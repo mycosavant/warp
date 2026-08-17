@@ -109,6 +109,61 @@ It is installed on the **Windows-side** Claude Code, not in this WSL
 environment (`~/.claude/plugins/installed_plugins.json` has no warp entry).
 That asymmetry is itself an argument for the WSL-integration work.
 
+## Running under WSL2 (WSLg)
+
+**Use this:**
+
+```bash
+env -u WAYLAND_DISPLAY LIBGL_ALWAYS_SOFTWARE=1 ./target/debug/warp-oss
+```
+
+Verified working — renders the full UI correctly.
+
+Two independent WSLg problems, each with its own symptom:
+
+**1. Wayland presents nothing.** With `WAYLAND_DISPLAY` set, winit picks the
+Wayland backend (`Running app with windowing system: Wayland`). The window is
+genuinely created — the log shows `window resized` and
+`active window changed: Some(WindowId(0))` — but never paints, so it appears in
+alt-tab and the taskbar as a blank grey rectangle, with focus thrashing
+between `Some(WindowId(0))` and `None`. Likely cause: `sctk_adwaita`
+client-side decorations failing, visible as
+`XDG Settings Portal did not return response in time`.
+
+Unsetting `WAYLAND_DISPLAY` routes through Xwayland instead
+(`windowing system: X11`) and the window renders. Under X11 you can confirm it
+directly, which is impossible for a Wayland client:
+
+```bash
+xwininfo -root -tree | grep -i warp
+# 0x600003 "Warp": ("dev.warp.WarpOss" ...)  1182x738+32+32  +2142+327
+```
+
+**2. GPU passthrough fails.** Without `LIBGL_ALWAYS_SOFTWARE=1` the log fills
+with `MESA: error: ZINK: failed to choose pdev` and
+`libEGL: failed to create dri2 screen`. With it, the log is clean and wgpu
+selects `Vulkan Cpu (llvmpipe)` — software rendering, but correct.
+
+### Stale instances hold port 9282
+
+Warp binds `127.0.0.1:9282` and spawns a crash-recovery sibling
+(`--crash-recovery-mechanism=force-dedicated-gpu`). **Killing the main PID is
+not enough** — the recovery child re-binds the port and respawns a terminal
+server, and the next launch fails with
+`Failed to bind local HTTP server on 127.0.0.1:9282: Address already in use`.
+
+Kill the whole family before relaunching:
+
+```bash
+pkill -f 'debug/warp-oss'; sleep 2; ss -tlnp | grep 9282   # expect no output
+```
+
+### Harmless startup noise in this environment
+
+`org.freedesktop.secrets was not provided` (no keyring), `portal.Settings`
+missing (no XDG desktop portal), and the clipboard falling back from
+`ext-data-control` to X11. None affect the fork.
+
 ## Local telemetry (OpenTelemetry)
 
 Upstream already ships an OTLP/HTTP exporter but locks it to cloud-agent runs:
