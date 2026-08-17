@@ -109,6 +109,76 @@ It is installed on the **Windows-side** Claude Code, not in this WSL
 environment (`~/.claude/plugins/installed_plugins.json` has no warp entry).
 That asymmetry is itself an argument for the WSL-integration work.
 
+## Building on Windows (the working GUI path)
+
+**Status: verified.** `warp-oss.exe` builds in ~8 minutes and renders a real
+native window. This is the recommended way to actually *use* the fork; the
+WSL2 build compiles and runs but its window never reaches the desktop (below).
+
+Checkout lives at `C:\dev\warp`, built from the WSL repo so nothing has to be
+pushed to GitHub.
+
+### Prerequisites
+
+Already present here: Visual Studio, Rust 1.92.0 MSVC (rustup auto-syncs to
+`rust-toolchain.toml`), Git. Installed via winget:
+
+```powershell
+winget install -e --id Google.Protobuf   # protoc, required by prost-build
+winget install -e --id Kitware.CMake
+winget install -e --id LLVM.LLVM         # libclang, for bindgen
+```
+
+Warp's own `script/windows/bootstrap.ps1` installs these plus VS 2022 Build
+Tools and InnoSetup; the three above are enough if VS and Rust already exist.
+
+**winget's PATH changes do not reach an already-running shell**, and a
+WSL-spawned `powershell.exe` inherits a stale Windows PATH. Set them
+explicitly for the build.
+
+### Cloning — three traps, all hit on the first attempt
+
+1. **`git -c` vs `git clone -c`.** `git -c core.autocrlf=false clone` applies
+   the setting to that invocation only; it is *not* written to the new repo.
+   The result was 6,281 CRLF-modified files — the same mess as the original
+   WSL checkout. Use `git clone -c ...`, which does persist, or set the config
+   and renormalize afterwards.
+2. **`core.symlinks` must be `false` on Windows** unless Developer Mode is on.
+   With it `true`, checkout of `.claude/skills` fails and takes the whole index
+   with it: `fatal: Could not reset index file to revision 'HEAD'`, leaving
+   `git ls-files` empty. Setting it `false` fixed it immediately.
+   Consequence: `.claude/skills` is a plain file on Windows, so Warp's in-repo
+   skills do **not** resolve for Claude Code there. Enable Developer Mode if
+   you want them.
+3. **LFS objects are not in the WSL repo.** The WSL clone has the real
+   binaries in its *worktree* but an empty LFS object store, so cloning from it
+   fails with `smudge filter lfs failed`. Point LFS at GitHub instead:
+   `git config lfs.url https://github.com/warpdotdev/warp.git/info/lfs`.
+
+Working sequence:
+
+```powershell
+git clone -c core.autocrlf=false -c core.eol=lf -c core.symlinks=false `
+  --branch dev \\wsl.localhost\Ubuntu\home\effatha\git\warp C:\dev\warp
+cd C:\dev\warp
+git config lfs.url https://github.com/warpdotdev/warp.git/info/lfs
+git lfs pull
+git reset --hard HEAD          # expect: 0 modified files afterwards
+```
+
+### Build and run
+
+```powershell
+$env:PROTOC = "$env:LOCALAPPDATA\Microsoft\WinGet\Packages\Google.Protobuf_Microsoft.Winget.Source_8wekyb3d8bbwe\bin\protoc.exe"
+$env:PATH = "C:\Program Files\CMake\bin;" + (Split-Path $env:PROTOC) + ";$env:PATH"
+$env:LIBCLANG_PATH = 'C:\Program Files\LLVM\bin'
+cargo build --bin warp-oss --features gui
+.\target\debug\warp-oss.exe
+```
+
+~8 GB of build artifacts. Verified: fork markers present in the binary, zero
+Sentry symbols, real `MainWindowHandle`, onboarding renders.
+
 ## Running under WSL2 (WSLg)
 
 **Use this:**
