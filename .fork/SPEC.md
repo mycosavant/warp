@@ -36,17 +36,73 @@ Load-bearing modules:
 - `crates/warp_multi_agent_client/`, `crates/warp_server_auth/`,
   `crates/graphql/src/api/{billing,api_keys}.rs`.
 
-### Critical open question (blocks Phase 3 design)
+### Request-path trace — RESOLVED 2026-08-17
 
-`LLMProvider` is **metadata only** — it supplies icons, display names, and key
-slugs. It is *not* a transport trait; there is no `trait LlmProvider { fn
-complete(...) }`. Model choice arrives from the server via
-`warp_graphql::queries::get_feature_model_choices`.
+`LLMProvider` is **metadata only** — icons, display names, key slugs. It is
+*not* a transport trait. But tracing the outbound path found **two entirely
+separate request paths**, which is the single most important fact in this spec:
 
-**Unresolved:** whether a pasted API key is used for a direct client→provider
-call, or is merely forwarded so Warp's backend makes the call. This determines
-whether Phase 3 is "swap a transport" or "build a transport." Resolve by
-tracing the outbound request path before writing Phase 3 code.
+**Path A — Warp's native agent (proxied, account-bound).** No provider
+hostname (`api.anthropic.com`, `api.openai.com`, …) appears anywhere in the
+client's Rust source; the only hits are bundled skill *documentation*. Warp's
+own agent talks to `api.warp.dev`. This path cannot be freed client-side — the
+inference happens on Warp's servers. **Abandon it.**
+
+**Path B — the agent-harness layer (direct, already local).**
+`app/src/ai/agent_sdk/` is a full pluggable harness system that spawns
+*external agent CLIs* which talk directly to providers, with no Warp proxy:
+
+- `driver/harness/claude_code.rs` (+ `parent_bridge.rs`, `wake_driver.rs`,
+  `claude_transcript.rs`) — drives the real `claude` CLI
+- `driver/harness/codex.rs`, `driver/harness/gemini.rs`
+- `provider.rs`, `oauth_flow.rs`, `api_key.rs`, `mcp.rs`, `mcp_config.rs`,
+  `profiles.rs`, `model.rs`, `runner.rs`
+
+It sets `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`, `CLAUDE_CODE_USE_BEDROCK`, and
+crucially `CLAUDE_CONFIG_DIR` — which **already defaults to `~/.claude`**
+(`claude_transcript.rs:86`, `claude_code.rs:665`). So the harness inherits the
+real Claude Code config: **subscription auth, MCP servers, skills, hooks.**
+
+**Conclusion: Phase 3 is not "build a provider layer" — it already exists.**
+The fork's job is to reroute it, not write it.
+
+### The catch, and therefore the actual work
+
+`FeatureFlag::AgentHarness` is documented as: *"Enables the `--harness` flag for
+`oz agent run`, allowing external agent CLIs (e.g. `claude`) to execute prompts
+instead of Warp's agent harness."*
+
+The harness is wired to **`oz agent run`** — Warp's *cloud* runner — not to the
+local terminal agent surface. `mod.rs:279` and `:323` both read
+`args.harness != Harness::Oz && !FeatureFlag::AgentHarness.is_enabled()`.
+
+So the real engineering task is **bridging the existing claude_code harness to
+the local agent UI**, bypassing Oz. Everything else (spawning, transcript
+parsing, MCP config, API keys, retry) is reusable as-is.
+
+### The kill-switch seam — better than expected
+
+`FeatureFlag::is_enabled()` (`warp_features/src/lib.rs:1075`) resolves in
+priority order:
+
+```rust
+overrides::get_override(*self)              // ← highest priority, local
+    .or(USER_PREFERENCE_MAP[*self as usize].get())
+    .or(Some(FLAG_STATES[*self as usize].load(Ordering::Relaxed)))  // ← server-pushed
+    .unwrap_or(false)
+```
+
+An **`overrides` mechanism already exists and outranks server-pushed state.**
+That is a single, upstream-maintained, highest-priority hook through which the
+entire fork can force flags on/off without editing a single call site. This is
+the ideal kill switch — near-zero merge surface.
+
+Relevant flags: `AgentHarness`, `APIKeyManagement`, `McpOauth` (enable);
+`CrashReporting`, `CocoaSentry`, `WithSandboxTelemetry`,
+`RecordAppActiveEvents`, `LogExpensiveFramesInSentry`, `RecordPtyThroughput`
+(disable); `CloudEnvironments`, `CloudAgentRunners`, `CloudRunners`,
+`CloudConversations`, `OzIdentityFederation`, `OzPlatformSkills`, `OzHandoff`
+(disable — these are Warp's paid cloud infra).
 
 ## Phase 0 — repo hygiene and branches ✅ done
 
@@ -93,41 +149,44 @@ removes *client-side* gating only; anything genuinely computed on Warp's
 servers cannot be unlocked client-side and must instead be replaced by a local
 implementation (which is the point of Phases 2–3).
 
-## Phase 2 — Claude via Agent SDK subprocess (start here)
+## Phase 2 — reroute the claude_code harness to the local agent
 
-Rationale: a Pro/Max subscription authenticates **only** through Claude Code's
-own auth flow. The raw Anthropic API bills separate API credits and cannot use
-a subscription. So driving the Agent SDK as a subprocess is the *only* route
-that spends the subscription rather than credits.
+Rationale for going through the `claude` CLI rather than the raw API: a Pro/Max
+subscription authenticates **only** through Claude Code's own auth flow. The
+raw Anthropic API bills separate credits and cannot use a subscription.
+Path B already spawns that CLI with `CLAUDE_CONFIG_DIR` defaulting to
+`~/.claude`, so subscription auth is inherited with no new auth code.
 
-Inherited for free: subscription auth, MCP servers, my skills, hooks, and
-existing tool definitions.
+Work items, smallest first:
 
-Sketch: new crate `warp_fork_agent` that spawns the Agent SDK, speaks its
-streaming JSON protocol over stdio, and adapts that stream onto the event type
-Warp's existing agent UI already consumes — so the terminal UI is reused rather
-than rebuilt.
+1. Force `AgentHarness` + `APIKeyManagement` on via the `overrides` hook.
+2. Trace how `Harness::ClaudeCode` runs are dispatched, and add a **local**
+   dispatch path that does not route through `oz agent run`.
+3. Adapt the harness output stream (`driver/output.rs`,
+   `harness/claude_transcript.rs`) onto whatever event type the local agent UI
+   consumes. **This is the bulk of the work** — see risk below.
 
-Deliberately deferred: making this the *default* agent path. First make it work
-behind a flag alongside the stock path, so upstream's agent keeps working while
-this is unstable.
+Deliberately deferred: making this the default. Keep it behind a fork flag
+alongside the stock path so upstream's agent keeps working while this is
+unstable.
 
-## Phase 3 — pluggable provider layer (design now, build after Phase 2)
+## Phase 3 — extend the existing provider layer
 
-Target: one trait, several backends — Agent SDK (subscription), direct
-Anthropic/OpenAI/Google API keys, and local models (Ollama).
+Revised: do **not** build a new `AgentBackend` trait. Warp's `Harness` enum
+already is that abstraction, with working `claude_code`, `codex`, and `gemini`
+implementations. Extending it beats replacing it — an added enum variant is a
+far smaller merge surface than a parallel architecture.
 
-```rust
-trait AgentBackend {
-    async fn stream(&self, req: AgentRequest) -> Result<BoxStream<AgentEvent>>;
-    fn capabilities(&self) -> Capabilities;  // tools, vision, context window
-}
-```
+- Add a local-model harness (Ollama / OpenAI-compatible endpoint) alongside the
+  existing three.
+- Extend `LLMProvider` with `Ollama`/`Local` so the existing settings UI, icons,
+  and key storage keep working unmodified.
+- Replace the server-provided model list
+  (`get_feature_model_choices`) with a local registry so the client works fully
+  offline.
 
-`LLMProvider` is extended rather than replaced (add `Ollama`, `Local`), keeping
-the existing settings UI, icons, and key-storage code working.
-
-Sequencing depends entirely on the open question above. Answer it first.
+Sequencing: Phase 2 must land first — it proves the local dispatch path that
+every other harness will reuse.
 
 ### Risks
 
