@@ -9,6 +9,9 @@ pub fn init_feature_flags() {
     for flag in enabled_features() {
         flag.set_enabled(true);
     }
+    // Fork policy: user preferences outrank both channel state and
+    // server-pushed flags, so this must land before anything reads a flag.
+    crate::fork::apply_feature_preferences();
     mark_initialized();
 }
 

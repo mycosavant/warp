@@ -123,6 +123,7 @@ pub mod appearance;
 pub mod channel;
 pub mod editor;
 pub mod features;
+pub mod fork;
 pub mod input_suggestions;
 #[cfg(feature = "integration_tests")]
 pub mod integration_testing;

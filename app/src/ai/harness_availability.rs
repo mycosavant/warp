@@ -45,12 +45,27 @@ pub struct HarnessAvailability {
 /// Oz is enabled by default so the UI is usable pre-fetch; the server
 /// list (which respects admin overrides) replaces this once available.
 fn default_harnesses() -> Vec<HarnessAvailability> {
-    vec![HarnessAvailability {
+    let mut harnesses = vec![HarnessAvailability {
         harness: Harness::Oz,
         display_name: harness_display::display_name(Harness::Oz).to_string(),
         enabled: true,
         available_models: vec![],
-    }]
+    }];
+    // Fork policy: expose local CLI harnesses without a server round-trip.
+    // `refresh` early-returns when logged out, so this list is what an
+    // account-free user actually sees. Entries whose CLI is missing are still
+    // filtered by `local_harness_setup_state`, not shown as broken.
+    if crate::fork::is_active() {
+        for &harness in crate::fork::forced_local_harnesses() {
+            harnesses.push(HarnessAvailability {
+                harness,
+                display_name: harness_display::display_name(harness).to_string(),
+                enabled: true,
+                available_models: vec![],
+            });
+        }
+    }
+    harnesses
 }
 
 #[derive(Debug, Clone)]

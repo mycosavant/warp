@@ -92,10 +92,47 @@ overrides::get_override(*self)              // ← highest priority, local
     .unwrap_or(false)
 ```
 
-An **`overrides` mechanism already exists and outranks server-pushed state.**
-That is a single, upstream-maintained, highest-priority hook through which the
-entire fork can force flags on/off without editing a single call site. This is
-the ideal kill switch — near-zero merge surface.
+**Correction to an earlier draft of this document:** `overrides` is *not*
+usable. It is `#[cfg(feature = "test-util")]`; in production
+(`lib.rs:1171-1177`) `get_override` is a hardcoded `None` stub, and the
+test-util version is thread-local — useless for a GUI app's many threads.
+
+The usable seam is the **second** line: `set_user_preference`
+(`lib.rs:1106`) is production API, and `USER_PREFERENCE_MAP` is referenced in
+exactly three places — definition, read, write. It is **never cleared or
+reset**, so a preference set once at startup permanently outranks both channel
+defaults and server-pushed state. Only one caller exists upstream (a test), so
+there is no contention.
+
+That makes the kill switch a *purely additive* call at startup — no upstream
+list edited, no call site touched.
+
+Relevant flags: `AgentHarness`, `APIKeyManagement`, `McpOauth` (enable);
+`CrashReporting`, `CocoaSentry`, `WithSandboxTelemetry`,
+`RecordAppActiveEvents`, `LogExpensiveFramesInSentry`, `RecordPtyThroughput`
+(disable); `CloudEnvironments`, `CloudAgentRunners`, `CloudRunners`,
+`CloudConversations`, `OzIdentityFederation`, `OzPlatformSkills`, `OzHandoff`
+(disable — these are Warp's paid cloud infra).
+
+### Cargo features do the heavy lifting
+
+Flags are enabled at **compile time** via Cargo features
+(`app/src/features.rs`, `#[cfg(feature = "…")]`). Measured against
+`app/Cargo.toml`'s 198-entry `default` list:
+
+- `crash_reporting` / `cocoa_sentry` are **not** in `default`, and
+  `crash_reporting = ["dep:sentry", "dep:minidumper", "dep:crash-handler", …]`.
+  **A stock build already contains no Sentry code at all.** This is a real
+  removal, not a no-op — worth knowing before "removing telemetry" by hand.
+- `agent_harness`, `api_key_management`, `solo_user_byok`,
+  `skip_firebase_anonymous_user`, `mcp_oauth`, `mcp_server` **are** in
+  `default` — already on.
+- `global_ai_analytics_collection` **is** in `default` — a genuine target.
+
+Cargo features are additive-only, so *disabling* cannot be done by adding a
+feature. Hence the split: **enable** via Cargo features, **disable** via
+`set_user_preference` at runtime. This avoids ever editing the 198-line
+`default` array, which would conflict on nearly every upstream merge.
 
 Relevant flags: `AgentHarness`, `APIKeyManagement`, `McpOauth` (enable);
 `CrashReporting`, `CocoaSentry`, `WithSandboxTelemetry`,
