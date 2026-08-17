@@ -194,18 +194,46 @@ raw Anthropic API bills separate credits and cannot use a subscription.
 Path B already spawns that CLI with `CLAUDE_CONFIG_DIR` defaulting to
 `~/.claude`, so subscription auth is inherited with no new auth code.
 
-Work items, smallest first:
+### "Claude as primary agent" has three tiers, not one
 
-1. Force `AgentHarness` + `APIKeyManagement` on via the `overrides` hook.
-2. Trace how `Harness::ClaudeCode` runs are dispatched, and add a **local**
-   dispatch path that does not route through `oz agent run`.
-3. Adapt the harness output stream (`driver/output.rs`,
-   `harness/claude_transcript.rs`) onto whatever event type the local agent UI
-   consumes. **This is the bulk of the work** — see risk below.
+Tracing `Harness::Oz` turned up a third system, separate from both Path A and
+the orchestration harness. Ranked by cost:
 
-Deliberately deferred: making this the default. Keep it behind a fork flag
-alongside the stock path so upstream's agent keeps working while this is
-unstable.
+**Tier 1 — Claude as a CLI agent in a pane. Already works, zero code.**
+`app/src/terminal/cli_agent.rs` defines a `CLIAgent` enum with first-class
+support for Claude, Codex, Gemini, OpenCode, Copilot, Cursor, Goose, Amp,
+Droid, Auggie, Pi, Antigravity. Warp gives these rich input, a Warpify footer,
+notifications, and per-agent icons. Every backing Cargo feature
+(`cli_agent_rich_input`, `warpify_footer`, `agent_cli_launch_modal`,
+`pluggable_notifications`) is in `default`, and **neither `cli_agent.rs` nor
+`local_harness_launch.rs` contains any auth check**. Just run `claude` in a
+Warp pane.
+
+This is the pragmatic answer to "Claude instead of Oz" and it is available
+today, account-free.
+
+**Tier 2 — Claude as a local orchestration/child harness.** Delivered by
+`app/src/fork.rs` (`forced_local_harnesses`). Lets Warp *spawn* Claude as a
+child agent rather than only hosting it in a pane.
+
+**Tier 3 — replace Agent Mode's backend so Warp's own agent surface is driven
+by Claude.** This is the expensive one, and the cost is concrete:
+
+- `AIClient` (`app/src/server/server_api/ai.rs`) is a **70-method** trait
+  behind `Arc<dyn AIClient>`. The trait object is a real seam, but a local
+  implementation must satisfy conversations, agents, tasks, memory stores,
+  skills, artifacts, credits and request limits.
+- Agent-run events arrive over a **separate SSE stream**
+  (`ai/agent_events/driver.rs`, `AgentEventFilter`, reconnect/backoff logic)
+  keyed on server-issued run IDs.
+- Conversation persistence, `credit_availability`, and `request_usage_model`
+  all assume server-side state.
+
+Recommendation: take Tiers 1 and 2, and treat Tier 3 as a research spike
+rather than committed work. The incremental benefit over Tier 1 is mostly
+cosmetic — Claude already runs with Warp's rich UI — while the cost is
+re-implementing 70 trait methods plus an event-stream protocol, all of which
+upstream will keep changing under the fork.
 
 ## Phase 3 — extend the existing provider layer
 
