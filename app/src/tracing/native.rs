@@ -70,6 +70,7 @@ use warpui::AppContext;
 
 use super::Initialization;
 use super::cloud_agent_auth::{self, AuthContext};
+use super::local_export::LocalHttpClient;
 use crate::channel::ChannelState;
 use crate::tracing::install_no_subscriber;
 
@@ -111,13 +112,22 @@ pub fn init() -> anyhow::Result<Initialization> {
         install_no_subscriber()?;
         return Ok(Initialization::default());
     };
-    let Ok(auth_context) = AuthContext::from_environment() else {
-        install_no_subscriber()?;
-        return Ok(Initialization::default());
+    // Fork policy: a loopback collector needs no cloud-agent dispatch
+    // credential, and a local user has no way to obtain one. Remote endpoints
+    // still require auth exactly as upstream does.
+    let local_export = use_local_export(base_endpoint.trim());
+    let auth_context = if local_export {
+        None
+    } else {
+        let Ok(auth_context) = AuthContext::from_environment() else {
+            install_no_subscriber()?;
+            return Ok(Initialization::default());
+        };
+        Some(auth_context)
     };
 
     let shutdown_timeout = export_timeout();
-    let provider = match build_provider(base_endpoint.trim(), &auth_context) {
+    let provider = match build_provider(base_endpoint.trim(), auth_context.as_ref(), local_export) {
         Ok(provider) => provider,
         Err(err) => {
             install_no_subscriber()?;
@@ -129,7 +139,9 @@ pub fn init() -> anyhow::Result<Initialization> {
             });
         }
     };
-    let _ = AUTH_CONTEXT.set(auth_context);
+    if let Some(auth_context) = auth_context {
+        let _ = AUTH_CONTEXT.set(auth_context);
+    }
 
     let active_spans = ActiveSpanRegistry::default();
     let tracer =
@@ -157,16 +169,28 @@ pub fn init() -> anyhow::Result<Initialization> {
 /// so credential refresh can update requests without reconstructing provider state.
 fn build_provider(
     base_endpoint: &str,
-    auth_context: &AuthContext,
+    auth_context: Option<&AuthContext>,
+    export_all_spans: bool,
 ) -> anyhow::Result<SdkTracerProvider> {
     let endpoint = traces_endpoint(base_endpoint)?;
-    let exporter = opentelemetry_otlp::SpanExporter::builder()
-        .with_http()
-        .with_http_client(auth_context.http_client())
-        .with_protocol(Protocol::HttpBinary)
-        .with_endpoint(endpoint)
-        .build()
-        .context("Failed to build the OTLP span exporter")?;
+    // The two transports are distinct types, so the builder chain has to be
+    // completed inside each arm rather than shared.
+    let exporter = match auth_context {
+        Some(auth_context) => opentelemetry_otlp::SpanExporter::builder()
+            .with_http()
+            .with_http_client(auth_context.http_client())
+            .with_protocol(Protocol::HttpBinary)
+            .with_endpoint(endpoint)
+            .build()
+            .context("Failed to build the OTLP span exporter")?,
+        None => opentelemetry_otlp::SpanExporter::builder()
+            .with_http()
+            .with_http_client(LocalHttpClient::new())
+            .with_protocol(Protocol::HttpBinary)
+            .with_endpoint(endpoint)
+            .build()
+            .context("Failed to build the local OTLP span exporter")?,
+    };
 
     let resource = Resource::builder_empty()
         .with_service_name("warp-cloud-agent")
@@ -190,6 +214,7 @@ fn build_provider(
         .with_batch_exporter(CloudAgentSpanExporter {
             inner: exporter,
             diagnostics: RateLimitedDiagnostics::default(),
+            export_all_spans,
         })
         .with_resource(resource)
         .build())
@@ -447,6 +472,11 @@ impl opentelemetry::trace::Span for ShutdownAwareSpan {
 struct CloudAgentSpanExporter {
     inner: opentelemetry_otlp::SpanExporter,
     diagnostics: RateLimitedDiagnostics,
+    /// Fork policy: when exporting to a local collector, keep every span the
+    /// `EnvFilter` admitted rather than only cloud-agent-marked ones. This is
+    /// what surfaces local agent/harness spans (`setup_observability.rs`),
+    /// which are created but discarded under upstream's filter.
+    export_all_spans: bool,
 }
 impl std::fmt::Debug for CloudAgentSpanExporter {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -461,10 +491,11 @@ impl SpanExporter for CloudAgentSpanExporter {
         &self,
         batch: Vec<SpanData>,
     ) -> impl std::future::Future<Output = OTelSdkResult> + Send {
-        let batch: Vec<_> = batch
-            .into_iter()
-            .filter_map(filter_cloud_agent_span)
-            .collect();
+        let batch: Vec<_> = if self.export_all_spans {
+            batch.into_iter().map(strip_cloud_agent_marker).collect()
+        } else {
+            batch.into_iter().filter_map(filter_cloud_agent_span).collect()
+        };
 
         async move {
             if batch.is_empty() {
@@ -523,7 +554,7 @@ impl RateLimitedDiagnostics {
 
 /// Removes unrelated spans and strips the internal routing marker from spans and events before
 /// export.
-fn filter_cloud_agent_span(mut span: SpanData) -> Option<SpanData> {
+fn filter_cloud_agent_span(span: SpanData) -> Option<SpanData> {
     let is_cloud_agent_span = span.attributes.iter().any(|attribute| {
         attribute.key.as_str() == CLOUD_AGENT_MARKER && attribute.value == Value::Bool(true)
     });
@@ -531,6 +562,14 @@ fn filter_cloud_agent_span(mut span: SpanData) -> Option<SpanData> {
         return None;
     }
 
+    Some(strip_cloud_agent_marker(span))
+}
+
+/// Strips the internal routing marker from a span and its events.
+///
+/// The marker is a transport detail of upstream's filtering scheme and is not
+/// meaningful to a collector, so it is removed on every export path.
+fn strip_cloud_agent_marker(mut span: SpanData) -> SpanData {
     span.attributes
         .retain(|attribute| attribute.key.as_str() != CLOUD_AGENT_MARKER);
     for event in &mut span.events.events {
@@ -538,5 +577,27 @@ fn filter_cloud_agent_span(mut span: SpanData) -> Option<SpanData> {
             .attributes
             .retain(|attribute| attribute.key.as_str() != CLOUD_AGENT_MARKER);
     }
-    Some(span)
+    span
 }
+
+/// Whether to export unauthenticated to a collector on this machine.
+///
+/// Requires both fork policy to be active and the endpoint to be loopback, so
+/// this can never cause traces to leave the machine without a credential.
+/// A malformed endpoint returns false, deferring to upstream's authenticated
+/// path, which will then reject it in `traces_endpoint`.
+fn use_local_export(base_endpoint: &str) -> bool {
+    crate::fork::is_active() && endpoint_is_loopback(base_endpoint)
+}
+
+/// Pure loopback test over a raw endpoint string, split out from
+/// [`use_local_export`] so it is testable without touching process env.
+fn endpoint_is_loopback(base_endpoint: &str) -> bool {
+    Url::parse(base_endpoint)
+        .ok()
+        .is_some_and(|endpoint| endpoint_host_is_loopback(&endpoint))
+}
+
+#[cfg(test)]
+#[path = "native_tests.rs"]
+mod tests;

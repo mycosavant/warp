@@ -6,6 +6,8 @@ use tracing::subscriber;
 #[cfg(not(target_family = "wasm"))]
 mod cloud_agent_auth;
 #[cfg(not(target_family = "wasm"))]
+mod local_export;
+#[cfg(not(target_family = "wasm"))]
 mod native;
 
 #[cfg(not(target_family = "wasm"))]

@@ -109,6 +109,51 @@ It is installed on the **Windows-side** Claude Code, not in this WSL
 environment (`~/.claude/plugins/installed_plugins.json` has no warp entry).
 That asymmetry is itself an argument for the WSL-integration work.
 
+## Local telemetry (OpenTelemetry)
+
+Upstream already ships an OTLP/HTTP exporter but locks it to cloud-agent runs:
+it demands a `WARP_CLOUD_AGENT_OTLP_TOKEN` dispatch credential, and its span
+filter drops everything not tagged `tags.cloud_agent`. The fork removes both
+obstacles **for loopback endpoints only**.
+
+Start any OTLP collector, e.g. Jaeger:
+
+```bash
+docker run --rm -p 4318:4318 -p 16686:16686 jaegertracing/all-in-one:latest
+```
+
+Then run Warp pointed at it:
+
+```bash
+WARP_CLOUD_AGENT_OTLP_ENDPOINT=http://localhost:4318 \
+OTEL_SERVICE_NAME=warp-fork \
+  ./target/debug/warp
+```
+
+Traces appear at <http://localhost:16686>. Use `RUST_LOG` to widen beyond the
+`INFO` default — upstream picked `INFO` because only marked spans were
+exported, so `RUST_LOG=warp=debug` is now considerably more expensive.
+
+Agent and harness spans come for free: `ai/agent_sdk/setup_observability.rs`
+already emits `setup_environment_resolution`, `..._repo_clone`,
+`..._setup_commands`, `..._codebase_indexing` and `..._skill_loading`, and
+`tracing-opentelemetry` bridges them into OTLP.
+
+**Safety properties, both covered by tests in `app/src/tracing/native_tests.rs`:**
+
+- Authentication is dropped *only* when the endpoint host is loopback
+  (`localhost`, `127.0.0.1`, `::1`). Lookalikes such as `localhost.evil.com`
+  and `127.0.0.1.evil.com` are correctly treated as remote.
+- A malformed endpoint is treated as non-loopback, so it falls back to the
+  authenticated path rather than silently exporting without a credential.
+- Plain `http` remains rejected for non-loopback hosts, so the local-export
+  affordance cannot leak traces unencrypted to a remote collector.
+
+Export stays **opt-in and off by default**: with `WARP_CLOUD_AGENT_OTLP_ENDPOINT`
+unset, `init` installs a no-op subscriber and nothing is collected or sent.
+The Phase 1 egress deny-list deliberately does not block loopback, so the
+collector is unaffected.
+
 ### git-lfs — resolved
 
 `git-lfs` (3.4.1) is now installed. Its four hooks in `.git/hooks/`
