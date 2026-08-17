@@ -253,6 +253,50 @@ far smaller merge surface than a parallel architecture.
 Sequencing: Phase 2 must land first — it proves the local dispatch path that
 every other harness will reuse.
 
+## Phase 4 — local telemetry (OpenTelemetry, not Sentry)
+
+Use **OpenTelemetry**. This is not a close call, and it needs almost no new
+code, because upstream already ships it:
+
+- `opentelemetry` 0.32, `opentelemetry-otlp`, `opentelemetry_sdk` and
+  `tracing-opentelemetry` are already workspace dependencies.
+- `app/src/tracing/native.rs` already builds an OTLP exporter over
+  `Protocol::HttpBinary` — standard OTLP/HTTP, so any collector works
+  (otel-collector, Jaeger, Grafana Tempo, …).
+- Export is **opt-in and off by default**: with the `CLOUD_AGENT_OTLP_ENDPOINT`
+  env var absent or empty, `init` returns early and nothing is exported
+  (`native.rs:107`).
+- It **deliberately permits plain `http` for loopback hosts** and requires
+  HTTPS otherwise (`native.rs:217`). That affordance exists precisely for a
+  local collector.
+- `OTEL_SERVICE_NAME` is honoured for resource naming.
+
+Sentry is the wrong tool for this regardless of the fork's goals: it is
+crash/error reporting, not tracing or metrics. It answers "what broke", not
+"what did the agent do, in what order, and how long did each step take".
+Keep it removed.
+
+### It already gives harness/agent observability
+
+`app/src/ai/agent_sdk/setup_observability.rs` (313 lines) already emits named
+`tracing` spans for agent lifecycle stages — `setup_environment_resolution`,
+`setup_environment_repo_clone`, `setup_environment_setup_commands`,
+`setup_environment_codebase_indexing`, `setup_environment_skill_loading` —
+alongside `driver/harness/telemetry.rs`. Because `tracing-opentelemetry`
+bridges `tracing` spans into OTel, these become OTLP spans for free.
+
+**One change is needed.** `filter_cloud_agent_span` (`native.rs:526`) drops
+every span not tagged `tags.cloud_agent`, so today only cloud-agent runs are
+exported. Local harness spans are created but filtered out. Extending that
+filter to include local harness spans is the whole job.
+
+Sequencing: this is additive and independent of Phases 1–3, so it can be done
+whenever. Bring it up by pointing `CLOUD_AGENT_OTLP_ENDPOINT` at
+`http://localhost:4318` with a collector running, then widen the filter.
+
+Note the egress backstop deliberately does not block loopback, so a local
+collector is unaffected by Phase 1.
+
 ### Risks
 
 - **UI coupling.** Warp's agent UI may assume server-shaped responses. If so,

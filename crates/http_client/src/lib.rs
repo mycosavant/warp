@@ -1,3 +1,4 @@
+mod egress;
 pub mod iap;
 
 use std::future::Future;
@@ -369,10 +370,26 @@ impl Client {
     /// Core request execution logic shared by all platforms.
     async fn execute_inner(&self, request: Request) -> reqwest::Result<Response> {
         let Request {
-            wrapped: request,
+            wrapped: mut request,
             serialized_payload,
             prevent_sleep_reason,
         } = request;
+
+        // Fork policy backstop: telemetry/analytics egress is redirected to an
+        // unconnectable address so no payload leaves the machine, even if a
+        // call site skipped its feature-flag check. Deliberately placed before
+        // the `before_request_sent` hook so observers see the rewritten URL and
+        // cannot mistake a blocked request for a sent one.
+        //
+        // This cannot stop the Sentry SDK, which uses its own transport — see
+        // `egress` module docs.
+        if egress::is_blocked(request.url()) {
+            log::warn!(
+                "fork: blocked telemetry egress to {}",
+                request.url().host_str().unwrap_or("<no host>")
+            );
+            *request.url_mut() = egress::blackhole_url();
+        }
 
         if let Some(before_response_send_fn) = &self.before_request_sent {
             before_response_send_fn(&request, &serialized_payload);
