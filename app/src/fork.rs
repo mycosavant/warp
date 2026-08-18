@@ -15,7 +15,10 @@
 //! two one-line call sites, never in the policy itself.
 
 use warp_cli::agent::Harness;
+use warpui::{AppContext, SingletonEntity};
 
+use crate::auth::{AuthStateProvider, UserUid};
+use crate::cloud_object::Owner;
 use crate::features::FeatureFlag;
 
 /// Set to `0`, `off` or `false` to run the fork with stock upstream behaviour.
@@ -137,6 +140,78 @@ pub fn local_ai_completions_enabled() -> bool {
     is_active()
 }
 
+/// The owner written into Warp Drive objects created without an account.
+///
+/// Deliberately a fixed constant rather than a per-install UUID. `UserWorkspaces
+/// ::owner_to_space` maps an object to [`Space::Personal`] only when its owner
+/// equals the *current* user and otherwise falls through to [`Space::Shared`],
+/// so a per-machine identity would make a store that moved machines show up
+/// under "Shared with me" — the one place local-first objects must never land,
+/// since the whole point of T4.4 is to carry this store between machines.
+///
+/// It cannot collide with a real account: Warp user ids are Firebase uids.
+const LOCAL_DRIVE_UID: &str = "local";
+
+/// Whether Warp Drive is authoritative locally rather than a cache of the server.
+///
+/// Nothing here severs the sync — logging out already does that, and by exactly
+/// one line. `SyncQueue::should_dequeue` starts `false` and is set true in a
+/// single place, at the end of a *successful* server fetch, which requires an
+/// account. So without one, local writes reach the in-memory model and SQLite
+/// and simply accumulate in the queue unsent.
+///
+/// What this enables is the other half: the same successful fetch is also the
+/// only thing that sets `UpdateManager::has_initial_load`, and 24 call sites
+/// across 15 files await that condition before doing their work. Logged out
+/// they wait forever — Warp Drive spins indefinitely over a store that is fully
+/// populated and writable, and `warp mcp list` never returns.
+///
+/// See `.fork/TASKS.md` T4.1 for the full map.
+pub fn local_drive_enabled() -> bool {
+    is_active()
+}
+
+/// The [`Owner`] for objects created with no account, or `None` under upstream
+/// policy.
+///
+/// Consumed by `workspaces::user_workspaces::UserWorkspaces::personal_drive`,
+/// which upstream returns `None` from when unauthenticated. Every create path
+/// needs an `Owner` and every call site bails on `None`, so that one function
+/// is the difference between a Warp Drive that can be read and edited without
+/// an account and one that can also be added to.
+pub fn local_drive_owner() -> Option<Owner> {
+    local_drive_enabled().then(|| Owner::User {
+        user_uid: UserUid::new(LOCAL_DRIVE_UID),
+    })
+}
+
+/// Whether Warp Drive is running account-free, and so is authoritative locally.
+///
+/// The auth-dependent half of [`local_drive_enabled`]. Fork policy alone is not
+/// enough for the seams that decide whether to talk to the server: a fork user
+/// who does sign in should get upstream behaviour back, because their objects
+/// now exist somewhere else too.
+///
+/// Returns `false` when [`AuthStateProvider`] is not registered. That is not a
+/// state production reaches — `lib.rs` registers it long before any of this
+/// runs — but plenty of unit tests build a narrow set of singletons without it,
+/// and falling back to upstream behaviour there leaves those tests measuring
+/// exactly what they measured before.
+pub fn local_drive_is_authoritative(app: &AppContext) -> bool {
+    local_drive_enabled()
+        && app.has_singleton_model::<AuthStateProvider>()
+        && !AuthStateProvider::as_ref(app).get().is_logged_in()
+}
+
+/// Whether an object belongs to the account-free local drive.
+///
+/// Used to keep locally-owned objects out of the sync queue if an account is
+/// ever added later. Without this they would be pushed to the server under a
+/// `user_uid` that does not exist there.
+pub fn is_local_drive_owner(owner: &Owner) -> bool {
+    matches!(owner, Owner::User { user_uid } if user_uid.as_str() == LOCAL_DRIVE_UID)
+}
+
 /// Harnesses exposed locally without asking Warp's server for permission.
 ///
 /// Upstream ships `default_harnesses()` containing only `Oz` (Warp's own
@@ -212,3 +287,7 @@ pub fn apply_feature_preferences() {
         flag.set_user_preference(true);
     }
 }
+
+#[cfg(test)]
+#[path = "fork_tests.rs"]
+mod tests;

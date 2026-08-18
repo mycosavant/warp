@@ -278,7 +278,19 @@ pub fn log_out(app: &mut AppContext) {
 
     // As part of Logout v0, we remove sqlite3 so sessions and cloud objects don't persist between accounts.
     // TODO: Implement per-user scoping of sqlite3.
-    persistence::remove(&global_resource_handles.model_event_sender);
+    //
+    // Under fork policy the store is not a cache of server-owned objects, it is the
+    // original — Warp Drive is writable with no account at all, and those objects
+    // exist nowhere else. Deleting it here would be data loss triggered from a menu
+    // item. The tradeoff is deliberate and in the other direction from upstream's:
+    // a previous account's objects now survive logout on this machine. That is the
+    // right call for a single-user personal fork and the wrong one for a shared
+    // machine. See `.fork/TASKS.md` T4.2.
+    if crate::fork::local_drive_enabled() {
+        log::info!("Local-first Warp Drive: keeping the local store across logout");
+    } else {
+        persistence::remove(&global_resource_handles.model_event_sender);
+    }
 
     AuthManager::handle(app).update(app, |auth_manager, ctx| {
         auth_manager.log_out(ctx);
@@ -301,9 +313,14 @@ pub fn log_out(app: &mut AppContext) {
     AgentConversationsModel::handle(app).update(app, |agent_conversations_model, _| {
         agent_conversations_model.reset();
     });
-    CloudModel::handle(app).update(app, |cloud_model, _| {
-        cloud_model.reset();
-    });
+    // Kept in step with the SQLite store above: clearing memory while the database
+    // survives would empty Warp Drive until the next launch and then repopulate it,
+    // which reads as data loss even though nothing was lost.
+    if !crate::fork::local_drive_enabled() {
+        CloudModel::handle(app).update(app, |cloud_model, _| {
+            cloud_model.reset();
+        });
+    }
     // Clear the sync queue so that we don't try to sync the old user's objects to the new user.
     SyncQueue::handle(app).update(app, |sync_queue, _| {
         sync_queue.clear();

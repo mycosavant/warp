@@ -2435,7 +2435,11 @@ impl DriveIndex {
 
         let mut sections = vec![];
 
-        if !self.is_online(app) {
+        // The banner promises that some files are read only, which is true when the
+        // local store is a cache of server-owned objects and false once it is the
+        // original: with no account, losing the network changes nothing about what
+        // can be edited. See `.fork/TASKS.md` T4.3.
+        if !self.is_online(app) && !crate::fork::local_drive_enabled() {
             sections.push(self.render_offline_banner(app));
         }
 

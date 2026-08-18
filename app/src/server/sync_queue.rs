@@ -421,6 +421,18 @@ impl SyncQueue {
     /// Enqueue a new request.
     pub fn enqueue(&mut self, item: QueueItem, ctx: &mut ModelContext<Self>) -> QueueItemId {
         let queue_id = QueueItemId::new();
+
+        // Local-first Warp Drive: with no account there is nothing to sync to, and
+        // dropping the item here rather than letting it pile up is what makes that a
+        // guarantee instead of an accident. Upstream already never *sends* it —
+        // `should_dequeue` is only set after a successful server fetch — but the item
+        // would survive in the queue, and adding an account later would start
+        // dequeueing and push objects owned by a `user_uid` the server has never
+        // heard of. See `fork::local_drive_owner` and `.fork/TASKS.md` T4.2.
+        if crate::fork::local_drive_is_authoritative(ctx) {
+            return queue_id;
+        }
+
         let mut queue_item = item;
 
         self.add_inferred_dependencies(&mut queue_item, &queue_id, ctx);

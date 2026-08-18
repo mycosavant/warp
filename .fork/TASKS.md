@@ -394,9 +394,17 @@ distinguishing origins, plus a working offline mode and `ExportManager`.
 
 So this is "keep the store, neutralize the sync" — not a rewrite.
 
-- [ ] **T4.1** Map every server-sync entry point in `cloud_object/model/persistence.rs`
-- [ ] **T4.2** Local-only mode: full read/write, no account, no sync
-- [ ] **T4.3** Confirm the offline read-only banner does not apply in local mode
+- [x] **T4.1** Map the server-sync entry points — done, but the premise below
+      was wrong. See "The map" and "Three blockers".
+- [x] **T4.2** Local-only mode: full read/write, no account, no sync.
+      Four seams, one per blocker below plus the guarantee. Not yet exercised
+      in a running GUI — see "Not verified".
+- [x] **T4.3** Offline read-only banner — answered by T4.1, no work needed.
+      It is gated on `NetworkStatus::is_online()` (`drive/index.rs:2439`), not
+      on auth, so a logged-out-but-online user never sees it. It is genuinely
+      about the network, not the account. Under local-first it becomes a lie
+      when the network *does* drop — nothing is read-only then either — so it
+      wants suppressing, but that is one condition in T4.2, not its own item.
 - [ ] **T4.4** Git-backed sync — versioned, portable, self-hosted or not
 - [ ] **T4.5** Round-trip via the existing import/export paths
 
@@ -404,6 +412,176 @@ Explicitly **not** doing: Proton Drive. No general-purpose public API,
 E2E-encrypted with client-side key management; integration means
 rclone-shaped reverse engineering, trading a working local store for a
 fragile sync target. Revisit only after T4.4 works.
+
+### The map — T4.1 corrected
+
+**There are no server-sync entry points in `cloud_object/model/persistence.rs`.**
+That file is 1,838 lines of pure in-memory model: a `HashMap<ObjectUid, Box<dyn
+CloudObject>>` plus accessors, with a `SyncSender<ModelEvent>` for SQLite
+writes. It never holds a client and never issues a request. `UpdateSource::
+{Server, Local}` lives there, but only as a tag on emitted events — nothing
+branches on it to decide whether to talk to the network.
+
+The sync layer is `server/cloud_objects/update_manager.rs` (4,833 lines) and
+`server/sync_queue.rs` (1,988). Every local write follows the same three steps,
+in this order, with no online/offline branch anywhere in them:
+
+    1. update the in-memory CloudModel
+    2. save_to_db(...)          -> SQLite, unconditional
+    3. SyncQueue::enqueue(...)  -> server, eventually
+
+Step 3 is the only server contact, and it is already decoupled: `enqueue` only
+appends. Whether anything is *sent* is one bool, `SyncQueue::should_dequeue`
+(`sync_queue.rs:348`), which starts `false` (`:384`).
+
+So the sync is not something the fork has to sever. It is already severed when
+logged out, and by exactly one line.
+
+### It already doesn't sync. That is the problem.
+
+`should_dequeue` is set true in exactly one place — `update_manager.rs:1071`,
+at the end of `on_changed_objects_fetched`, i.e. only after a server fetch has
+*succeeded*. That function is reachable only via `poll_for_updated_objects`,
+which early-returns when logged out (`:688`), and polling itself only starts
+when `TeamTesterStatus::initiate_data_pollers` fires — emitted from
+`auth_manager.rs:449`, on user-fetched.
+
+No account, therefore: no poll, no fetch, no dequeue. Reads and local writes
+work; the SQLite store is loaded at startup (`lib.rs:2174`) with no auth check
+at all. Nothing leaks.
+
+But the same successful fetch is also the only thing that sets
+`UpdateManager::has_initial_load` (`:1073`), and **24 call sites across 15
+files `await` that condition** before doing their work. Logged out, they wait
+forever. Confirmed consumers include:
+
+    drive/index.rs:961          Warp Drive spinner never stops; sections
+                                never initialize (has_initialized_sections)
+    ai/agent_sdk/mcp.rs:31       `warp mcp list` never returns
+    ai/agent_sdk/profiles.rs:34  `warp profiles list` never returns
+    ai/agent_sdk/environment.rs  5 sites
+    settings/cloud_preferences_syncer.rs:496, notebooks, env var collections,
+    workflow_view, pane_group, workspace/view, docker_sandbox, privacy
+
+The drive spinner is gated `show_warp_drive_loading_icon && is_online`
+(`index.rs:2515`), so the visible symptom is precisely "logged out but online"
+— which is the fork's normal state. Warp Drive looks perpetually loading while
+the store underneath it is fully populated and writable.
+
+This inverts the task. "Neutralize the sync" is done. The work is to stop the
+app *waiting* for a sync that is never coming.
+
+### Three blockers
+
+1. **No owner.** `UserWorkspaces::personal_drive` (`user_workspaces.rs:979`)
+   maps `AuthStateProvider::user_id()` to `Owner::User`, and returns `None`
+   when unauthenticated. Every create path needs an `Owner` and every call site
+   bails on `None`. So logged out you can read and edit, but cannot create
+   anything. One function, ~20 call sites downstream of it — the narrowest
+   seam in T4.
+
+2. **`has_initial_load` never fires.** Above. The condition is
+   interior-mutable (`reset_initial_load` takes `&self`), so it can be set from
+   anywhere. Open question is *when*: at `UpdateManager::new` the SQLite load
+   has already happened (`lib.rs:2174` precedes `:2289`), so the state it
+   asserts is true — but auth restoration is async, and `auth_manager` only
+   calls `reset_initial_load` for `!from_refresh`, so a restored session may
+   not re-arm it. Settle this in T4.2 rather than assuming.
+
+3. **Logout deletes the database.** `auth::log_out` (`auth/mod.rs:281`) calls
+   `persistence::remove` — "so sessions and cloud objects don't persist between
+   accounts" — then `CloudModel::reset()`. Upstream that is safe: the local
+   store is a cache of server-owned objects. Once it is authoritative it is
+   data loss, and it is reachable from a menu item. This one is not a feature
+   gap, it is a hazard, and it did not exist before local-first made the store
+   the original rather than the copy.
+
+### T4.2 as built
+
+The local identity is a **fixed sentinel**, `UserUid::new("local")`, not a
+per-install UUID. `owner_to_space` files an object under `Space::Personal` only
+when its owner equals the *current* user and under `Space::Shared` otherwise, so
+a per-machine identity would put a store that moved machines into "Shared with
+me" — exactly what T4.4 exists to do. It cannot collide with an account: real
+Warp user ids are Firebase uids.
+
+Four seams, all in the established additive style — no upstream behaviour is
+deleted, and `WARP_FORK_POLICY=0` restores every one of them:
+
+    fork::local_drive_owner          -> UserWorkspaces::personal_drive
+                                        blocker 1: the drive becomes writable
+    fork::local_drive_is_authoritative -> UpdateManager::new
+                                        blocker 2: the SQLite store *is* the
+                                        initial load, so nothing waits forever
+                                     -> SyncQueue::enqueue
+                                        the guarantee: refused at the door
+    fork::local_drive_enabled        -> auth::log_out
+                                        blocker 3: the store is not deleted
+                                     -> drive::index render_all_sections
+                                        T4.3: no false read-only banner
+
+`local_drive_is_authoritative` is the auth-dependent half — fork policy *and*
+no account. A fork user who does sign in gets upstream behaviour back, because
+their objects then exist somewhere other than this machine.
+
+Two things fell out for free rather than needing work. Objects with pending
+changes already render as a laptop icon reading **"Saved locally"** rather than
+a spinner: upstream's condition is `has_in_flight_requests &&
+!sync_queue_is_dequeueing`, and under local-first the queue never dequeues, so
+the correct indicator was already the one that shows. And the Warp Drive
+spinner needed no separate fix — it is gated on the same initial-load condition
+as everything else, so blocker 2 turned it off.
+
+The enqueue refusal is what turns "does not sync" from an ordering accident
+into a property. Upstream already never *sends* while logged out, but the item
+survives in the queue, and `lib.rs` reseeds the queue at startup from every
+object with pending changes — so the first time an account was added, locally
+owned objects would have been pushed under a uid the server has never heard of.
+Both paths are now closed, the startup one by owner rather than by auth, since
+by then a real account may legitimately be present.
+
+### Verified
+
+- 9 new tests. Each seam is asserted in both directions — logged out *and*
+  signed in — because a guard that never turns off would silently break a fork
+  user who does log in, and that failure would look like a Warp bug.
+- Full suite **6508 passed / 20 failed**, against a same-session baseline of
+  **6500 / 19** measured by stashing this work. The delta is the 9 new tests,
+  the one inversion below, and the secret-redaction pair that the T3 notes
+  already record as varying run to run.
+- `cargo clippy -p warp --lib --all-targets` clean; `cargo fmt --check` clean
+  for every file touched here.
+
+**Caught by the test suite, and worth recording because it was mine:** the
+first version of the `WARP_FORK_POLICY=0` test set and unset the variable
+around its assertion. `std::env` is process-wide and the suite runs in
+parallel, so it re-enabled fork policy mid-run for whatever happened to be
+executing alongside it — and made a `WARP_FORK_POLICY=0` baseline run report
+6510/18 instead of the truth. It presented as unrelated tests failing, which is
+the expensive kind of wrong. The policy-off path is covered by running the
+whole suite with the variable set, which is the real check anyway.
+
+**Not verified: a running GUI.** Everything above is unit-level. The claims
+that need a real window are that Warp Drive renders its contents instead of a
+spinner, and that an object created with no account survives a restart. Both
+need the Windows build (`C:\dev\warp`); the WSL build still has no workspace.
+
+### Known: a T4.2 consequence, surfacing as a test failure
+
+`ai::execution_profiles::profiles::tests::
+auth_completion_waits_for_cloud_initial_load_before_migrating` fails under fork
+policy and passes with `WARP_FORK_POLICY=0` — A/B'd, not assumed. Same category
+as the T1 entry above it, and the second such inversion in the fork.
+
+It asserts that legacy execution profiles do not migrate until cloud objects
+arrive. Under local-first they migrate at startup instead, because the local
+store *is* the load. For a fork user that is the only behaviour that works at
+all — waiting for a fetch that never comes means legacy profiles never migrate.
+For someone who launches logged out and then signs in, local profiles migrate
+first and the server's merge in afterwards via `CloudModelEvent::
+InitialLoadCompleted`, which `profiles.rs` already subscribes to. Both sets
+survive; the test is asserting the intermediate state, and that state is
+genuinely different now.
 
 ## T5 — Claude in Oz's seat (the spike)
 

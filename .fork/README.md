@@ -585,3 +585,76 @@ This part has *not* been verified against a real provider — there was no key o
 local LLM available to test with. The request shape is asserted field by field
 against a stub server, but a stub agrees with whatever it is told. One real
 request is worth more than that whole test file.
+
+## Warp Drive without an account
+
+Warp Drive is backed by a real local SQLite store (`crates/cloud_object_persistence`,
+diesel + bundled sqlite3). Warp's server is a **sync layer on top** of it, not
+the storage. So the fork does not have to replace anything — the store already
+works, and with no account nothing is ever sent from it.
+
+What was missing is that upstream treats that store as a *cache*. Several
+things wait for the server to confirm the cache before using it, and with no
+account they wait forever.
+
+### What changed
+
+Four things, all conditional on fork policy and reversible with
+`WARP_FORK_POLICY=0`:
+
+* **The drive is writable.** Creating any object needs an `Owner`, which
+  upstream derives from the signed-in user and leaves as `None` when there
+  isn't one. Objects created without an account are owned by a fixed local
+  identity instead.
+* **Nothing waits for a sync that is not coming.** Upstream marks the initial
+  load complete only after a successful server fetch. 24 places await that
+  before doing their work — the Warp Drive spinner, `warp mcp list`, execution
+  profiles, environments. With no account the local store *is* the load, so
+  they proceed against it.
+* **Logging out no longer deletes the store.** Upstream removes the sqlite
+  database on logout, which is safe when its contents are copies of
+  server-owned objects and is data loss once they are the originals.
+* **No false offline banner.** "You are offline. Some files will be read only."
+  is about the network, not the account. With no account nothing becomes read
+  only when the network drops, so the banner is suppressed.
+
+### It does not sync, and that is enforced
+
+With no account nothing is sent — but that was already true upstream, as an
+accident of ordering rather than a promise. The sync queue only starts draining
+after a *successful* server fetch, so items simply piled up unsent.
+
+Locally owned objects are now refused by the sync queue outright, and filtered
+out of the queue that is rebuilt at startup. Without both, the first time you
+added an account those objects would have been pushed to Warp's server under a
+user id it has never heard of.
+
+Sign in and normal syncing resumes for everything owned by that account.
+Objects created while account-free stay local — they are owned by an identity
+the server does not know, which is the point.
+
+### Where your objects live
+
+In `warp.sqlite`, alongside the rest of Warp's persisted state. The directory
+is resolved at runtime rather than fixed — `persistence::sqlite::
+database_file_path_for_scope` picks a per-scope path (the GUI, the TUI and the
+remote-server daemon each get their own so they never share a database), under
+a secure container directory where the platform has one. Read it off
+`app_database_file_path` rather than assuming a location; the paths quoted
+elsewhere in this file are for config and logs, which are not the same place.
+
+Objects show a laptop icon reading **"Saved locally"** rather than a sync
+spinner. That is upstream's own indicator for "changed locally, queue not
+draining" — under local-first it is simply always the accurate one.
+
+The local owner is the constant `"local"` on every machine, deliberately, so a
+store stays in your Personal space after it moves between machines. A
+per-machine identity would file a copied store under "Shared with me". This is
+what makes T4.4 (git-backed sync) possible without rewriting ownership.
+
+### Not yet verified in a running GUI
+
+The above is covered by unit tests but has not been exercised in a real window.
+Worth confirming by hand on the Windows build: that Warp Drive renders its
+contents instead of a perpetual spinner, and that a workflow created with no
+account is still there after a restart.

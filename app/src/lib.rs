@@ -2162,6 +2162,12 @@ pub(crate) fn initialize_app(
     let objects_with_pending_changes = cloud_objects
         .iter()
         .filter(|object| object.metadata().has_pending_content_changes())
+        // Objects owned by the account-free local drive exist only in this store and
+        // must never be pushed. `SyncQueue::enqueue` refuses them while logged out,
+        // but this path seeds the queue directly at startup and would otherwise be
+        // the way they leak the first time an account is added. See
+        // `fork::is_local_drive_owner` and `.fork/TASKS.md` T4.2.
+        .filter(|object| !fork::is_local_drive_owner(&object.permissions().owner))
         .cloned()
         .collect::<Vec<_>>();
     all_queue_items.extend(QueueItem::from_cached_objects(

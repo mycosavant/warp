@@ -220,6 +220,26 @@ impl UpdateManager {
             me.handle_model_event(event, ctx);
         });
 
+        let has_initial_load = Condition::new();
+
+        // Under fork policy with no account, the local SQLite store *is* the initial
+        // load, and it has already happened — `CloudModel` is constructed from it in
+        // `lib.rs` before this singleton exists, and `AuthState::initialize` reads
+        // secure storage synchronously earlier still, so `is_logged_in` here is
+        // accurate for a restored session rather than a transient false.
+        //
+        // Upstream only ever sets this condition after a *successful server fetch*,
+        // which needs an account. Without one, the 24 call sites that await it — the
+        // Warp Drive spinner, `warp mcp list`, execution profiles, environments —
+        // wait forever over a store that is fully populated. See `.fork/TASKS.md`
+        // T4.1. A real account still takes the upstream path: `AuthManager` calls
+        // `reset_initial_load` on login, so the condition re-arms and the server
+        // fetch resolves it.
+        if crate::fork::local_drive_is_authoritative(ctx) {
+            log::info!("Local-first Warp Drive: treating the SQLite store as the initial load");
+            has_initial_load.set();
+        }
+
         Self {
             model_event_sender,
             object_client,
@@ -227,7 +247,7 @@ impl UpdateManager {
             in_flight_request_abort_handle: None,
             should_poll_for_updated_objects: false,
             spawned_futures: Default::default(),
-            has_initial_load: Condition::new(),
+            has_initial_load,
         }
     }
 
