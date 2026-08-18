@@ -299,3 +299,98 @@ git add --renormalize .
 
 A backup of the LFS content remains at `~/.warp-lfs-backup`; it can be deleted
 once you're confident, but it costs nothing to keep.
+
+## Driving Warp from an agent (`warpctrl`)
+
+Upstream ships a complete local control plane and gates it off in public
+builds. The fork opens it (see `.fork/TASKS.md` T1) and ports it to Windows.
+It is the orchestration surface: an external agent can drive windows, tabs,
+panes, sessions and the input buffer of a running instance.
+
+There is no separate binary — the app binary enters control mode via a hidden
+flag, and everything after `--warpctrl` is parsed as `warpctrl`:
+
+```powershell
+.\target\debug\warp-oss.exe --warpctrl instance list
+.\target\debug\warp-oss.exe --warpctrl app ping
+```
+
+For day-to-day use, wrap it:
+
+```powershell
+function warpctrl { & 'C:\dev\warp\target\debug\warp-oss.exe' --warpctrl @args }
+```
+
+### What it can do
+
+85 actions, all implemented. `warpctrl action list` emits the full catalog as
+JSON with `parameter_spec`, `result_spec` and `target_scope` per action, so
+tool definitions can be generated from it rather than hardcoded.
+
+```
+app       ping version active focus
+window    list inspect create focus close
+tab       list inspect create activate move close rename reset_name color.*
+pane      list inspect split focus navigate resize maximize unmaximize close rename
+session   list inspect activate next previous reopen_closed
+input     insert replace submit
+surface   settings.open command_palette.open ai_assistant.toggle warp_drive.* ... (20)
+setting   list get set toggle
+theme     list get set dark.set light.set system.set
+appearance get zoom.* font_size.*
+keybinding list get
+file      open
+```
+
+`input insert` and `input replace` stage text without running it; **`input
+submit` runs it** — that one is a fork addition, because without it an agent
+can type but never execute. All three reject newlines and control characters,
+so one call runs exactly one command and nothing can be smuggled in behind it.
+`submit` returns an error rather than a false acknowledgement when the target
+pane is busy.
+
+Mutations need a focused window with a workspace. `app focus` first if
+`window list` reports `is_active: false`.
+
+### Enablement
+
+Two gates, both opened by fork policy, both still overridable:
+
+* `FeatureFlag::WarpControlCli` — forced on in `app/src/fork.rs`.
+* Settings → Scripting — defaults to Enabled via
+  `settings::local_control::effective_default_mode`. Stored in secure
+  storage, so an explicit choice there still wins.
+
+Set `WARP_FORK_POLICY=0` to get stock upstream behaviour (both off).
+
+### Security model
+
+Not a remote surface. Three boundaries, all local:
+
+1. A discovery record in `%LOCALAPPDATA%\warp\local-control` (Windows) or
+   `$XDG_RUNTIME_DIR/warp/local-control` (Unix), owner-only, containing
+   routing metadata and **never a token**.
+2. An owner-authenticated credential broker — a 0600 Unix socket checked
+   against the kernel-reported peer UID, or on Windows a named pipe with a
+   protected DACL whose client is impersonated and compared by token user SID.
+   It mints short-lived, instance-bound, single-action bearer grants held only
+   in process memory.
+3. A loopback HTTP endpoint that rejects browser `Origin`, requires an exact
+   `Host`, and validates the grant's existence, expiry, instance and scope.
+
+The broker authenticates the **OS account, not the application**: anything
+already running as you is inside the boundary. Enabling local control grants
+nothing to another user, and nothing to the network.
+
+Verify the Windows ACL is owner-only with:
+
+```powershell
+icacls "$env:LOCALAPPDATA\warp\local-control"
+# expect exactly: <domain>\<user>:(F)  -- no SYSTEM, no Administrators
+```
+
+### Platform status
+
+Working on Linux/macOS (upstream) and Windows (fork port). Under WSL2 the
+process runs and read actions work, but the window never composites, so it has
+no workspace and mutations fail with `missing_target`. Use the Windows build.

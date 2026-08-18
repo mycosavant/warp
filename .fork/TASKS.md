@@ -56,10 +56,57 @@ Reference: `crates/warp_cli/src/local_control/`, `app/src/local_control/`,
       `app` 4, `window` 5, `tab` 10, `pane` 11, `session` 6, `input` 2,
       `surface` 20, `setting` 4, `theme` 6, `appearance` 7, `keybinding` 2,
       `file` 1, plus `instance`/`action`/`capability` introspection.
-- [!] **T1.5b** Mutations unverified — blocked, see below.
+- [x] **T1.5b** Mutations verified on Windows 2026-08-17 (blocked on WSL, see
+      below): `app focus`, `tab create` → created tab 2374, `tab list`
+      confirms 3 tabs with the new one active.
+- [x] **T1.8** `input.submit` — replaces the buffer and runs it. Verified
+      end-to-end: submitting `Set-Content -Path C:\dev\warpctrl_proof.txt ...`
+      produced the file with the expected contents. Newline and control-char
+      rejection both confirmed to still fire, so one call runs exactly one
+      command.
+- [x] **T1.10** Windows named-pipe credential broker — **done and verified**.
 - [ ] **T1.7** Document the verified command surface in `.fork/README.md`
 
-### Blocker: no workspace on Linux, no broker on Windows
+### RESOLVED 2026-08-17 — Windows is now the working platform
+
+The port took **four** changes, not the one predicted. In discovery order:
+
+1. `discovery_dir()` resolved through `XDG_RUNTIME_DIR`/`HOME`, neither of
+   which Windows reliably has — it would have landed in the working
+   directory. Now `LOCALAPPDATA`, with `USERPROFILE` as a `HOME` fallback.
+2. `set_private_dir_permissions` / `set_private_permissions` hard-failed
+   off-unix, so publication never ran. Now a protected DACL via
+   `local_control::windows_security`.
+3. The credential broker — the only gap originally identified. Now a named
+   pipe carrying the same descriptor.
+4. `local_control_publication_supported()` hardcoded
+   `cfg!(not(target_os = "windows"))`. This was the one that kept the server
+   silently dead after 1–3 were done: a fourth gate behind the feature flag,
+   the Scripting setting and the broker. Now states the capability
+   (`cfg!(any(unix, windows))`) rather than a platform list.
+
+Verified on Windows against a live logged-out instance:
+
+    discovery record  %LOCALAPPDATA%\warp\local-control\inst_<id>.json
+    named pipe        \\.\pipe\warp-local-control\inst_<id>.broker.sock
+    instance list     inst_826a... (pid 31152, channel warp-oss, protocol 1)
+    app ping          reachable (protocol version 1)
+    window list       has_workspace: true
+    tab create        Created tab 2374 in window 0 (tab count 3)
+    input submit      ok -> command actually executed, proof file written
+
+`instance list` only returns instances that pass `probe_instance`, which runs
+the whole broker→HTTP flow, so a bare listing is already end-to-end evidence.
+
+ACL verified empirically rather than assumed — `icacls` on both the registry
+directory and the record reports exactly one ACE:
+
+    C:\Users\<user>\AppData\Local\warp\local-control <domain>\<user>:(F)
+
+No SYSTEM, no Administrators, no inherited entries. That is stricter than the
+Windows default, and is what `D:P(...)` buys.
+
+### Remaining blocker: no workspace on Linux
 
 Mutating actions fail on the WSL build with
 `missing_target: tab.create requires a workspace in the target window`.
@@ -68,31 +115,10 @@ Mutating actions fail on the WSL build with
 composites under WSLg. Not a local-control defect; the same WSLg RAIL
 forwarding failure that pushed the build to Windows.
 
-And local control **does not work on Windows at all**, by upstream design:
+Windows is now the working platform for local control, so this is no longer
+on the critical path — but the Linux build is still unusable as a GUI.
 
-    #[cfg(not(unix))]
-    /// Fails closed on platforms without an owner-authenticated broker transport.
-    fn request_credential_over_owner_ipc(..) -> Result<String, ControlError> {
-        Err(ControlError::new(ErrorCode::LocalControlDisabled,
-            "local control requires an owner-authenticated credential broker"))
-    }
-
-`request_credential` is on every request path, so every action fails closed.
-Discovery *is* ported (`is_pid_alive` has a `#[cfg(windows)]` arm via
-`tasklist`) and the loopback HTTP transport is `cfg(not(wasm))`, so the
-credential broker is the sole missing piece. Unimplemented platform, not a bug.
-
-Net: the build that renders can't be controlled; the build that can be
-controlled won't render.
-
-- [ ] **T1.10** Windows named-pipe credential broker — the recommended unblock.
-      Bounded: a `#[cfg(windows)]` sibling for `bind_credential_broker` /
-      `run_credential_broker` (app side) and `request_credential_over_owner_ipc`
-      (client side). Named pipes preserve the security model: a restrictive
-      DACL replaces the 0600 mode bits, and `GetNamedPipeClientProcessId` plus
-      client impersonation replaces kernel-reported peer UID. Purely additive
-      alongside the existing `#[cfg(unix)]` arms.
-- [ ] **T1.11** Alternative: fix WSLg rendering so the Linux build is usable.
+- [ ] **T1.11** Fix WSLg rendering so the Linux build is usable.
       Also serves T6, but has resisted several attempts already.
 
 Deferred, dependent on T1 landing:
