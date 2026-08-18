@@ -564,10 +564,18 @@ by then a real account may legitimately be present.
 - 9 new tests. Each seam is asserted in both directions — logged out *and*
   signed in — because a guard that never turns off would silently break a fork
   user who does log in, and that failure would look like a Warp bug.
-- Full suite **6508 passed / 22 failed**, against a same-session baseline of
-  **6500 / 19** measured by stashing this work. The delta is 11 new tests, the
-  two inversions below, and the secret-redaction pair that the T3 notes already
-  record as varying run to run.
+- 14 new tests. Full suite **6512 passed / 21 failed** on the final run,
+  against a same-session baseline of **6500 / 19** measured by stashing this
+  work. Total count rises by exactly 14, matching the new tests. The failure
+  delta is the two inversions below plus the flaky set, which varies run to
+  run — consecutive runs gave 22, 20 and 21.
+- Newly observed in that flaky set:
+  `server::cloud_objects::update_manager::tests::
+  test_pending_metadata_update_with_polling`. It is in a module this work
+  touches, so it was checked rather than assumed: passes 3/3 in isolation and
+  under `WARP_FORK_POLICY=0`, and only fails under parallel load. A polling
+  timeout, not a regression. Recorded because "it's probably flaky" is exactly
+  the reasoning that hides a real fault.
 - `cargo clippy -p warp --lib --all-targets` clean; `cargo fmt --check` clean
   for every file touched here.
 
@@ -598,23 +606,52 @@ The store path is now known rather than guessed:
 
     %LOCALAPPDATA%\warp\WarpOss\data\warp.sqlite
 
-**Still not verified: that a created object survives a restart.** Not for lack
-of trying — the store is empty (`object_metadata` 0 rows), so nothing has been
-created yet, and there is no way to create one from here. The local-control
-catalog has no Warp Drive object actions at all: 85 actions covering app,
-window, tab, pane, session, input, surface, setting, theme, appearance,
-keybinding and file, and nothing that creates a workflow, rule or folder.
-`input.*` writes to the terminal's input editor, not to whatever UI has focus,
-so the `+` button cannot be reached by scripting. This needs one human click,
-or a new local-control action.
+- [x] **T4.6** A created object survives a restart — **verified 2026-08-18**,
+      and it found a bug. A workflow `simple-workflow-test` was created by hand
+      in the GUI with no account (the `+` cannot be reached by scripting; see
+      T1.12). In SQLite it is exactly what the design predicts:
 
-- [ ] **T4.6** Create a Warp Drive object with no account and confirm it is
-      still there after a restart. One click, or see T1.12.
+          object_type  WORKFLOW
+          server_id    <empty>        never synced
+          client_id    Client-56cd792e-...
+          is_pending   1              -> renders "Saved locally", not a spinner
+          subject_uid  local          the sentinel, written by personal_drive
+
+      After a full close-and-relaunch it is still there, editable, with its
+      `wf-test` alias intact. The alias lives outside `workflows.data`, which
+      is why the payload column does not mention it.
+
 - [ ] **T1.12** Add Warp Drive object actions to the local-control catalog.
       Surfaced by T4.2 verification: the catalog can drive every part of the
       app *except* its object store, which makes exactly the fork's own
-      headline feature the one thing an agent cannot exercise. Same shape as
-      the `setting.get/set` allowlist gap recorded under T2.
+      headline feature the one thing an agent cannot exercise. 85 actions
+      across app, window, tab, pane, session, input, surface, setting, theme,
+      appearance, keybinding and file, and nothing that creates a workflow,
+      rule or folder. `input.*` writes to the terminal's input editor rather
+      than to whatever UI has focus, so the `+` button is unreachable. Same
+      shape as the `setting.get/set` allowlist gap recorded under T2.
+
+### The bug T4.6 caught, and why nothing else could have
+
+The restored workflow came back filed under **"Shared with me"** — an object
+this client had created itself one restart earlier.
+
+T4.2 taught `personal_drive` to *write* the local sentinel as owner, but left
+`owner_to_space` *reading* `AuthStateProvider::user_id()` directly. Signed in,
+those two agree. Account-free they do not: `user_id()` is `None` while the
+sentinel is not, so `Some(uid) == None` was false for every locally-created
+object and all of them read as somebody else's.
+
+Both sides now resolve through `personal_drive`, which is already the seam that
+answers "who am I". For a signed-in user the two forms are identical by
+construction, since `personal_drive` is `Owner::User { user_uid: <current> }`.
+
+**Every unit test passed with this bug in place**, and they were not bad tests —
+they covered the writing side and the reading side, separately and correctly.
+The defect lived in the agreement between them, which is not a place a unit
+test naturally looks. It took creating a real object and restarting a real
+window. Worth remembering the next time a change looks fully covered: a seam
+that is correct at both ends can still be wrong in the middle.
 
 ### Known: two T4.2 consequences, surfacing as test failures
 
