@@ -385,4 +385,3 @@ fn a_failing_command_surfaces_its_stderr() {
     assert!(message.contains("failed to load model"), "{message}");
     fs::remove_file(path).ok();
 }
-
