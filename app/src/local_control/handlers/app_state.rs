@@ -638,15 +638,15 @@ fn input_text(
                 format!("{} requires a terminal input target", action_kind.as_str()),
             )
         })?;
-    let executed = terminal_view.update(ctx, |terminal_view, ctx| {
+    let queued = terminal_view.update(ctx, |terminal_view, ctx| {
         terminal_view.input().update(ctx, |input, ctx| match disposition {
             InputDisposition::Append => {
                 input.append_to_buffer(&text, ctx);
-                true
+                false
             }
             InputDisposition::Replace => {
                 input.replace_buffer_content(&text, ctx);
-                true
+                false
             }
             InputDisposition::Submit => {
                 // `set_pending_command` inserts at the cursor, so clear first to
@@ -654,23 +654,23 @@ fn input_text(
                 input.replace_buffer_content("", ctx);
                 input.set_pending_command(&text, ctx);
                 input.execute_pending_command(ctx);
-                // Execution is refused silently when the pane is busy or its
-                // history is not appendable, leaving the command pending. An
-                // orchestrator must not read that as success, so surface it.
-                !input.has_pending_command()
+                // A still-pending command has been *queued*, not refused: the
+                // pane runs it once the shell finishes bootstrapping or the
+                // current command completes. Report which happened rather than
+                // guessing — an unattended caller that wants output needs to
+                // know it must wait.
+                input.has_pending_command()
             }
         })
     });
-    if !executed {
-        return Err(ControlError::new(
-            ErrorCode::InvalidRequest,
-            format!(
-                "{} could not run: the target pane is busy or is not accepting commands",
-                action_kind.as_str()
-            ),
-        ));
+    let mut response = ack(instance_id, action_kind);
+    if disposition == InputDisposition::Submit
+        && let Some(object) = response.as_object_mut()
+    {
+        object.insert("executed".to_owned(), serde_json::Value::Bool(!queued));
+        object.insert("queued".to_owned(), serde_json::Value::Bool(queued));
     }
-    Ok(ack(instance_id, action_kind))
+    Ok(response)
 }
 
 pub(super) fn validate_staged_input_text(

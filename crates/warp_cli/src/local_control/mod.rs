@@ -398,8 +398,11 @@ pub enum InputCommand {
     ///
     /// Unlike `insert` and `replace`, this executes. The text is still rejected
     /// if it contains newlines or control characters, so one call runs exactly
-    /// one command. Fails rather than silently doing nothing when the target
-    /// pane is busy.
+    /// one command.
+    ///
+    /// Reports `executed` when the command ran immediately and `queued` when
+    /// the pane's shell is still starting or busy. A queued command runs as
+    /// soon as the pane is ready.
     Submit(TextTargetArgs),
 }
 

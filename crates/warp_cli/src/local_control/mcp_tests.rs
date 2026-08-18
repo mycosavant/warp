@@ -130,11 +130,14 @@ fn text_actions_require_text_and_warn_about_newlines() {
 }
 
 /// `input.submit` executes in the user's terminal; its description must say so,
-/// or a model cannot weigh the action correctly.
+/// or a model cannot weigh the action correctly. It must also explain the
+/// queued case, since a queued command runs later and its output is not ready
+/// when the call returns.
 #[test]
-fn submit_is_described_as_executing() {
+fn submit_is_described_as_executing_and_explains_queueing() {
     let description = describe(&metadata_for(ActionKind::InputSubmit));
     assert!(description.contains("RUN it"));
+    assert!(description.contains("queued"));
     let insert = describe(&metadata_for(ActionKind::InputInsert));
     assert!(insert.contains("WITHOUT running it"));
 }

@@ -163,8 +163,10 @@ running it."
             .to_string(),
         "input.submit" => "Replace the target pane's input buffer with this text \
 and RUN it. This executes a command in the user's terminal. Rejects newlines \
-and control characters, so exactly one command runs per call. Returns an error \
-if the pane is busy rather than silently doing nothing."
+and control characters, so exactly one command runs per call. The result \
+reports `executed: true` when it ran immediately, or `queued: true` when the \
+pane's shell is still starting or busy — a queued command runs as soon as the \
+pane is ready, so wait before reading its output."
             .to_string(),
         "app.active" => "Report the active window/tab/pane/session chain.".to_string(),
         "app.focus" => "Focus the Warp app. Required before mutating actions when \
