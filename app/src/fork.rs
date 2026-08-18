@@ -106,6 +106,20 @@ pub fn account_gate_bypassed() -> bool {
     is_active()
 }
 
+/// Wraps an `is_anonymous_or_logged_out()` result for **UI gating only**.
+///
+/// Settings pages check auth directly rather than going through
+/// `AISettings::is_any_ai_enabled`, so overriding the master switch alone
+/// leaves pages rendering a "please create an account" banner in place of the
+/// controls. Call sites that decide *what to draw* should route through here.
+///
+/// Deliberately not applied to call sites that decide whether to *talk to the
+/// server*; those should keep seeing the real auth state so they fail fast
+/// instead of issuing credential-less requests.
+pub fn is_anonymous_for_ui(actual: bool) -> bool {
+    if account_gate_bypassed() { false } else { actual }
+}
+
 /// Applies fork feature-flag policy.
 ///
 /// Must run after upstream's channel flags are applied but before
