@@ -187,26 +187,53 @@ impl PrivacySettingsSnapshot {
         self.cloud_conversation_storage_enabled
     }
 
+    // Fork policy: these accessors are the chokepoint every telemetry consumer
+    // reads through, so overriding them here stops *collection*, not just
+    // delivery. That matters — the egress deny-list in `http_client` prevents
+    // events leaving, but without this the collector still records events and
+    // `write_telemetry_events_to_disk` persists a growing backlog for "sending
+    // on the next app startup".
+    //
+    // Note `is_telemetry_force_enabled` is also forced off: upstream treats it
+    // as an override that re-enables telemetry regardless of user preference,
+    // and `should_disable_telemetry` honours it.
+
     pub fn is_telemetry_enabled(&self) -> bool {
+        if crate::fork::is_active() {
+            return false;
+        }
         self.is_telemetry_enabled
     }
 
     pub fn is_crash_reporting_enabled(&self) -> bool {
+        if crate::fork::is_active() {
+            return false;
+        }
         self.is_crash_reporting_enabled
     }
 
     pub fn is_telemetry_force_enabled(&self) -> bool {
+        if crate::fork::is_active() {
+            return false;
+        }
         self.is_telemetry_force_enabled
     }
 
     pub fn should_disable_telemetry(&self) -> bool {
+        if crate::fork::is_active() {
+            return true;
+        }
         // If a user has opted in to the agent mode analytics experiment, telemetry must be enabled.
         !self.is_telemetry_enabled
             && !self.is_telemetry_force_enabled
             && !FeatureFlag::AgentModeAnalytics.is_enabled()
     }
 
+    /// Whether to collect AI user-generated content — prompts and responses.
     pub fn should_collect_ai_ugc_telemetry(&self) -> bool {
+        if crate::fork::is_active() {
+            return false;
+        }
         self.should_collect_ai_ugc_telemetry
     }
 
