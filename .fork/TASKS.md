@@ -463,11 +463,24 @@ forever. Confirmed consumers include:
 
     drive/index.rs:961          Warp Drive spinner never stops; sections
                                 never initialize (has_initialized_sections)
-    ai/agent_sdk/mcp.rs:31       `warp mcp list` never returns
-    ai/agent_sdk/profiles.rs:34  `warp profiles list` never returns
+    ai/agent_sdk/mcp.rs:31       `warp mcp list`
+    ai/agent_sdk/profiles.rs:34  `warp profiles list`
     ai/agent_sdk/environment.rs  5 sites
     settings/cloud_preferences_syncer.rs:496, notebooks, env var collections,
     workflow_view, pane_group, workspace/view, docker_sandbox, privacy
+
+**Correction, 2026-08-18, from running the binary.** The two CLI entries above
+were previously written up as "never returns *because of this*". That
+attribution is wrong. `warp mcp list` does hang forever, but it never reaches
+the await: `command_requires_auth` returns `true` for `MCPCommand::List`
+(`ai/agent_sdk/mod.rs:1575`), so `launch_command` errors out with "You are not
+logged in" first — and then the process hangs anyway, because that error path
+never terminates the app. Two separate faults, neither of them blocker 2. The
+await is real and the other 22 sites are genuinely blocked by it; these two are
+behind an earlier gate. `warp mcp list` reads local Drive objects and arguably
+should not need an account at all, but that match arm also covers agent, run,
+environment and memory commands which really do talk to Warp's server, so
+opening it is its own decision and not part of T4.2.
 
 The drive spinner is gated `show_warp_drive_loading_icon && is_online`
 (`index.rs:2515`), so the visible symptom is precisely "logged out but online"
@@ -551,10 +564,10 @@ by then a real account may legitimately be present.
 - 9 new tests. Each seam is asserted in both directions — logged out *and*
   signed in — because a guard that never turns off would silently break a fork
   user who does log in, and that failure would look like a Warp bug.
-- Full suite **6508 passed / 20 failed**, against a same-session baseline of
-  **6500 / 19** measured by stashing this work. The delta is the 9 new tests,
-  the one inversion below, and the secret-redaction pair that the T3 notes
-  already record as varying run to run.
+- Full suite **6508 passed / 22 failed**, against a same-session baseline of
+  **6500 / 19** measured by stashing this work. The delta is 11 new tests, the
+  two inversions below, and the secret-redaction pair that the T3 notes already
+  record as varying run to run.
 - `cargo clippy -p warp --lib --all-targets` clean; `cargo fmt --check` clean
   for every file touched here.
 
@@ -567,12 +580,43 @@ executing alongside it — and made a `WARP_FORK_POLICY=0` baseline run report
 the expensive kind of wrong. The policy-off path is covered by running the
 whole suite with the variable set, which is the real check anyway.
 
-**Not verified: a running GUI.** Everything above is unit-level. The claims
-that need a real window are that Warp Drive renders its contents instead of a
-spinner, and that an object created with no account survives a restart. Both
-need the Windows build (`C:\dev\warp`); the WSL build still has no workspace.
+### Verified on Windows, 2026-08-18
 
-### Known: a T4.2 consequence, surfacing as a test failure
+Driven from WSL over `powershell.exe`; see `.fork/README.md` "Driving the
+Windows build from WSL" for the mechanics.
+
+    surface warp-drive open   ok: true
+    screenshot                Warp Drive renders: PERSONAL space with a `+`,
+                              MCP Servers, Rules, TRASH. No spinner.
+
+**Warp Drive renders its contents instead of a perpetual spinner with no
+account.** That is the claim T4.2 existed to make, and it holds. The instance
+was genuinely account-free — the binary said so itself on another path ("You
+are not logged in").
+
+The store path is now known rather than guessed:
+
+    %LOCALAPPDATA%\warp\WarpOss\data\warp.sqlite
+
+**Still not verified: that a created object survives a restart.** Not for lack
+of trying — the store is empty (`object_metadata` 0 rows), so nothing has been
+created yet, and there is no way to create one from here. The local-control
+catalog has no Warp Drive object actions at all: 85 actions covering app,
+window, tab, pane, session, input, surface, setting, theme, appearance,
+keybinding and file, and nothing that creates a workflow, rule or folder.
+`input.*` writes to the terminal's input editor, not to whatever UI has focus,
+so the `+` button cannot be reached by scripting. This needs one human click,
+or a new local-control action.
+
+- [ ] **T4.6** Create a Warp Drive object with no account and confirm it is
+      still there after a restart. One click, or see T1.12.
+- [ ] **T1.12** Add Warp Drive object actions to the local-control catalog.
+      Surfaced by T4.2 verification: the catalog can drive every part of the
+      app *except* its object store, which makes exactly the fork's own
+      headline feature the one thing an agent cannot exercise. Same shape as
+      the `setting.get/set` allowlist gap recorded under T2.
+
+### Known: two T4.2 consequences, surfacing as test failures
 
 `ai::execution_profiles::profiles::tests::
 auth_completion_waits_for_cloud_initial_load_before_migrating` fails under fork
@@ -588,6 +632,18 @@ first and the server's merge in afterwards via `CloudModelEvent::
 InitialLoadCompleted`, which `profiles.rs` already subscribes to. Both sets
 survive; the test is asserting the intermediate state, and that state is
 genuinely different now.
+
+`workspace::view::tests::
+test_tools_panel_preferences_activate_after_signup_and_ai_enablement` fails the
+same way and for the same kind of reason, added by the drive-availability fix
+below. It asserts the left panel reports `RequiresAccount` for Warp Drive
+before signup; under fork policy it reports `Available`, because it is. A/B'd
+against `WARP_FORK_POLICY=0`, which passes.
+
+Three inversions in the fork now, all of the same shape: a test pinning
+upstream's "this needs an account" premise, which is the premise the fork
+exists to remove. Worth watching as a count — if it keeps climbing, the fork is
+diverging faster than the seam design intends.
 
 ## T4.4 scope — git-backed sync
 

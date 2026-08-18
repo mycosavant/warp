@@ -635,13 +635,21 @@ the server does not know, which is the point.
 
 ### Where your objects live
 
-In `warp.sqlite`, alongside the rest of Warp's persisted state. The directory
-is resolved at runtime rather than fixed — `persistence::sqlite::
-database_file_path_for_scope` picks a per-scope path (the GUI, the TUI and the
-remote-server daemon each get their own so they never share a database), under
-a secure container directory where the platform has one. Read it off
-`app_database_file_path` rather than assuming a location; the paths quoted
-elsewhere in this file are for config and logs, which are not the same place.
+On Windows, confirmed by inspection:
+
+    %LOCALAPPDATA%\warp\WarpOss\data\warp.sqlite
+
+The directory is resolved at runtime rather than fixed —
+`persistence::sqlite::database_file_path_for_scope` picks a per-scope path, so
+the GUI, the TUI and the remote-server daemon never share a database, and a
+secure container directory is used where the platform has one. On another
+platform or channel, read it off `app_database_file_path` rather than assuming
+the path above.
+
+Note the store is `WAL`-mode: `warp.sqlite-wal` holds recent writes and can be
+much larger than the database itself. Copy all three files (`.sqlite`, `-wal`,
+`-shm`) if you want to inspect it, or the objects written this session will
+appear to be missing.
 
 Objects show a laptop icon reading **"Saved locally"** rather than a sync
 spinner. That is upstream's own indicator for "changed locally, queue not
