@@ -1000,13 +1000,24 @@ impl UserWorkspaces {
     // This is always possible, as unknown owners imply the shared space.
     pub fn owner_to_space(&self, owner: Owner, ctx: &AppContext) -> Space {
         match owner {
-            Owner::User { user_uid } => {
+            Owner::User { .. } => {
                 if !FeatureFlag::SharedWithMe.is_enabled() {
                     return Space::Personal;
                 }
 
-                let current_user = AuthStateProvider::as_ref(ctx).get().user_id();
-                if Some(user_uid) == current_user {
+                // Compared against `personal_drive` rather than `user_id` directly so
+                // that the reading side and the writing side agree on who "I" am.
+                // For a signed-in user these are identical — `personal_drive` is
+                // `Owner::User { user_uid: <current user> }`. Account-free they are
+                // not: `user_id()` is `None` while `personal_drive` is the local
+                // sentinel, so an object this client just created failed
+                // `Some(uid) == None` and filed itself under "Shared with me".
+                //
+                // Caught by creating a workflow in the running Windows build and
+                // restarting; every unit test passed with the bug in place, because
+                // they exercise the two sides separately. See T4.6.
+                let current_owner = self.personal_drive(ctx);
+                if Some(owner) == current_owner {
                     Space::Personal
                 } else {
                     Space::Shared

@@ -2,7 +2,7 @@ use warpui::{App, SingletonEntity};
 
 use super::*;
 use crate::auth::AuthStateProvider;
-use crate::cloud_object::{CloudObjectEventEntrypoint, ObjectType};
+use crate::cloud_object::{CloudObjectEventEntrypoint, ObjectType, Space};
 use crate::drive::settings::WarpDriveSettings;
 use crate::network::NetworkStatus;
 use crate::server::cloud_objects::update_manager::{InitiatedBy, UpdateManager};
@@ -208,6 +208,84 @@ fn the_drive_availability_gate_depends_on_the_anonymous_user_flag() {
         FORCE_ENABLED.contains(&FeatureFlag::SkipFirebaseAnonymousUser),
         "the availability gate above is only reachable while this flag is forced on"
     );
+}
+
+/// The writing side and the reading side have to agree on who "I" am.
+///
+/// `personal_drive` stamps new objects with the local sentinel; `owner_to_space`
+/// decides which space an object belongs to. Account-free, `user_id()` is `None`
+/// while the sentinel is not, so comparing against `user_id()` made every
+/// locally-created object fail the match and file itself under "Shared with me".
+///
+/// Every unit test passed with that bug in place, because they covered the two
+/// sides separately. It took creating a workflow in the running Windows build
+/// and restarting to see it. This test is the pair of them together.
+#[test]
+fn a_locally_created_object_belongs_to_the_personal_space() {
+    let _guard = FeatureFlag::SharedWithMe.override_enabled(true);
+
+    App::test((), |app| async move {
+        app.add_singleton_model(|_| AuthStateProvider::new_logged_out_for_test());
+        app.add_singleton_model(UserWorkspaces::default_mock);
+
+        app.read(|ctx| {
+            let workspaces = UserWorkspaces::as_ref(ctx);
+            let owner = workspaces
+                .personal_drive(ctx)
+                .expect("fork policy provides a local drive owner");
+
+            assert_eq!(
+                workspaces.owner_to_space(owner, ctx),
+                Space::Personal,
+                "an object this client just created must not come back as someone else's"
+            );
+        });
+    });
+}
+
+/// The same round trip with an account, which is upstream's own behaviour and
+/// has to keep working — the change routes both sides through one seam rather
+/// than special-casing the account-free path.
+#[test]
+fn a_signed_in_users_own_object_still_belongs_to_the_personal_space() {
+    let _guard = FeatureFlag::SharedWithMe.override_enabled(true);
+
+    App::test((), |app| async move {
+        app.add_singleton_model(|_| AuthStateProvider::new_for_test());
+        app.add_singleton_model(UserWorkspaces::default_mock);
+
+        app.read(|ctx| {
+            let workspaces = UserWorkspaces::as_ref(ctx);
+            let owner = workspaces
+                .personal_drive(ctx)
+                .expect("a signed-in user has a personal drive");
+
+            assert_eq!(workspaces.owner_to_space(owner, ctx), Space::Personal);
+        });
+    });
+}
+
+/// Someone else's object must still read as shared, or the fix would have
+/// quietly turned "Shared with me" into a second personal space.
+#[test]
+fn another_users_object_is_still_shared() {
+    let _guard = FeatureFlag::SharedWithMe.override_enabled(true);
+
+    App::test((), |app| async move {
+        app.add_singleton_model(|_| AuthStateProvider::new_logged_out_for_test());
+        app.add_singleton_model(UserWorkspaces::default_mock);
+
+        app.read(|ctx| {
+            let someone_else = Owner::User {
+                user_uid: UserUid::new("kK3sBqL9vXdF2mN7pR1tY4wZ8cJ6"),
+            };
+
+            assert_eq!(
+                UserWorkspaces::as_ref(ctx).owner_to_space(someone_else, ctx),
+                Space::Shared
+            );
+        });
+    });
 }
 
 fn local_object_creation() -> QueueItem {
