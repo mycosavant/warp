@@ -385,3 +385,24 @@ fn a_failing_command_surfaces_its_stderr() {
     assert!(message.contains("failed to load model"), "{message}");
     fs::remove_file(path).ok();
 }
+
+#[cfg(windows)]
+#[test]
+#[ignore = "diagnostic"]
+fn windows_spawn_probe() {
+    let path = std::env::temp_dir().join("warp-probe.cmd");
+    fs::write(&path, "@echo off\r\necho probe-ok\r\n").unwrap();
+
+    let std_result = std::process::Command::new(&path).output();
+    println!("std::process on .cmd  -> {std_result:?}");
+
+    let blocking_result = command::blocking::Command::new(&path).output();
+    println!("command::blocking .cmd -> {blocking_result:?}");
+
+    let exe_result = command::blocking::Command::new("cmd.exe")
+        .args(["/c", "echo", "probe-ok"])
+        .output();
+    println!("command::blocking .exe -> {exe_result:?}");
+
+    fs::remove_file(path).ok();
+}
