@@ -89,6 +89,29 @@ pub fn local_control_default_enabled() -> bool {
     is_active()
 }
 
+/// Whether voice input is transcribed on this machine.
+///
+/// Upstream has one transcription path and it is not local: `server::
+/// voice_transcriber::ServerVoiceTranscriber` base64-encodes the recording and
+/// POSTs it to `api.warp.dev`. The `ai::voice::transcribe::Provider` enum
+/// (`Wispr` | `OpenAI`) selects *Warp's upstream vendor*, not where inference
+/// runs, so neither value keeps audio on the machine.
+///
+/// This is unconditional under fork policy rather than opt-in, for two reasons.
+/// It is a privacy fix, not a preference — no toggle should be able to put
+/// microphone audio back on the wire. And the server path cannot work here
+/// anyway: transcription is an authenticated call, and this fork runs without
+/// an account, so upstream's transcriber can only fail. Substituting a local
+/// one strictly enlarges what works.
+///
+/// Consumed by `voice::local_transcriber::fork_voice_transcriber`, which is
+/// deliberately fail-closed: when it is installed it is the *only* transcriber,
+/// and a misconfigured endpoint surfaces as an error rather than falling back
+/// to the server.
+pub fn local_voice_transcription_enabled() -> bool {
+    is_active()
+}
+
 /// Harnesses exposed locally without asking Warp's server for permission.
 ///
 /// Upstream ships `default_harnesses()` containing only `Oz` (Warp's own
@@ -141,7 +164,11 @@ pub fn account_gate_bypassed() -> bool {
 /// server*; those should keep seeing the real auth state so they fail fast
 /// instead of issuing credential-less requests.
 pub fn is_anonymous_for_ui(actual: bool) -> bool {
-    if account_gate_bypassed() { false } else { actual }
+    if account_gate_bypassed() {
+        false
+    } else {
+        actual
+    }
 }
 
 /// Applies fork feature-flag policy.

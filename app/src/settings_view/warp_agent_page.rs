@@ -126,6 +126,11 @@ const SHARED_BLOCK_TITLE_GENERATION_DESCRIPTION: &str =
 const GIT_OPERATIONS_AUTOGEN_DESCRIPTION: &str =
     "Let AI generate commit messages and pull request titles and descriptions.";
 const WISPR_FLOW_URL: &str = "https://wisprflow.ai/";
+/// Replaces [`WISPR_FLOW_URL`] under fork policy, where transcription no longer
+/// reaches Wispr Flow. whisper.cpp is what
+/// `agents.voice.local_transcription.endpoint` defaults to addressing, so its
+/// documentation is the destination that can actually help.
+const WHISPER_CPP_URL: &str = "https://github.com/ggml-org/whisper.cpp";
 const CUSTOM_INFERENCE_LEARN_MORE_URL: &str =
     "https://docs.warp.dev/agents/inference/custom-inference-endpoint/";
 const CUSTOM_INFERENCE_TERMS_URL: &str = "https://www.warp.dev/legal/terms-of-service";
@@ -3467,13 +3472,26 @@ impl VoiceWidget {
             app,
         ));
 
-        let voice_input_description_text_fragments = vec![
-            FormattedTextFragment::plain_text(
-                "Voice input allows you to control Warp by speaking directly to your terminal (powered by ",
-            ),
-            FormattedTextFragment::hyperlink("Wispr Flow", WISPR_FLOW_URL),
-            FormattedTextFragment::plain_text(")."),
-        ];
+        // Under fork policy the recording never leaves the machine, so naming
+        // Wispr Flow here would be false. See `voice::local_transcriber`.
+        let voice_input_description_text_fragments =
+            if crate::fork::local_voice_transcription_enabled() {
+                vec![
+                    FormattedTextFragment::plain_text(
+                        "Voice input allows you to control Warp by speaking directly to your terminal. Audio is transcribed on this machine; configure the transcriber under agents.voice.local_transcription in settings.toml (see ",
+                    ),
+                    FormattedTextFragment::hyperlink("whisper.cpp", WHISPER_CPP_URL),
+                    FormattedTextFragment::plain_text(")."),
+                ]
+            } else {
+                vec![
+                    FormattedTextFragment::plain_text(
+                        "Voice input allows you to control Warp by speaking directly to your terminal (powered by ",
+                    ),
+                    FormattedTextFragment::hyperlink("Wispr Flow", WISPR_FLOW_URL),
+                    FormattedTextFragment::plain_text(")."),
+                ]
+            };
 
         let voice_input_description = FormattedTextElement::new(
             FormattedText::new([FormattedTextLine::Line(

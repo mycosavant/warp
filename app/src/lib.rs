@@ -2136,8 +2136,10 @@ pub(crate) fn initialize_app(
 
     #[cfg(feature = "voice_input")]
     ctx.add_singleton_model(voice_input::VoiceInput::new);
-    ctx.add_singleton_model(|_| {
-        VoiceTranscriber::new(Arc::new(ServerVoiceTranscriber::new(server_api.clone())))
+    ctx.add_singleton_model(|ctx| {
+        voice::local_transcriber::fork_voice_transcriber(ctx).unwrap_or_else(|| {
+            VoiceTranscriber::new(Arc::new(ServerVoiceTranscriber::new(server_api.clone())))
+        })
     });
 
     let notebooks = cloud_objects

@@ -35,8 +35,8 @@ pub fn initialize_settings_for_tests_with_mode(
         AISettings, AccessibilitySettings, AliasExpansionSettings, AppEditorSettings,
         BlockVisibilitySettings, ChangelogSettings, CloudPreferencesSettings, CodeSettings,
         DebugSettings, EmacsBindingsSettings, FontSettings, GPUSettings, InputModeSettings,
-        InputSettings, LocalControlSettings, NativePreferenceSettings, PaneSettings,
-        SameLinePromptBlockSettings, ScrollSettings, SelectionSettings,
+        InputSettings, LocalControlSettings, LocalVoiceSettings, NativePreferenceSettings,
+        PaneSettings, SameLinePromptBlockSettings, ScrollSettings, SelectionSettings,
         SharedObjectLimitBannerSettings, SshSettings, ThemeSettings, TuiVoiceSettings,
         VimBannerSettings, init_and_register_user_preferences,
     };
@@ -92,6 +92,7 @@ pub fn initialize_settings_for_tests_with_mode(
     if warp_core::features::FeatureFlag::WarpControlCli.is_enabled() {
         LocalControlSettings::register(app);
     }
+    LocalVoiceSettings::register(app);
 
     #[cfg(any(target_os = "linux", target_os = "freebsd"))]
     {
