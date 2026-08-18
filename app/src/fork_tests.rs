@@ -3,6 +3,7 @@ use warpui::{App, SingletonEntity};
 use super::*;
 use crate::auth::AuthStateProvider;
 use crate::cloud_object::{CloudObjectEventEntrypoint, ObjectType};
+use crate::drive::settings::WarpDriveSettings;
 use crate::network::NetworkStatus;
 use crate::server::cloud_objects::update_manager::{InitiatedBy, UpdateManager};
 use crate::server::ids::ClientId;
@@ -173,6 +174,40 @@ fn a_logged_in_user_still_queues_normally() {
             );
         });
     });
+}
+
+/// The fork disabled Warp Drive with its own T1 change, and only a live run
+/// caught it. `is_warp_drive_available` is
+/// `!SkipFirebaseAnonymousUser.is_enabled() || !is_anonymous_or_logged_out()`,
+/// and `SkipFirebaseAnonymousUser` is in [`FORCE_ENABLED`] — so under fork
+/// policy the first clause is false, being account-free makes the second false,
+/// and the drive switches itself off. Everything T4.2 fixed underneath it was
+/// unreachable: `surface.warp_drive.open` answered "Warp Drive is disabled".
+#[test]
+fn warp_drive_is_available_without_an_account() {
+    let _guard = FeatureFlag::SkipFirebaseAnonymousUser.override_enabled(true);
+
+    App::test((), |app| async move {
+        app.add_singleton_model(|_| AuthStateProvider::new_logged_out_for_test());
+
+        app.read(|ctx| {
+            assert!(
+                WarpDriveSettings::is_warp_drive_available(ctx),
+                "fork policy must not hide a drive that works fine without an account"
+            );
+        });
+    });
+}
+
+/// The flag is what makes the check bite, so pin that too — if
+/// `SkipFirebaseAnonymousUser` ever leaves `FORCE_ENABLED` this test should
+/// start passing for a different reason, and the one above would go quiet.
+#[test]
+fn the_drive_availability_gate_depends_on_the_anonymous_user_flag() {
+    assert!(
+        FORCE_ENABLED.contains(&FeatureFlag::SkipFirebaseAnonymousUser),
+        "the availability gate above is only reachable while this flag is forced on"
+    );
 }
 
 fn local_object_creation() -> QueueItem {

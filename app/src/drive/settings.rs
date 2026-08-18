@@ -47,10 +47,23 @@ impl WarpDriveSettings {
     /// feature remains unavailable until then.
     pub fn is_warp_drive_available(app: &warpui::AppContext) -> bool {
         use warpui::SingletonEntity as _;
+        // The auth check routes through `fork::is_anonymous_for_ui` because this
+        // decides what to *draw* — whether Warp Drive appears in the tools panel,
+        // command palette and command search — rather than whether to talk to the
+        // server. Under fork policy the drive is local-first and fully functional
+        // with no account, so hiding it would hide a working feature.
+        //
+        // Without this, fork policy disabled Warp Drive by way of its own T1
+        // change: `SkipFirebaseAnonymousUser` is in `fork::FORCE_ENABLED`, which
+        // makes the first clause false, and being logged out makes the second
+        // false. Found by running the Windows build, not by reading — every
+        // static trace of the drive stopped at the model layer. See T4.2.
         !FeatureFlag::SkipFirebaseAnonymousUser.is_enabled()
-            || !crate::auth::AuthStateProvider::as_ref(app)
-                .get()
-                .is_anonymous_or_logged_out()
+            || !crate::fork::is_anonymous_for_ui(
+                crate::auth::AuthStateProvider::as_ref(app)
+                    .get()
+                    .is_anonymous_or_logged_out(),
+            )
     }
     /// Returns whether Warp Drive should be considered enabled.
     /// Returns `false` when the user is anonymous or fully logged out,

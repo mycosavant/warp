@@ -658,3 +658,101 @@ The above is covered by unit tests but has not been exercised in a real window.
 Worth confirming by hand on the Windows build: that Warp Drive renders its
 contents instead of a perpetual spinner, and that a workflow created with no
 account is still there after a restart.
+
+## Driving the Windows build from WSL
+
+Written down 2026-08-18 after the original working session was lost to a
+cleared context. The capability had been rebuilt from scratch twice by then;
+the scripts referenced here exist so it does not have to be a third time.
+
+The GUI only works on Windows (WSLg never composites a window, so the Linux
+build has no workspace and every mutating `warpctrl` action fails with
+`missing_target`). But an agent running in WSL can drive that Windows build
+end to end, because WSL interop makes `powershell.exe` an ordinary executable:
+
+```bash
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File 'C:\dev\shot.ps1' -Out 'C:\dev\shots\x.png'
+```
+
+Anything under `/mnt/c` is visible to both sides, so scripts, screenshots and
+proof files pass between them as plain files. No SSH, no agent, no daemon.
+
+### The three scripts
+
+| Script | What it does |
+|---|---|
+| `C:\dev\build.ps1` | Builds `warp-oss.exe` with the env that winget's PATH changes never reach. |
+| `C:\dev\shot.ps1`  | Screenshots a window (or the whole virtual screen) to PNG. |
+| `C:\dev\mcp_win*.ps1` | Drives a running instance over MCP, batched. |
+
+**`$ErrorActionPreference` must be `Continue` in any script that runs cargo.**
+Cargo writes its progress (`Compiling foo v1.2.3`) to stderr, and under `Stop`
+PowerShell promotes the first such line to a terminating `NativeCommandError`
+and aborts about two seconds in — *while still exiting 0*. It looks exactly
+like a successful incremental build that had nothing to do. Check
+`$LASTEXITCODE` and the binary's timestamp, not the exit status of the script.
+This cost a full cycle before it was spotted.
+
+`shot.ps1` takes `-Process warp-oss` to capture just Warp's window after
+raising it, `-Scale` to shrink the output, and `-DelaySeconds` to wait for the
+UI to settle. It calls `SetProcessDPIAware` first — without that, the window
+rect and the captured pixels disagree on a scaled display and the grab lands
+in the wrong place. It falls back to the whole virtual screen when the process
+has no `MainWindowHandle` yet, which is the normal state during early startup.
+
+A full-screen grab at this display's 2560x1440 is around 4 MB; `-Scale 0.5`
+brings it to roughly 800 KB, which is still legible for checking whether a
+panel rendered.
+
+### Driving it without an MCP client
+
+`warpctrl mcp` speaks newline-delimited JSON-RPC on stdio, so a batch of calls
+is just a file piped into it. This needs no MCP client at all and is the
+easiest way to script a verification:
+
+```powershell
+$msgs = @(
+  '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}'
+  '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"warp_app_focus","arguments":{}}}'
+  '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"warp_tab_create","arguments":{}}}'
+  '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"warp_input_submit","arguments":{"text":"..."}}}'
+)
+$msgs | Out-File C:\dev\mcp_in.jsonl -Encoding ascii
+Get-Content C:\dev\mcp_in.jsonl | & .\target\debug\warp-oss.exe --warpctrl mcp 2>$null
+```
+
+Write the messages as `-Encoding ascii`. PowerShell's default adds a BOM, and
+the first JSON-RPC line then fails to parse.
+
+Single actions do not need the MCP framing at all — `--warpctrl input submit
+'...'` is enough, which is what `C:\dev\proof.ps1` does.
+
+### Proving a command actually ran
+
+The pattern used throughout T1: submit a command that writes a file, then look
+for the file. It is the only check that cannot be satisfied by an
+acknowledgement that lies.
+
+```powershell
+.\target\debug\warp-oss.exe --warpctrl input submit 'Set-Content -Path C:\dev\proof.txt -Value RAN'
+Start-Sleep -Seconds 6
+Test-Path C:\dev\proof.txt
+```
+
+Sleep before checking. `input.submit` returns `queued: true` rather than
+`executed: true` when the pane's shell is still starting, and a freshly created
+tab is the common case — the command runs a moment later.
+
+### Shut it down with CloseMainWindow, not Kill
+
+```powershell
+(Get-Process warp-oss).CloseMainWindow()
+```
+
+`Kill()` skips the cleanup that removes the local-control discovery record, so
+the next `instance list` reports `ambiguous_instance` against an instance that
+no longer exists. Warp also spawns a crash-recovery sibling that re-binds
+`127.0.0.1:9282` and respawns a terminal server when the parent dies, so a
+killed process leaves the port held and the next launch fails to bind. This is
+also the most likely cause of the `.recovery` log-file mystery recorded under
+T2.
