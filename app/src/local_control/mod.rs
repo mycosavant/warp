@@ -900,8 +900,18 @@ fn lookup_credential(
     grant.verify_for_action(instance_id, grant.action)?;
     Ok(grant)
 }
+/// Whether this platform can publish a discovery record safely.
+///
+/// The requirement is an owner-only ACL on the registry directory, each record
+/// and the credential broker transport — without it, publication would leak
+/// routing metadata to other OS users. Upstream expresses this as
+/// `not(target_os = "windows")` because only the Unix mode-bit path existed.
+///
+/// The fork implements the same guarantee on Windows with a protected DACL
+/// (see `local_control::windows_security`), so the condition is now stated as
+/// the capability it actually stands for rather than as a platform list.
 fn local_control_publication_supported() -> bool {
-    cfg!(not(target_os = "windows"))
+    cfg!(any(unix, windows))
 }
 
 /// Performs browser-origin hardening for local-control endpoints.
