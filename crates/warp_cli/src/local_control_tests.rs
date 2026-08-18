@@ -428,6 +428,10 @@ fn retained_action_examples() -> Vec<(ActionKind, Vec<&'static str>)> {
             ActionKind::InputReplace,
             vec!["warpctrl", "input", "replace", "hello"],
         ),
+        (
+            ActionKind::InputSubmit,
+            vec!["warpctrl", "input", "submit", "pwd"],
+        ),
         (ActionKind::ThemeList, vec!["warpctrl", "theme", "list"]),
         (ActionKind::ThemeGet, vec!["warpctrl", "theme", "get"]),
         (
@@ -649,6 +653,7 @@ fn parsed_action_kind(command: &ControlCommand) -> Option<ActionKind> {
         ControlCommand::Input(command) => match command {
             InputCommand::Insert(_) => Some(ActionKind::InputInsert),
             InputCommand::Replace(_) => Some(ActionKind::InputReplace),
+            InputCommand::Submit(_) => Some(ActionKind::InputSubmit),
         },
         ControlCommand::Theme(command) => match command {
             ThemeCommand::List(_) => Some(ActionKind::ThemeList),
@@ -735,5 +740,7 @@ fn parsed_action_kind(command: &ControlCommand) -> Option<ActionKind> {
             },
         },
         ControlCommand::Completions { .. } => None,
+        // Not a single action: `mcp` serves the whole catalog over stdio.
+        ControlCommand::Mcp => None,
     }
 }

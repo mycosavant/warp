@@ -1,6 +1,7 @@
 //! Command-line interface for controlling a running local Warp app.
 mod commands;
 mod completions;
+mod mcp;
 mod output;
 mod selectors;
 use std::ffi::OsString;
@@ -148,6 +149,18 @@ pub enum ControlCommand {
     /// Inspect public action metadata and implementation status.
     #[command(subcommand)]
     Action(ActionCatalogCommand),
+
+    /// Serve the action catalog to an MCP client over stdio.
+    ///
+    /// Every implemented action becomes one MCP tool, generated from the
+    /// catalog rather than hardcoded. Intended to be launched by the client,
+    /// not run interactively: stdout carries JSON-RPC, stderr carries
+    /// diagnostics.
+    ///
+    /// Register with Claude Code:
+    ///     claude mcp add warp -- <path-to-warp-binary> --warpctrl mcp
+    #[command(verbatim_doc_comment)]
+    Mcp,
 
     /// Inspect local Warp windows.
     #[command(subcommand)]
@@ -927,6 +940,8 @@ fn run_inner(args: ControlArgs) -> Result<(), local_control::protocol::ControlEr
         ControlCommand::App(command) => run_app_command(command, output_format),
         ControlCommand::Capability(command) => run_capability_command(command, output_format),
         ControlCommand::Action(command) => run_action_catalog_command(command, output_format),
+        // Never returns: the MCP server owns stdio until the client closes it.
+        ControlCommand::Mcp => mcp::run_and_exit(),
         ControlCommand::Window(command) => run_window_command(command, output_format),
         ControlCommand::Tab(command) => run_tab_command(command, output_format),
         ControlCommand::Pane(command) => run_pane_command(command, output_format),
