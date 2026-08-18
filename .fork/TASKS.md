@@ -35,16 +35,65 @@ Warp from Claude Code.
 Reference: `crates/warp_cli/src/local_control/`, `app/src/local_control/`,
 `crates/local_control/`.
 
-- [ ] **T1.1** Force `FeatureFlag::WarpControlCli` on in `fork::FORCE_ENABLED`
-- [ ] **T1.2** Default `LocalControlSettings` to `Enabled` under fork policy
-      (it is a `SecureSetting`; default is channel-derived and off for public
-      channels — needs a fork-aware default, not a stored-value edit)
-- [ ] **T1.3** Verify the `--warpctrl` entrypoint dispatches in our build
-      (`CONTROL_MODE_FLAG`, `ControlArgs::from_control_mode_env`)
-- [ ] **T1.4** Smoke test: `instance list`, `app ping`, `app active`
-- [ ] **T1.5** Smoke test mutations: `tab create`, `pane split`, `input insert`
-- [ ] **T1.6** Confirm no account gate anywhere on the local-control path
+- [x] **T1.1** Force `FeatureFlag::WarpControlCli` on in `fork::FORCE_ENABLED`
+- [x] **T1.2** Default `LocalControlSettings` to `Enabled` under fork policy
+      via `settings::local_control::effective_default_mode`. Upstream's
+      `default_mode_for_channel` left pure so its per-channel test still holds.
+- [x] **T1.3** `--warpctrl` entrypoint dispatches. Verified: feature-flag init
+      runs before the dispatch in `lib.rs::run`, so `fork::
+      apply_feature_preferences` lands in time.
+- [x] **T1.4** Verified 2026-08-17 against a live instance, **logged out**:
+      `instance list` → instance discovered; `app ping` → reachable;
+      `app version`; `app active`; `window list`; `tab list`;
+      `setting list` → real setting values. Full chain exercised: discovery
+      record → Unix-socket credential broker → loopback HTTP + bearer →
+      `LocalControlBridge` on the main thread.
+- [x] **T1.6** No account gate anywhere on the local-control path — every
+      command above ran with no Warp account. Confirmed by reading
+      (`permissions.rs` checks only the feature flag + settings) and
+      empirically.
+- [x] **T1.5a** Catalog verified: **84 actions, all `implemented`** —
+      `app` 4, `window` 5, `tab` 10, `pane` 11, `session` 6, `input` 2,
+      `surface` 20, `setting` 4, `theme` 6, `appearance` 7, `keybinding` 2,
+      `file` 1, plus `instance`/`action`/`capability` introspection.
+- [!] **T1.5b** Mutations unverified — blocked, see below.
 - [ ] **T1.7** Document the verified command surface in `.fork/README.md`
+
+### Blocker: no workspace on Linux, no broker on Windows
+
+Mutating actions fail on the WSL build with
+`missing_target: tab.create requires a workspace in the target window`.
+`window list` shows one window with `has_workspace: false, is_active: false`
+— the window object exists but never gets a workspace because it never
+composites under WSLg. Not a local-control defect; the same WSLg RAIL
+forwarding failure that pushed the build to Windows.
+
+And local control **does not work on Windows at all**, by upstream design:
+
+    #[cfg(not(unix))]
+    /// Fails closed on platforms without an owner-authenticated broker transport.
+    fn request_credential_over_owner_ipc(..) -> Result<String, ControlError> {
+        Err(ControlError::new(ErrorCode::LocalControlDisabled,
+            "local control requires an owner-authenticated credential broker"))
+    }
+
+`request_credential` is on every request path, so every action fails closed.
+Discovery *is* ported (`is_pid_alive` has a `#[cfg(windows)]` arm via
+`tasklist`) and the loopback HTTP transport is `cfg(not(wasm))`, so the
+credential broker is the sole missing piece. Unimplemented platform, not a bug.
+
+Net: the build that renders can't be controlled; the build that can be
+controlled won't render.
+
+- [ ] **T1.10** Windows named-pipe credential broker — the recommended unblock.
+      Bounded: a `#[cfg(windows)]` sibling for `bind_credential_broker` /
+      `run_credential_broker` (app side) and `request_credential_over_owner_ipc`
+      (client side). Named pipes preserve the security model: a restrictive
+      DACL replaces the 0600 mode bits, and `GetNamedPipeClientProcessId` plus
+      client impersonation replaces kernel-reported peer UID. Purely additive
+      alongside the existing `#[cfg(unix)]` arms.
+- [ ] **T1.11** Alternative: fix WSLg rendering so the Linux build is usable.
+      Also serves T6, but has resisted several attempts already.
 
 Deferred, dependent on T1 landing:
 
