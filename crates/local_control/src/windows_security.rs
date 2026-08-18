@@ -34,7 +34,7 @@ use windows::core::{PCWSTR, PWSTR};
 
 use crate::{ControlError, ErrorCode};
 
-fn security_error(operation: &str, error: impl std::fmt::Display) -> ControlError {
+fn security_error(operation: impl std::fmt::Display, error: impl std::fmt::Display) -> ControlError {
     ControlError::with_details(
         ErrorCode::Internal,
         format!("failed to {operation}"),
@@ -98,6 +98,7 @@ impl OwnerOnlySecurityDescriptor {
                 self.descriptor,
             )
         }
+        .ok()
         .map_err(|err| {
             security_error(
                 format!("apply an owner-only ACL to {}", path.display()),
@@ -152,7 +153,7 @@ pub struct TokenUserBuffer(Vec<u8>);
 
 impl TokenUserBuffer {
     /// The SID borrowed from the owned buffer.
-    pub fn sid(&self) -> windows::Win32::Foundation::PSID {
+    pub fn sid(&self) -> windows::Win32::Security::PSID {
         let user = self.0.as_ptr() as *const TOKEN_USER;
         unsafe { (*user).User.Sid }
     }
