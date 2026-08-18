@@ -146,6 +146,37 @@ Relevant flags: `AgentHarness`, `APIKeyManagement`, `McpOauth` (enable);
 See `README.md`. Working tree normalized 5,894 → 7 files; branch topology
 established.
 
+## Status correction (2026-08-17, after first real run)
+
+An earlier draft claimed Tier 1 "already works, zero code". **That was wrong.**
+Running the built app showed the entire AI surface greyed out, with
+*"Without an account, you won't have access to Warp's AI features"* and
+*"Create an account to use your own API keys"*. The account gate — specced in
+Phase 1 but never implemented — was the actual blocker, not telemetry.
+
+Two things were then fixed:
+
+**Account gate.** Three single conditions, not 31 call sites:
+`settings::ai::AISettings::is_any_ai_enabled` (master switch),
+`UserWorkspaces::is_byo_api_key_enabled`, and
+`UserWorkspaces::is_custom_inference_enabled`. Deliberately *not* overriding
+`is_anonymous_or_logged_out` itself — that opens all 31 gates including ones
+that then call the server with no credential.
+
+**Telemetry collection.** The flag work stopped scheduled *sending*, but a live
+run logged `Successfully wrote telemetry events to disk`
+(`server/telemetry/collector.rs:88`) — events were still being recorded and
+persisted as a backlog "for sending on the next app startup". The egress
+deny-list was doing all the real work. Now the five
+`PrivacySettingsSnapshot` accessors are overridden, including
+`is_telemetry_force_enabled` (an override that re-enables telemetry regardless
+of preference) and `should_collect_ai_ugc_telemetry` (prompts and responses).
+
+**The open Phase 3 question is also answered**, by Warp's own settings copy:
+*"API keys added here are stored only on this device, not on Warp's servers."*
+BYO keys are direct client→provider calls. There is no proxy to replace —
+Phase 3 is a gate removal plus a harness, not a transport rewrite.
+
 ## Phase 1 — kill switch (chosen strategy: behavioral, not textual)
 
 **Principle: no deletions.** Add one fork-owned module that forces the relevant
