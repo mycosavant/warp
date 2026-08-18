@@ -986,6 +986,10 @@ impl ServerApi {
         request: &GenerateAIInputSuggestionsRequest,
     ) -> Result<generate_ai_input_suggestions::GenerateAIInputSuggestionsResponseV2, AIApiError>
     {
+        if crate::fork::local_ai_completions_enabled() {
+            return Ok(crate::ai::local_completion::generate_ai_input_suggestions(request).await?);
+        }
+
         let auth_token = self.get_or_refresh_access_token().await?;
 
         let request_builder = self.base_client.http_client().post(format!(
@@ -1038,6 +1042,10 @@ impl ServerApi {
         &self,
         request: &GenerateAMQuerySuggestionsRequest,
     ) -> Result<generate_am_query_suggestions::GenerateAMQuerySuggestionsResponse, AIApiError> {
+        if crate::fork::local_ai_completions_enabled() {
+            return Ok(crate::ai::local_completion::generate_am_query_suggestions(request).await?);
+        }
+
         let auth_token = self.get_or_refresh_access_token().await?;
 
         cfg_if::cfg_if! {

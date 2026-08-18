@@ -17,7 +17,7 @@ use super::{
     AISettings, AccessibilitySettings, AliasExpansionSettings, AppEditorSettings,
     BlockVisibilitySettings, ChangelogSettings, CodeSettings, DebugSettings, EmacsBindingsSettings,
     FontSettings, FontSettingsChangedEvent, GPUSettings, InputBoxType, InputModeSettings,
-    InputSettings, LocalControlSettings, LocalVoiceSettings, PaneSettings,
+    InputSettings, LocalAiSettings, LocalControlSettings, LocalVoiceSettings, PaneSettings,
     SameLinePromptBlockSettings, ScrollSettings, SelectionSettings,
     SharedObjectLimitBannerSettings, SshSettings, ThemeSettings, TuiAutoupdateSettings,
     TuiThemeSettings, TuiVoiceSettings, TuiZeroStateSettings, VimBannerSettings,
@@ -108,6 +108,7 @@ pub fn register_all_settings(ctx: &mut AppContext) {
     if FeatureFlag::WarpControlCli.is_enabled() {
         LocalControlSettings::register(ctx);
     }
+    LocalAiSettings::register(ctx);
     LocalVoiceSettings::register(ctx);
 
     #[cfg(any(target_os = "linux", target_os = "freebsd"))]

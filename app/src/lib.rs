@@ -1788,6 +1788,13 @@ pub(crate) fn initialize_app(
         },
     );
 
+    // Mirrors the endpoint, key and per-feature models into a process global
+    // the four `/ai/*` call sites can read without a context. Must follow
+    // `ApiKeyManager`, which it subscribes to.
+    if crate::fork::local_ai_completions_enabled() {
+        crate::ai::local_completion::install(ctx);
+    }
+
     ctx.add_singleton_model(AntivirusInfo::new);
 
     cfg_if::cfg_if! {

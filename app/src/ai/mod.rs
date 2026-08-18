@@ -72,6 +72,7 @@ pub mod facts;
 pub(crate) mod generate_block_title;
 pub(crate) mod generate_code_review_content;
 pub(crate) mod loading;
+pub(crate) mod local_completion;
 pub mod mcp;
 pub mod outline;
 

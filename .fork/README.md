@@ -506,3 +506,82 @@ reason whisper wants it.
 What this does *not* prove is the microphone-to-transcript path end to end;
 that needs someone to speak into it. Worth doing once with a proxy running to
 confirm nothing reaches `api.warp.dev`.
+
+## The four small AI features, without Warp in the middle
+
+Next Command, Prompt Suggestions, Shared Block Title Generation and Commit & PR
+Generation are each one `POST` to `api.warp.dev/ai/*` — a JSON body, a JSON
+reply, no streaming, no session state. Warp's server is a bearer-authenticated
+proxy in front of a model, which is why these four can be re-pointed without
+touching the agent.
+
+Under fork policy they go to a model you control instead. Like voice, this is
+**fail-closed**: even unconfigured they never reach `api.warp.dev`. The reason
+is the payloads. Between them these four carry terminal output plus the command
+that produced it, your working directory and recent shell history, and an
+entire working-tree diff. The account gates are already bypassed, so without
+this you could flip a toggle and quietly resume shipping all of that upstream.
+
+Unconfigured, you get an error naming the setting to fill in.
+
+### Setting it up
+
+**No key or URL goes in `settings.toml`** — that file is plaintext. Both come
+from Warp's own Custom Inference storage, which uses the OS keychain and already
+has an editor:
+
+> Settings → Warp Agent → Custom Inference → add an endpoint
+
+Give it a URL, a key and at least one model. That is the whole setup. A pasted
+Anthropic, OpenAI or OpenRouter key on the same page works too, with no endpoint
+at all.
+
+`settings.toml` only chooses among what is stored there:
+
+    [agents.local_ai]
+    endpoint = ""      # Custom Inference endpoint name; empty = use the first
+    model    = ""      # empty = the endpoint's first model
+
+    [agents.local_ai.models]   # per-feature overrides; empty = agents.local_ai.model
+    next_command       = ""    # fires on nearly every prompt — go small and fast
+    prompt_suggestions = ""
+    block_title        = ""
+    code_review        = ""    # reads a whole diff — a bigger model pays off here
+
+Resolution order, most explicit first: the endpoint named above → the first
+configured endpoint → an Anthropic key → an OpenAI key → an OpenRouter key. A
+*named* endpoint that does not exist is an error rather than a fall-through to
+some other provider, because falling through would send the payload somewhere
+you did not pick.
+
+Google is not in that chain on purpose: the Gemini API is not OpenAI-shaped at
+its documented endpoint, so a Google key needs an explicit Custom Inference
+entry pointing at a compatibility route — better than a guess made here that
+fails at request time.
+
+### Local, meaning issued from this machine
+
+Not necessarily inferred on it. The same path serves a llama.cpp server on
+loopback and `api.anthropic.com` with your own key. What both have in common —
+and the whole point — is that Warp is not in the middle. For a fully on-device
+setup, point a Custom Inference endpoint at whatever you already run:
+
+    http://127.0.0.1:11434/v1/chat/completions    # Ollama
+    http://127.0.0.1:8080/v1/chat/completions     # llama.cpp / LM Studio
+
+Protocol comes from the endpoint's schema dropdown — OpenAI Chat Completions,
+OpenAI Responses, or Anthropic Messages. All three are implemented.
+
+### Trying it
+
+    # in a repo with uncommitted changes
+    Commit & PR generation  ->  a commit message from your endpoint
+
+A wrong model name comes back as the provider's own 404, which names the model;
+set `agents.local_ai.model` to fix it. An endpoint that is not listening comes
+back naming the URL it could not reach.
+
+This part has *not* been verified against a real provider — there was no key or
+local LLM available to test with. The request shape is asserted field by field
+against a stub server, but a stub agrees with whatever it is told. One real
+request is worth more than that whole test file.

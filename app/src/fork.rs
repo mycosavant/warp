@@ -112,6 +112,31 @@ pub fn local_voice_transcription_enabled() -> bool {
     is_active()
 }
 
+/// Whether the four small AI features call a model the user controls.
+///
+/// "Next Command", "Prompt Suggestions", "Shared Block Title Generation" and
+/// "Commit & PR Generation" are each a single-shot `POST` to an `/ai/*` route
+/// on `api.warp.dev` — no streaming, no tool use, no session state. Warp's
+/// server is a bearer-authenticated proxy in front of a model, nothing more,
+/// which is why these four can be re-pointed without touching the agent.
+///
+/// Fail-closed for the same reason voice transcription is: every one of these
+/// requests carries user data off the machine — terminal output and the command
+/// that produced it, the working directory and recent shell history, or an
+/// entire working-tree diff. [`account_gate_bypassed`] makes the toggles
+/// reachable without an account, so without this a fork user could switch one
+/// on and quietly resume shipping exactly that payload upstream.
+///
+/// So under fork policy these four never reach `api.warp.dev`. An unconfigured
+/// endpoint surfaces as an error naming the setting to fill in, rather than
+/// falling back to the server.
+///
+/// Consumed by `ai::local_completion`, which resolves the endpoint and key from
+/// `ai::api_keys::ApiKeyManager` and the model from `settings::LocalAiSettings`.
+pub fn local_ai_completions_enabled() -> bool {
+    is_active()
+}
+
 /// Harnesses exposed locally without asking Warp's server for permission.
 ///
 /// Upstream ships `default_harnesses()` containing only `Oz` (Warp's own

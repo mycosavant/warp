@@ -2987,6 +2987,10 @@ impl AIClient for ServerApi {
         &self,
         request: GenerateCodeReviewContentRequest,
     ) -> Result<GenerateCodeReviewContentResponse, anyhow::Error> {
+        if crate::fork::local_ai_completions_enabled() {
+            return crate::ai::local_completion::generate_code_review_content(request).await;
+        }
+
         let auth_token = self.get_or_refresh_access_token().await?;
         let request_builder = self.base_client.http_client().post(format!(
             "{}/ai/generate_code_review_content",
