@@ -380,6 +380,14 @@ pub enum InputCommand {
 
     /// Replace the input buffer without submitting it.
     Replace(TextTargetArgs),
+
+    /// Replace the input buffer and run it.
+    ///
+    /// Unlike `insert` and `replace`, this executes. The text is still rejected
+    /// if it contains newlines or control characters, so one call runs exactly
+    /// one command. Fails rather than silently doing nothing when the target
+    /// pane is busy.
+    Submit(TextTargetArgs),
 }
 
 #[derive(Debug, Clone, Subcommand)]

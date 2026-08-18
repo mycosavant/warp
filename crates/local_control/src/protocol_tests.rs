@@ -163,8 +163,9 @@ fn malformed_and_removed_action_names_are_not_deserialized() {
 }
 
 #[test]
-fn catalog_has_exactly_84_retained_actions() {
-    assert_eq!(ActionKind::ALL.len(), 84);
+fn catalog_has_exactly_85_retained_actions() {
+    // 84 upstream actions plus the fork's `input.submit`.
+    assert_eq!(ActionKind::ALL.len(), 85);
 }
 
 #[test]

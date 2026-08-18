@@ -326,7 +326,10 @@ opentelemetry.workspace = true
 opentelemetry-http.workspace = true
 opentelemetry-otlp.workspace = true
 opentelemetry_sdk.workspace = true
-tokio.workspace = true
+# `net` is required for the Windows named-pipe credential broker in
+# `local_control`. It arrives transitively via axum/hyper today, but the broker
+# depends on it directly, so declare it rather than rely on feature unification.
+tokio = { workspace = true, features = ["net"] }
 tokio-util.workspace = true
 tracing-opentelemetry.workspace = true
 tracing-subscriber.workspace = true
@@ -406,10 +409,12 @@ windows = { workspace = true, features = [
     "Win32_Security",
     "Win32_Storage",
     "Win32_Storage_FileSystem",
+    "Win32_Security_Authorization",
     "Win32_System_Console",
     "Win32_System_Diagnostics_Debug",
     "Win32_System_Environment",
     "Win32_System_IO",
+    "Win32_System_Pipes",
     "Win32_System_ProcessStatus",
     "Win32_System_SystemInformation",
     "Win32_System_Threading",

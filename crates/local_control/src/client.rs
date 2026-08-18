@@ -159,7 +159,105 @@ fn request_credential_over_socket(
     Ok(response)
 }
 
-#[cfg(not(unix))]
+#[cfg(windows)]
+/// Resolves the selected instance's validated broker pipe and requests a credential.
+fn request_credential_over_owner_ipc(
+    instance: &InstanceRecord,
+    request: &CredentialRequest,
+) -> Result<String, ControlError> {
+    let pipe_name = instance.broker_pipe_name()?;
+    request_credential_over_pipe(&pipe_name, request)
+}
+
+/// Exchanges one credential request and response over an owner-only named pipe.
+///
+/// The Unix broker delimits its request by shutting down the write half and
+/// reading to EOF. A named pipe has no half-close, so both directions are
+/// length-prefixed instead. Framing is chosen per platform rather than shared
+/// because the Unix wire format is upstream's and left untouched; only this
+/// fork's Windows transport is new.
+#[cfg(windows)]
+fn request_credential_over_pipe(
+    pipe_name: &str,
+    request: &CredentialRequest,
+) -> Result<String, ControlError> {
+    use std::fs::OpenOptions;
+    use std::io::{Read as _, Write as _};
+
+    let mut pipe = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(pipe_name)
+        .map_err(|err| {
+            ControlError::with_details(
+                ErrorCode::TransportUnavailable,
+                "failed to connect to the owner-authenticated local-control credential broker",
+                err.to_string(),
+            )
+        })?;
+
+    let payload = serde_json::to_vec(request).map_err(|err| {
+        ControlError::with_details(
+            ErrorCode::Internal,
+            "failed to serialize local-control credential request",
+            err.to_string(),
+        )
+    })?;
+    let length = u32::try_from(payload.len()).map_err(|_| {
+        ControlError::new(
+            ErrorCode::InvalidRequest,
+            "local-control credential request is too large",
+        )
+    })?;
+    pipe.write_all(&length.to_le_bytes())
+        .and_then(|()| pipe.write_all(&payload))
+        .and_then(|()| pipe.flush())
+        .map_err(|err| {
+            ControlError::with_details(
+                ErrorCode::TransportUnavailable,
+                "failed to send local-control credential request",
+                err.to_string(),
+            )
+        })?;
+
+    let mut length = [0u8; 4];
+    pipe.read_exact(&mut length).map_err(|err| {
+        ControlError::with_details(
+            ErrorCode::TransportUnavailable,
+            "failed to read the local-control credential response length",
+            err.to_string(),
+        )
+    })?;
+    let length = u32::from_le_bytes(length) as usize;
+    if length > MAX_BROKER_RESPONSE_BYTES {
+        return Err(ControlError::new(
+            ErrorCode::TransportUnavailable,
+            "local-control credential response exceeded the maximum size",
+        ));
+    }
+    let mut response = vec![0u8; length];
+    pipe.read_exact(&mut response).map_err(|err| {
+        ControlError::with_details(
+            ErrorCode::TransportUnavailable,
+            "failed to read the local-control credential response",
+            err.to_string(),
+        )
+    })?;
+    String::from_utf8(response).map_err(|err| {
+        ControlError::with_details(
+            ErrorCode::TransportUnavailable,
+            "local-control credential response was not valid UTF-8",
+            err.to_string(),
+        )
+    })
+}
+
+/// Caps the length-prefixed response so a hostile prefix cannot force a large
+/// allocation before any of the payload has been read.
+#[cfg(windows)]
+const MAX_BROKER_RESPONSE_BYTES: usize = 64 * 1024;
+
+#[cfg(all(not(unix), not(windows)))]
 /// Fails closed on platforms without an owner-authenticated broker transport.
 fn request_credential_over_owner_ipc(
     _instance: &InstanceRecord,

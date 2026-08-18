@@ -107,8 +107,15 @@ pub(crate) fn handle(
             ctx,
         ),
         ActionKind::SessionReopenClosed => session_reopen_closed(instance_id, target, ctx),
-        ActionKind::InputInsert => input_text(instance_id, action, params, target, false, ctx),
-        ActionKind::InputReplace => input_text(instance_id, action, params, target, true, ctx),
+        ActionKind::InputInsert => {
+            input_text(instance_id, action, params, target, InputDisposition::Append, ctx)
+        }
+        ActionKind::InputReplace => {
+            input_text(instance_id, action, params, target, InputDisposition::Replace, ctx)
+        }
+        ActionKind::InputSubmit => {
+            input_text(instance_id, action, params, target, InputDisposition::Submit, ctx)
+        }
         ActionKind::SurfaceSettingsOpen => surface_settings_open(instance_id, params, target, ctx),
         ActionKind::SurfaceCommandPaletteOpen => surface_palette_open(
             instance_id,
@@ -598,12 +605,23 @@ fn pane_group_action(
     Ok(ack(instance_id, action_kind))
 }
 
+/// What an input action does with the text it is given.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum InputDisposition {
+    /// Insert at the cursor, leaving existing buffer content in place.
+    Append,
+    /// Replace the whole buffer.
+    Replace,
+    /// Replace the whole buffer and run it.
+    Submit,
+}
+
 fn input_text(
     instance_id: &Option<InstanceId>,
     action_kind: ActionKind,
     params: &serde_json::Value,
     target: &TargetSelector,
-    replace_buffer: bool,
+    disposition: InputDisposition,
     ctx: &mut ModelContext<LocalControlBridge>,
 ) -> Result<serde_json::Value, ControlError> {
     let text = text_param(params)?;
@@ -620,15 +638,38 @@ fn input_text(
                 format!("{} requires a terminal input target", action_kind.as_str()),
             )
         })?;
-    terminal_view.update(ctx, |terminal_view, ctx| {
-        terminal_view.input().update(ctx, |input, ctx| {
-            if replace_buffer {
-                input.replace_buffer_content(&text, ctx);
-            } else {
+    let executed = terminal_view.update(ctx, |terminal_view, ctx| {
+        terminal_view.input().update(ctx, |input, ctx| match disposition {
+            InputDisposition::Append => {
                 input.append_to_buffer(&text, ctx);
+                true
             }
-        });
+            InputDisposition::Replace => {
+                input.replace_buffer_content(&text, ctx);
+                true
+            }
+            InputDisposition::Submit => {
+                // `set_pending_command` inserts at the cursor, so clear first to
+                // get replace-then-run rather than append-then-run.
+                input.replace_buffer_content("", ctx);
+                input.set_pending_command(&text, ctx);
+                input.execute_pending_command(ctx);
+                // Execution is refused silently when the pane is busy or its
+                // history is not appendable, leaving the command pending. An
+                // orchestrator must not read that as success, so surface it.
+                !input.has_pending_command()
+            }
+        })
     });
+    if !executed {
+        return Err(ControlError::new(
+            ErrorCode::InvalidRequest,
+            format!(
+                "{} could not run: the target pane is busy or is not accepting commands",
+                action_kind.as_str()
+            ),
+        ));
+    }
     Ok(ack(instance_id, action_kind))
 }
 

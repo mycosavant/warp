@@ -153,7 +153,8 @@ fn surface_list_rejects_target_selectors() {
 
 #[test]
 fn capabilities_advertises_the_complete_catalog() {
-    assert_eq!(capabilities().len(), 84);
+    // 84 upstream actions plus the fork's `input.submit`.
+    assert_eq!(capabilities().len(), 85);
 }
 
 #[test]

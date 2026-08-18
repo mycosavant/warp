@@ -165,6 +165,33 @@ impl InstanceRecord {
         }
     }
 
+    /// Resolves the validated broker name as a Windows named pipe.
+    ///
+    /// Named pipes live in a kernel namespace rather than the filesystem, so
+    /// the broker reference is interpreted as a pipe name instead of being
+    /// joined onto the discovery directory. Validation is shared with
+    /// [`Self::broker_socket_path`], so a record still cannot redirect
+    /// credential requests anywhere but the name derived from its own
+    /// instance ID.
+    ///
+    /// Confidentiality comes from the pipe's own owner-only DACL, applied at
+    /// creation, plus peer-token verification in the broker — not from the
+    /// name, which is guessable by design.
+    #[cfg(windows)]
+    pub fn broker_pipe_name(&self) -> Result<String, ControlError> {
+        self.validate_local_control_authority()?;
+        let credential_broker = self.credential_broker.as_ref().ok_or_else(|| {
+            ControlError::new(
+                ErrorCode::LocalControlDisabled,
+                "local-control credential broker is disabled for this instance",
+            )
+        })?;
+        Ok(format!(
+            r"\\.\pipe\warp-local-control\{}",
+            credential_broker.socket_path.display()
+        ))
+    }
+
     /// Resolves the validated broker filename inside the private discovery directory.
     pub fn broker_socket_path(&self) -> Result<PathBuf, ControlError> {
         self.validate_local_control_authority()?;
@@ -281,10 +308,19 @@ pub fn discovery_dir() -> PathBuf {
     if let Some(path) = std::env::var_os(DISCOVERY_DIR_ENV) {
         return PathBuf::from(path);
     }
+    // Windows has no XDG_RUNTIME_DIR and frequently no HOME, which would leave
+    // the registry in the process's working directory — world-readable and
+    // wrong. LOCALAPPDATA is the per-user, non-roaming equivalent.
+    #[cfg(windows)]
+    if let Some(path) = std::env::var_os("LOCALAPPDATA") {
+        return PathBuf::from(path).join("warp").join("local-control");
+    }
     if let Some(path) = std::env::var_os("XDG_RUNTIME_DIR") {
         return PathBuf::from(path).join("warp").join("local-control");
     }
-    let home = std::env::var_os("HOME").unwrap_or_else(|| ".".into());
+    let home = std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE"))
+        .unwrap_or_else(|| ".".into());
     PathBuf::from(home).join(".warp").join("local-control")
 }
 
@@ -468,7 +504,14 @@ fn set_private_dir_permissions(path: &Path) -> Result<(), ControlError> {
         .map_err(|err| permissions_error("protect local-control discovery directory", err))
 }
 
-#[cfg(not(unix))]
+/// Windows equivalent of the `0o700` directory mode: a protected DACL granting
+/// the calling user alone. See `windows_security` for why protection matters.
+#[cfg(windows)]
+fn set_private_dir_permissions(path: &Path) -> Result<(), ControlError> {
+    crate::windows_security::apply_owner_only_acl(path)
+}
+
+#[cfg(all(not(unix), not(windows)))]
 fn set_private_dir_permissions(_path: &Path) -> Result<(), ControlError> {
     Err(ControlError::new(
         ErrorCode::LocalControlDisabled,
@@ -486,7 +529,13 @@ fn set_private_permissions(path: &Path) -> Result<(), ControlError> {
         .map_err(|err| permissions_error("protect local-control discovery record", err))
 }
 
-#[cfg(not(unix))]
+/// Windows equivalent of the `0o600` record mode.
+#[cfg(windows)]
+fn set_private_permissions(path: &Path) -> Result<(), ControlError> {
+    crate::windows_security::apply_owner_only_acl(path)
+}
+
+#[cfg(all(not(unix), not(windows)))]
 fn set_private_permissions(_path: &Path) -> Result<(), ControlError> {
     Err(ControlError::new(
         ErrorCode::LocalControlDisabled,

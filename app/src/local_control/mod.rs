@@ -71,7 +71,7 @@ use std::os::unix::fs::PermissionsExt as _;
 use std::sync::{Arc, Mutex};
 
 use ::local_control::auth::CredentialGrant;
-#[cfg(any(unix, test))]
+#[cfg(any(unix, windows, test))]
 use ::local_control::auth::{CredentialRequest, ScopedCredential};
 use ::local_control::{
     ActionKind, AuthToken, ControlEndpoint, ControlError, ControlResponse, ErrorCode,
@@ -86,17 +86,17 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::post;
 use axum::{Json, Router};
 pub use bridge::LocalControlBridge;
-#[cfg(any(unix, test))]
+#[cfg(any(unix, windows, test))]
 use chrono::Duration;
 use permissions::ensure_feature_enabled;
-#[cfg(any(unix, test))]
+#[cfg(any(unix, windows, test))]
 use permissions::{ensure_action_allowed, ensure_protocol_version};
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
 use warp_core::channel::ChannelState;
 use warpui::{Entity, ModelContext, ModelSpawner, SingletonEntity};
 
-#[cfg(any(unix, test))]
+#[cfg(any(unix, windows, test))]
 const MAX_ACTIVE_CREDENTIALS: usize = 128;
 
 /// App-owned authority shared by one instance's broker and HTTP listener.
@@ -243,6 +243,17 @@ impl LocalControlServer {
             drop(runtime_guard);
             listener
         };
+        // Bind the first pipe instance synchronously, so a name collision or
+        // ACL failure surfaces from `start()` exactly as a Unix bind failure
+        // does, rather than being logged from a detached task.
+        #[cfg(windows)]
+        let (broker_pipe_name, broker_pipe) = {
+            let pipe_name = registered_instance.record().broker_pipe_name()?;
+            let runtime_guard = runtime.enter();
+            let pipe = create_broker_pipe(&pipe_name, true)?;
+            drop(runtime_guard);
+            (pipe_name, pipe)
+        };
         let state = ControlServerState {
             bridge_spawner,
             instance_id,
@@ -259,6 +270,8 @@ impl LocalControlServer {
         });
         #[cfg(unix)]
         runtime.spawn(run_credential_broker(broker_listener, state));
+        #[cfg(windows)]
+        runtime.spawn(run_credential_broker(broker_pipe_name, broker_pipe, state));
         let endpoint_url = control_endpoint.url();
         self._runtime = Some(runtime);
         self.control_endpoint = Some(control_endpoint);
@@ -430,7 +443,255 @@ fn ensure_peer_uid(stream: &tokio::net::UnixStream, expected_uid: u32) -> Result
     Ok(())
 }
 
-#[cfg(unix)]
+/// Creates one named-pipe server instance protected by an owner-only DACL.
+///
+/// A named pipe serves a single client per instance, so the accept loop creates
+/// the next instance before handing the connected one off. `first` sets
+/// `FILE_FLAG_FIRST_PIPE_INSTANCE` on the initial creation, which makes the
+/// call fail rather than silently join an existing pipe of the same name that
+/// something else already owns.
+///
+/// The descriptor is rebuilt per instance instead of being shared: a raw
+/// `PSECURITY_DESCRIPTOR` is not `Send`, and rebuilding sidesteps holding one
+/// across the accept loop's awaits entirely. The kernel copies the descriptor
+/// into the object at creation, so freeing it immediately afterwards is safe.
+#[cfg(windows)]
+fn create_broker_pipe(
+    pipe_name: &str,
+    first: bool,
+) -> Result<tokio::net::windows::named_pipe::NamedPipeServer, ControlError> {
+    use ::local_control::windows_security::OwnerOnlySecurityDescriptor;
+    use tokio::net::windows::named_pipe::ServerOptions;
+
+    let descriptor = OwnerOnlySecurityDescriptor::new()?;
+    let mut attributes = descriptor.attributes();
+    unsafe {
+        ServerOptions::new()
+            .first_pipe_instance(first)
+            .create_with_security_attributes_raw(
+                pipe_name,
+                &mut attributes as *mut _ as *mut std::ffi::c_void,
+            )
+    }
+    .map_err(|err| {
+        ControlError::with_details(
+            ErrorCode::Internal,
+            "failed to bind owner-authenticated local-control credential broker",
+            err.to_string(),
+        )
+    })
+}
+
+/// Accepts same-user credential requests independently from the HTTP listener.
+///
+/// Mirrors the Unix broker's accept loop. The next pipe instance is created
+/// before the connected one is handed off, so there is no window in which a
+/// client can find the pipe missing.
+#[cfg(windows)]
+async fn run_credential_broker(
+    pipe_name: String,
+    mut server: tokio::net::windows::named_pipe::NamedPipeServer,
+    state: ControlServerState,
+) {
+    loop {
+        if server.connect().await.is_err() {
+            return;
+        }
+        let connected = server;
+        server = match create_broker_pipe(&pipe_name, false) {
+            Ok(next) => next,
+            Err(err) => {
+                log::warn!("local-control credential broker stopped accepting: {err:#}");
+                return;
+            }
+        };
+        let state = state.clone();
+        tokio::spawn(async move {
+            if let Err(err) = handle_credential_broker_connection(connected, state).await {
+                log::warn!("local-control credential broker connection failed: {err:#}");
+            }
+        });
+    }
+}
+
+/// Authenticates the pipe peer before decoding and evaluating its request.
+///
+/// Ordering matches the Unix broker: the OS-reported caller identity, not any
+/// field in caller-controlled JSON, is the client-identity boundary.
+///
+/// Framing differs by necessity. The Unix broker reads to EOF after the client
+/// shuts down its write half; a named pipe has no half-close, so both
+/// directions carry a `u32` length prefix.
+#[cfg(windows)]
+async fn handle_credential_broker_connection(
+    mut pipe: tokio::net::windows::named_pipe::NamedPipeServer,
+    state: ControlServerState,
+) -> Result<(), ControlError> {
+    let response = match ensure_same_user_peer(&pipe) {
+        Ok(()) => match read_broker_request(&mut pipe).await {
+            Ok(bytes) => match serde_json::from_slice::<CredentialRequest>(&bytes) {
+                Ok(request) => issue_credential(&state, request)
+                    .await
+                    .and_then(|credential| serialize_credential_broker_response(&credential)),
+                Err(err) => Err(ControlError::with_details(
+                    ErrorCode::InvalidRequest,
+                    "failed to decode local-control credential request",
+                    err.to_string(),
+                )),
+            },
+            Err(error) => Err(error),
+        },
+        Err(error) => Err(error),
+    };
+    let bytes = match response {
+        Ok(bytes) => bytes,
+        Err(error) => serialize_credential_broker_response(&ErrorResponseEnvelope::new(error))?,
+    };
+    let length = u32::try_from(bytes.len()).map_err(|_| {
+        ControlError::new(
+            ErrorCode::Internal,
+            "local-control credential response is too large to frame",
+        )
+    })?;
+    pipe.write_all(&length.to_le_bytes())
+        .await
+        .map_err(|err| broker_io_error("write the local-control credential response length", err))?;
+    pipe.write_all(&bytes)
+        .await
+        .map_err(|err| broker_io_error("write the local-control credential response", err))
+}
+
+/// Reads one length-prefixed credential request.
+#[cfg(windows)]
+async fn read_broker_request(
+    pipe: &mut tokio::net::windows::named_pipe::NamedPipeServer,
+) -> Result<Vec<u8>, ControlError> {
+    /// Bounds the request so a hostile prefix cannot force a large allocation
+    /// before any payload has arrived.
+    const MAX_BROKER_REQUEST_BYTES: usize = 64 * 1024;
+
+    let mut length = [0u8; 4];
+    pipe.read_exact(&mut length)
+        .await
+        .map_err(|err| broker_io_error("read the local-control credential request length", err))?;
+    let length = u32::from_le_bytes(length) as usize;
+    if length > MAX_BROKER_REQUEST_BYTES {
+        return Err(ControlError::new(
+            ErrorCode::InvalidRequest,
+            "local-control credential request exceeded the maximum size",
+        ));
+    }
+    let mut bytes = vec![0u8; length];
+    pipe.read_exact(&mut bytes)
+        .await
+        .map_err(|err| broker_io_error("read the local-control credential request", err))?;
+    Ok(bytes)
+}
+
+#[cfg(windows)]
+fn broker_io_error(operation: &str, error: std::io::Error) -> ControlError {
+    ControlError::with_details(
+        ErrorCode::TransportUnavailable,
+        format!("failed to {operation}"),
+        error.to_string(),
+    )
+}
+
+/// Requires the impersonated pipe client's user SID to match Warp's own.
+///
+/// This is the Windows analogue of comparing the kernel-reported peer UID:
+/// impersonation asks the OS who the caller is rather than trusting anything
+/// the caller sent. Like the Unix check it excludes other OS users, and like
+/// the Unix check it does not distinguish trusted Warp code from arbitrary
+/// processes already running as the same user.
+///
+/// Impersonation is reverted on every path, including failure — leaving the
+/// thread impersonating would let subsequent work on it run as the client.
+#[cfg(windows)]
+fn ensure_same_user_peer(
+    pipe: &tokio::net::windows::named_pipe::NamedPipeServer,
+) -> Result<(), ControlError> {
+    use std::os::windows::io::AsRawHandle as _;
+
+    use ::local_control::windows_security::{OwnedHandle, current_user_sid_string, token_user};
+    use windows::Win32::Foundation::HANDLE;
+    use windows::Win32::Security::{RevertToSelf, TOKEN_QUERY};
+    use windows::Win32::System::Pipes::ImpersonateNamedPipeClient;
+    use windows::Win32::System::Threading::{GetCurrentThread, OpenThreadToken};
+    use windows::core::PWSTR;
+
+    let handle = HANDLE(pipe.as_raw_handle());
+    unsafe { ImpersonateNamedPipeClient(handle) }.map_err(|err| {
+        ControlError::with_details(
+            ErrorCode::UnauthorizedLocalClient,
+            "failed to identify local-control credential broker peer",
+            err.to_string(),
+        )
+    })?;
+
+    let peer_sid = (|| {
+        let mut token = HANDLE::default();
+        unsafe { OpenThreadToken(GetCurrentThread(), TOKEN_QUERY, true, &mut token) }.map_err(
+            |err| {
+                ControlError::with_details(
+                    ErrorCode::UnauthorizedLocalClient,
+                    "failed to open the local-control credential broker peer token",
+                    err.to_string(),
+                )
+            },
+        )?;
+        let token = OwnedHandle(token);
+        let user = token_user(token.0)?;
+        let mut sid_string = PWSTR::null();
+        unsafe {
+            windows::Win32::Security::Authorization::ConvertSidToStringSidW(
+                user.sid(),
+                &mut sid_string,
+            )
+        }
+        .map_err(|err| {
+            ControlError::with_details(
+                ErrorCode::UnauthorizedLocalClient,
+                "failed to convert the local-control credential broker peer SID",
+                err.to_string(),
+            )
+        })?;
+        let value = unsafe { sid_string.to_string() }.map_err(|err| {
+            ControlError::with_details(
+                ErrorCode::UnauthorizedLocalClient,
+                "failed to decode the local-control credential broker peer SID",
+                err.to_string(),
+            )
+        });
+        unsafe {
+            let _ = windows::Win32::Foundation::LocalFree(Some(std::mem::transmute::<
+                *mut u16,
+                windows::Win32::Foundation::HLOCAL,
+            >(sid_string.0)));
+        }
+        value
+    })();
+
+    // Revert before evaluating, so an early return cannot leave the thread
+    // impersonating the client.
+    unsafe { RevertToSelf() }.map_err(|err| {
+        ControlError::with_details(
+            ErrorCode::Internal,
+            "failed to revert local-control credential broker impersonation",
+            err.to_string(),
+        )
+    })?;
+
+    if peer_sid? != current_user_sid_string()? {
+        return Err(ControlError::new(
+            ErrorCode::UnauthorizedLocalClient,
+            "local-control credential broker peer belongs to a different OS user",
+        ));
+    }
+    Ok(())
+}
+
+#[cfg(any(unix, windows))]
 fn serialize_credential_broker_response(
     response: &impl serde::Serialize,
 ) -> Result<Vec<u8>, ControlError> {
@@ -447,7 +708,7 @@ fn serialize_credential_broker_response(
 ///
 /// The bearer secret and its grant are retained only in the running instance's
 /// process-local map; neither is written back into the discovery registry.
-#[cfg(any(unix, test))]
+#[cfg(any(unix, windows, test))]
 async fn issue_credential(
     state: &ControlServerState,
     request: CredentialRequest,
@@ -596,7 +857,7 @@ async fn handle_control_request(
     (status, Json(response)).into_response()
 }
 
-#[cfg(any(unix, test))]
+#[cfg(any(unix, windows, test))]
 fn insert_credential(
     credentials: &mut HashMap<String, CredentialGrant>,
     secret: String,
