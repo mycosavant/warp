@@ -405,8 +405,14 @@ So this is "keep the store, neutralize the sync" — not a rewrite.
       about the network, not the account. Under local-first it becomes a lie
       when the network *does* drop — nothing is read-only then either — so it
       wants suppressing, but that is one condition in T4.2, not its own item.
-- [ ] **T4.4** Git-backed sync — versioned, portable, self-hosted or not
-- [ ] **T4.5** Round-trip via the existing import/export paths
+- [~] **T4.4** Git-backed sync — scoped, not started. See "T4.4 scope" below.
+      The hard part is not git; git2 is already a dependency and a live file
+      watcher already exists. The hard part is that no lossless file
+      representation of a cloud object exists yet.
+- [ ] **T4.5** Round-trip via the existing import/export paths — **premise is
+      wrong, same as T4.1's.** There is no round trip today: export and import
+      do not even cover the same set of types, and neither carries identity.
+      Folded into T4.4c; see below.
 
 Explicitly **not** doing: Proton Drive. No general-purpose public API,
 E2E-encrypted with client-side key management; integration means
@@ -582,6 +588,106 @@ first and the server's merge in afterwards via `CloudModelEvent::
 InitialLoadCompleted`, which `profiles.rs` already subscribes to. Both sets
 survive; the test is asserting the intermediate state, and that state is
 genuinely different now.
+
+## T4.4 scope — git-backed sync
+
+Scoped 2026-08-18. Not started.
+
+### Most of the machinery is already here
+
+- **`git2` 0.20.4 is already an `app` dependency**, `vendored-libgit2`, so it
+  builds without a system libgit2. Already used in three places, including
+  `Repository::discover` in `workflows/local_workflows.rs:183`. Like T3 and
+  T1.9, this can be done with **zero new dependencies**.
+- **Warp already reads workflows out of a git repository.** `WorkflowSource`
+  has eight variants, two of which are file-based and have nothing to do with
+  Warp Drive: `Project` loads `.warp/workflows/*.yaml` from the discovered git
+  worktree, and `Local` loads the user's home workflow directory. So "workflows
+  in a git repo" is an upstream feature, not something the fork invents.
+- **Live reload already works.** `WarpManagedPathsWatcher` watches the config
+  directories and `user_config::native` reloads themes, workflows, launch
+  configs and model routers on change. `git pull` is picked up without a
+  restart, for free, on whatever paths are wired into it.
+- **A complete, type-generic serializer already exists.** `CloudObject::
+  serialized() -> SerializedModel` (`cloud_object/mod.rs:497`) is implemented
+  for every object type — it is what gets sent to the server and stored. JSON
+  types go through `serde_json::to_string` (`json_model.rs:24`).
+
+Useful detail: `load_project_workflows` uses the `WARP_CONFIG_DIR` **constant**
+(`.warp`), not `base_warp_config_dir_name()`. So repo workflows live in `.warp`
+on every channel, while the *home* config dir is channel-suffixed — `.warp-oss`
+for this fork's build. Repo-relative paths are therefore already portable
+between the fork and stock Warp; home-relative ones are not.
+
+### What is actually missing
+
+Not git. **A lossless file representation of a cloud object.** The existing
+export/import paths are a sharing feature and cannot be reused as a
+serialization layer, which is also why T4.5's premise is wrong:
+
+    export  Workflow -> .yaml   Notebook -> .md   EnvVarCollection -> .env
+            everything else: `anyhow::bail!("exporting {other:?} not yet supported")`
+
+    import  .md -> Notebook     .yaml/.yml -> Workflow (+ enums)   dirs -> Folders
+            nothing else
+
+The two sets are not even the same: export writes env var collections that
+import cannot read, and import creates folders that export only expresses as
+directory names. Neither carries the object's identity, its folder placement,
+its trash state or its timestamps — export serializes `model().data` and
+nothing else. So a round trip through them loses the object graph and mints new
+ids on the way back in. Ten or so types have no representation at all: AI
+facts, MCP servers, templatable MCP servers, execution profiles, workflow
+enums, cloud preferences, ambient agent environments, scheduled agents, cloud
+agent configs.
+
+The store itself is far more tractable than that suggests. There are only
+**four payload shapes** plus one shared spine:
+
+    object_metadata          the spine — type, server_id/client_id, folder_id,
+                             trashed_ts, timestamps, creator/editor uids
+    object_permissions       owner (subject_uid/subject_type), guests, links
+    workflows                data: Text
+    notebooks                title, data, ai_document_id
+    folders                  name, is_open, is_warp_pack
+    generic_string_objects   data: Text   <- all ten JSON types land here
+
+So one file format plus a metadata sidecar covers everything, and the ten
+"unsupported" types are collectively a single case.
+
+### Decomposition
+
+- **T4.4a** Lossless object↔file format. The real work. One file per object,
+  carrying identity, folder path, and payload. Must survive a round trip
+  byte-for-byte on unchanged objects, or every `git status` is dirty.
+- **T4.4b** Working-tree materializer: write the whole store to a directory,
+  read it back. Folder hierarchy as directories, so the tree is browsable and
+  diffs are legible.
+- **T4.4c** Round trip, replacing T4.5: materialize → mutate on disk → reload →
+  assert the object graph is identical, ids included.
+- **T4.4d** Git operations. Thin, given git2 is present.
+- **T4.4e** Conflict policy. Cheap or expensive depending on decision 1 below.
+
+### Decisions to settle before starting
+
+1. **Who drives git — Warp, or you?** If Warp auto-commits and pulls, it needs
+   a merge and conflict story for a graph of objects with ids, which is a sync
+   engine and is where this task's risk actually lives. If Warp only reads and
+   writes a directory and *you* run git, conflicts are text conflicts in your
+   own repo, T4.4d and T4.4e nearly vanish, and the existing file watcher
+   already handles the pull side.
+2. **Is the working tree authoritative, or a mirror of SQLite?** T4.2 just made
+   SQLite the source of truth. Two sources of truth needs reconciliation; a
+   mirror needs a rule for which side wins on divergence.
+3. **Does this extend Warp Drive, or the existing `WorkflowSource::Project`
+   path?** The second is a much smaller change and already git-native, but it
+   is a parallel store — workflows would live in two places, which is the
+   confusion upstream already has and the fork would be doubling down on.
+
+Recommendation: user-driven git (1), working tree as a materialized mirror with
+SQLite authoritative (2), extending Warp Drive rather than the project path
+(3). That keeps the sync engine out of the fork entirely — git is the sync —
+and leaves T4.4a as the only substantial piece of work.
 
 ## T5 — Claude in Oz's seat (the spike)
 
