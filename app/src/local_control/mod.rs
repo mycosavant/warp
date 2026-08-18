@@ -553,9 +553,9 @@ async fn handle_credential_broker_connection(
             "local-control credential response is too large to frame",
         )
     })?;
-    pipe.write_all(&length.to_le_bytes())
-        .await
-        .map_err(|err| broker_io_error("write the local-control credential response length", err))?;
+    pipe.write_all(&length.to_le_bytes()).await.map_err(|err| {
+        broker_io_error("write the local-control credential response length", err)
+    })?;
     pipe.write_all(&bytes)
         .await
         .map_err(|err| broker_io_error("write the local-control credential response", err))

@@ -107,15 +107,30 @@ pub(crate) fn handle(
             ctx,
         ),
         ActionKind::SessionReopenClosed => session_reopen_closed(instance_id, target, ctx),
-        ActionKind::InputInsert => {
-            input_text(instance_id, action, params, target, InputDisposition::Append, ctx)
-        }
-        ActionKind::InputReplace => {
-            input_text(instance_id, action, params, target, InputDisposition::Replace, ctx)
-        }
-        ActionKind::InputSubmit => {
-            input_text(instance_id, action, params, target, InputDisposition::Submit, ctx)
-        }
+        ActionKind::InputInsert => input_text(
+            instance_id,
+            action,
+            params,
+            target,
+            InputDisposition::Append,
+            ctx,
+        ),
+        ActionKind::InputReplace => input_text(
+            instance_id,
+            action,
+            params,
+            target,
+            InputDisposition::Replace,
+            ctx,
+        ),
+        ActionKind::InputSubmit => input_text(
+            instance_id,
+            action,
+            params,
+            target,
+            InputDisposition::Submit,
+            ctx,
+        ),
         ActionKind::SurfaceSettingsOpen => surface_settings_open(instance_id, params, target, ctx),
         ActionKind::SurfaceCommandPaletteOpen => surface_palette_open(
             instance_id,
@@ -639,29 +654,31 @@ fn input_text(
             )
         })?;
     let queued = terminal_view.update(ctx, |terminal_view, ctx| {
-        terminal_view.input().update(ctx, |input, ctx| match disposition {
-            InputDisposition::Append => {
-                input.append_to_buffer(&text, ctx);
-                false
-            }
-            InputDisposition::Replace => {
-                input.replace_buffer_content(&text, ctx);
-                false
-            }
-            InputDisposition::Submit => {
-                // `set_pending_command` inserts at the cursor, so clear first to
-                // get replace-then-run rather than append-then-run.
-                input.replace_buffer_content("", ctx);
-                input.set_pending_command(&text, ctx);
-                input.execute_pending_command(ctx);
-                // A still-pending command has been *queued*, not refused: the
-                // pane runs it once the shell finishes bootstrapping or the
-                // current command completes. Report which happened rather than
-                // guessing — an unattended caller that wants output needs to
-                // know it must wait.
-                input.has_pending_command()
-            }
-        })
+        terminal_view
+            .input()
+            .update(ctx, |input, ctx| match disposition {
+                InputDisposition::Append => {
+                    input.append_to_buffer(&text, ctx);
+                    false
+                }
+                InputDisposition::Replace => {
+                    input.replace_buffer_content(&text, ctx);
+                    false
+                }
+                InputDisposition::Submit => {
+                    // `set_pending_command` inserts at the cursor, so clear first to
+                    // get replace-then-run rather than append-then-run.
+                    input.replace_buffer_content("", ctx);
+                    input.set_pending_command(&text, ctx);
+                    input.execute_pending_command(ctx);
+                    // A still-pending command has been *queued*, not refused: the
+                    // pane runs it once the shell finishes bootstrapping or the
+                    // current command completes. Report which happened rather than
+                    // guessing — an unattended caller that wants output needs to
+                    // know it must wait.
+                    input.has_pending_command()
+                }
+            })
     });
     let mut response = ack(instance_id, action_kind);
     if disposition == InputDisposition::Submit
