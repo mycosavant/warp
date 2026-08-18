@@ -83,6 +83,29 @@ pub fn forced_local_harnesses() -> &'static [Harness] {
     &[Harness::Claude, Harness::Codex, Harness::OpenCode]
 }
 
+/// Whether to bypass Warp's "must have an account" gates.
+///
+/// Upstream disables the entire AI surface for anonymous/logged-out users in
+/// exactly three places, each a single condition:
+///
+/// * `settings::ai::AISettings::is_any_ai_enabled` — the master switch. With
+///   this false, no agent, no model picker, no harness selection.
+/// * `workspaces::user_workspaces::UserWorkspaces::is_byo_api_key_enabled`
+/// * `workspaces::user_workspaces::UserWorkspaces::is_custom_inference_enabled`
+///
+/// Bypassing them is coherent only because Warp's own settings UI states that
+/// **"API keys added here are stored only on this device, not on Warp's
+/// servers"** — BYO keys are used for direct client→provider calls, so a
+/// logged-out user with their own key needs nothing from Warp's backend.
+///
+/// This does **not** grant access to anything server-side. Warp's own `Oz`
+/// agent still requires a real account, because inference for it happens on
+/// Warp's servers. The point is to reach the BYO-key and local-harness paths,
+/// which do not.
+pub fn account_gate_bypassed() -> bool {
+    is_active()
+}
+
 /// Applies fork feature-flag policy.
 ///
 /// Must run after upstream's channel flags are applied but before

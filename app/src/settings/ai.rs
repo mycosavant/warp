@@ -2185,8 +2185,13 @@ impl AISettings {
             .get()
             .is_anonymous_or_logged_out();
 
+        // Fork policy: a logged-out user running their own API keys or a local
+        // harness needs nothing from Warp's backend, so the account
+        // requirement does not apply. See `crate::fork::account_gate_bypassed`.
+        let account_gate_ok = !is_anonymous_or_logged_out || crate::fork::account_gate_bypassed();
+
         *self.is_any_ai_enabled
-            && !is_anonymous_or_logged_out
+            && account_gate_ok
             && !self.is_ai_disabled_due_to_remote_session_org_policy(app)
     }
 

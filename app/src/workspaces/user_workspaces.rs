@@ -710,9 +710,12 @@ impl UserWorkspaces {
     /// For solo users (no workspace), this is controlled by the `SoloUserByok` feature flag.
     /// Anonymous or logged-out users are not allowed to use BYO API keys.
     pub fn is_byo_api_key_enabled(&self, app: &AppContext) -> bool {
+        // Fork policy: keys entered here are stored on-device and used for
+        // direct provider calls, so being logged out is not a reason to refuse.
         if AuthStateProvider::as_ref(app)
             .get()
             .is_anonymous_or_logged_out()
+            && !crate::fork::account_gate_bypassed()
         {
             return false;
         }
@@ -741,9 +744,12 @@ impl UserWorkspaces {
     /// Anonymous or logged-out users are not allowed to use custom inference.
     /// Controlled by the BYO_ENDPOINT billing policy.
     pub fn is_custom_inference_enabled(&self, app: &AppContext) -> bool {
+        // Fork policy: custom endpoints are a purely local concern (e.g. an
+        // Ollama or vLLM server), so no account is required.
         if AuthStateProvider::as_ref(app)
             .get()
             .is_anonymous_or_logged_out()
+            && !crate::fork::account_gate_bypassed()
         {
             return false;
         }
