@@ -67,6 +67,12 @@ Reference: `crates/warp_cli/src/local_control/`, `app/src/local_control/`,
 - [x] **T1.10** Windows named-pipe credential broker — **done and verified**.
 - [ ] **T1.7** Document the verified command surface in `.fork/README.md`
 
+Confirmed 2026-08-18: closing the window with `CloseMainWindow` removes the
+discovery record, and `instance list` immediately reports none. So the stale
+records that produced `ambiguous_instance` during T2 came specifically from
+`Kill()`ing the process, not from ordinary shutdown — the cleanup path works,
+it just never runs when the process is killed.
+
 ### RESOLVED 2026-08-17 — Windows is now the working platform
 
 The port took **four** changes, not the one predicted. In discovery order:
@@ -234,6 +240,11 @@ takes over when the parent dies (`crash_recovery::wait_for_parent_crash`,
 process during testing leaves the recovery child in charge. But a launch with
 zero prior `warp-oss` processes reproduced it, so that is not the whole story.
 
+Further evidence 2026-08-18: two `warp-oss` launches an hour apart, one wrote
+`warp-oss.log` normally and the next wrote `.recovery`, with no deletion in
+between. So it is per-run state, not a one-way door — consistent with the
+recovery-child theory and inconsistent with "the file is broken".
+
 I deleted `warp-oss.log` during this testing before understanding any of the
 above, so I cannot fully separate cause from coincidence — but recreating the
 file did not fix it and the recovery-path evidence points elsewhere. The
@@ -335,6 +346,12 @@ naming the setting to fill in.
   subscription fails silently — it looks like a feature that works but needs a
   relaunch, which nobody reports as a bug. Settings groups *emit* their changed
   event without calling `notify`, so `observe` would never have fired.
+- Windows: 64/64 module tests pass, `warp-oss` builds and launches, and
+  `warpctrl instance list` reaches it — that command runs the whole
+  broker → HTTP flow, so a bare listing is end-to-end evidence that startup
+  completed. `config::install` runs before the first window, so a wrong
+  registration order would have been an immediate panic rather than a subtle
+  fault.
 
 **Not verified: a real provider.** Doing so needs a key, and there is no local
 LLM server on this machine to substitute one. Every field name and route here
