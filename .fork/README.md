@@ -430,3 +430,79 @@ interactively. Diagnostics go to stderr.
 Working on Linux/macOS (upstream) and Windows (fork port). Under WSL2 the
 process runs and read actions work, but the window never composites, so it has
 no workspace and mutations fail with `missing_target`. Use the Windows build.
+
+## Voice input, transcribed on this machine
+
+Upstream sends your voice to `api.warp.dev`. The provider setting
+(`Wispr` | `OpenAI`) picks *Warp's* upstream vendor, not where inference runs,
+so neither value keeps audio local — "Provider: OpenAI" is not an escape hatch.
+
+Under fork policy `LocalTranscriber` replaces that path entirely. It is
+**fail-closed**: when it is installed it is the only transcriber, and a
+misconfiguration is an error, never a quiet fall back to the server. If it were
+a fallback, the failure it hid would be exactly the one that matters.
+
+### Setting it up
+
+Everything lives under `agents.voice.local_transcription` in `settings.toml`
+(`%LOCALAPPDATA%\warp\WarpOss\config\settings.toml` on Windows). The defaults
+already point at a stock `whisper-server`, so with one running you need no
+configuration at all.
+
+    [agents.voice.local_transcription]
+    backend  = "http"                                # or "command"
+    endpoint = "http://127.0.0.1:8080/inference"     # whisper.cpp's default
+    model    = ""                                    # required by OpenAI-shaped servers
+    command  = ""                                    # backend = "command" only
+    command_args = "--model {model} --language {language} --no-timestamps --file {audio}"
+
+**You already have a whisper server.** OpenWhispr ships whisper.cpp's
+`whisper-server` and a base model:
+
+    C:\Users\<you>\AppData\Local\Programs\OpenWhispr\resources\bin\whisper-server-win32-x64.exe
+    C:\Users\<you>\.cache\openwhispr\whisper-models\ggml-base.bin
+
+Run it standalone and Warp will use it:
+
+    whisper-server-win32-x64.exe -m "%USERPROFILE%\.cache\openwhispr\whisper-models\ggml-base.bin" --port 8080
+
+### Which endpoint, and why the whole URL is a setting
+
+whisper.cpp and the OpenAI-compatible servers agree on the request
+(`multipart/form-data`, field `file`) and on the reply (`{"text": ...}`). They
+disagree only on the route — measured, not assumed:
+
+    POST /inference                -> {"text":" List the files in this directory.\n"}
+    POST /v1/audio/transcriptions  -> 404 File Not Found
+
+So point `endpoint` at `/inference` for whisper.cpp and
+`/v1/audio/transcriptions` for speaches, faster-whisper-server or LocalAI —
+those also need `model` set, which whisper.cpp ignores.
+
+### The `command` backend
+
+For a transcriber with no server. The recording is written to a `0600`
+temporary file, the binary runs, and **stdout is the transcript** — which is
+why whisper-cli needs `--no-timestamps`; without it the transcript goes to a
+file and Warp sees silence (the error says so).
+
+Arguments are split on whitespace *before* `{audio}`, `{model}` and
+`{language}` are substituted, so a value containing spaces stays one argument.
+`{language}` becomes `auto` when no language is set, rather than dropping the
+argument and leaving a dangling `--language`.
+
+### Verifying it yourself
+
+There is an `#[ignore]`d end-to-end test that drives the real HTTP path:
+
+    WARP_VOICE_TEST_ENDPOINT=http://127.0.0.1:8080/inference \
+    WARP_VOICE_TEST_WAV=/mnt/c/dev/speech16k.wav \
+      cargo test -p warp --lib transcribes_a_real_recording -- --ignored --nocapture
+
+`speech16k.wav` is a 16 kHz mono sample generated with Windows SAPI — the same
+format `voice_input` produces. Warp resamples to 16 kHz mono for the same
+reason whisper wants it.
+
+What this does *not* prove is the microphone-to-transcript path end to end;
+that needs someone to speak into it. Worth doing once with a proxy running to
+confirm nothing reaches `api.warp.dev`.

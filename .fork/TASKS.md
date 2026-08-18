@@ -161,12 +161,84 @@ Privacy note: this is a fix, not a preference. `Provider::OpenAI` is **not** a
 local path — `ServerVoiceTranscriber` POSTs base64 audio to `api.warp.dev`
 regardless of provider. Voice currently leaves the machine either way.
 
-- [ ] **T2.1** `LocalTranscriber` implementing `voice::transcriber::Transcriber`
-- [ ] **T2.2** Backend: local whisper endpoint and/or `whisper.cpp` subprocess
-- [ ] **T2.3** Swap the singleton registration under fork policy
-- [ ] **T2.4** Repoint the `wisprflow.ai` settings link
-      (`WISPR_FLOW_URL`, `warp_agent_page.rs:128`)
-- [ ] **T2.5** Verify no audio egress under recording (proxy check)
+- [x] **T2.1** `LocalTranscriber` implementing `voice::transcriber::Transcriber`
+      — `app/src/voice/local_transcriber.rs`. Fail-closed: when it is installed
+      it is the *only* transcriber, and a misconfiguration is an error rather
+      than a fallback to the server. A fallback would paper over exactly the
+      failure that matters — the audio went somewhere else.
+- [x] **T2.2** Two backends, settings under `agents.voice.local_transcription`.
+
+      `http` posts `multipart/form-data`. whisper.cpp's `whisper-server` and
+      the OpenAI-compatible servers (speaches, faster-whisper-server, LocalAI)
+      agree on the request shape and on `{"text": ...}` for the reply, and
+      differ only in route — which is why the endpoint setting is a whole URL.
+      Measured against a live server rather than assumed:
+
+          POST /inference                 -> {"text":" List the files in this directory.\n"}
+          POST /v1/audio/transcriptions   -> 404 File Not Found
+          extra `model` / `language` form fields  -> tolerated
+          empty body                      -> 400 "Invalid request" (plain text)
+
+      So the default endpoint is whisper.cpp's `/inference`, the response
+      parser trims the leading space and trailing newline, and a non-2xx body
+      is surfaced verbatim (tail-truncated).
+
+      `command` writes the recording to a 0600 temp file and runs a binary,
+      reading the transcript from stdout. Arguments are split *before*
+      placeholder substitution so a model path under `C:\Program Files` stays
+      one argument.
+- [x] **T2.3** Registration swapped at `lib.rs` via
+      `fork::local_voice_transcription_enabled`. Settings are mirrored into a
+      snapshot because `transcribe` runs off the main thread with no context; a
+      test drives the real subscription and asserts an edited endpoint arrives
+      without a restart. Settings groups emit a `ChangedEvent` rather than
+      notifying observers — `ctx.observe` here would have silently never fired.
+- [x] **T2.4** `WISPR_FLOW_URL` retained for the non-fork branch; under fork
+      policy the description says audio is transcribed on this machine and
+      links to whisper.cpp. The old text ("powered by Wispr Flow") would now be
+      false, so the whole sentence changes, not just the URL.
+- [~] **T2.5** No audio egress — *argued and unit-tested, not proxy-verified.*
+      Under fork policy `ServerVoiceTranscriber` is never constructed
+      (`fork_policy_installs_a_local_transcriber`), and `LocalTranscriber`
+      contacts only the configured endpoint or spawns the configured binary.
+      The default endpoint is asserted to be loopback. What is **not** done is
+      a proxy capture during a real recording: that needs a microphone and a
+      human to speak into it. Worth doing once by hand.
+
+**Verified**
+
+    linux    31 unit tests; live HTTP against whisper-server -> "List the files in this directory."
+    windows  29 unit tests (2 unix-only skipped); same live transcription
+    windows  app builds, launches, runs with the settings.toml block in place
+
+**Bug caught by clippy, would have shipped:** `std::process::Command` flashes a
+console window on Windows on every invocation. `command::blocking::Command`
+fixes that but defaults to `CREATE_BREAKAWAY_FROM_JOB`, which `CreateProcess`
+refuses inside a job that disallows it — `Access is denied` when running any
+binary. Clearing the flags keeps `CREATE_NO_WINDOW` and drops breakaway, which
+is right anyway: breakaway exists so shells outlive Warp, and a transcriber
+Warp is synchronously waiting on should not.
+
+**Not done, deliberately:** the new settings are not reachable from `warpctrl`.
+`setting.get`/`set` operate on `ALLOWLISTED_SETTING_KEYS`, a curated list of
+ten appearance and input keys each with hand-written accessors. Adding voice
+keys is plumbing, and belongs with T1, not here.
+
+**Open, unexplained:** the dev build never creates
+`%LOCALAPPDATA%\warp\WarpOss\data\logs\warp-oss.log` — it writes to
+`warp-oss.log.recovery` instead, and the `.old.N` slots are frozen at 169
+bytes. `setup_log_files_for_current_execution` routes to the `.recovery` path
+when `is_from_crash_recovery_process`, and Warp launches a recovery child that
+takes over when the parent dies (`crash_recovery::wait_for_parent_crash`,
+"Parent has crashed; continuing execution"), so repeatedly `Kill()`ing the
+process during testing leaves the recovery child in charge. But a launch with
+zero prior `warp-oss` processes reproduced it, so that is not the whole story.
+
+I deleted `warp-oss.log` during this testing before understanding any of the
+above, so I cannot fully separate cause from coincidence — but recreating the
+file did not fix it and the recovery-path evidence points elsewhere. The
+installed stable Warp logs normally and was not touched. Worth a look before
+relying on the OSS build's file logs for anything.
 
 ## T3 — Re-plumb the four small AI features locally
 
