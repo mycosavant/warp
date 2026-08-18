@@ -63,7 +63,31 @@ const FORCE_ENABLED: &[FeatureFlag] = &[
     FeatureFlag::LocalClaudeCodexChildHarnesses,
     FeatureFlag::SoloUserByok,
     FeatureFlag::SkipFirebaseAnonymousUser,
+    FeatureFlag::WarpControlCli,
 ];
+
+/// Whether local control (`warpctrl`) should default to enabled.
+///
+/// Local control is the fork's orchestration surface: it lets an external
+/// agent drive windows, tabs, panes, sessions and the input buffer of a
+/// running Warp instance. Upstream ships it complete but gated twice — by
+/// [`FeatureFlag::WarpControlCli`] (a `DOGFOOD_FLAGS` entry, so off in every
+/// public channel) and by `LocalControlSettings`, whose default comes from
+/// `default_mode_for_channel` and is `Disabled` off-dogfood.
+///
+/// [`FORCE_ENABLED`] handles the first gate. This handles the second, and is
+/// consulted from `settings::local_control::LocalControlModeSetting::
+/// default_value` — it changes only the *default*, so an explicit user choice
+/// stored in secure storage still wins. Upstream's `default_mode_for_channel`
+/// is deliberately left pure so its per-channel test keeps passing.
+///
+/// Note this is a local privilege surface, not a remote one: the credential
+/// broker authenticates the OS account via a 0600 Unix socket and
+/// kernel-reported peer UID. Enabling it grants nothing to anything that
+/// isn't already running as this user.
+pub fn local_control_default_enabled() -> bool {
+    is_active()
+}
 
 /// Harnesses exposed locally without asking Warp's server for permission.
 ///

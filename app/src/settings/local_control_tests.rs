@@ -2,13 +2,14 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 
 use settings::{PrivatePreferences, PublicPreferences, Setting as _, SettingsManager, SyncToCloud};
-use warp_core::channel::{Channel, ChannelState};
+use warp_core::channel::Channel;
 use warpui::SingletonEntity as _;
 use warpui_extras::secure_storage::{self, AppContextExt as _};
 use warpui_extras::user_preferences;
 
 use super::{
     LocalControlMode, LocalControlModeSetting, LocalControlSettings, default_mode_for_channel,
+    effective_default_mode,
 };
 
 #[derive(Default)]
@@ -89,9 +90,22 @@ fn unset_mode_follows_channel_default() {
     let settings = default_settings();
 
     assert_eq!(LocalControlMode::default(), LocalControlMode::Disabled);
+    assert_eq!(settings.mode(), effective_default_mode());
+}
+
+/// Fork policy opts local control in without disturbing upstream's per-channel
+/// rule, which stays authoritative when the fork is switched off.
+#[test]
+fn fork_policy_enables_local_control_by_default() {
     assert_eq!(
-        settings.mode(),
-        default_mode_for_channel(ChannelState::channel())
+        default_mode_for_channel(Channel::Oss),
+        LocalControlMode::Disabled,
+        "upstream's per-channel default must stay untouched"
+    );
+    assert_eq!(
+        effective_default_mode(),
+        LocalControlMode::Enabled,
+        "fork policy must opt local control in"
     );
 }
 
@@ -172,7 +186,7 @@ fn mode_does_not_migrate_from_private_preferences() {
         app.read(|ctx| {
             assert_eq!(
                 LocalControlSettings::as_ref(ctx).mode(),
-                default_mode_for_channel(ChannelState::channel())
+                effective_default_mode()
             );
             let private_value = LocalControlModeSetting::preferences_for_setting(ctx)
                 .read_value(LocalControlModeSetting::storage_key())

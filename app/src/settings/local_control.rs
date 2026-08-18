@@ -46,6 +46,21 @@ fn default_mode_for_channel(channel: Channel) -> LocalControlMode {
     }
 }
 
+/// The mode applied when secure storage holds no explicit choice.
+///
+/// Upstream this is purely [`default_mode_for_channel`]. The fork opts local
+/// control in regardless of channel, because it is the orchestration surface
+/// the fork is built around — see `fork::local_control_default_enabled`.
+///
+/// Only the *default* moves: `new_from_storage` consults this solely when
+/// secure storage is empty, so an explicit user choice still wins either way.
+pub(crate) fn effective_default_mode() -> LocalControlMode {
+    if crate::fork::local_control_default_enabled() {
+        return LocalControlMode::Enabled;
+    }
+    default_mode_for_channel(ChannelState::channel())
+}
+
 impl LocalControlMode {
     pub const ALL: [Self; 2] = [Self::Disabled, Self::Enabled];
 
@@ -178,7 +193,7 @@ impl Setting for LocalControlModeSetting {
     }
 
     fn default_value() -> Self::Value {
-        default_mode_for_channel(ChannelState::channel())
+        effective_default_mode()
     }
 
     fn new_from_storage(ctx: &mut AppContext) -> Self {
