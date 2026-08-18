@@ -127,9 +127,28 @@ Deferred, dependent on T1 landing:
       `insert`/`replace`, so a seeded command is never auto-executed. Adding
       submit is a local patch. Decide whether we want it; it is the difference
       between "assist" and "autonomous".
-- [ ] **T1.9** MCP wrapper over the action catalog. `warpctrl action list` and
-      `capability inspect` already emit machine-readable metadata, so tool
-      definitions can be generated rather than hardcoded.
+- [x] **T1.9** MCP server — `warpctrl mcp`, done and verified. 85 tools
+      generated from the catalog. No new dependencies: MCP over stdio is
+      newline-delimited JSON-RPC 2.0 and the local-control client is blocking,
+      so it is a synchronous stdin loop over `serde_json`.
+
+      Verified on Windows driving a live instance end-to-end:
+      `initialize` → `tools/list` (85) → `app.focus` → `tab.create`
+      → `input.submit`, with the submitted command confirmed by the file it
+      wrote. Errors surface as `isError` results carrying the `ControlError`
+      code, so a model can read `missing_target` and focus a window.
+
+      **Bug found by this testing, now fixed:** `input.submit` was reporting
+      `isError` for commands that had in fact run. `has_pending_command` means
+      *queued*, not *refused* — `can_execute_command` returns
+      `No(NotBootstrapped)` while a freshly created tab's shell starts, and the
+      pane runs the command once ready. Since `tab.create` immediately followed
+      by `input.submit` is the obvious orchestration sequence, that path is
+      common. The acknowledgement now carries `executed` and `queued`, both
+      verified:
+
+          bootstrapped pane -> executed: true,  queued: false  (file present at once)
+          fresh tab         -> executed: false, queued: true   (absent, then present)
 
 ## T2 — Local voice transcription (replace Wispr Flow)
 

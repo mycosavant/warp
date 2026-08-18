@@ -389,6 +389,42 @@ icacls "$env:LOCALAPPDATA\warp\local-control"
 # expect exactly: <domain>\<user>:(F)  -- no SYSTEM, no Administrators
 ```
 
+### Driving it from Claude Code (MCP)
+
+`warpctrl mcp` serves the whole catalog to an MCP client over stdio. Register
+it once:
+
+```bash
+claude mcp add warp -- C:\\dev\\warp\\target\\debug\\warp-oss.exe --warpctrl mcp
+```
+
+Every implemented action becomes one tool, named `warp_<action>` with dots
+replaced by underscores — `tab.create` becomes `warp_tab_create`. Tools are
+generated from the catalog, so adding an action publishes a tool with no
+further work.
+
+The typical sequence an agent follows:
+
+```
+warp_instance_list      -> confirm an instance is reachable
+warp_app_focus          -> mutations need a focused window with a workspace
+warp_tab_create         -> optional, gives the agent its own tab
+warp_input_submit       -> run a command
+```
+
+`warp_input_submit` returns `executed: true` when the command ran immediately,
+or `queued: true` when the pane's shell is still starting — a freshly created
+tab is the common case. A queued command runs as soon as the pane is ready, so
+wait before reading its output rather than resubmitting.
+
+Failures come back as tool results with `isError` rather than transport
+errors, carrying the local-control error code so the cause is actionable:
+`missing_target` means focus a window first, `local_control_disabled` means
+Scripting is off.
+
+Note the server talks JSON-RPC on stdout — run it only via an MCP client, not
+interactively. Diagnostics go to stderr.
+
 ### Platform status
 
 Working on Linux/macOS (upstream) and Windows (fork port). Under WSL2 the
