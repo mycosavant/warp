@@ -220,7 +220,15 @@ impl LocalTranscriber {
         // `command::blocking` rather than `std::process`: it sets
         // CREATE_NO_WINDOW, so transcribing does not flash a console window on
         // Windows every time the user speaks.
-        let output = command::blocking::Command::new(&config.command)
+        let mut process = command::blocking::Command::new(&config.command);
+        // Clearing the flags drops the crate's default CREATE_BREAKAWAY_FROM_JOB
+        // (CREATE_NO_WINDOW is always ORed back in). Breakaway exists so shells
+        // outlive Warp; a transcriber Warp is synchronously waiting on should
+        // not, and CreateProcess refuses breakaway outright inside a job that
+        // disallows it — observed as `Access is denied` under `cargo test`.
+        #[cfg(windows)]
+        process.creation_flags(0);
+        let output = process
             .args(&args)
             .output()
             .with_context(|| format!("Failed to run local transcriber `{}`", config.command))?;
