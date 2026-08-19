@@ -1579,6 +1579,56 @@ can be fed back mid-turn, and at that point the `ToolCall` messages become
 correct rather than dangerous. Also absent: model selection, attachments, MCP
 context.
 
+#### Verified on Windows, 2026-08-19
+
+In the real agent panel, in a **logged-out** client — the left panel still says
+"Sign in to access Agent conversations" in both screenshots:
+
+    New Agent Tab  ->  "New Warp Agent conversation"
+    prompt         ->  "In one short sentence: what is the capital of France?"
+    child process  ->  claude.exe (27800), parent warp-oss.exe (32260)
+    rendered       ->  "Paris is the capital of France."
+
+    follow-up      ->  "What did I ask you in my previous message? Quote it."
+    rendered       ->  You asked: "In one short sentence: what is the capital
+                        of France?"
+
+The second turn is the one that matters. It proves the conversation token made
+the full round trip — Claude's session id into `StreamInit`, stored by Warp as
+the conversation's server token, handed back as `params.conversation_token`,
+out again as `--resume` — through Warp's own storage rather than through
+anything this fork keeps. There is no session state in `local_agent`, and the
+agent still remembered.
+
+Also confirmed by the same run: an account-free Warp *can* hold an agent
+conversation. Upstream it cannot, and not because of a gate — because every
+path leads to `{server}/ai/multi-agent`, which needs a bearer token.
+
+**How the GUI was driven, since none of it is obvious.** No keyboard focus is
+available from a background process on either platform, so this had to be done
+without one:
+
+| Mechanism | Works | Note |
+| --- | --- | --- |
+| `PostMessage` WM_KEYDOWN/UP | yes | plain keys reach Warp unfocused |
+| the same, with Ctrl/Shift held | **no** | posted messages don't set the thread key state, so `Ctrl+Shift+Enter` arrived as a bare Enter and ran the prompt as a shell command |
+| `PostMessage` WM_CHAR | **no** | typed characters never reached the editor |
+| `warpctrl input replace` | yes | but it does not run the input classifier |
+| command palette + Enter | yes | `warpctrl surface command-palette open --query ...` seeds it and Enter invokes the top entry |
+
+So the way into agent mode without a modifier is the palette: seed it with
+`New Agent Tab`, press Enter, then `input replace` and Enter again. Two facts
+made that necessary — natural-language auto-detection is **off by default**
+(`agents.warp_agent.input.ai_auto_detection_enabled`, default `false`), and
+`input replace` sets the buffer without classifying it, so the prompt stays a
+shell command however it is phrased.
+
+WSLg is worse: `XGetInputFocus` returns `None` and `XSetInputFocus` does not
+stick, because the RAIL window is not foreground on the Windows desktop and
+Xwayland has no keyboard focus to give. Clicks work there, keys do not. That
+is the WSLg counterpart of the Windows foreground lock, and it is why this was
+verified on Windows.
+
 ## T6 — WSL integration
 
 User-stated high-priority feature-add, not yet scoped. File explorer and

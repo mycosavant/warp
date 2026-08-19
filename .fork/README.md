@@ -709,6 +709,18 @@ You need the `claude` CLI on `PATH`. It uses whatever authentication Claude Code
 already has — subscription, API key, whatever `claude` itself is set up with.
 Warp is not in the middle and no key is copied anywhere.
 
+Verified in the real agent panel on Windows, signed out, 2026-08-19: "In one
+short sentence: what is the capital of France?" → *Paris is the capital of
+France.*, with `claude.exe` running as a child of `warp-oss.exe`; then a
+follow-up in the same conversation correctly quoted the first message. An
+account-free Warp holding an agent conversation is not something upstream can
+do — not because of a gate, but because every path leads to
+`{server}/ai/multi-agent`, which needs a bearer token.
+
+Note that natural-language auto-detection is off by default
+(`agents.warp_agent.input.ai_auto_detection_enabled`), so reach the agent the
+normal way: `Ctrl-I`, or `Ctrl-Shift-Enter` for a new conversation.
+
 ### Why this is one `if` and not a rewrite
 
 The whole agent surface — the panel, blocks, diffs, todo lists, conversation
@@ -1057,8 +1069,36 @@ proof files pass between them as plain files. No SSH, no agent, no daemon.
 | `C:\dev\build.ps1` | Builds `warp-oss.exe` with the env that winget's PATH changes never reach. |
 | `C:\dev\shot.ps1`  | Screenshots a window (or the whole virtual screen) to PNG. |
 | `C:\dev\click.ps1` | Clicks inside a window, without touching the physical mouse. |
+| `C:\dev\keys.ps1`  | Posts keystrokes to one window, without taking focus. |
 | `C:\dev\sweep.ps1` | Runs every `warpctrl` action and records what each one did. |
 | `C:\dev\mcp_win*.ps1` | Drives a running instance over MCP, batched. |
+
+### Typing at Warp without focus, and what will not work
+
+A background process cannot take keyboard focus on Windows, so `keys.ps1` uses
+`PostMessage` for the same reason `click.ps1` does: it delivers to one HWND and
+leaves the user's own Warp alone. Three of the four obvious things fail, and
+each failure looks like success:
+
+| Mechanism | Works | What happens when it doesn't |
+| --- | --- | --- |
+| WM_KEYDOWN / WM_KEYUP | yes | — |
+| the same with Ctrl or Shift held | **no** | posted messages do not set the thread's key state, so `Ctrl+Shift+Enter` arrives as a bare `Enter` — and a bare Enter *runs the input buffer*, which is how a prompt intended for the agent gets executed as a shell command |
+| WM_CHAR | **no** | characters never reach the editor; the buffer stays empty and it reads as a slow UI |
+| `warpctrl input replace` | yes | but it sets the buffer without running the input classifier, so the text stays whatever mode the input was already in |
+
+The way to reach a keybinding without a modifier is the **command palette**,
+which `warpctrl` can seed and a bare Enter can invoke:
+
+```bash
+warpctrl surface command-palette open --query 'New Agent Tab'
+keys.ps1 -Key Return          # invokes the highlighted entry
+```
+
+Under WSLg none of this applies, because there is no keyboard at all:
+`XGetInputFocus` returns `None` and `XSetInputFocus` does not stick. The RAIL
+window is not foreground on the Windows desktop, so Xwayland has no keyboard
+focus to hand out. Clicks work, keys do not.
 
 **`$ErrorActionPreference` must be `Continue` in any script that runs cargo.**
 Cargo writes its progress (`Compiling foo v1.2.3`) to stderr, and under `Stop`
