@@ -188,3 +188,21 @@ fn the_export_action_belongs_to_fork_policy() {
         );
     });
 }
+
+/// The export destination must stay something only the user can change.
+///
+/// `setting.set` is gated by an allowlist, and this key is deliberately not on
+/// it: an agent can ask for an export but cannot decide where a pruning
+/// exporter points. That is the entire argument for the destination being a
+/// setting rather than a parameter, and adding one line to that allowlist would
+/// undo it without touching anything in this file.
+#[test]
+fn the_mirror_path_cannot_be_repointed_through_local_control() {
+    let key = LocalDriveSyncPath::toml_path().expect("the mirror path is user-visible");
+
+    assert!(
+        !crate::local_control::handlers::settings_surfaces::ALLOWLISTED_SETTING_KEYS.contains(&key),
+        "{key} became settable through local control, which lets a caller \
+         choose the directory drive.sync.export prunes"
+    );
+}

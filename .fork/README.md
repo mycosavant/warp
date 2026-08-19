@@ -715,8 +715,42 @@ Two properties are worth knowing because they constrain everything else:
 Trashed objects are exported, with their timestamp — emptying the trash is your
 decision, and an export that pre-empted it would take the undo away.
 
-Not yet wired: nothing invokes an export, and nothing applies an imported tree
-back into the store. See `.fork/TASKS.md` T4.4d and T4.4f.
+### Running an export
+
+Set the destination in `settings.toml` — there is no GUI control for it yet:
+
+    [warp_drive.local_sync]
+    path = "C:\\dev\\my-warp-drive"    # absolute; empty or absent = disabled
+
+Then drive it from `warpctrl`:
+
+    warpctrl drive status    # where it would go, and what would go there
+    warpctrl drive export    # write it
+
+`status` writes nothing, not even the directory, and reports an unset path
+rather than erroring — it is the command you run to find out *why* an export
+will not run. Both are MCP tools too (`warp_drive_sync_status`,
+`warp_drive_sync_export`), so an agent can run them.
+
+**The path is settings-only on purpose.** `warpctrl setting set` is gated by an
+allowlist and this key is deliberately not on it, so an agent can ask for an
+export but cannot choose the directory that gets pruned. Empty, relative,
+filesystem-root and not-a-directory destinations are all refused before
+anything is read or written.
+
+Verified on Windows against a real repository: `git init` in the mirror, a
+README, a `notes.json` and a `my-notes/todo.md` alongside the exported
+workflow, then commit and export twice more — `removed_files: 0`,
+`git status --porcelain` empty, `.git` intact.
+
+**Known gap: workflow aliases do not travel.** An alias is not a drive object —
+`WorkflowAliases` is a settings group holding `alias` plus the `workflow_id` it
+points at. So a workflow arrives on another machine without its alias. The
+format already preserves the id the alias refers to, so this is fixable; see
+`.fork/TASKS.md` T4.4g.
+
+Not yet wired: nothing applies an imported tree back into the store, so this is
+currently a one-way mirror. See `.fork/TASKS.md` T4.4f.
 
 ## Driving the Windows build from WSL
 

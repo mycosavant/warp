@@ -411,10 +411,13 @@ So this is "keep the store, neutralize the sync" — not a rewrite.
   - [x] **T4.4a** Lossless object↔file format — `drive/local_sync/format.rs`
   - [x] **T4.4b** Working-tree materializer — `drive/local_sync/tree.rs`
   - [x] **T4.4c** Round trip, replacing T4.5 — three levels of it, below
-  - [ ] **T4.4d** Git operations, and something that invokes an export at all
+  - [x] **T4.4d** A trigger — `drive.sync.status` and `drive.sync.export`,
+        verified on the Windows build against a real git repository
   - [ ] **T4.4e** Conflict policy
   - [ ] **T4.4f** Apply an imported tree back into the store — new, and the
         remaining hard half; see "What is left, and why it is the hard half"
+  - [ ] **T4.4g** Workflow aliases do not travel with the drive — new, found by
+        the live run; see "The alias gap" below
 - [x] **T4.5** Round-trip via the existing import/export paths — **premise is
       wrong, same as T4.1's.** There is no round trip today: export and import
       do not even cover the same set of types, and neither carries identity.
@@ -888,10 +891,79 @@ Only the third spans the seam between the other two.
 
 ### What is left, and why it is the hard half
 
-- **T4.4d** — nothing invokes an export yet. Needs a repository path setting
-  and a trigger. The natural trigger is a local-control action, which folds in
-  T1.12 and makes the whole feature drivable and verifiable without clicking;
-  it costs a catalog entry, a handler and permission wiring.
+### T4.4d as built — the trigger
+
+Two actions, `drive.sync.status` and `drive.sync.export`, bringing the catalog
+to 87. Namespaced `drive.sync.*` rather than `drive.*` because upstream retired
+a whole `drive.*` group and pins the old names as unparseable in
+`malformed_and_removed_action_names_are_not_deserialized`; these are not a
+revival of those. This also closes T1.12 — none of the other 85 actions touch
+the object store.
+
+**The destination is a setting, not a parameter, and that is a security
+property rather than a convenience.** An export prunes. If the destination
+arrived with the request, anything that could reach local control could aim a
+pruning exporter at a directory of its choosing. `warp_drive.local_sync.path`
+is also deliberately **not** in `ALLOWLISTED_SETTING_KEYS`, so `setting.set`
+cannot repoint it either: an agent can ask for an export but cannot decide
+where it lands. Pinned by a test, because adding one line to that allowlist
+would undo the whole argument without touching the drive code.
+
+Guards, each naming itself in the error: unset, relative, filesystem root, and
+not-a-directory are refused before anything is read or written. A mistyped `/`
+would otherwise walk the entire filesystem reading every file to decide whether
+it was one of ours. `WARP_FORK_POLICY=0` refuses too — the catalog is a
+compile-time list so the action cannot vanish from it, but an action that
+deletes files should stop working when its policy is off.
+
+### Verified on Windows, 2026-08-18
+
+Built at 21:09, run against the real store containing the `simple-workflow-test`
+workflow created by hand in the previous session:
+
+    drive status     objects 1, path_exists false
+    drive export     written 1
+    drive export     written 0, unchanged 1     <- the property, live
+
+The file is `simple-workflow-test-8f89f76f.json`, carrying
+`uid: Client-56cd792e-...` — the same client id recorded in the SQLite
+inspection two sessions ago, so identity really does survive the store → file
+boundary.
+
+Then the destructive case, against an actual git repository rather than a
+tempdir: `git init` in the mirror, add a README, a `notes.json`, and a
+`my-notes/todo.md`, commit, and export twice more.
+
+    removed_files 0        nothing of the user's was touched
+    git status --porcelain (empty)      the repository is clean
+    .git\HEAD present
+
+That last line is the one worth having. The unit tests assert the same thing
+against a tempdir, but "an export leaves a real git repository clean" is the
+claim the whole format was designed around, and until now it had only ever been
+checked against a directory this code also created.
+
+### The alias gap — T4.4g
+
+The live run found something reading would not have. The exported workflow has
+no alias, and `wf-test` was set on it.
+
+Not a defect in the format: **workflow aliases are not drive objects at all.**
+`WorkflowAliases` (`workflows/aliases.rs`) is a *settings group* — a
+`Vec<WorkflowAlias>` under storage key `WorkflowAliases`, each entry holding an
+`alias` string and the `workflow_id: SyncId` it points at. So the export is
+lossless with respect to the drive; the alias was never in it.
+
+It is still a real gap for what T4.4 is *for*. Carry the repository to another
+machine, import, and the workflow returns without its alias — because aliases
+live in settings, which in this fork sync nowhere.
+
+Tractable, and the format already did the hard part: aliases reference
+workflows by `SyncId`, and a `SyncId` is exactly what the files preserve. So
+the link would survive if the aliases travelled. What needs deciding is whether
+settings-shaped data belongs in a *drive* mirror at all, and what happens to an
+alias pointing at a workflow that is not in the personal space. That is a
+design call, not a line of code, which is why it is its own task.
 - **T4.4f** — applying an imported tree *back into* the store. `snapshot` only
   reads. Writing means creating and updating objects through `CloudModel`'s
   typed paths, which is thirteen constructors rather than thirteen accessors,
