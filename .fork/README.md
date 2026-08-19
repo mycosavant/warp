@@ -882,12 +882,13 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File 'C:\dev\shot.ps1' -Out '
 Anything under `/mnt/c` is visible to both sides, so scripts, screenshots and
 proof files pass between them as plain files. No SSH, no agent, no daemon.
 
-### The three scripts
+### The four scripts
 
 | Script | What it does |
 |---|---|
 | `C:\dev\build.ps1` | Builds `warp-oss.exe` with the env that winget's PATH changes never reach. |
 | `C:\dev\shot.ps1`  | Screenshots a window (or the whole virtual screen) to PNG. |
+| `C:\dev\click.ps1` | Clicks inside a window, without touching the physical mouse. |
 | `C:\dev\mcp_win*.ps1` | Drives a running instance over MCP, batched. |
 
 **`$ErrorActionPreference` must be `Continue` in any script that runs cargo.**
@@ -908,6 +909,18 @@ has no `MainWindowHandle` yet, which is the normal state during early startup.
 A full-screen grab at this display's 2560x1440 is around 4 MB; `-Scale 0.5`
 brings it to roughly 800 KB, which is still legible for checking whether a
 panel rendered.
+
+`click.ps1` exists because some fork behaviour has no `warpctrl` action and no
+keybinding — the Drive panel's trash menu is the case that forced it (T4.7).
+Coordinates are window-relative and line up with a `shot.ps1 -Process`
+capture pixel for pixel, so the loop is: screenshot, read the coordinates off
+it, click, screenshot again. `-Right` opens a context menu. Remember `-Scale`
+halves the coordinates too.
+
+It posts mouse messages to the one window rather than moving the cursor and
+clicking. A synthetic *physical* click goes wherever the pointer happens to
+be, and the user's own Warp is running on the same desktop — this disturbs
+nothing outside the target window, and works without raising it.
 
 ### Driving it without an MCP client
 

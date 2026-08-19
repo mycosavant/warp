@@ -1090,6 +1090,45 @@ And T4.4f's empty-tree guard is now reachable in earnest: on a single-object
 drive, deleting the object *and* emptying the trash produces an empty tree,
 which the import refuses. The last deletion still cannot propagate.
 
+#### Verified on Windows, 2026-08-19
+
+Through the panel, on the running build, against the very object that could not
+be got rid of — `from-another-machine`, trashed since the T4.4f session.
+
+The first thing to check was the menu, since before this it had no entries at
+all on a trashed object. Right-click now draws **Restore** and **Delete
+forever**.
+
+    Restore          -> trash empties, object back under PERSONAL,
+                        "Empty trash" greys out
+    drive export     -> written 1, unchanged 1
+                        and the file no longer carries "trashed"
+
+    Trash it again, then Delete forever
+                     -> toast "1 object deleted forever"
+    drive status     -> objects 2 -> 1
+    drive export     -> removed_files 1
+
+    Import a hand-authored throwaway (created 1), trash it,
+    then the Empty trash button
+                     -> confirmation dialog, then
+                        "Trash emptied: 1 object deleted forever"
+    drive export     -> removed_files 1
+
+Then closed and reopened Warp: `objects 1`, export `unchanged 1`. Nothing came
+back, which is the part only a restart can show — the in-memory model and the
+panel would look identical either way, and the SQLite delete is what makes it
+permanent.
+
+The toasts are worth noting rather than skipping past: they are driven by the
+completion event, so seeing them is what confirms the local path emits it. The
+`drive export` numbers are the independent check — `removed_files 1` means the
+object was gone from the *store*, not just from the panel.
+
+Driven with a new `C:\dev\click.ps1` (see `.fork/README.md`), because the trash
+menu has no `warpctrl` action and no keybinding: this is the first fork
+behaviour that could only be reached through the GUI.
+
 ### The alias gap — T4.4g
 
 The live run found something reading would not have. The exported workflow has
