@@ -126,12 +126,14 @@ verification used an explicit selector. Making the window foreground from WSL
 means defeating the foreground lock, which is not something to do on a desktop
 the user is sitting at — the permission classifier refused it, correctly.
 
-One unexplained event, recorded rather than hidden: mid-session the running
-build exited by itself, its log ending in a `NativeModalAction::
-TriggerButtonCallback(0)` followed by an orderly teardown, having started as a
-crash-recovery child. No `warpctrl` call is implicated — the sweep had not
-started — but it happened, and the next person seeing it should know it has
-been seen before.
+One event that looked alarming and was not: mid-session the running build
+exited, its log ending in `NativeModalAction::TriggerButtonCallback(0)` after
+starting as a crash-recovery child. Explained by the user immediately
+afterwards — they had closed the debug terminal window, which spawns the
+recovery child, and then clicked "yes, exit Warp" on the confirmation dialog.
+So the button callback in the log is exactly what it says: a person clicking a
+button. Worth keeping only as a reminder that a `TriggerButtonCallback` in this
+log is a human, not a fault.
 
 Driven by `C:\dev\sweep.ps1`, which is worth keeping: re-running it after an
 upstream merge is the cheapest way to find out what the merge broke.
