@@ -72,6 +72,9 @@ pub mod facts;
 pub(crate) mod generate_block_title;
 pub(crate) mod generate_code_review_content;
 pub(crate) mod loading;
+// Spawns a local `claude`; `command::r#async` does not exist on wasm.
+#[cfg(not(target_family = "wasm"))]
+pub(crate) mod local_agent;
 pub(crate) mod local_completion;
 pub mod mcp;
 pub mod outline;

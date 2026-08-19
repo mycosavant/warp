@@ -140,6 +140,35 @@ pub fn local_ai_completions_enabled() -> bool {
     is_active()
 }
 
+/// Set to `1`, `on` or `true` to answer agent conversations from the local
+/// `claude` CLI instead of `api.warp.dev`.
+const LOCAL_AGENT_ENV_VAR: &str = "WARP_FORK_LOCAL_AGENT";
+
+/// Whether the agent conversation is answered on this machine (T5).
+///
+/// **Default off, unlike every other predicate in this module.** The others
+/// enlarge what works — an account-free user gets a Drive that can be written
+/// to, a microphone that stays on the machine, a harness list that is not
+/// empty. This one *substitutes* for something that works, and the substitute
+/// is a spike: Claude runs its own tools, so Warp's diff review and command
+/// approval do not participate, and only a plain user query is handled at all.
+/// Switching it on by fork policy would take working behaviour away from anyone
+/// signed in.
+///
+/// Consumed by `ai::agent::api::generate_multi_agent_output`, which is the
+/// entire seam: one async fn, `RequestParams` in and a stream of
+/// `ResponseEvent` out. Everything the agent surface does hangs off it, and
+/// nothing above it knows whether the events came off an SSE socket or a pipe.
+/// See `ai::local_agent` for why that is true and `.fork/TASKS.md` T5 for how
+/// it was established.
+pub fn local_agent_enabled() -> bool {
+    is_active()
+        && matches!(
+            std::env::var(LOCAL_AGENT_ENV_VAR).as_deref(),
+            Ok("1") | Ok("on") | Ok("true")
+        )
+}
+
 /// The owner written into Warp Drive objects created without an account.
 ///
 /// Deliberately a fixed constant rather than a per-install UUID. `UserWorkspaces

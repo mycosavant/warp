@@ -16,6 +16,11 @@ pub async fn generate_multi_agent_output(
     mut params: RequestParams,
     cancellation_rx: futures::channel::oneshot::Receiver<()>,
 ) -> Result<ResponseStream, ConvertToAPITypeError> {
+    #[cfg(not(target_family = "wasm"))]
+    if crate::fork::local_agent_enabled() && crate::ai::local_agent::handles(&params) {
+        return Ok(crate::ai::local_agent::generate(params, cancellation_rx).await);
+    }
+
     let supported_tools = params
         .supported_tools_override
         .take()

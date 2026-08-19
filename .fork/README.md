@@ -698,6 +698,61 @@ local LLM available to test with. The request shape is asserted field by field
 against a stub server, but a stub agrees with whatever it is told. One real
 request is worth more than that whole test file.
 
+## The agent, answered by your own Claude (experimental)
+
+**Off by default.** Everything else in this fork enlarges what works; this
+substitutes for something that already does, and it is a spike. Turn it on with
+
+    WARP_FORK_LOCAL_AGENT=1 ./target/debug/warp-oss
+
+You need the `claude` CLI on `PATH`. It uses whatever authentication Claude Code
+already has — subscription, API key, whatever `claude` itself is set up with.
+Warp is not in the middle and no key is copied anywhere.
+
+### Why this is one `if` and not a rewrite
+
+The whole agent surface — the panel, blocks, diffs, todo lists, conversation
+history, cost readout — hangs off exactly one function:
+
+    ai::agent::api::generate_multi_agent_output(server_api, params, cancel)
+        -> Result<ResponseStream, ConvertToAPITypeError>
+
+`RequestParams` in, a stream of `ResponseEvent` out. Upstream that POSTs a
+protobuf request to `{server}/ai/multi-agent` and decodes base64url protobuf
+off an SSE stream. Nothing above it knows that. So a local implementation is a
+different body for that one function, and the integration is a single condition
+at the top of it.
+
+The 70-method `AIClient` trait, which the plan expected to be the obstacle, is
+**not on this path at all**. See `.fork/TASKS.md` T5.1.
+
+The other thing that makes it possible: the client sends its *entire task list*
+on every request. The server is not the keeper of the conversation — this
+machine is, and it re-presents the whole thing each turn. There is nothing to
+recover from a server because the server never held it.
+
+Session continuity likewise needed no new state. Warp stores
+`StreamInit.conversation_id` as the conversation's token and hands it back next
+turn, so reporting Claude's session id there makes Warp's own round-tripping
+the session store: `--session-id` on the first turn, `--resume` after.
+
+### What it does not do yet
+
+**Claude runs its own tools.** Tool activity is shown as text, never as a
+`ToolCall` message — a `ToolCall` is an *instruction*, and Warp's action model
+would execute a tool Claude had already run. A second `rm`. So Warp's diff
+review and command approval do not participate; Claude's own permission rules
+govern, which in `--print` mode means read-only tools work and anything needing
+approval is refused.
+
+Getting Warp's execution back means `--input-format stream-json`, so results can
+be fed back mid-turn. At that point `ToolCall` becomes correct rather than
+dangerous.
+
+Also absent: model selection (Claude Code picks its own), attachments, MCP
+context. Only a plain user query is claimed at all — passive suggestions,
+conversation resume, code review and project init still go upstream untouched.
+
 ## Warp Drive without an account
 
 Warp Drive is backed by a real local SQLite store (`crates/cloud_object_persistence`,
