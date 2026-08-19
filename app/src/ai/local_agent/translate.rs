@@ -4,8 +4,26 @@
 //! [`api::ResponseEvent`] out. No process, no clock, no network — which is what
 //! makes the interesting half of this feature testable without either end.
 
+use chrono::{DateTime, Utc};
 use serde::Deserialize;
 use warp_multi_agent_api as api;
+
+/// How much of the prompt becomes the conversation's name in the history panel.
+///
+/// Upstream the server writes a summarised title; there is no summariser here,
+/// so the prompt itself is the honest stand-in. Long enough to tell two
+/// conversations apart, short enough for the panel.
+const TASK_DESCRIPTION_CHARS: usize = 60;
+
+fn task_description(prompt: &str) -> String {
+    let prompt = prompt.trim();
+    // `char_indices` rather than slicing by byte: a prompt can end mid-glyph
+    // and `String::truncate` would panic on the boundary.
+    match prompt.char_indices().nth(TASK_DESCRIPTION_CHARS) {
+        Some((cut, _)) => format!("{}…", prompt[..cut].trim_end()),
+        None => prompt.to_owned(),
+    }
+}
 
 /// A line of Claude's `--output-format stream-json`.
 ///
@@ -87,18 +105,31 @@ pub(super) struct Translator {
     /// holds.
     task_needs_announcing: bool,
     request_id: String,
+    /// The prompt this turn was asked, recorded into the transcript as a
+    /// `UserQuery` message. See [`Self::user_query`].
+    prompt: String,
     next_message: u64,
     saw_result: bool,
+    /// When the turn started, stamped onto every message.
+    started_at: DateTime<Utc>,
 }
 
 impl Translator {
-    pub(super) fn new(task_id: String, task_needs_announcing: bool, request_id: String) -> Self {
+    pub(super) fn new(
+        task_id: String,
+        task_needs_announcing: bool,
+        request_id: String,
+        prompt: String,
+        started_at: DateTime<Utc>,
+    ) -> Self {
         Self {
             task_id,
             task_needs_announcing,
             request_id,
+            prompt,
             next_message: 0,
             saw_result: false,
+            started_at,
         }
     }
 
@@ -151,11 +182,25 @@ impl Translator {
                         api::client_action::CreateTask {
                             task: Some(api::Task {
                                 id: self.task_id.clone(),
+                                // The task's name. `AIConversation::title`
+                                // reads it first and only falls back to the
+                                // initial query, so a task with no description
+                                // is a conversation called "Untitled" in the
+                                // history panel.
+                                description: task_description(&self.prompt),
                                 ..Default::default()
                             }),
                         },
                     )]));
                 }
+                events.push(actions(vec![
+                    api::client_action::Action::AddMessagesToTask(
+                        api::client_action::AddMessagesToTask {
+                            task_id: self.task_id.clone(),
+                            messages: vec![self.user_query()],
+                        },
+                    ),
+                ]));
                 events
             }
             ClaudeEvent::Assistant { message } => {
@@ -184,6 +229,30 @@ impl Translator {
         }
     }
 
+    /// The user's own turn, written into the transcript.
+    ///
+    /// Upstream the *server* echoes the query back as a message, and a great
+    /// deal hangs off that rather than off the input the client already holds.
+    /// Live it is deliberately inert — `convert_from` maps it to
+    /// `NoClientRepresentation`, so it does not double-render the prompt the
+    /// input already drew. It matters when the conversation is read back from
+    /// the database, where `convert_conversation` turns it into the exchange's
+    /// `AIAgentInput::UserQuery`. Without it a restored conversation has the
+    /// agent's half and not the user's, no `initial_query`, no title, and an
+    /// exchange whose `start_time` falls through `unwrap_or_default()` to the
+    /// Unix epoch — which is what "58 years ago" in the history panel was.
+    fn user_query(&mut self) -> api::Message {
+        let body = api::message::Message::UserQuery(api::message::UserQuery {
+            query: self.prompt.clone(),
+            context: Some(api::InputContext {
+                current_time: Some(self.timestamp()),
+                ..Default::default()
+            }),
+            ..Default::default()
+        });
+        self.message(body)
+    }
+
     fn content_block(&mut self, block: ContentBlock) -> Option<api::Message> {
         let body = match block {
             ContentBlock::Text { text } if !text.trim().is_empty() => {
@@ -210,14 +279,37 @@ impl Translator {
             }
         };
 
+        Some(self.message(body))
+    }
+
+    /// Wraps a message body with the identity and time every message needs.
+    ///
+    /// The timestamp is not decoration. `convert_conversation` derives a
+    /// restored exchange's `finish_time` from it and falls back to it for
+    /// `start_time`, so an unstamped message becomes a conversation that
+    /// happened in 1970.
+    fn message(&mut self, body: api::message::Message) -> api::Message {
         self.next_message += 1;
-        Some(api::Message {
+        api::Message {
             id: format!("{}-{}", self.request_id, self.next_message),
             task_id: self.task_id.clone(),
             request_id: self.request_id.clone(),
+            timestamp: Some(self.timestamp()),
             message: Some(body),
             ..Default::default()
-        })
+        }
+    }
+
+    /// One time for the whole turn, taken when it started.
+    ///
+    /// Deliberately not `now()` per message: these all belong to one exchange,
+    /// and a turn that took a minute should not look like a minute of
+    /// conversation history.
+    fn timestamp(&self) -> prost_types::Timestamp {
+        prost_types::Timestamp {
+            seconds: self.started_at.timestamp(),
+            nanos: self.started_at.timestamp_subsec_nanos() as i32,
+        }
     }
 
     fn finished(&self, result: ResultEvent) -> api::ResponseEvent {

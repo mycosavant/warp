@@ -60,6 +60,7 @@ use std::process::Stdio;
 use std::sync::Arc;
 
 use anyhow::{Context as _, anyhow};
+use chrono::Utc;
 use futures::channel::oneshot;
 use futures::stream::{self, Stream, StreamExt as _};
 use futures_lite::io::BufReader;
@@ -170,6 +171,7 @@ async fn run(turn: Turn) -> anyhow::Result<impl Stream<Item = Event> + Send + us
         working_directory,
     } = turn;
     let request_id = Uuid::new_v4().to_string();
+    let started_at = Utc::now();
 
     let mut command = command::r#async::Command::new("claude");
     command
@@ -220,7 +222,13 @@ async fn run(turn: Turn) -> anyhow::Result<impl Stream<Item = Event> + Send + us
         _child: child,
         lines: Box::pin(BufReader::new(stdout).lines()),
         stderr: Box::pin(stderr),
-        translator: Translator::new(task_id, task_needs_announcing, request_id),
+        translator: Translator::new(
+            task_id,
+            task_needs_announcing,
+            request_id,
+            prompt,
+            started_at,
+        ),
         pending: VecDeque::new(),
         ended: false,
     }))
