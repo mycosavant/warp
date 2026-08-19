@@ -187,7 +187,27 @@ Sentry symbols, real `MainWindowHandle`, onboarding renders.
 env -u WAYLAND_DISPLAY LIBGL_ALWAYS_SOFTWARE=1 ./target/debug/warp-oss
 ```
 
-Verified working — renders the full UI correctly.
+**The Linux build is usable.** Verified 2026-08-19 end to end: the full UI
+renders, a workspace opens, `warpctrl` mutations land, and a submitted command
+runs. It is software-rendered through llvmpipe, and that turns out to cost less
+than expected — **0% CPU at idle**, with a burst to ~280% of one core while
+painting 50,000 lines of scrollback, settling back to zero within two seconds.
+Fine for terminal work; a heavier UI test than that has not been run.
+
+Getting there took one thing nobody had tried: **completing onboarding.** A
+fresh Linux profile opens on the onboarding slides, and while those are showing
+there is no workspace — `RootView` is in `AuthOnboardingState::Onboarding`, and
+`Workspace` is only built by the other branch. That is the whole reason
+`window list` reported `has_workspace: false`, and it had been recorded here
+for weeks as "the window never composites under WSLg". It composites. See
+`.fork/TASKS.md` T1.11.
+
+The account slide has a **Skip → "Skip for now"**, and taking it lands you in a
+working terminal with no account. Worth knowing about the trap next to it:
+under account-first onboarding the "you have onboarded" flag is written *only*
+on that path, so quitting while the account slide is up brings the whole
+sequence back on the next launch — which reads as "the app never finishes
+starting" when it is really "the app is still asking".
 
 Two independent WSLg problems, each with its own symptom:
 
@@ -227,6 +247,33 @@ Kill the whole family before relaunching:
 ```bash
 pkill -f 'debug/warp-oss'; sleep 2; ss -tlnp | grep 9282   # expect no output
 ```
+
+### Driving the Linux GUI from an agent
+
+Same problem as Windows — some things have no `warpctrl` action, and the
+onboarding slides are one of them — and the same answer, minus the tooling.
+`xdotool` is not installed and `sudo` is denied here, but `libX11` and
+`libXtst` are present, so XTEST is reachable from `ctypes` with nothing to
+install. `~/.local/bin/warp-xin.py` does that:
+
+```bash
+xwininfo -root -tree | grep -i warp     # 0x600003 "Warp": ... 1182x738+32+32
+import -window 0x600003 /tmp/shot.png   # screenshot, window-relative pixels
+python3 ~/.local/bin/warp-xin.py click 590 445
+python3 ~/.local/bin/warp-xin.py key Return
+```
+
+Two things cost an hour between them, both worth knowing:
+
+* **Weston reparents the window**, so the toplevel named "Warp" is a
+  *grandchild* of the root and `XFetchName` on the root's children finds
+  nothing. Recurse, or read the id out of `xwininfo -root -tree`.
+* **A non-zero delay on the button release loses it.** `XTestFakeButtonEvent`'s
+  last argument is a server-side delay; ask for 50ms and then let the process
+  exit, and the release never arrives. The button stays held — `XQueryPointer`
+  reports `Button1Mask` — and the UI sits in a hover state that looks exactly
+  like a click the app ignored. It is the opposite: a click that never ended.
+  Send both events with delay 0 and sleep before exiting.
 
 ### Harmless startup noise in this environment
 
@@ -487,13 +534,14 @@ interactively. Diagnostics go to stderr.
 Working on Linux/macOS (upstream) and Windows (fork port). Two different
 things are easy to confuse here:
 
-* **The Linux build under WSLg** is unusable: the process runs and read actions
-  answer, but the window never composites, so there is no workspace at all and
-  mutations fail with `missing_target`. No selector fixes that — there is
-  nothing to select. See T1.11.
-* **The Windows build driven from WSL** is the working arrangement and the one
-  everything above was verified on. Its window is never *focused* from WSL, but
-  it has a workspace, so everything works given an explicit selector.
+* **The Linux build under WSLg** works, including mutations, once the profile
+  has been through onboarding — until then there is no workspace and everything
+  that needs one fails with `missing_target`. Run it with the two environment
+  tweaks above, or the window paints nothing. Its window *is* reported active,
+  unlike the Windows one.
+* **The Windows build driven from WSL** is the arrangement everything above was
+  verified on, and remains the default. Its window is never *focused* from WSL,
+  but it has a workspace, so everything works given an explicit selector.
 
 ## Voice input, transcribed on this machine
 
@@ -934,10 +982,11 @@ Written down 2026-08-18 after the original working session was lost to a
 cleared context. The capability had been rebuilt from scratch twice by then;
 the scripts referenced here exist so it does not have to be a third time.
 
-The GUI only works on Windows (WSLg never composites a window, so the Linux
-build has no workspace and every mutating `warpctrl` action fails with
-`missing_target`). But an agent running in WSL can drive that Windows build
-end to end, because WSL interop makes `powershell.exe` an ordinary executable:
+Windows is the primary GUI platform for this fork — it is where the builds are
+verified and where the user actually runs Warp. (The Linux build works too; see
+"Running under WSL2" above. It was written off for weeks on a misdiagnosis.)
+An agent running in WSL can drive the Windows build end to end, because WSL
+interop makes `powershell.exe` an ordinary executable:
 
 ```bash
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File 'C:\dev\shot.ps1' -Out 'C:\dev\shots\x.png'

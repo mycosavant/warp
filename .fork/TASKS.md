@@ -177,20 +177,67 @@ directory and the record reports exactly one ACE:
 No SYSTEM, no Administrators, no inherited entries. That is stricter than the
 Windows default, and is what `D:P(...)` buys.
 
-### Remaining blocker: no workspace on Linux
+### RESOLVED 2026-08-19 — there was no rendering bug (T1.11)
 
-Mutating actions fail on the WSL build with
-`missing_target: tab.create requires a workspace in the target window`.
-`window list` shows one window with `has_workspace: false, is_active: false`
-— the window object exists but never gets a workspace because it never
-composites under WSLg. Not a local-control defect; the same WSLg RAIL
-forwarding failure that pushed the build to Windows.
+The record above said: "the window object exists but never gets a workspace
+because it never composites under WSLg." Every word after "exists" was wrong.
 
-Windows is now the working platform for local control, so this is no longer
-on the critical path — but the Linux build is still unusable as a GUI.
+It composites. The Linux build renders the whole UI correctly under WSLg with
+the two documented environment tweaks, and always did. What it was showing was
+the **onboarding slides**, and while those are up `RootView` sits in
+`AuthOnboardingState::Onboarding` — `Workspace` is built by the *other* branch
+(`root_view.rs:1925`). So `has_workspace: false` was not a symptom of a
+graphics failure at all. It was the app truthfully reporting that a fresh
+profile had not been through onboarding yet.
 
-- [ ] **T1.11** Fix WSLg rendering so the Linux build is usable.
-      Also serves T6, but has resisted several attempts already.
+Completing it — three slides, then **Skip → "Skip for now"** on the account
+slide — produced, in order:
+
+    window list     has_workspace: true   (was false for weeks)
+    tab create      Created tab 2144 in window 0 (tab count 2)
+    input submit    the command ran; /tmp/t111-proof.txt written
+
+Then rebuilt at HEAD and relaunched, because the binary that found this was
+from 2026-08-17 and the point is whether *current* code is usable:
+
+    window list     has_workspace: true straight from launch — onboarding is
+                    persisted, so the workspace is what you get
+    tab create      Created tab 2764 in window 0 (tab count 3)
+    input submit    ok, executed: false, queued: true, and the file appeared
+                    — the T1.9 fix behaving correctly here too; the old binary
+                    reported `isError` for this same case
+    drive status    answers (0 objects: the Linux profile has its own store)
+
+Cost of software rendering, measured rather than assumed: **0% CPU at idle**,
+peaking around 280% of one core while painting 50,000 lines of scrollback and
+back to zero within two seconds. An earlier 25% reading was a cargo build on
+the same machine, not llvmpipe.
+
+**How it hid for so long.** There *is* a real WSLg rendering failure, and it is
+already documented: with `WAYLAND_DISPLAY` set the window is created but never
+paints. That is a grey rectangle, and it is genuinely broken. The X11 fallback
+fixes it. But the `has_workspace: false` symptom looks identical either way, so
+after the switch to X11 it kept being read as the same problem. Nobody
+screenshotted the X11 window — which shows a perfectly rendered "Welcome to
+Warp" — because the diagnosis was already written down.
+
+The generalisable bit: **a symptom that survives the fix for its supposed cause
+is evidence the cause was wrong**, not evidence the fix was incomplete.
+
+- [x] **T1.11** The Linux build is usable. No code changed — the fix was
+      finishing a flow, and the honest deliverable is that the blocker was a
+      misdiagnosis. See above and `.fork/README.md`.
+
+**The trap next door, not fixed.** Under account-first onboarding,
+`mark_local_onboarding_completed` is called only from `complete_account_first`
+(`root_view.rs:2690` skips it when `account_first`), so the flag is written
+only if the user reaches the end of the account slide — including via Skip.
+Quit while that slide is up and the entire sequence returns on the next launch,
+forever, which reads as "the app never finishes starting". Not a wall, since
+Skip works, but it is an account-shaped papercut in a fork whose premise is
+that there is no account. One condition under fork policy would remove it;
+worth doing only if it starts biting, and named here so it is a decision rather
+than an oversight.
 
 Deferred, dependent on T1 landing:
 
@@ -1410,7 +1457,12 @@ remaining features seamless across Windows and WSL2.
 - [ ] **T6.1** Scope what "seamless" means concretely; enumerate broken surfaces
 - [ ] **T6.2** Path translation (`\\wsl.localhost\...` ↔ `/mnt/c/...`)
 - [ ] **T6.3** File explorer across the boundary
-- [ ] **T6.4** Decide the WSLg window-forwarding story or stay Windows-native
+- [ ] **T6.4** Decide the WSLg window-forwarding story or stay Windows-native.
+      T1.11 changed the terms of this decision: the WSLg build works, so this
+      is now a choice between two working options rather than a workaround for
+      one broken one. What the Linux build costs is llvmpipe — software
+      rendering, real CPU, no GPU passthrough — and what it buys is a Warp that
+      is *inside* WSL, where the files and the shell already are.
 
 ---
 
