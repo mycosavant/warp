@@ -8,8 +8,10 @@ use crate::drive::local_sync::tree;
 use crate::network::NetworkStatus;
 use crate::server::ids::ClientId;
 use crate::server::sync_queue::SyncQueue;
+use crate::workflows::aliases::{Aliases, WorkflowAlias, WorkflowAliases};
 use crate::workspaces::team_tester::TeamTesterStatus;
 use crate::workspaces::user_workspaces::UserWorkspaces;
+use settings::{Setting as _, SettingsManager};
 
 /// The round trip T4.4c could only half-assert, now closed: a real store, out
 /// to a directory, **edited on disk**, and back into the store.
@@ -77,6 +79,7 @@ fn a_new_file_becomes_an_object_with_the_identity_in_it() {
                 creator_uid: None,
                 last_editor_uid: None,
                 is_welcome_object: false,
+                aliases: Vec::new(),
                 payload: Payload::Json(serde_json::json!({
                     "name": "from-elsewhere",
                     "command": "echo hi",
@@ -166,6 +169,9 @@ fn applying_the_same_tree_twice_changes_nothing_the_second_time() {
                 unchanged: 1,
                 trashed: 0,
                 unreadable: Vec::new(),
+                aliases_set: 0,
+                aliases_removed: 0,
+                aliases_reassigned: Vec::new(),
             }
         );
     });
@@ -303,7 +309,159 @@ fn moving_a_file_moves_the_object_between_folders() {
     });
 }
 
+/// T4.4g, the headline: an alias typed on one machine reaches the other,
+/// through the workflow's own file and nothing else.
+#[test]
+fn an_alias_added_on_disk_reaches_settings() {
+    App::test((), |mut app| async move {
+        let root = TempDir::new().unwrap();
+        let workflow = local_workflow("deploy", "cargo build");
+        let workflow_id = workflow.sync_id();
+        drive_app(&mut app, vec![workflow]);
+
+        let (objects, _) = app.read(snapshot);
+        tree::export(root.path(), &objects).unwrap();
+        add_alias_to_file(&root.path().join(objects[0].object.file_name()), "dep");
+
+        let imported = tree::import(root.path()).unwrap();
+        let summary = apply(&imported.objects, &mut app).unwrap();
+
+        assert_eq!(summary.aliases_set, 1);
+        assert_eq!(summary.aliases_removed, 0);
+        app.read(|ctx| {
+            let aliases = WorkflowAliases::as_ref(ctx).get_all_aliases();
+            assert_eq!(aliases.len(), 1);
+            assert_eq!(aliases[0].alias, "dep");
+            assert_eq!(
+                aliases[0].workflow_id, workflow_id,
+                "the alias arrived pointing at the wrong workflow"
+            );
+        });
+    });
+}
+
+/// The other direction. The workflow's file is the whole truth about its
+/// aliases, so one deleted there is deleted here.
+#[test]
+fn an_alias_taken_out_of_the_file_is_taken_out_of_settings() {
+    App::test((), |mut app| async move {
+        let root = TempDir::new().unwrap();
+        let workflow = local_workflow("deploy", "cargo build");
+        let workflow_id = workflow.sync_id();
+        drive_app_with_aliases(&mut app, vec![workflow], vec![alias("dep", workflow_id)]);
+
+        // Export carries the alias into the file; take it out again, as an
+        // edit on the other machine would have.
+        let (objects, _) = app.read(snapshot);
+        tree::export(root.path(), &objects).unwrap();
+        let path = root.path().join(objects[0].object.file_name());
+        let mut portable = read_portable(&path);
+        assert_eq!(portable.aliases.len(), 1, "the export dropped the alias");
+        portable.aliases.clear();
+        std::fs::write(&path, portable.to_file_contents().unwrap()).unwrap();
+
+        let imported = tree::import(root.path()).unwrap();
+        let summary = apply(&imported.objects, &mut app).unwrap();
+
+        assert_eq!(summary.aliases_removed, 1);
+        app.read(|ctx| {
+            assert!(WorkflowAliases::as_ref(ctx).get_all_aliases().is_empty());
+        });
+    });
+}
+
+/// The rule that keeps this from being destructive.
+///
+/// An alias for a workflow the tree does not describe — a team workflow, or one
+/// outside the mirror — has no file anywhere, so absence says nothing about it.
+/// Reconciling the whole list against the tree would wipe it with nothing to
+/// restore it from.
+#[test]
+fn an_alias_for_a_workflow_the_tree_does_not_describe_is_left_alone() {
+    App::test((), |mut app| async move {
+        let root = TempDir::new().unwrap();
+        let elsewhere = SyncId::ClientId(ClientId::new());
+        drive_app_with_aliases(
+            &mut app,
+            vec![local_workflow("deploy", "cargo build")],
+            vec![alias("team-thing", elsewhere)],
+        );
+
+        let (objects, _) = app.read(snapshot);
+        tree::export(root.path(), &objects).unwrap();
+        let imported = tree::import(root.path()).unwrap();
+
+        let summary = apply(&imported.objects, &mut app).unwrap();
+
+        assert_eq!(summary.aliases_removed, 0);
+        app.read(|ctx| {
+            let aliases = WorkflowAliases::as_ref(ctx).get_all_aliases();
+            assert_eq!(aliases.len(), 1, "an alias outside the mirror was wiped");
+            assert_eq!(aliases[0].workflow_id, elsewhere);
+        });
+    });
+}
+
+/// An alias is keyed by its text alone, so a tree claiming `dep` takes it from
+/// whatever held it here. That is the right outcome — two `dep`s is not a
+/// state — but it changes something outside the mirror, so it gets named.
+#[test]
+fn an_alias_taken_from_a_workflow_outside_the_tree_is_named() {
+    App::test((), |mut app| async move {
+        let root = TempDir::new().unwrap();
+        let elsewhere = SyncId::ClientId(ClientId::new());
+        let workflow = local_workflow("deploy", "cargo build");
+        let workflow_id = workflow.sync_id();
+        drive_app_with_aliases(&mut app, vec![workflow], vec![alias("dep", elsewhere)]);
+
+        let (objects, _) = app.read(snapshot);
+        tree::export(root.path(), &objects).unwrap();
+        add_alias_to_file(&root.path().join(objects[0].object.file_name()), "dep");
+
+        let imported = tree::import(root.path()).unwrap();
+        let summary = apply(&imported.objects, &mut app).unwrap();
+
+        assert_eq!(summary.aliases_reassigned, vec!["dep".to_owned()]);
+        app.read(|ctx| {
+            let aliases = WorkflowAliases::as_ref(ctx).get_all_aliases();
+            assert_eq!(aliases.len(), 1, "both claims on `dep` survived");
+            assert_eq!(aliases[0].workflow_id, workflow_id);
+        });
+    });
+}
+
+/// The alias half of the idempotence the objects already have: a repeated pull
+/// must not rewrite the settings store for nothing.
+#[test]
+fn re_importing_a_tree_with_aliases_writes_no_aliases() {
+    App::test((), |mut app| async move {
+        let root = TempDir::new().unwrap();
+        let workflow = local_workflow("deploy", "cargo build");
+        let workflow_id = workflow.sync_id();
+        drive_app_with_aliases(&mut app, vec![workflow], vec![alias("dep", workflow_id)]);
+
+        let (objects, _) = app.read(snapshot);
+        tree::export(root.path(), &objects).unwrap();
+        let imported = tree::import(root.path()).unwrap();
+
+        apply(&imported.objects, &mut app).unwrap();
+        let second = apply(&imported.objects, &mut app).unwrap();
+
+        assert_eq!(second.aliases_set, 0);
+        assert_eq!(second.aliases_removed, 0);
+        assert!(second.aliases_reassigned.is_empty());
+    });
+}
+
 fn drive_app(app: &mut App, objects: Vec<Box<dyn CloudObject>>) {
+    drive_app_with_aliases(app, objects, Vec::new());
+}
+
+fn drive_app_with_aliases(
+    app: &mut App,
+    objects: Vec<Box<dyn CloudObject>>,
+    aliases: Vec<WorkflowAlias>,
+) {
     app.add_singleton_model(|_| NetworkStatus::new());
     app.add_singleton_model(TeamTesterStatus::mock);
     app.add_singleton_model(|_| AuthStateProvider::new_logged_out_for_test());
@@ -311,6 +469,38 @@ fn drive_app(app: &mut App, objects: Vec<Box<dyn CloudObject>>) {
     app.add_singleton_model(SyncQueue::mock);
     app.add_singleton_model(|_| CloudModel::new(None, objects, None));
     app.add_singleton_model(UpdateManager::mock);
+    // `WorkflowAliases` is a private setting, so writing one goes through the
+    // preferences store as well as the manager.
+    app.add_singleton_model(|_| SettingsManager::default());
+    app.update(crate::settings::init_and_register_user_preferences);
+    app.add_singleton_model(move |_| WorkflowAliases {
+        aliases: Aliases::new(Some(aliases)),
+    });
+}
+
+fn alias(text: &str, workflow_id: SyncId) -> WorkflowAlias {
+    WorkflowAlias {
+        alias: text.to_owned(),
+        workflow_id,
+        arguments: None,
+        env_vars: None,
+    }
+}
+
+fn read_portable(path: &std::path::Path) -> PortableObject {
+    PortableObject::from_file_contents(&std::fs::read_to_string(path).unwrap()).unwrap()
+}
+
+/// Edits a file the way the other machine's user would have, by adding an alias
+/// to the workflow it describes.
+fn add_alias_to_file(path: &std::path::Path, text: &str) {
+    let mut portable = read_portable(path);
+    portable.aliases.push(Alias {
+        alias: text.to_owned(),
+        env_vars: None,
+        arguments: None,
+    });
+    std::fs::write(path, portable.to_file_contents().unwrap()).unwrap();
 }
 
 fn local_permissions() -> CloudObjectPermissions {

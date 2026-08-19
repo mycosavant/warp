@@ -22,7 +22,7 @@ fn a_workflow_file_looks_like_this() {
     assert_eq!(
         object.to_file_contents().unwrap(),
         r#"{
-  "warp_drive": 1,
+  "warp_drive": 2,
   "type": "WORKFLOW",
   "uid": "Client-4f2a1c8e-0d3b-4a76-9c11-8e5b2d7f6a90",
   "name": "simple-workflow-test",
@@ -47,7 +47,7 @@ fn a_notebook_file_keeps_its_markdown_as_markdown() {
     assert_eq!(
         object.to_file_contents().unwrap(),
         r#"---
-warp_drive: 1
+warp_drive: 2
 type: NOTEBOOK
 uid: Client-4f2a1c8e-0d3b-4a76-9c11-8e5b2d7f6a90
 name: Field notes
@@ -262,12 +262,12 @@ fn both_kinds_of_owner_round_trip() {
 #[test]
 fn a_malformed_file_is_an_error_rather_than_a_panic() {
     let cases = [
-        r#"{"warp_drive":1,"type":"WORKFLOW","uid":"Client-4f2a1c8e-0d3b-4a76-9c11-8e5b2d7f6a90","name":"x","owner":"team:too-short","data":{}}"#,
-        r#"{"warp_drive":1,"type":"WORKFLOW","uid":"not-an-id","name":"x","owner":"user:local","data":{}}"#,
-        r#"{"warp_drive":1,"type":"NOT_A_TYPE","uid":"Client-4f2a1c8e-0d3b-4a76-9c11-8e5b2d7f6a90","name":"x","owner":"user:local","data":{}}"#,
-        r#"{"warp_drive":1,"type":"WORKFLOW","uid":"Client-4f2a1c8e-0d3b-4a76-9c11-8e5b2d7f6a90","name":"x","owner":"nobody","data":{}}"#,
+        r#"{"warp_drive":2,"type":"WORKFLOW","uid":"Client-4f2a1c8e-0d3b-4a76-9c11-8e5b2d7f6a90","name":"x","owner":"team:too-short","data":{}}"#,
+        r#"{"warp_drive":2,"type":"WORKFLOW","uid":"not-an-id","name":"x","owner":"user:local","data":{}}"#,
+        r#"{"warp_drive":2,"type":"NOT_A_TYPE","uid":"Client-4f2a1c8e-0d3b-4a76-9c11-8e5b2d7f6a90","name":"x","owner":"user:local","data":{}}"#,
+        r#"{"warp_drive":2,"type":"WORKFLOW","uid":"Client-4f2a1c8e-0d3b-4a76-9c11-8e5b2d7f6a90","name":"x","owner":"nobody","data":{}}"#,
         // A workflow with no payload at all.
-        r#"{"warp_drive":1,"type":"WORKFLOW","uid":"Client-4f2a1c8e-0d3b-4a76-9c11-8e5b2d7f6a90","name":"x","owner":"user:local"}"#,
+        r#"{"warp_drive":2,"type":"WORKFLOW","uid":"Client-4f2a1c8e-0d3b-4a76-9c11-8e5b2d7f6a90","name":"x","owner":"user:local"}"#,
         "not a file we wrote",
     ];
 
@@ -287,11 +287,102 @@ fn a_file_from_a_newer_format_is_refused() {
     let contents = workflow_fixture()
         .to_file_contents()
         .unwrap()
-        .replace("\"warp_drive\": 1", "\"warp_drive\": 2");
+        .replace("\"warp_drive\": 2", "\"warp_drive\": 3");
 
     let err = PortableObject::from_file_contents(&contents).unwrap_err();
 
     assert!(format!("{err:#}").contains("newer"), "{err:#}");
+}
+
+/// T4.4g, pinned. An alias is a shortcut the user typed, and it belongs in the
+/// file of the thing it is a shortcut *to* — so it moves, and dies, with it.
+///
+/// The order is the assertion that matters: aliases come out sorted, not in the
+/// order they were added, or reordering two of them would be a diff.
+#[test]
+fn a_workflows_aliases_are_carried_in_its_own_file() {
+    let mut object = workflow_fixture();
+    object.aliases = vec![
+        Alias {
+            alias: "dep".to_owned(),
+            env_vars: Some(TEST_SERVER_UID.to_owned()),
+            arguments: Some(BTreeMap::from([("target".to_owned(), "prod".to_owned())])),
+        },
+        Alias {
+            alias: "b".to_owned(),
+            env_vars: None,
+            arguments: None,
+        },
+    ];
+
+    assert_eq!(
+        object.to_file_contents().unwrap(),
+        r#"{
+  "warp_drive": 2,
+  "type": "WORKFLOW",
+  "uid": "Client-4f2a1c8e-0d3b-4a76-9c11-8e5b2d7f6a90",
+  "name": "simple-workflow-test",
+  "owner": "user:local",
+  "revision": "2025-08-18T19:14:16.123456Z",
+  "aliases": [
+    {
+      "alias": "b"
+    },
+    {
+      "alias": "dep",
+      "env_vars": "aBcDeFgHiJkLmNoPqRsTuV",
+      "arguments": {
+        "target": "prod"
+      }
+    }
+  ],
+  "data": {
+    "arguments": [],
+    "command": "echo hello world",
+    "name": "simple-workflow-test"
+  }
+}
+"#
+    );
+    assert_eq!(
+        PortableObject::from_file_contents(&object.to_file_contents().unwrap())
+            .unwrap()
+            .aliases
+            .len(),
+        2
+    );
+}
+
+/// Nothing but a workflow can be aliased, so an `aliases` key written onto
+/// anything else by hand is dropped rather than carried into settings as an
+/// entry pointing at something that can never answer to it.
+#[test]
+fn an_alias_on_something_that_is_not_a_workflow_is_dropped() {
+    let mut notebook = notebook_fixture("body\n");
+    notebook.aliases = vec![Alias {
+        alias: "notes".to_owned(),
+        env_vars: None,
+        arguments: None,
+    }];
+
+    let parsed = PortableObject::from_file_contents(&notebook.to_file_contents().unwrap()).unwrap();
+
+    assert!(parsed.aliases.is_empty());
+}
+
+/// A mirror written before T4.4g. Reading it must work — the version bump is
+/// there to stop an *old* build mangling a new file, not to strand old ones.
+#[test]
+fn a_file_from_before_aliases_still_reads() {
+    let contents = workflow_fixture()
+        .to_file_contents()
+        .unwrap()
+        .replace("\"warp_drive\": 2", "\"warp_drive\": 1");
+
+    let parsed = PortableObject::from_file_contents(&contents).unwrap();
+
+    assert!(parsed.aliases.is_empty());
+    assert_eq!(parsed.name, "simple-workflow-test");
 }
 
 /// A real `git merge` result, split back into the two files that produced it.
@@ -414,6 +505,7 @@ fn workflow_fixture() -> PortableObject {
         creator_uid: None,
         last_editor_uid: None,
         is_welcome_object: false,
+        aliases: Vec::new(),
         payload: Payload::Json(json!({
             "name": "simple-workflow-test",
             "command": "echo hello world",

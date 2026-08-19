@@ -405,9 +405,9 @@ So this is "keep the store, neutralize the sync" — not a rewrite.
       about the network, not the account. Under local-first it becomes a lie
       when the network *does* drop — nothing is read-only then either — so it
       wants suppressing, but that is one condition in T4.2, not its own item.
-- [~] **T4.4** Git-backed sync — the mirror is two-way and drivable, and it
-      refuses to act on a half-merged tree. Only the alias gap is left. See
-      "T4.4 as built" below.
+- [x] **T4.4** Git-backed sync — the mirror is two-way and drivable, it refuses
+      to act on a half-merged tree, and workflow aliases travel with their
+      workflows. See "T4.4 as built" below.
   - [x] **T4.4a** Lossless object↔file format — `drive/local_sync/format.rs`
   - [x] **T4.4b** Working-tree materializer — `drive/local_sync/tree.rs`
   - [x] **T4.4c** Round trip, replacing T4.5 — three levels of it, below
@@ -417,8 +417,8 @@ So this is "keep the store, neutralize the sync" — not a rewrite.
         rather than reading it as a deletion; see "T4.4e as built" below
   - [x] **T4.4f** Apply an imported tree back into the store — done and
         verified live; see "T4.4f as built" below
-  - [ ] **T4.4g** Workflow aliases do not travel with the drive — new, found by
-        the live run; see "The alias gap" below
+  - [x] **T4.4g** Workflow aliases travel inside their workflow's file — found
+        by the live run; see "The alias gap" and "T4.4g as built" below
 - [~] **T4.7** Deleting a Warp Drive object without an account. `trash_object`
       is fixed; permanently deleting is still broken. See "Two things that were
       never possible without an account" below.
@@ -1056,6 +1056,67 @@ the link would survive if the aliases travelled. What needs deciding is whether
 settings-shaped data belongs in a *drive* mirror at all, and what happens to an
 alias pointing at a workflow that is not in the personal space. That is a
 design call, not a line of code, which is why it is its own task.
+
+### T4.4g as built — the alias travels in the workflow's file
+
+**Where it goes was the whole question.** The obvious answer is a side-car:
+mirror the settings group as a top-level `.warp-aliases.json`. Everything that
+makes the rest of this format work argues against it. Placement is the path,
+identity is in the file, deleting the file deletes the thing — a list of ids has
+none of those properties. Delete a workflow's file and the side-car entry is
+left pointing at nothing; and a list of ids is exactly the shape a diff cannot
+review.
+
+Carried in the workflow's own file, an alias moves when the workflow moves, dies
+when it dies, and **cannot dangle, because there is nowhere for it to dangle
+from**. The cost is that `PortableObject` is now a join of two sources rather
+than a projection of one object's rows — done in `snapshot`, which is the layer
+whose entire job is bridging the store to this form.
+
+**The import rule is deliberately unlike the object rule**, and this is the part
+worth reading twice. Objects read absence as deletion, which works *because* a
+deleted object still exports as a trashed one — absence therefore means
+something specific. An alias has no such tombstone: an alias that is gone is
+just gone. So absence is only read **within the workflows the tree describes**.
+An alias pointing anywhere else — a team workflow, an object outside the mirror
+— is left completely alone, because reconciling the whole list against the tree
+would wipe it with nothing anywhere to restore it from.
+
+Three smaller decisions, each because the alternative breaks byte stability or
+loses data:
+
+- **`arguments` becomes a `BTreeMap`.** The setting holds a `HashMap`, and
+  `serde_json` writes a map in iteration order — which for a `HashMap` is
+  randomised per process. The same alias would have produced different bytes
+  after every restart, and the repository would never have been clean twice
+  running. The alias *list* is sorted for the same reason: reordering two
+  aliases must not be a diff.
+- **The format version goes to 2.** Not ceremony. A v1 build reading a v2 file
+  ignores `aliases`, and its next export writes the file back without them — so
+  a build that believed it was doing nothing would destroy them. Refusing the
+  whole file is the only reading of a version number that protects against that.
+  Old files still read; the bump only stops old *builds*.
+- **`env_vars` is the one sideways reference the format keeps as an id.**
+  Placement is a path because it points at a container; an env var collection is
+  a sibling. It resolves after an import because the collection is itself a
+  drive object travelling in the same tree.
+
+Aliases whose workflow is not in the mirror are counted as `aliases_not_mirrored`
+by `status` and `export`, so "why didn't my alias travel" has an answer. A tree
+that claims an alias currently held by a workflow outside the mirror takes it —
+two `dep`s is not a state — and that is reported by name under
+`aliases_reassigned`, since it changes something the tree does not describe.
+
+**Known edge, inherited rather than introduced:** `WorkflowAliases::connect`
+drops a workflow's aliases when it is trashed, so an import that trashes a
+workflow loses its aliases permanently — restoring it from the panel does not
+bring them back. Identical to trashing a workflow from the GUI, so it is
+upstream behaviour rather than a mirror bug, but it is worth knowing.
+
+9 tests, 6 of which were confirmed to fail with the join stubbed out. The other
+three are guard tests — "an alias outside the tree is left alone", the
+idempotence check — which pass trivially when the feature does nothing, which is
+what a guard test is for.
 ### T4.4e as built — what happens when git leaves a conflict behind
 
 Decision 1 settles *who* resolves a conflict: the user, in their own

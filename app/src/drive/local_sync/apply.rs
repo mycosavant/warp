@@ -33,12 +33,12 @@
 //! a sync engine, and the whole point of decision 1 in T4.4 was that git is
 //! already a better one than anything this fork should write.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use anyhow::{Result, anyhow, bail};
 use warpui::{GetSingletonModelHandle, ModelContext, ReadModel, SingletonEntity, UpdateModel};
 
-use super::format::{Payload, PortableObject};
+use super::format::{Alias, Payload, PortableObject};
 use super::snapshot::snapshot;
 use super::tree::PlacedObject;
 use crate::ai::ambient_agents::scheduled::CloudScheduledAmbientAgentModel;
@@ -60,6 +60,7 @@ use crate::notebooks::{CloudNotebookModel, NotebookId};
 use crate::server::cloud_objects::update_manager::UpdateManager;
 use crate::server::ids::{GenericStringObjectId, HashableId, SyncId, ToServerId};
 use crate::settings::cloud_preferences::CloudPreferenceModel;
+use crate::workflows::aliases::{WorkflowAlias, WorkflowAliases};
 use crate::workflows::workflow::Workflow;
 use crate::workflows::workflow_enum::CloudWorkflowEnumModel;
 use crate::workflows::{CloudWorkflowModel, WorkflowId};
@@ -80,6 +81,18 @@ pub struct ApplySummary {
     /// object type that grew a payload shape the reader does not know would
     /// land here rather than being silently dropped.
     pub unreadable: Vec<String>,
+    /// Alias entries added or rewritten from the tree.
+    pub aliases_set: usize,
+    /// Alias entries dropped because the tree's workflow no longer lists them.
+    pub aliases_removed: usize,
+    /// Aliases taken from a workflow the tree does not describe.
+    ///
+    /// An alias is keyed by its text and nothing else, so a tree that claims
+    /// `dep` takes it from whatever it pointed at here — including a team
+    /// workflow the mirror never sees. That is the right outcome, since the
+    /// alternative is two `dep`s, but it is a change to something outside the
+    /// mirror and so it gets named rather than counted.
+    pub aliases_reassigned: Vec<String>,
 }
 
 /// Writes an imported tree into the live store.
@@ -130,8 +143,109 @@ where
 
     persist(&touched, app);
     summary.trashed = trash_absent(objects, &existing, app);
+    apply_aliases(objects, &mut summary, app)?;
 
     Ok(summary)
+}
+
+/// T4.4g — reconciles workflow aliases against the tree.
+///
+/// # Only for the workflows the tree describes
+///
+/// The rule that keeps this safe. An alias pointing at a workflow the tree does
+/// not contain is left completely alone: it belongs to a team drive, or to an
+/// object outside the mirror, and an import has nothing to say about either.
+/// Replacing the whole alias list with the tree's would wipe those, and they
+/// have no file anywhere to come back from.
+///
+/// So the shape is deliberately unlike the object side. Objects use absence to
+/// mean deletion because a deleted object still exports as a trashed one, which
+/// makes absence meaningful. Aliases have no such tombstone — an alias that is
+/// gone is just gone — so absence only counts *within* the workflows the tree
+/// speaks for.
+///
+/// Runs after the objects have landed, because an alias for a workflow that
+/// does not exist yet would point at nothing. That ordering also means
+/// `trash_absent` has already run, and `WorkflowAliases::connect` drops the
+/// aliases of any workflow trashed by it — which is the same thing that happens
+/// when a workflow is trashed from the panel, and is consistent here since a
+/// workflow with no file has no aliases in the tree either.
+fn apply_aliases<A>(objects: &[PlacedObject], summary: &mut ApplySummary, app: &mut A) -> Result<()>
+where
+    A: UpdateModel + ReadModel + GetSingletonModelHandle,
+{
+    let described: Vec<(SyncId, &[Alias])> = objects
+        .iter()
+        .filter(|placed| placed.object.object_type == ObjectType::Workflow)
+        .map(|placed| (placed.object.id, placed.object.aliases.as_slice()))
+        .collect();
+    let described_ids: HashSet<SyncId> = described.iter().map(|(id, _)| *id).collect();
+
+    let wanted: Vec<WorkflowAlias> = described
+        .iter()
+        .flat_map(|(workflow_id, aliases)| {
+            aliases.iter().map(move |alias| WorkflowAlias {
+                alias: alias.alias.clone(),
+                workflow_id: *workflow_id,
+                arguments: alias
+                    .arguments
+                    .as_ref()
+                    .map(|arguments| arguments.clone().into_iter().collect()),
+                // A hand-mangled id drops the environment rather than the whole
+                // alias: the shortcut is the part worth keeping.
+                env_vars: alias
+                    .env_vars
+                    .as_deref()
+                    .and_then(|id| super::format::sync_id_from_str(id).ok()),
+            })
+        })
+        .collect();
+    let wanted_names: HashSet<&str> = wanted.iter().map(|alias| alias.alias.as_str()).collect();
+
+    WorkflowAliases::handle(app).update(app, |aliases, ctx| {
+        let before = aliases.get_all_aliases().to_vec();
+
+        let stale: Vec<String> = before
+            .iter()
+            .filter(|alias| {
+                described_ids.contains(&alias.workflow_id)
+                    && !wanted_names.contains(alias.alias.as_str())
+            })
+            .map(|alias| alias.alias.clone())
+            .collect();
+
+        summary.aliases_reassigned = before
+            .iter()
+            .filter(|alias| {
+                !described_ids.contains(&alias.workflow_id)
+                    && wanted_names.contains(alias.alias.as_str())
+            })
+            .map(|alias| alias.alias.clone())
+            .collect();
+
+        // Only the entries that actually differ, so importing the same tree
+        // twice writes settings once — the alias half of the idempotence the
+        // object half already has.
+        let changed: Vec<WorkflowAlias> = wanted
+            .iter()
+            .filter(|alias| !before.contains(alias))
+            .cloned()
+            .collect();
+
+        summary.aliases_set = changed.len();
+        summary.aliases_removed = stale.len();
+
+        if !stale.is_empty() {
+            aliases.remove_aliases(stale, ctx)?;
+        }
+        if !changed.is_empty() {
+            aliases.set_aliases(changed, ctx)?;
+        }
+        // Loud rather than counted: the objects are already in the store by
+        // now, so a silent failure here leaves the drive imported and the
+        // shortcuts to it in a state nobody has been told about.
+        Ok(())
+    })
 }
 
 /// Writes one object, returning whether it was created rather than updated.

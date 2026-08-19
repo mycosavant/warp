@@ -324,6 +324,14 @@ pub struct DriveSyncStatusResult {
     /// to look at when either one stops working.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub conflicted: Vec<String>,
+    /// Workflow aliases whose workflow is not in the mirror, and which
+    /// therefore will not travel with it.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub aliases_not_mirrored: usize,
+}
+
+fn is_zero(value: &usize) -> bool {
+    *value == 0
 }
 
 /// What `drive.sync.export` did. `written == 0` with a full `unchanged` is the
@@ -341,6 +349,9 @@ pub struct DriveSyncExportResult {
     pub not_personal: usize,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub unreadable: Vec<String>,
+    /// Aliases left behind because their workflow is not in the mirror.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub aliases_not_mirrored: usize,
 }
 
 /// What `drive.sync.import` did to the store.
@@ -363,6 +374,16 @@ pub struct DriveSyncImportResult {
     pub duplicates: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub unreadable: Vec<String>,
+    /// Workflow alias entries added or rewritten from the tree.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub aliases_set: usize,
+    /// Alias entries dropped because the tree's workflow no longer lists them.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub aliases_removed: usize,
+    /// Aliases taken from a workflow outside the mirror, which is a change to
+    /// something the tree does not describe and so is named rather than counted.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub aliases_reassigned: Vec<String>,
 }
 
 /// Typed success payloads for catalog actions that need stable structured data.

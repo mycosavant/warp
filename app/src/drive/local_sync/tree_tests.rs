@@ -410,6 +410,7 @@ fn base(name: &str) -> PortableObject {
         creator_uid: None,
         last_editor_uid: None,
         is_welcome_object: false,
+        aliases: Vec::new(),
         payload: Payload::Json(json!({ "name": name })),
     }
 }

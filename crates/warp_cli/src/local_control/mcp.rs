@@ -195,7 +195,8 @@ runs git itself. This PRUNES: files in that directory that Warp wrote and that \
 no longer correspond to an object are deleted, and directories are removed once \
 empty. Files Warp did not write are never touched. The destination comes from \
 settings and cannot be passed in. Refuses, writing nothing at all, if a file it \
-would overwrite still has git conflict markers in it."
+would overwrite still has git conflict markers in it. A workflow's aliases \
+travel inside its own file."
             .to_string(),
         "drive.sync.import" => "Read the directory set by \
 `warp_drive.local_sync.path` back into Warp Drive, after the user has pulled. \

@@ -45,6 +45,24 @@
 //!   spotting a marker — the mirror shares a repository with the user's own
 //!   work, and their conflicted README is not ours to have an opinion about.
 //!
+//! # Things that are not drive objects (T4.4g)
+//!
+//! A workflow alias is the first of these, and it needed a rule of its own.
+//! `WorkflowAliases` is a settings group, not a cloud object, so it has no
+//! identity, no folder and no file — and upstream syncs it through cloud
+//! settings sync, which this fork removed. So a workflow arrived on another
+//! machine having lost the one thing the user typed to reach it.
+//!
+//! It is carried **inside the workflow's own file** rather than in a list of
+//! its own, so that it moves when the workflow moves and dies when it dies.
+//! See [`format::Alias`] for why the side-car alternative loses.
+//!
+//! The import rule is deliberately unlike the object rule. Objects read absence
+//! as deletion, which works because a deleted object still exports as a trashed
+//! one — absence therefore means something. An alias has no such tombstone, so
+//! absence is only read *within the workflows the tree describes*: an alias
+//! pointing anywhere else is left completely alone.
+//!
 //! See `.fork/TASKS.md` T4.4 for the full scope.
 
 pub mod apply;

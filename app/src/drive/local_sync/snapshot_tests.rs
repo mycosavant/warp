@@ -10,9 +10,11 @@ use crate::drive::local_sync::tree;
 use crate::features::FeatureFlag;
 use crate::notebooks::{CloudNotebook, CloudNotebookModel};
 use crate::server::ids::{ClientId, SyncId};
+use crate::workflows::aliases::{Aliases, WorkflowAlias, WorkflowAliases};
 use crate::workflows::workflow::Workflow;
 use crate::workflows::{CloudWorkflow, CloudWorkflowModel};
 use crate::workspaces::user_workspaces::UserWorkspaces;
+use settings::Setting as _;
 
 /// The end-to-end shape of T4.4: a real store, through the bridge, onto a
 /// disk, and back — with the object graph intact.
@@ -144,15 +146,81 @@ fn a_trashed_object_is_exported_with_its_timestamp() {
     });
 }
 
+/// T4.4g. An alias is not a drive object — it lives in a settings group — so
+/// without this join a workflow arrives on another machine having lost the one
+/// thing the user typed to reach it.
+#[test]
+fn an_alias_travels_in_its_workflows_file() {
+    let workflow = local_workflow(None, "deploy", "cargo build");
+    let workflow_id = workflow.sync_id();
+
+    with_drive_and_aliases(
+        vec![workflow],
+        vec![alias("dep", workflow_id)],
+        move |ctx| {
+            let (objects, summary) = snapshot(ctx);
+
+            assert_eq!(
+                objects[0].object.aliases,
+                vec![Alias {
+                    alias: "dep".to_owned(),
+                    env_vars: None,
+                    arguments: None,
+                }]
+            );
+            assert_eq!(summary.aliases_not_mirrored, 0);
+        },
+    );
+}
+
+/// An alias for a workflow the mirror does not contain — a team workflow, or one
+/// this machine trashed. It cannot travel, since there is no file for it to
+/// travel in, so it is counted rather than silently missing.
+#[test]
+fn an_alias_for_a_workflow_outside_the_mirror_is_counted() {
+    let elsewhere = SyncId::ClientId(ClientId::new());
+
+    with_drive_and_aliases(
+        vec![local_workflow(None, "deploy", "cargo build")],
+        vec![alias("team-thing", elsewhere)],
+        move |ctx| {
+            let (objects, summary) = snapshot(ctx);
+
+            assert!(objects[0].object.aliases.is_empty());
+            assert_eq!(summary.aliases_not_mirrored, 1);
+        },
+    );
+}
+
 /// Builds an app with `objects` in its store and runs `assertions` against it.
 fn with_drive(objects: Vec<Box<dyn CloudObject>>, assertions: impl FnOnce(&AppContext) + 'static) {
+    with_drive_and_aliases(objects, Vec::new(), assertions);
+}
+
+fn with_drive_and_aliases(
+    objects: Vec<Box<dyn CloudObject>>,
+    aliases: Vec<WorkflowAlias>,
+    assertions: impl FnOnce(&AppContext) + 'static,
+) {
     App::test((), |app| async move {
         app.add_singleton_model(|_| AuthStateProvider::new_logged_out_for_test());
         app.add_singleton_model(UserWorkspaces::default_mock);
         app.add_singleton_model(|_| CloudModel::new(None, objects, None));
+        app.add_singleton_model(move |_| WorkflowAliases {
+            aliases: Aliases::new(Some(aliases)),
+        });
 
         app.read(assertions);
     });
+}
+
+fn alias(text: &str, workflow_id: SyncId) -> WorkflowAlias {
+    WorkflowAlias {
+        alias: text.to_owned(),
+        workflow_id,
+        arguments: None,
+        env_vars: None,
+    }
 }
 
 fn local_permissions() -> CloudObjectPermissions {

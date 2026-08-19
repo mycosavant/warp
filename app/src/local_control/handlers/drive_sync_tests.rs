@@ -5,15 +5,18 @@ use super::*;
 use crate::auth::AuthStateProvider;
 use crate::cloud_object::model::persistence::CloudModel;
 use crate::cloud_object::{CloudObject, CloudObjectMetadata, CloudObjectPermissions};
+use crate::drive::local_sync::format::{Alias, PortableObject};
 use crate::network::NetworkStatus;
 use crate::server::cloud_objects::update_manager::UpdateManager;
 use crate::server::ids::{ClientId, SyncId};
 use crate::server::sync_queue::SyncQueue;
 use crate::settings::LocalDriveSyncPath;
+use crate::workflows::aliases::WorkflowAliases;
 use crate::workflows::workflow::Workflow;
 use crate::workflows::{CloudWorkflow, CloudWorkflowModel};
 use crate::workspaces::team_tester::TeamTesterStatus;
 use crate::workspaces::user_workspaces::UserWorkspaces;
+use settings::SettingsManager;
 
 /// The trigger, end to end: a store, an action, files on a disk.
 #[test]
@@ -217,6 +220,41 @@ fn status_names_the_files_with_unresolved_conflicts() {
     });
 }
 
+/// T4.4g through the action surface: an alias in a file becomes an alias in
+/// settings, and the reply says how many.
+#[test]
+fn an_alias_in_a_file_reaches_settings_through_the_actions() {
+    App::test((), |mut app| async move {
+        let root = TempDir::new().unwrap();
+        let bridge = drive_app(&mut app, Some(root.path()), vec![workflow("deploy")]);
+        bridge.update(&mut app, |_, ctx| export(ctx).unwrap());
+
+        let path = std::fs::read_dir(root.path())
+            .unwrap()
+            .next()
+            .unwrap()
+            .unwrap()
+            .path();
+        let mut portable =
+            PortableObject::from_file_contents(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        portable.aliases.push(Alias {
+            alias: "dep".to_owned(),
+            env_vars: None,
+            arguments: None,
+        });
+        std::fs::write(&path, portable.to_file_contents().unwrap()).unwrap();
+
+        let result = bridge.update(&mut app, |_, ctx| import(ctx).unwrap());
+
+        assert_eq!(result["aliases_set"], 1);
+        app.read(|ctx| {
+            let aliases = WorkflowAliases::as_ref(ctx).get_all_aliases();
+            assert_eq!(aliases.len(), 1);
+            assert_eq!(aliases[0].alias, "dep");
+        });
+    });
+}
+
 /// Leaves the exported file half-merged, the way `git pull` would.
 fn conflict_the_only_file(root: &std::path::Path) {
     let path = std::fs::read_dir(root)
@@ -252,6 +290,11 @@ fn drive_app(
     // `apply` persists through the update manager and routes deletions through
     // its trash path, so an import needs it registered where an export does not.
     app.add_singleton_model(UpdateManager::mock);
+    // `WorkflowAliases` is a private setting, so writing one goes through the
+    // preferences store as well as the manager.
+    app.add_singleton_model(|_| SettingsManager::default());
+    app.update(crate::settings::init_and_register_user_preferences);
+    app.add_singleton_model(WorkflowAliases::new_with_defaults);
     app.add_singleton_model(|_| LocalDriveSyncSettings {
         local_drive_sync_path: LocalDriveSyncPath::new(Some(configured)),
     });

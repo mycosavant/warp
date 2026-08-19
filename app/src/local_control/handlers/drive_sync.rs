@@ -59,6 +59,7 @@ pub(crate) fn status(
         objects: objects.len(),
         not_personal: summary.not_personal,
         unreadable: summary.unreadable,
+        aliases_not_mirrored: summary.aliases_not_mirrored,
         // Reading the tree is the one thing this action does not have to do to
         // answer its literal question, and the reason it does it anyway is the
         // sentence above: an unresolved merge is the only condition that stops
@@ -77,6 +78,7 @@ pub(crate) fn export(
         SnapshotSummary {
             not_personal,
             unreadable,
+            aliases_not_mirrored,
         },
     ) = snapshot(ctx);
 
@@ -113,6 +115,7 @@ pub(crate) fn export(
         orphaned: summary.orphaned.iter().map(|id| id.to_string()).collect(),
         not_personal,
         unreadable,
+        aliases_not_mirrored,
     })
 }
 
@@ -191,6 +194,9 @@ pub(crate) fn import(
             .map(|(path, id)| format!("{}: {id}", path.display()))
             .collect(),
         unreadable: summary.unreadable,
+        aliases_set: summary.aliases_set,
+        aliases_removed: summary.aliases_removed,
+        aliases_reassigned: summary.aliases_reassigned,
     })
 }
 

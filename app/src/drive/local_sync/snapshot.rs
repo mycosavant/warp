@@ -18,14 +18,17 @@
 //! here rather than silently exporting nothing. Nothing is enqueued: the item is
 //! constructed, read and dropped.
 
+use std::collections::HashMap;
+
 use anyhow::{Result, bail};
 use warpui::{AppContext, SingletonEntity};
 
-use super::format::{Payload, PortableObject};
+use super::format::{Alias, Payload, PortableObject};
 use super::tree::PlacedObject;
 use crate::cloud_object::model::persistence::CloudModel;
 use crate::cloud_object::{CloudObject, CloudObjectMetadata, CloudObjectPermissions, Space};
 use crate::server::sync_queue::QueueItem;
+use crate::workflows::aliases::WorkflowAliases;
 
 /// What a snapshot took, and what it left behind.
 #[derive(Debug, Default, PartialEq)]
@@ -38,6 +41,11 @@ pub struct SnapshotSummary {
     /// Objects whose payload could not be read. Should be zero; a non-zero
     /// value means an object type grew a shape this file does not know.
     pub unreadable: Vec<String>,
+    /// Aliases whose workflow is not in the mirror — trashed on another
+    /// machine, or somebody else's. They are left in settings untouched and
+    /// counted here, because the alternative is a user whose alias did not
+    /// travel and no sentence anywhere explaining why.
+    pub aliases_not_mirrored: usize,
 }
 
 /// Reads the personal drive out of the live store.
@@ -53,6 +61,11 @@ pub struct SnapshotSummary {
 pub fn snapshot(app: &AppContext) -> (Vec<PlacedObject>, SnapshotSummary) {
     let mut summary = SnapshotSummary::default();
     let mut objects = Vec::new();
+    // T4.4g. The join that makes an alias travel with its workflow: read once
+    // here rather than looked up per object, and drained as objects claim their
+    // entries so that whatever is left over is exactly the set with no workflow
+    // in the mirror.
+    let mut aliases = aliases_by_workflow(app);
 
     for object in CloudModel::as_ref(app).cloud_objects() {
         if object.space(app) != Space::Personal {
@@ -61,21 +74,49 @@ pub fn snapshot(app: &AppContext) -> (Vec<PlacedObject>, SnapshotSummary) {
         }
 
         match to_portable(object.as_ref()) {
-            Ok(portable) => objects.push(PlacedObject {
-                object: portable,
-                parent: object.metadata().folder_id,
-            }),
+            Ok(mut portable) => {
+                portable.aliases = aliases.remove(&portable.id.to_string()).unwrap_or_default();
+                objects.push(PlacedObject {
+                    object: portable,
+                    parent: object.metadata().folder_id,
+                });
+            }
             Err(err) => summary
                 .unreadable
                 .push(format!("{}: {err:#}", object.display_name())),
         }
     }
 
+    summary.aliases_not_mirrored = aliases.values().map(Vec::len).sum();
+
     // Sorted by identity so two exports of the same store produce the same
     // order. Nothing downstream depends on order, but a summary and a log line
     // that shuffle between runs are much harder to read than ones that do not.
     objects.sort_by_key(|placed| placed.object.id.to_string());
     (objects, summary)
+}
+
+/// Every alias in settings, grouped by the workflow it points at.
+fn aliases_by_workflow(app: &AppContext) -> HashMap<String, Vec<Alias>> {
+    let mut by_workflow: HashMap<String, Vec<Alias>> = HashMap::new();
+
+    for alias in WorkflowAliases::as_ref(app).get_all_aliases() {
+        by_workflow
+            .entry(alias.workflow_id.to_string())
+            .or_default()
+            .push(Alias {
+                alias: alias.alias.clone(),
+                env_vars: alias.env_vars.map(|id| id.to_string()),
+                // Ordered on the way in, so the file's bytes do not depend on
+                // a `HashMap`'s per-process iteration order.
+                arguments: alias
+                    .arguments
+                    .as_ref()
+                    .map(|arguments| arguments.clone().into_iter().collect()),
+            });
+    }
+
+    by_workflow
 }
 
 fn to_portable(object: &dyn CloudObject) -> Result<PortableObject> {
@@ -97,6 +138,9 @@ fn to_portable(object: &dyn CloudObject) -> Result<PortableObject> {
         creator_uid: metadata.creator_uid.clone(),
         last_editor_uid: metadata.last_editor_uid.clone(),
         is_welcome_object: metadata.is_welcome_object,
+        // Filled in by `snapshot`, which is the only caller with the settings
+        // group in reach.
+        aliases: Vec::new(),
         payload: payload_of(object)?,
     })
 }

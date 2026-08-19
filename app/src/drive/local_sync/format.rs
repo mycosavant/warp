@@ -39,6 +39,8 @@
 //! exactly, and its maps are `BTreeMap`, so keys are sorted and the bytes are
 //! stable.
 
+use std::collections::BTreeMap;
+
 use anyhow::{Context, Result, anyhow, bail};
 use chrono::{DateTime, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
@@ -53,7 +55,13 @@ use crate::server::ids::{ClientId, HashableId, ServerId, SyncId};
 
 /// Written into every file and checked on read. A file from a future version is
 /// refused rather than half-understood.
-pub const FORMAT_VERSION: u32 = 1;
+///
+/// v2 added `aliases` (T4.4g). The bump is not ceremony: a v1 build reading a
+/// v2 file would ignore the field, and its next export would write the file
+/// back without it — so the aliases would be silently destroyed by a build that
+/// believed it was doing nothing. Refusing the whole file is the only reading
+/// of a version number that protects against that.
+pub const FORMAT_VERSION: u32 = 2;
 
 /// The metadata file inside a folder's directory. Dot-prefixed so it sorts to
 /// the top and reads as machinery rather than content.
@@ -84,7 +92,48 @@ pub struct PortableObject {
     pub creator_uid: Option<String>,
     pub last_editor_uid: Option<String>,
     pub is_welcome_object: bool,
+    /// Aliases pointing at this object. Workflows only, and empty for
+    /// everything else — see [`Alias`] for why they are carried here at all.
+    pub aliases: Vec<Alias>,
     pub payload: Payload,
+}
+
+/// A shortcut that runs a workflow, carried in the workflow's own file.
+///
+/// # Why this lives on the object rather than in a file of its own
+///
+/// An alias is not a drive object. `WorkflowAliases` is a *settings group* — a
+/// `Vec<WorkflowAlias>` keyed by nothing, each entry naming the `SyncId` it
+/// points at — so mirroring it faithfully would mean a second top-level file
+/// full of ids, and a second placement system to keep in step with the first.
+///
+/// Everything that makes the rest of this format work argues against that.
+/// Placement is the path; identity is in the file; deleting the file deletes
+/// the thing. An alias in a side-car list has none of those properties: delete
+/// the workflow's file and the alias entry is left pointing at nothing, and a
+/// list of ids is precisely the shape a diff cannot review. Carried in the
+/// workflow's own file, an alias moves when the workflow moves, dies when it
+/// dies, and cannot dangle — because there is nowhere for it to dangle *from*.
+///
+/// The cost is that [`PortableObject`] is now a join of two sources rather than
+/// a projection of one object's rows. That join is done in `snapshot`, which is
+/// the layer whose whole job is bridging the store to this form.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub struct Alias {
+    pub alias: String,
+    /// The env var collection to run with, as a [`SyncId`] — the one reference
+    /// this format cannot express as a path, because it points sideways rather
+    /// than at a container. It resolves after an import because the collection
+    /// is itself a drive object and travels in the same tree.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub env_vars: Option<String>,
+    /// Pre-filled arguments. A `BTreeMap` rather than the `HashMap` the setting
+    /// holds, because `serde_json` writes a map in iteration order and a
+    /// `HashMap`'s is randomised per process — the same alias would produce
+    /// different bytes after every restart, and the repository would never be
+    /// clean twice running.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub arguments: Option<BTreeMap<String, String>>,
 }
 
 /// The four payload shapes the store actually has.
@@ -132,6 +181,9 @@ pub struct Header {
     /// Folders only.
     #[serde(default, skip_serializing_if = "is_false")]
     pub warp_pack: bool,
+    /// Workflows only.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub aliases: Vec<Alias>,
 }
 
 /// The JSON envelope. `data` comes last so the payload is the tail of the file
@@ -222,6 +274,14 @@ impl PortableObject {
             welcome: self.is_welcome_object,
             ai_document,
             warp_pack,
+            // Sorted, not in the order the user happened to add them. The
+            // setting is a `Vec` in edit order, and shipping that order would
+            // make reordering two aliases a diff.
+            aliases: {
+                let mut aliases = self.aliases.clone();
+                aliases.sort();
+                aliases
+            },
         })
     }
 
@@ -276,6 +336,13 @@ impl PortableObject {
             creator_uid: header.creator,
             last_editor_uid: header.last_editor,
             is_welcome_object: header.welcome,
+            // Only a workflow can be aliased, so aliases written onto anything
+            // else by hand mean nothing and are dropped rather than carried
+            // into the store as an entry pointing at an unaliasable object.
+            aliases: match object_type {
+                ObjectType::Workflow => header.aliases,
+                _ => Vec::new(),
+            },
             payload,
         })
     }
@@ -485,7 +552,7 @@ fn owner_from_str(value: &str) -> Result<Owner> {
 
 /// `Client-<uuid>` is 43 characters and a [`ServerId`] is exactly 22, so the two
 /// forms cannot be confused for each other.
-fn sync_id_from_str(value: &str) -> Result<SyncId> {
+pub(super) fn sync_id_from_str(value: &str) -> Result<SyncId> {
     if let Some(client_id) = ClientId::from_hash(value) {
         return Ok(SyncId::ClientId(client_id));
     }

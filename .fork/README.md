@@ -743,11 +743,30 @@ README, a `notes.json` and a `my-notes/todo.md` alongside the exported
 workflow, then commit and export twice more — `removed_files: 0`,
 `git status --porcelain` empty, `.git` intact.
 
-**Known gap: workflow aliases do not travel.** An alias is not a drive object —
-`WorkflowAliases` is a settings group holding `alias` plus the `workflow_id` it
-points at. So a workflow arrives on another machine without its alias. The
-format already preserves the id the alias refers to, so this is fixable; see
-`.fork/TASKS.md` T4.4g.
+**Workflow aliases travel inside the workflow's own file.** An alias is not a
+drive object — `WorkflowAliases` is a settings group — so it is carried in the
+file of the thing it is a shortcut *to*, which means it moves when the workflow
+moves and dies when it dies. Nothing else in the tree references it, so there
+is nowhere for it to dangle.
+
+    "aliases": [
+      { "alias": "dep", "env_vars": "...", "arguments": {"target": "prod"} }
+    ]
+
+An alias for a workflow that is *not* in the mirror — a team workflow, one you
+trashed — cannot travel, since there is no file to travel in. `status` and
+`export` report those as `aliases_not_mirrored` rather than leaving you to
+wonder.
+
+On the way back, aliases are reconciled **only for the workflows the tree
+describes**. Anything pointing elsewhere is left alone: it has no file to come
+back from, so absence says nothing about it. If the tree claims an alias that
+currently points at a workflow outside the mirror, the tree wins — two `dep`s
+is not a state — and the import names it under `aliases_reassigned`.
+
+This is format version 2. A mirror written before this reads fine; a v2 file
+read by a build from before it is refused outright, which is the point — that
+build would drop the aliases on its next export and believe it had done nothing.
 
 ### Reading it back
 
