@@ -65,13 +65,76 @@ Reference: `crates/warp_cli/src/local_control/`, `app/src/local_control/`,
       rejection both confirmed to still fire, so one call runs exactly one
       command.
 - [x] **T1.10** Windows named-pipe credential broker — **done and verified**.
-- [ ] **T1.7** Document the verified command surface in `.fork/README.md`
+- [x] **T1.7** Document the verified command surface in `.fork/README.md` —
+      done by running all 88 actions rather than by reading the catalog. See
+      "T1.7 as built" below; it corrected the count, the namespace list and the
+      focus rule, all three of which were wrong.
 
 Confirmed 2026-08-18: closing the window with `CloseMainWindow` removes the
 discovery record, and `instance list` immediately reports none. So the stale
 records that produced `ambiguous_instance` during T2 came specifically from
 `Kill()`ing the process, not from ordinary shutdown — the cleanup path works,
 it just never runs when the process is killed.
+
+### T1.7 as built — the surface was documented by running it
+
+Verified 2026-08-19 by executing **all 88 actions** against the live Windows
+build, one at a time, appending each result to a file before the next call so
+that if the app died the last line would name the action that killed it.
+Nothing killed it.
+
+Three things in the existing documentation were wrong, and only running it
+would have found any of them:
+
+* **The count.** The README said 85 and this board said 84. It is 88, and the
+  arithmetic reconciles exactly: T1.5a counted 84 on 2026-08-17, then T1.8
+  added `input.submit` and T4.4 added `drive.sync.{status,export,import}`. So
+  the fork's own additions were the drift, and nobody had come back to count.
+  The namespace list was also missing `instance`, `capability` and `action`.
+  (The "other 85 actions" phrasing elsewhere on this board and in
+  `drive_sync.rs` is still right: 88 minus the three `drive` actions.)
+* **The focus rule.** "Mutations need a focused window; `app focus` first" is
+  backwards on both halves. `app focus` returns `ok: true` and cannot raise the
+  window at all from WSL — Windows' foreground lock forbids a background
+  process doing that — yet creating tabs, splitting panes, submitting input,
+  settings, themes, appearance, surfaces and the whole `drive` namespace all
+  work with `is_active: false`. What actually fails is any action left to
+  resolve *the active* target, and the fix is a selector, not focus.
+* **`--window <id>` is the fix for all of it.** Every `missing_target` in the
+  sweep cleared by naming the window, because everything else resolves inside
+  one — `tab inspect --tab-index 0` alone means nothing without a window to
+  count within. With `--window` present, ids and indexes are interchangeable.
+
+  Worth recording how nearly this went in wrong: the first pass had
+  `pane focus --pane <id>` and `session activate --session <id>` down as
+  broken, on two reproducible `stale_target` results, and a table saying to use
+  indexes for those two. Re-testing before publishing showed both work — the
+  earlier failures were a *closed pane and a Settings tab left active by the
+  sweep itself*, i.e. the ids really were stale and the error was exactly
+  right. A failure observed twice is still not a property of the surface.
+
+Two state preconditions worth the words in the README: `input.*` needs the
+active tab to be a terminal (opening the settings surface silently breaks
+every subsequent `input` call until `tab activate` puts a terminal back), and
+`surface.code_review.open` needs that terminal to be in a repository — it
+answered `target_state_conflict` until `input submit 'cd C:\dev\warp'`, then
+succeeded.
+
+**What is deliberately not claimed.** The window could not be focused for these
+runs, so no action was tested through the "active target" default path; every
+verification used an explicit selector. Making the window foreground from WSL
+means defeating the foreground lock, which is not something to do on a desktop
+the user is sitting at — the permission classifier refused it, correctly.
+
+One unexplained event, recorded rather than hidden: mid-session the running
+build exited by itself, its log ending in a `NativeModalAction::
+TriggerButtonCallback(0)` followed by an orderly teardown, having started as a
+crash-recovery child. No `warpctrl` call is implicated — the sweep had not
+started — but it happened, and the next person seeing it should know it has
+been seen before.
+
+Driven by `C:\dev\sweep.ps1`, which is worth keeping: re-running it after an
+upstream merge is the cheapest way to find out what the merge broke.
 
 ### RESOLVED 2026-08-17 — Windows is now the working platform
 

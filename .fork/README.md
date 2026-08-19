@@ -323,24 +323,30 @@ function warpctrl { & 'C:\dev\warp\target\debug\warp-oss.exe' --warpctrl @args }
 
 ### What it can do
 
-85 actions, all implemented. `warpctrl action list` emits the full catalog as
-JSON with `parameter_spec`, `result_spec` and `target_scope` per action, so
-tool definitions can be generated from it rather than hardcoded.
+**88 actions. Every one of them run against the live Windows build on
+2026-08-19 — this list is the verified surface, not the catalog's own claim
+about itself.** `warpctrl action list` emits the catalog as JSON with
+`parameter_spec`, `result_spec` and `target_scope` per action, so tool
+definitions can be generated from it rather than hardcoded.
 
-```
-app       ping version active focus
-window    list inspect create focus close
-tab       list inspect create activate move close rename reset_name color.*
-pane      list inspect split focus navigate resize maximize unmaximize close rename
-session   list inspect activate next previous reopen_closed
-input     insert replace submit
-surface   settings.open command_palette.open ai_assistant.toggle warp_drive.* ... (20)
-setting   list get set toggle
-theme     list get set dark.set light.set system.set
-appearance get zoom.* font_size.*
-keybinding list get
-file      open
-```
+| Namespace | n | Actions |
+|---|---|---|
+| `instance`   | 2  | list inspect |
+| `app`        | 4  | ping version active focus |
+| `capability` | 2  | list inspect |
+| `window`     | 5  | list inspect create focus close |
+| `tab`        | 10 | list inspect create activate move close rename reset-name color set/clear |
+| `pane`       | 11 | list inspect split focus navigate resize maximize unmaximize close rename reset-name |
+| `session`    | 6  | list inspect activate previous next reopen-closed |
+| `input`      | 3  | insert replace submit |
+| `theme`      | 6  | list get set system-set light-set dark-set |
+| `appearance` | 7  | get font-size-increase/decrease/reset zoom-increase/decrease/reset |
+| `setting`    | 4  | list get set toggle |
+| `keybinding` | 2  | list get |
+| `action`     | 2  | list inspect |
+| `surface`    | 20 | list, plus 19 panels and modals |
+| `file`       | 1  | open |
+| `drive`      | 3  | status export import — **fork-added**, see T4.4 |
 
 `input insert` and `input replace` stage text without running it; **`input
 submit` runs it** — that one is a fork addition, because without it an agent
@@ -349,8 +355,59 @@ so one call runs exactly one command and nothing can be smuggled in behind it.
 `submit` returns an error rather than a false acknowledgement when the target
 pane is busy.
 
-Mutations need a focused window with a workspace. `app focus` first if
-`window list` reports `is_active: false`.
+### Targets: the rule that decides whether a call works
+
+**Nothing needs the window focused. Everything needs to know which target you
+mean.** This is the single most useful thing to know about the surface, and
+the earlier version of this section had it backwards.
+
+Driving from WSL, `window list` always reports `is_active: false`, because
+Windows refuses to let a background process raise a window (the foreground
+lock) — `app focus` returns `ok: true` and does not actually raise it. That
+turns out not to matter. Creating tabs, splitting panes, submitting input,
+changing settings, themes and appearance, opening surfaces, and the whole
+`drive` namespace all work with no active window at all.
+
+What breaks is any action left to resolve *the active* window/tab/pane, since
+there isn't one. Those answer `missing_target: requires an active Warp window`
+— and **`--window <id>` fixes every one of them.** That is the whole rule:
+
+```powershell
+warpctrl window inspect  --window 0
+warpctrl tab inspect     --window 0 --tab-index 0
+warpctrl pane rename     --window 0 --pane-index 0 'build'
+warpctrl session inspect --window 0 --tab-index 0 --pane-index 0
+```
+
+The window has to be named because everything else is resolved inside one:
+`tab inspect --tab-index 0` on its own still fails, since an index with no
+window to count within means nothing. With `--window` present, ids and indexes
+are interchangeable — `--pane 'Pane Pane Terminal (2155)'` and `--pane-index 0`
+both work. So `warpctrl window list` is the first call of any session: it hands
+you the id every other selector hangs off.
+
+Three actions resolve a pane or session id on their own, without a window —
+`pane focus`, `session activate`, `session inspect`. Convenient, but not worth
+remembering as an exception: `--window` always works.
+
+Ids go stale, and the error says so rather than guessing: close a pane and the
+next call naming it answers `stale_target`. Re-`list` after anything that
+changes the tree.
+
+Two preconditions are about state rather than targeting:
+
+* `input.*` needs the active tab to be a **terminal**. Opening the settings or
+  code-review surface makes that tab active, and every `input` call then fails
+  with `requires an active terminal session` until `tab activate --tab-index N`
+  puts a terminal back. Easy to mistake for a broken instance.
+* `surface.code_review.open` needs that terminal to be **inside a repository**,
+  or it answers `target_state_conflict`. `input submit 'cd <repo>'` first.
+
+Error codes are specific enough to act on: `missing_target` (name a target),
+`invalid_selector` (this action needs one), `stale_target` (the id no longer
+resolves), `ambiguous_target` (several match — `session inspect` hits this,
+since every tab reports an active session), `target_state_conflict` (the
+target is real but in the wrong state), `no_instance` (nothing running).
 
 ### Enablement
 
@@ -407,7 +464,7 @@ The typical sequence an agent follows:
 
 ```
 warp_instance_list      -> confirm an instance is reachable
-warp_app_focus          -> mutations need a focused window with a workspace
+warp_window_list        -> get the window id every other selector hangs off
 warp_tab_create         -> optional, gives the agent its own tab
 warp_input_submit       -> run a command
 ```
@@ -419,17 +476,24 @@ wait before reading its output rather than resubmitting.
 
 Failures come back as tool results with `isError` rather than transport
 errors, carrying the local-control error code so the cause is actionable:
-`missing_target` means focus a window first, `local_control_disabled` means
-Scripting is off.
+`missing_target` means name a target rather than relying on the active one
+(see "Targets" above), `local_control_disabled` means Scripting is off.
 
 Note the server talks JSON-RPC on stdout — run it only via an MCP client, not
 interactively. Diagnostics go to stderr.
 
 ### Platform status
 
-Working on Linux/macOS (upstream) and Windows (fork port). Under WSL2 the
-process runs and read actions work, but the window never composites, so it has
-no workspace and mutations fail with `missing_target`. Use the Windows build.
+Working on Linux/macOS (upstream) and Windows (fork port). Two different
+things are easy to confuse here:
+
+* **The Linux build under WSLg** is unusable: the process runs and read actions
+  answer, but the window never composites, so there is no workspace at all and
+  mutations fail with `missing_target`. No selector fixes that — there is
+  nothing to select. See T1.11.
+* **The Windows build driven from WSL** is the working arrangement and the one
+  everything above was verified on. Its window is never *focused* from WSL, but
+  it has a workspace, so everything works given an explicit selector.
 
 ## Voice input, transcribed on this machine
 
@@ -882,13 +946,14 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File 'C:\dev\shot.ps1' -Out '
 Anything under `/mnt/c` is visible to both sides, so scripts, screenshots and
 proof files pass between them as plain files. No SSH, no agent, no daemon.
 
-### The four scripts
+### The scripts
 
 | Script | What it does |
 |---|---|
 | `C:\dev\build.ps1` | Builds `warp-oss.exe` with the env that winget's PATH changes never reach. |
 | `C:\dev\shot.ps1`  | Screenshots a window (or the whole virtual screen) to PNG. |
 | `C:\dev\click.ps1` | Clicks inside a window, without touching the physical mouse. |
+| `C:\dev\sweep.ps1` | Runs every `warpctrl` action and records what each one did. |
 | `C:\dev\mcp_win*.ps1` | Drives a running instance over MCP, batched. |
 
 **`$ErrorActionPreference` must be `Continue` in any script that runs cargo.**
@@ -921,6 +986,12 @@ It posts mouse messages to the one window rather than moving the cursor and
 clicking. A synthetic *physical* click goes wherever the pointer happens to
 be, and the user's own Warp is running on the same desktop — this disturbs
 nothing outside the target window, and works without raising it.
+
+`sweep.ps1` runs every `warpctrl` action in groups (`-Group reads`, `tabs`,
+`panes`, `modals`, …) and appends one JSON line per call *before* making the
+next one, so a crash leaves the culprit as the last line rather than losing it.
+It produced the verified surface documented above, and re-running it after an
+upstream merge is the cheapest way to find out what the merge broke.
 
 ### Driving it without an MCP client
 
