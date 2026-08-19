@@ -767,6 +767,13 @@ is not a state — and the import names it under `aliases_reassigned`.
 This is format version 2. A mirror written before this reads fine; a v2 file
 read by a build from before it is refused outright, which is the point — that
 build would drop the aliases on its next export and believe it had done nothing.
+The bump rewrites every file in the mirror once.
+
+Verified on Windows against the alias that started the task: export put
+`wf-test` into the workflow's file, renaming it there and importing reported
+`aliases_removed: 1, aliases_set: 1`, and the export straight after reported
+`unchanged` — which is the proof, since a settings store that had not actually
+changed would have written the old name back.
 
 ### Reading it back
 

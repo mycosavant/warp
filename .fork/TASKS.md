@@ -1117,6 +1117,27 @@ upstream behaviour rather than a mirror bug, but it is worth knowing.
 three are guard tests — "an alias outside the tree is left alone", the
 idempotence check — which pass trivially when the feature does nothing, which is
 what a guard test is for.
+
+#### Verified on Windows, 2026-08-19
+
+Against the very alias whose absence started this task — `wf-test`, on
+`simple-workflow-test`:
+
+    export     written 2      <- every file rewritten once, for the v2 bump
+    the file now carries
+        "aliases": [ { "alias": "wf-test", "arguments": {} } ]
+
+    (rename it to "wft" in the file, as the other machine would have)
+    import     aliases_removed 1, aliases_set 1, updated 1
+    export     unchanged 2, written 0
+
+    (rename it back)
+    import     aliases_removed 1, aliases_set 1
+    import     unchanged 2, updated 0, no alias counters at all
+
+That `export → unchanged 2, written 0` immediately after the import is the
+line that proves it. If the alias had not actually reached the settings store,
+the export would have written the file straight back to `wf-test`.
 ### T4.4e as built — what happens when git leaves a conflict behind
 
 Decision 1 settles *who* resolves a conflict: the user, in their own
