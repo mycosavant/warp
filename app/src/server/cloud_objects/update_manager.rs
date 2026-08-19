@@ -4404,7 +4404,65 @@ impl UpdateManager {
         self.spawned_futures.push(future.future_id());
     }
 
+    /// Restores an object from the trash with no server involved.
+    ///
+    /// Nothing to reuse here, unlike the delete paths: upstream deliberately
+    /// does *not* clear `trashed_ts` optimistically, waiting for the server's
+    /// metadata to clear it instead. So the whole of a local untrash is
+    /// written out — the timestamp, the pending bit, the event the panel
+    /// listens for, and the row.
+    ///
+    /// The move-to-root is not an invention. Restoring an object into a folder
+    /// that is itself in the trash restores it *into* the trash, where the
+    /// user cannot reach it and has no way to know where it went. Upstream's
+    /// `test_metadata_after_untrash_item_and_move_to_root` asserts the server
+    /// answers with `folder_id: None` in exactly this case; this decides the
+    /// same thing locally because there is no server to decide it.
+    fn untrash_object_locally(&mut self, id: CloudObjectTypeAndId, ctx: &mut ModelContext<Self>) {
+        let uid = id.uid();
+
+        CloudModel::handle(ctx).update(ctx, |cloud_model, ctx| {
+            let parent_is_gone = cloud_model
+                .get_by_uid(&uid)
+                .and_then(|object| object.metadata().folder_id)
+                .is_some_and(|parent| {
+                    cloud_model
+                        .get_by_uid(&parent.uid())
+                        .is_none_or(|folder| folder.metadata().trashed_ts.is_some())
+                });
+
+            let Some(object) = cloud_model.get_mut_by_uid(&uid) else {
+                return;
+            };
+            object.metadata_mut().trashed_ts = None;
+            if parent_is_gone {
+                object.metadata_mut().folder_id = None;
+            }
+            object
+                .metadata_mut()
+                .pending_changes_statuses
+                .pending_untrash = false;
+
+            let hashed_sqlite_id = object.hashed_sqlite_id();
+            self.save_in_memory_object_metadata_to_sqlite(cloud_model, &uid, &hashed_sqlite_id);
+
+            ctx.emit(CloudModelEvent::ObjectUntrashed {
+                type_and_id: id,
+                source: UpdateSource::Local,
+            });
+            ctx.notify();
+        });
+    }
+
     pub fn untrash_object(&mut self, id: CloudObjectTypeAndId, ctx: &mut ModelContext<Self>) {
+        // Fork: the same story as `trash_object`, and the one that makes
+        // trashing safe to offer at all — a trash you cannot restore from is a
+        // delete. See `fork::drive_deletes_are_local`.
+        if crate::fork::drive_deletes_are_local(ctx) {
+            self.untrash_object_locally(id, ctx);
+            return;
+        }
+
         // If the object isn't known to the server yet, we can't untrash it.
         let Some(server_id) = id.server_id() else {
             return;
@@ -4542,6 +4600,86 @@ impl UpdateManager {
         self.spawned_futures.push(future.future_id());
     }
 
+    /// Deletes objects for good with no server involved, and reports how many
+    /// went.
+    ///
+    /// The server's half of a permanent delete is only *which ids went*.
+    /// Everything after that — the model, the objects' actions, the SQLite rows
+    /// — is [`Self::on_object_delete_success`], which already runs locally. So
+    /// the account-free path is that same work with the list computed here
+    /// instead of received.
+    ///
+    /// Descendants have to be walked rather than listed. Trashing a folder
+    /// marks only the folder, so its contents carry no `trashed_ts` of their
+    /// own; deleting the roots alone would leave them behind, in memory and in
+    /// SQLite, pointing at a parent that no longer exists. The server answers
+    /// with the descendants included, which is why upstream never has to.
+    fn delete_objects_locally(&mut self, roots: &[ObjectUid], ctx: &mut ModelContext<Self>) -> i32 {
+        let mut deleted: Vec<(SyncId, ObjectIdType)> = Vec::new();
+
+        CloudModel::handle(ctx).update(ctx, |cloud_model, ctx| {
+            for uid in roots {
+                deleted.extend(cloud_model.delete_object_and_descendants(uid.clone(), ctx));
+            }
+        });
+
+        if deleted.is_empty() {
+            return 0;
+        }
+
+        ObjectActions::handle(ctx).update(ctx, |object_actions, ctx| {
+            for (id, _) in &deleted {
+                object_actions.delete_actions_for_object(&id.uid(), ctx);
+            }
+        });
+
+        let num_deleted_objects = deleted.len() as i32;
+
+        // Deletes the objects' actions along with them.
+        self.save_to_db([ModelEvent::DeleteObjects { ids: deleted }]);
+
+        num_deleted_objects
+    }
+
+    /// Deletes one object for good with no server involved.
+    ///
+    /// The completion event is not decoration. `environments_page`,
+    /// `agent_sdk::environment` and `ambient_agents::scheduled` all wait on
+    /// `ObjectOperation::Delete` to finish their own flow, so a local delete
+    /// that skipped it would remove the object and leave the page that asked
+    /// for it waiting.
+    ///
+    /// `server_id` is whatever the object actually has, which account-free is
+    /// nothing. Upstream fills this with `ServerId::from_string_lossy(&uid)`,
+    /// which cannot be done here: that constructor asserts 22 characters and a
+    /// client uid is 43, so it panics rather than lying. The cost is that the
+    /// two listeners which match on `server_id` — the environments page's
+    /// success toast, and `scheduled`'s completion channel — do not fire for a
+    /// local object. Both were already unreachable account-free, since the
+    /// delete they are waiting on never happened at all.
+    fn delete_object_locally(
+        &mut self,
+        id: CloudObjectTypeAndId,
+        initiated_by: InitiatedBy,
+        ctx: &mut ModelContext<Self>,
+    ) {
+        let num_objects = self.delete_objects_locally(&[id.uid()], ctx);
+        if num_objects == 0 {
+            return;
+        }
+
+        ctx.emit(UpdateManagerEvent::ObjectOperationComplete {
+            result: ObjectOperationResult {
+                success_type: OperationSuccessType::Success,
+                operation: ObjectOperation::Delete { initiated_by },
+                client_id: None,
+                server_id: id.server_id(),
+                num_objects: Some(num_objects),
+            },
+        });
+        ctx.notify();
+    }
+
     pub fn delete_object_by_user(
         &mut self,
         id: CloudObjectTypeAndId,
@@ -4556,6 +4694,16 @@ impl UpdateManager {
         initiated_by: InitiatedBy,
         ctx: &mut ModelContext<Self>,
     ) {
+        // Fork: the same guard as `trash_object`, with the same effect —
+        // account-free no object has a server id, so "Delete forever" and
+        // every feature that deletes its own objects (environments, MCP
+        // servers, AI rules) returned here having done nothing. See
+        // `fork::drive_deletes_are_local`.
+        if crate::fork::drive_deletes_are_local(ctx) {
+            self.delete_object_locally(id, initiated_by, ctx);
+            return;
+        }
+
         // If the object isn't known to the server yet, we can't delete it.
         let Some(server_id) = id.server_id() else {
             return;
@@ -4665,6 +4813,36 @@ impl UpdateManager {
         self.spawned_futures.push(future.future_id());
     }
 
+    /// Empties the trash with no server involved.
+    ///
+    /// What the trash *is*, locally, is already written down: the objects in
+    /// this space carrying a `trashed_ts`, which is the same set the panel
+    /// counts to decide whether to grey the button out. So the list the server
+    /// would have answered with can simply be read.
+    fn empty_trash_locally(&mut self, space: Space, ctx: &mut ModelContext<Self>) {
+        let roots: Vec<ObjectUid> = CloudModel::as_ref(ctx)
+            .directly_trashed_cloud_objects_in_space(space, ctx)
+            .map(|object| object.sync_id().uid())
+            .collect();
+
+        let num_objects = self.delete_objects_locally(&roots, ctx);
+
+        ctx.emit(UpdateManagerEvent::ObjectOperationComplete {
+            result: ObjectOperationResult {
+                success_type: if num_objects == 0 {
+                    OperationSuccessType::Rejection
+                } else {
+                    OperationSuccessType::Success
+                },
+                operation: ObjectOperation::EmptyTrash,
+                client_id: None,
+                server_id: None,
+                num_objects: Some(num_objects),
+            },
+        });
+        ctx.notify();
+    }
+
     pub fn empty_trash(&mut self, space: Space, ctx: &mut ModelContext<Self>) {
         let object_client = self.object_client.clone();
 
@@ -4677,6 +4855,17 @@ impl UpdateManager {
                 return;
             }
         };
+
+        // Fork: `object_client.empty_trash` cannot succeed without credentials,
+        // and nothing is removed locally except on success — so account-free the
+        // trash could be filled but never emptied. Placed after the space guard
+        // above so the Shared space is still refused for upstream's reason: this
+        // client is not the owner of what is in it. See
+        // `fork::drive_deletes_are_local`.
+        if crate::fork::drive_deletes_are_local(ctx) {
+            self.empty_trash_locally(space, ctx);
+            return;
+        }
 
         // Make the request.
         let future = ctx.spawn_with_retry_on_error(

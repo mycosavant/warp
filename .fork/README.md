@@ -833,17 +833,36 @@ direction and was reported as ignored, with the reason.
 
 ### Deleting things without an account
 
-Two bugs of the same shape, found by reading the path the import's deletion
-rule depends on.
+Trash, restore, delete forever and empty trash all work without an account.
+None of them did before, and they were all the same bug: each is a server
+mutation upstream, guarded by `let Some(server_id) = id.server_id()`, and no
+locally-created object ever has a server id. So the Drive panel's Trash item
+did nothing, and emptying the trash did nothing — the trash could be filled but
+never emptied.
 
-**Fixed:** `trash_object` began by requiring a server id, and account-free no
-object has one — so the Drive panel's Trash item did nothing at all. Worse if
-it had got past that: the local timestamp is set optimistically and *reverted*
-when the request fails, which without credentials it always does.
+"Restore" and "Delete forever" were not even drawn on a trashed object: the
+context menu asks for a server id too. So the panel's trash was a one-way door
+in both senses, and fixing the update manager without fixing the menu would
+have left working code with nothing able to call it.
 
-**Not fixed:** emptying the trash is a bare server call, so it also does
-nothing. A trashed object currently cannot be permanently removed. See
-`.fork/TASKS.md` T4.7.
+Nothing here is a reimplementation. The local half of a delete already exists
+and is already correct; what was missing account-free is the list of ids the
+server would have replied with, and that list is readable locally. The one
+piece with no local counterpart is restore, because upstream deliberately waits
+for the server's metadata to clear the timestamp.
+
+Two behaviours worth knowing:
+
+* Emptying the trash takes everything *inside* a trashed folder with it.
+  Trashing a folder marks only the folder, so its contents would otherwise be
+  left behind pointing at a parent that no longer exists.
+* Restoring an object whose folder is still in the trash puts it at the root,
+  rather than back into the trash where you could not see it. This is what
+  Warp's server does; with no server, the client decides it.
+
+Deleting is still not synced to anything. It changes this machine's store, and
+travels to another machine only through the git mirror, where a deleted object
+shows up as an absent file. See `.fork/TASKS.md` T4.7.
 
 ## Driving the Windows build from WSL
 

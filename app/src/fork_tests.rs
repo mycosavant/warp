@@ -1,7 +1,8 @@
-use warpui::{App, SingletonEntity};
+use warpui::{App, ModelHandle, SingletonEntity};
 
 use super::*;
 use crate::auth::AuthStateProvider;
+use crate::cloud_object::model::actions::ObjectActions;
 use crate::cloud_object::model::persistence::CloudModel;
 use crate::cloud_object::{
     CloudObject, CloudObjectEventEntrypoint, CloudObjectMetadata, CloudObjectPermissions,
@@ -372,6 +373,242 @@ fn a_signed_in_user_still_trashes_through_the_server() {
             );
         });
     });
+}
+
+/// T4.7's headline: something in the trash can be got rid of.
+///
+/// `empty_trash` asks the server and only removes anything locally once the
+/// answer comes back, so account-free the trash filled up and stayed full —
+/// with no other way to empty it, since "Delete forever" is not drawn either.
+#[test]
+fn emptying_the_trash_without_an_account_actually_empties_it() {
+    App::test((), |mut app| async move {
+        let mut workflow = local_workflow();
+        workflow.metadata_mut().trashed_ts = Some(chrono::Utc::now().into());
+        let uid = workflow.sync_id().uid();
+        let update_manager = drive_app(&mut app, logged_out(), vec![workflow]);
+
+        update_manager.update(&mut app, |update_manager, ctx| {
+            update_manager.empty_trash(Space::Personal, ctx);
+        });
+
+        app.read(|ctx| {
+            assert!(
+                CloudModel::as_ref(ctx).get_by_uid(&uid).is_none(),
+                "a trashed object survived emptying the trash"
+            );
+        });
+    });
+}
+
+/// Trashing a folder marks only the folder, so its contents carry no
+/// `trashed_ts` of their own. The server's answer includes them; read the
+/// trashed set alone and they are left behind, in memory and in SQLite,
+/// pointing at a parent that no longer exists.
+#[test]
+fn emptying_the_trash_takes_what_is_inside_a_trashed_folder() {
+    App::test((), |mut app| async move {
+        let mut folder = local_folder();
+        folder.metadata_mut().trashed_ts = Some(chrono::Utc::now().into());
+        let folder_id = folder.sync_id();
+
+        let mut inside = local_workflow();
+        inside.metadata_mut().folder_id = Some(folder_id);
+        let inside_uid = inside.sync_id().uid();
+
+        let update_manager = drive_app(&mut app, logged_out(), vec![folder, inside]);
+
+        update_manager.update(&mut app, |update_manager, ctx| {
+            update_manager.empty_trash(Space::Personal, ctx);
+        });
+
+        app.read(|ctx| {
+            assert!(
+                CloudModel::as_ref(ctx).get_by_uid(&inside_uid).is_none(),
+                "the workflow inside the deleted folder was orphaned rather than deleted"
+            );
+        });
+    });
+}
+
+/// The other half of the same call, and the one worth being sure about: this is
+/// the most destructive thing the fork can do to a drive.
+#[test]
+fn emptying_the_trash_leaves_everything_that_is_not_in_it() {
+    App::test((), |mut app| async move {
+        let mut trashed = local_workflow();
+        trashed.metadata_mut().trashed_ts = Some(chrono::Utc::now().into());
+        let kept = local_workflow();
+        let kept_uid = kept.sync_id().uid();
+        let update_manager = drive_app(&mut app, logged_out(), vec![trashed, kept]);
+
+        update_manager.update(&mut app, |update_manager, ctx| {
+            update_manager.empty_trash(Space::Personal, ctx);
+        });
+
+        app.read(|ctx| {
+            assert!(
+                CloudModel::as_ref(ctx).get_by_uid(&kept_uid).is_some(),
+                "emptying the trash deleted an object that was not in it"
+            );
+        });
+    });
+}
+
+/// "Delete forever" on a single object — the same gap, and the path every
+/// feature that deletes its own objects goes through: environments, MCP
+/// servers, AI rules.
+#[test]
+fn an_object_can_be_deleted_for_good_one_at_a_time() {
+    App::test((), |mut app| async move {
+        let workflow = local_workflow();
+        let type_and_id = workflow.cloud_object_type_and_id();
+        let uid = workflow.sync_id().uid();
+        let update_manager = drive_app(&mut app, logged_out(), vec![workflow]);
+
+        update_manager.update(&mut app, |update_manager, ctx| {
+            update_manager.delete_object_by_user(type_and_id, ctx);
+        });
+
+        app.read(|ctx| {
+            assert!(CloudModel::as_ref(ctx).get_by_uid(&uid).is_none());
+        });
+    });
+}
+
+/// A trash you cannot restore from is a delete, and T4.4f's whole safety
+/// argument — "an object missing from the tree is trashed, which is
+/// recoverable" — rests on this working.
+#[test]
+fn an_object_in_the_trash_can_be_restored() {
+    App::test((), |mut app| async move {
+        let mut workflow = local_workflow();
+        workflow.metadata_mut().trashed_ts = Some(chrono::Utc::now().into());
+        let type_and_id = workflow.cloud_object_type_and_id();
+        let uid = workflow.sync_id().uid();
+        let update_manager = drive_app(&mut app, logged_out(), vec![workflow]);
+
+        update_manager.update(&mut app, |update_manager, ctx| {
+            update_manager.untrash_object(type_and_id, ctx);
+        });
+
+        app.read(|ctx| {
+            let object = CloudModel::as_ref(ctx).get_by_uid(&uid).unwrap();
+            assert!(
+                object.metadata().trashed_ts.is_none(),
+                "the object could not be got out of the trash"
+            );
+            assert!(
+                !object.metadata().pending_changes_statuses.pending_untrash,
+                "nothing is pending: there is no server to wait for"
+            );
+        });
+    });
+}
+
+/// Restoring into a folder that is itself in the trash restores the object
+/// *into* the trash, where the user cannot see it and has no way to find out
+/// where it went. The server moves it to the root instead; with no server,
+/// this does.
+#[test]
+fn restoring_an_object_whose_folder_is_in_the_trash_puts_it_at_the_root() {
+    App::test((), |mut app| async move {
+        let mut folder = local_folder();
+        folder.metadata_mut().trashed_ts = Some(chrono::Utc::now().into());
+        let folder_id = folder.sync_id();
+
+        let mut inside = local_workflow();
+        inside.metadata_mut().trashed_ts = Some(chrono::Utc::now().into());
+        inside.metadata_mut().folder_id = Some(folder_id);
+        let type_and_id = inside.cloud_object_type_and_id();
+        let uid = inside.sync_id().uid();
+
+        let update_manager = drive_app(&mut app, logged_out(), vec![folder, inside]);
+
+        update_manager.update(&mut app, |update_manager, ctx| {
+            update_manager.untrash_object(type_and_id, ctx);
+        });
+
+        app.read(|ctx| {
+            assert_eq!(
+                CloudModel::as_ref(ctx)
+                    .get_by_uid(&uid)
+                    .unwrap()
+                    .metadata()
+                    .folder_id,
+                None,
+                "the object was restored into a folder that is still in the trash"
+            );
+        });
+    });
+}
+
+/// The same call with an account still goes to the server. A signed-in user's
+/// trash lives somewhere else too, and deleting only the local copy would show
+/// an empty trash that refills at the next fetch.
+#[test]
+fn a_signed_in_user_still_empties_the_trash_through_the_server() {
+    App::test((), |mut app| async move {
+        let mut workflow = local_workflow();
+        workflow.metadata_mut().trashed_ts = Some(chrono::Utc::now().into());
+        let uid = workflow.sync_id().uid();
+        let update_manager = drive_app(&mut app, logged_in(), vec![workflow]);
+
+        update_manager.update(&mut app, |update_manager, ctx| {
+            update_manager.empty_trash(Space::Personal, ctx);
+        });
+
+        app.read(|ctx| {
+            assert!(
+                CloudModel::as_ref(ctx).get_by_uid(&uid).is_some(),
+                "fork policy must not delete a signed-in user's object before the server agrees"
+            );
+        });
+    });
+}
+
+/// The singletons the trash lifecycle touches. `ObjectActions` is here because
+/// a permanent delete takes an object's actions with it, and `UserWorkspaces`
+/// because emptying the trash is scoped to a space.
+fn drive_app(
+    app: &mut App,
+    auth: AuthStateProvider,
+    objects: Vec<Box<dyn CloudObject>>,
+) -> ModelHandle<UpdateManager> {
+    app.add_singleton_model(|_| NetworkStatus::new());
+    app.add_singleton_model(TeamTesterStatus::mock);
+    app.add_singleton_model(move |_| auth);
+    app.add_singleton_model(UserWorkspaces::default_mock);
+    app.add_singleton_model(SyncQueue::mock);
+    app.add_singleton_model(|_| ObjectActions::new(Vec::new()));
+    app.add_singleton_model(|_| CloudModel::new(None, objects, None));
+    app.add_singleton_model(UpdateManager::mock)
+}
+
+fn logged_out() -> AuthStateProvider {
+    AuthStateProvider::new_logged_out_for_test()
+}
+
+fn logged_in() -> AuthStateProvider {
+    AuthStateProvider::new_for_test()
+}
+
+fn local_folder() -> Box<dyn CloudObject> {
+    Box::new(crate::drive::folders::CloudFolder::new(
+        SyncId::ClientId(ClientId::new()),
+        crate::drive::folders::CloudFolderModel {
+            name: "Scripts".to_owned(),
+            is_open: false,
+            is_warp_pack: false,
+        },
+        CloudObjectMetadata::mock(),
+        CloudObjectPermissions {
+            owner: local_drive_owner().expect("fork policy provides a local drive owner"),
+            permissions_last_updated_ts: None,
+            anyone_with_link: None,
+            guests: Vec::new(),
+        },
+    ))
 }
 
 fn local_workflow() -> Box<dyn CloudObject> {

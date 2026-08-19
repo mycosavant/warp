@@ -1062,6 +1062,17 @@ impl DriveIndex {
         app: &AppContext,
     ) -> bool {
         if let Some(object) = CloudModel::as_ref(app).get_by_uid(&cloud_object_type_and_id.uid()) {
+            // Fork: account-free these operations are not online-only at all —
+            // restore is a timestamp and a row, delete forever is a row going
+            // away. Upstream asks for a network and a server id, and a local
+            // object never has the second, so "Restore" and "Delete forever"
+            // were never drawn on a trashed object: the trash was a one-way
+            // door. Nothing can be pending either, since pending means waiting
+            // on a server. See `fork::drive_deletes_are_local`.
+            if crate::fork::drive_deletes_are_local(app) {
+                return true;
+            }
+
             return self.is_online(app)
                 && cloud_object_type_and_id.has_server_id()
                 && !object.metadata().has_pending_online_only_change();
@@ -1611,8 +1622,12 @@ impl DriveIndex {
             )
             .with_text_label("Empty trash".to_string());
 
-        // Only show Empty Trash button when online, do not show for Shared space
-        if self.is_online(app) && space != &Space::Shared {
+        // Only show Empty Trash button when online, do not show for Shared space.
+        // Fork: account-free it never asks the network, so the online condition
+        // would only hide a button that works. See `fork::drive_deletes_are_local`.
+        if (self.is_online(app) || crate::fork::drive_deletes_are_local(app))
+            && space != &Space::Shared
+        {
             // Disable Empty Trash button if trash is empty
             let cloud_model = CloudModel::as_ref(app);
             if cloud_model

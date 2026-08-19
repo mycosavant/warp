@@ -203,7 +203,13 @@ pub fn local_drive_is_authoritative(app: &AppContext) -> bool {
         && !AuthStateProvider::as_ref(app).get().is_logged_in()
 }
 
-/// Whether trashing a Warp Drive object should happen without the server.
+/// Whether a Warp Drive object's whole trash lifecycle happens without the
+/// server: trash, restore, delete forever, empty trash.
+///
+/// One predicate for all four because they are one question — does removing an
+/// object need permission from somewhere else? — and answering it differently
+/// per verb is how a trash you can fill but not empty comes about, which is
+/// exactly the state this fork was in between T4.4f and T4.7.
 ///
 /// Upstream's `UpdateManager::trash_object` opens with
 /// `let Some(server_id) = id.server_id() else { return; }` — an object the
@@ -222,6 +228,13 @@ pub fn local_drive_is_authoritative(app: &AppContext) -> bool {
 ///
 /// Found while designing T4.4f, whose "an object missing from the tree is
 /// trashed rather than deleted" rule depends on trashing working at all.
+///
+/// T4.7 finished the lifecycle. `empty_trash` and `delete_object_with_
+/// initiated_by` are bare server calls that only touch anything locally once
+/// the response arrives, so account-free a trashed object could not be got rid
+/// of at all. And the Drive panel gates "Restore" and "Delete forever" on
+/// `has_server_id`, so neither was ever drawn: the fix had to reach the view
+/// or the fixed code would have had no way to be called.
 pub fn drive_deletes_are_local(app: &AppContext) -> bool {
     local_drive_is_authoritative(app)
 }

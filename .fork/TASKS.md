@@ -419,9 +419,9 @@ So this is "keep the store, neutralize the sync" — not a rewrite.
         verified live; see "T4.4f as built" below
   - [x] **T4.4g** Workflow aliases travel inside their workflow's file — found
         by the live run; see "The alias gap" and "T4.4g as built" below
-- [~] **T4.7** Deleting a Warp Drive object without an account. `trash_object`
-      is fixed; permanently deleting is still broken. See "Two things that were
-      never possible without an account" below.
+- [x] **T4.7** Deleting a Warp Drive object without an account — the whole
+      lifecycle: trash, restore, delete forever, empty trash. See "Two things
+      that were never possible without an account" and "T4.7 as built" below.
 - [x] **T4.5** Round-trip via the existing import/export paths — **premise is
       wrong, same as T4.1's.** There is no round trip today: export and import
       do not even cover the same set of types, and neither carries identity.
@@ -1014,7 +1014,7 @@ aside before deleting it produced `unchanged`, not `trashed`. That is correct �
 identity is in the header, so a rename is not a delete — but it meant the test
 proved nothing until it was redone without the copy.
 
-### Two things that were never possible without an account — T4.7
+### Two things that were never possible without an account — T4.7 (both fixed)
 
 Found while designing T4.4f's deletion rule, by reading the path it depends on.
 
@@ -1028,12 +1028,67 @@ ordering in which the upstream path worked here. Now routed through
 `fork::drive_deletes_are_local`, and pinned by a test that was confirmed to
 fail with the guard disabled.
 
-**Permanent deletion — still broken.** `UpdateManager::empty_trash` is a bare
-server call: it asks `object_client.empty_trash(owner)` and only removes
+**Permanent deletion — fixed, see below.** `UpdateManager::empty_trash` is a
+bare server call: it asks `object_client.empty_trash(owner)` and only removes
 anything locally on success. Account-free that request cannot succeed, so
-emptying the trash does nothing. Same shape as the bug above, not yet fixed,
-and not a T4.4f dependency — but it means a trashed object currently cannot be
-got rid of at all.
+emptying the trash did nothing — a trashed object could not be got rid of at
+all.
+
+### T4.7 as built — the trash is a place things can leave
+
+Four verbs, not two. The recorded scope was `empty_trash`; reading the path
+found the other three, and the last of them is the one that mattered most.
+
+**`empty_trash` and `delete_object_with_initiated_by` are the same bug.** Both
+ask the server and only touch anything locally once an answer arrives. The
+local half already exists and is already correct — `on_object_delete_success`
+does the model, the objects' actions and the SQLite rows — so what is missing
+account-free is *only the list of ids the server would have replied with*, and
+that list can simply be read: the objects in this space carrying a `trashed_ts`
+are what the trash is.
+
+**Descendants have to be walked, not listed.** Trashing a folder marks only the
+folder; its contents carry no `trashed_ts` of their own. Delete the trashed set
+alone and everything inside a deleted folder is left behind — in memory and in
+SQLite — pointing at a parent that no longer exists. The server's reply
+includes descendants, which is why upstream never has to think about this.
+
+**The fix had to reach the view, or nothing could have called it.** The Drive
+panel gates its trash context menu on `online_only_operation_allowed`, which
+requires `has_server_id()`. Account-free that is never true, so "Restore" and
+"Delete forever" were never *drawn* on a trashed object. Fixing the update
+manager alone would have left both fixed and unreachable.
+
+**Which made restore part of this task.** Exposing "Restore" without fixing
+`untrash_object` — same server-id guard — would have been worse than leaving it
+hidden. And it is load-bearing beyond the menu: T4.4f's safety argument is that
+an object missing from the tree is *trashed rather than deleted, because
+trashing is recoverable*, which was not true here. A trash you cannot restore
+from is a delete with extra steps.
+
+Restoring moves an object to the root when its folder is itself in the trash,
+because restoring into a trashed folder restores it *into* the trash, where the
+user cannot see it and has no way to find out where it went. Not an invention:
+upstream's `test_metadata_after_untrash_item_and_move_to_root` asserts the
+server answers exactly this way. With no server, the client decides it.
+
+One predicate for all four verbs, `fork::drive_deletes_are_local`, because they
+are one question — does removing an object need permission from somewhere else?
+Answering it per-verb is how a trash you can fill but not empty comes about,
+which is the state the fork was in between T4.4f and T4.7.
+
+**Known limits, both narrow.** A local delete's completion event carries
+`server_id: None`, because `ServerId::from_string_lossy` asserts 22 characters
+and a client uid is 43 — it panics rather than lying, which the first version
+of this found the hard way. So the two listeners keyed on `server_id` — the
+environments page's success toast and `ambient_agents::scheduled`'s completion
+channel — stay silent for a local object. Neither was reachable before, since
+the delete they wait on never happened; `scheduled`'s waiter hangs either way,
+which is its own upstream bug and not this one.
+
+And T4.4f's empty-tree guard is now reachable in earnest: on a single-object
+drive, deleting the object *and* emptying the trash produces an empty tree,
+which the import refuses. The last deletion still cannot propagate.
 
 ### The alias gap — T4.4g
 
