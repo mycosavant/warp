@@ -1629,6 +1629,82 @@ Xwayland has no keyboard focus to give. Clicks work there, keys do not. That
 is the WSLg counterpart of the Windows foreground lock, and it is why this was
 verified on Windows.
 
+### T5.5 — the sign-in gate over a history that was already here
+
+Spotted by the user in the verification screenshots above: the left panel said
+"Sign in to access Agent conversations / Create an account and enable AI to
+access your conversation history", sitting next to a working local conversation
+the whole time.
+
+That sentence was true while the only agent was Warp's, because the history was
+Warp's. T5 made it false. Conversations are written to the local database and
+read back at startup, and `AgentConversationsModel::unfiltered_entries` ends
+with a loop over `get_local_conversations_metadata` that touches no server. The
+two auth-dependent paths in that model are the cloud half — pulling ambient
+tasks and filling the creator filter — and neither is the list.
+
+The fix is one call site, the same shape as `is_warp_drive_available` in T4.2:
+route the anonymity check in `ToolPanelView::availability` through
+`fork::is_anonymous_for_ui`. The second branch already passes, because
+`is_any_ai_enabled` carries the account bypass.
+
+Worth knowing: the gate was not only cosmetic. `on_conversation_list_view_
+visibility_changed` calls `register_view_open` only when the panel is
+`Available`, so the list was never registered as a data consumer either. And
+opening it account-free costs no network traffic — the cloud fetch early-returns
+without a user id, leaving the load state at `WaitingForCloud`, and `can_poll`
+is false for that state.
+
+#### And two bugs the unlocked panel exposed
+
+Both mine, both the same omission, and neither was caught by any test I had
+written — the local agent wrote the agent's half of the transcript and nothing
+else.
+
+    Untitled conversation
+    C:\dev\warp                                    58 years ago
+
+**No user turn.** Upstream the *server* echoes the query back as a `UserQuery`
+message. Live it is inert — `convert_from` maps it to
+`NoClientRepresentation`, because the input already drew the prompt — so it
+looks redundant. It is not: on the way back out of the database
+`convert_conversation` turns it into the exchange's `AIAgentInput::UserQuery`.
+Without it a restored conversation has the answers and not the questions, and
+no `initial_query` for the title to fall back to.
+
+**1970.** The same message, unstamped. A restored exchange's `start_time` comes
+from that query's context time, then from any message timestamp, and then from
+`unwrap_or_default()` — which for a `DateTime` is the Unix epoch. Every message
+now carries the time the turn started, one time per turn because one turn is
+one exchange.
+
+`Task.description` is now set from the prompt too, since
+`AIConversation::title` reads it before falling back to the initial query. Cut
+by character rather than byte: `String::truncate` inside a glyph panics, and a
+pasted prompt is exactly where one turns up.
+
+Conversations recorded before this keep their empty title and their 1970 —
+nothing rewrites history rows, and the fix is in what gets written.
+
+#### Verified on Windows, 2026-08-19
+
+Signed out, panel open, one new conversation and one restart:
+
+    ACTIVE  Name three colours, comma...   C:\dev\warp    Just now
+    PAST    Untitled conversation          C:\dev\warp    56 years ago
+
+The second line is the conversation recorded before the fix, left exactly as
+it was — which is the clearest statement of what the fix does and does not do.
+
+Then closed with `CloseMainWindow` and relaunched:
+
+    PAST    Name three colours, comma...   C:\dev\warp    1 min ago
+
+    /agent Name three colours, comma separated, nothing else.
+           Red, green, blue
+
+Both halves. Before the fix a restored conversation showed only the answers.
+
 ## T6 — WSL integration
 
 User-stated high-priority feature-add, not yet scoped. File explorer and

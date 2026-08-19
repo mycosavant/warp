@@ -721,6 +721,24 @@ Note that natural-language auto-detection is off by default
 (`agents.warp_agent.input.ai_auto_detection_enabled`), so reach the agent the
 normal way: `Ctrl-I`, or `Ctrl-Shift-Enter` for a new conversation.
 
+### Conversation history is local, and the panel now says so
+
+The left panel used to answer "Sign in to access Agent conversations". That was
+true while the only agent was Warp's, because the history was Warp's — but
+conversations are written to the local database and read back at startup, and
+the list that feeds the panel ends with a loop over local metadata that touches
+no server. Under fork policy the panel shows them.
+
+Opening it account-free costs no network traffic: the cloud fetch early-returns
+without a user id, and the poll it would otherwise start is gated on a load
+state that fetch never reaches.
+
+Conversations recorded before 2026-08-19 show as "Untitled" and "58 years ago".
+That was a real bug — the local agent recorded the agent's half of the
+transcript and not the user's, and an exchange with no message timestamps falls
+back to the Unix epoch. Fixed for everything written since; nothing rewrites
+the old rows.
+
 ### Why this is one `if` and not a rewrite
 
 The whole agent surface — the panel, blocks, diffs, todo lists, conversation
