@@ -163,9 +163,10 @@ fn malformed_and_removed_action_names_are_not_deserialized() {
 }
 
 #[test]
-fn catalog_has_exactly_85_retained_actions() {
-    // 84 upstream actions plus the fork's `input.submit`.
-    assert_eq!(ActionKind::ALL.len(), 85);
+fn catalog_has_exactly_87_retained_actions() {
+    // 84 upstream actions, plus the fork's `input.submit`, `drive.sync.status`
+    // and `drive.sync.export`.
+    assert_eq!(ActionKind::ALL.len(), 87);
 }
 
 #[test]

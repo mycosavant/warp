@@ -64,11 +64,16 @@ pub(crate) fn validate_action_target(
         || target.session.is_some();
     let rejects_all_targets = match action.metadata().target_scope {
         TargetScope::Instance => action != ActionKind::AppFocus,
+        // `Drive` joins these rather than the group below: the store is
+        // app-wide, so a window or pane selector would be meaningless rather
+        // than merely ignored, and silently ignoring it would let a caller
+        // believe it had scoped an export.
         TargetScope::Appearance
         | TargetScope::Settings
         | TargetScope::Keybinding
         | TargetScope::Action
-        | TargetScope::Capability => true,
+        | TargetScope::Capability
+        | TargetScope::Drive => true,
         TargetScope::Window
         | TargetScope::Tab
         | TargetScope::Pane

@@ -300,6 +300,43 @@ pub struct SurfaceListResult {
     pub surfaces: Vec<SurfaceSummary>,
 }
 
+/// What `drive.sync.status` reports: where the mirror would go, and what would
+/// go into it. Read-only, and the way to check the destination before running
+/// an export that prunes it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DriveSyncStatusResult {
+    /// The configured directory, or `None` when the mirror is switched off.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
+    /// Whether that directory exists yet. An export creates it.
+    pub path_exists: bool,
+    /// Objects that would be written.
+    pub objects: usize,
+    /// Objects in a team drive or shared by someone else, which are not
+    /// mirrored — reported so their absence is explained rather than silent.
+    pub not_personal: usize,
+    /// Objects whose payload could not be read. Should always be empty.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub unreadable: Vec<String>,
+}
+
+/// What `drive.sync.export` did. `written == 0` with a full `unchanged` is the
+/// healthy steady state: it means `git status` is clean.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DriveSyncExportResult {
+    pub path: String,
+    pub written: usize,
+    pub unchanged: usize,
+    pub removed_files: usize,
+    pub removed_directories: usize,
+    /// Objects whose parent folder was missing, reparented to the top level.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub orphaned: Vec<String>,
+    pub not_personal: usize,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub unreadable: Vec<String>,
+}
+
 /// Typed success payloads for catalog actions that need stable structured data.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]

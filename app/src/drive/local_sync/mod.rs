@@ -21,13 +21,6 @@
 //!
 //! See `.fork/TASKS.md` T4.4 for the full scope.
 
-// Temporary, and removed by T4.4d. The three modules below are complete and
-// tested against each other and against the live store, but nothing in the app
-// *invokes* an export yet — there is no setting for the repository path and no
-// action that triggers one. Without this every item in all three files reads as
-// dead code and drowns out anything real.
-#![allow(dead_code)]
-
 pub mod format;
 pub mod snapshot;
 pub mod tree;

@@ -56,7 +56,10 @@ pub fn run_and_exit() -> ! {
         let Some(response) = handle_line(trimmed) else {
             continue;
         };
-        if writeln!(stdout, "{response}").and_then(|()| stdout.flush()).is_err() {
+        if writeln!(stdout, "{response}")
+            .and_then(|()| stdout.flush())
+            .is_err()
+        {
             std::process::exit(0);
         }
     }
@@ -115,10 +118,10 @@ fn initialize_result() -> Value {
         "capabilities": { "tools": {} },
         "serverInfo": { "name": "warpctrl", "version": env!("CARGO_PKG_VERSION") },
         "instructions": "Controls a running Warp terminal. Call warp_instance_list \
-first to confirm an instance is reachable. Mutating actions need a focused \
-window that has a workspace; if warp_window_list reports is_active false, call \
-warp_app_focus before mutating. Use warp_input_submit to run a command and \
-warp_input_insert to stage text without running it.",
+    first to confirm an instance is reachable. Mutating actions need a focused \
+    window that has a workspace; if warp_window_list reports is_active false, call \
+    warp_app_focus before mutating. Use warp_input_submit to run a command and \
+    warp_input_insert to stage text without running it.",
     })
 }
 
@@ -181,6 +184,17 @@ cannot accept tab or pane mutations yet."
         "setting.set" => "Set a Warp setting by dotted key. Use warp_setting_list \
 to discover keys and their current values first."
             .to_string(),
+        "drive.sync.status" => "Report where Warp Drive would be mirrored on disk \
+and how many objects would go there, WITHOUT writing anything. Run this before \
+warp_drive_sync_export to check the destination."
+            .to_string(),
+        "drive.sync.export" => "Write the whole of Warp Drive into the directory \
+set by `warp_drive.local_sync.path`, for the user to keep under git. Warp never \
+runs git itself. This PRUNES: files in that directory that Warp wrote and that \
+no longer correspond to an object are deleted, and directories are removed once \
+empty. Files Warp did not write are never touched. The destination comes from \
+settings and cannot be passed in."
+            .to_string(),
         other => format!("Warp local control action `{other}`."),
     };
     description.push_str(&format!(
@@ -209,6 +223,7 @@ fn scope_label(scope: TargetScope) -> &'static str {
         TargetScope::Keybinding => "keybinding",
         TargetScope::Action => "action",
         TargetScope::Capability => "capability",
+        TargetScope::Drive => "drive",
     }
 }
 
@@ -518,14 +533,14 @@ fn call_tool(params: &Value) -> Result<Value, String> {
     );
     request.target = target;
 
-    let response = local_control::client::send_request(&instance, &request)
-        .map_err(describe_error)?;
+    let response =
+        local_control::client::send_request(&instance, &request).map_err(describe_error)?;
     let ControlResponse::Ok { data } = response.response else {
         return Err("local-control request failed without an error payload".to_owned());
     };
 
-    let text = serde_json::to_string_pretty(&data)
-        .unwrap_or_else(|_| "action completed".to_owned());
+    let text =
+        serde_json::to_string_pretty(&data).unwrap_or_else(|_| "action completed".to_owned());
     Ok(json!({ "content": [{ "type": "text", "text": text }] }))
 }
 

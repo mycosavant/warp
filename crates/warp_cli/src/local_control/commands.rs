@@ -15,11 +15,11 @@ use crate::agent::OutputFormat;
 use crate::local_control::output::{write_json, write_json_line};
 use crate::local_control::selectors::{instance_selector, target_selector};
 use crate::local_control::{
-    ActionCatalogCommand, AppCommand, AppearanceCommand, CapabilityCommand, FileCommand,
-    InputCommand, InstanceCommand, KeybindingCommand, PaneCommand, SessionCommand, SettingCommand,
-    SurfaceCommand, SurfaceOpenCommand, SurfaceOpenToggleCommand, SurfaceQueryCommand,
-    SurfaceSettingsCommand, SurfaceToggleCommand, TabActivateArgs, TabCloseArgs, TabColorCommand,
-    TabCommand, TargetArgs, ThemeCommand, WindowCommand,
+    ActionCatalogCommand, AppCommand, AppearanceCommand, CapabilityCommand, DriveCommand,
+    FileCommand, InputCommand, InstanceCommand, KeybindingCommand, PaneCommand, SessionCommand,
+    SettingCommand, SurfaceCommand, SurfaceOpenCommand, SurfaceOpenToggleCommand,
+    SurfaceQueryCommand, SurfaceSettingsCommand, SurfaceToggleCommand, TabActivateArgs,
+    TabCloseArgs, TabColorCommand, TabCommand, TargetArgs, ThemeCommand, WindowCommand,
 };
 
 pub(super) fn run_surface_command(
@@ -697,6 +697,26 @@ pub(super) fn run_file_command(
                 column: args.column,
                 new_tab: args.new_tab,
             },
+            output_format,
+        ),
+    }
+}
+
+pub(super) fn run_drive_command(
+    command: DriveCommand,
+    output_format: OutputFormat,
+) -> Result<(), ControlError> {
+    match command {
+        DriveCommand::Status(args) => run_action_with_params(
+            args,
+            ActionKind::DriveSyncStatus,
+            EmptyParams {},
+            output_format,
+        ),
+        DriveCommand::Export(args) => run_action_with_params(
+            args,
+            ActionKind::DriveSyncExport,
+            EmptyParams {},
             output_format,
         ),
     }

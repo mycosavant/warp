@@ -10,7 +10,7 @@ use ::local_control::{
 use warpui::{Entity, ModelContext, SingletonEntity};
 
 use crate::local_control::handlers::{
-    app_state, close, metadata, metadata_config, settings_surfaces,
+    app_state, close, drive_sync, metadata, metadata_config, settings_surfaces,
 };
 use crate::local_control::permissions::{
     ensure_action_allowed, ensure_feature_enabled, ensure_protocol_version,
@@ -78,6 +78,8 @@ impl LocalControlBridge {
             ActionKind::ActionList => Ok(metadata::action_list()),
             ActionKind::ActionInspect => metadata::action_inspect(&request.action),
             ActionKind::SurfaceList => metadata::surface_list(ctx),
+            ActionKind::DriveSyncStatus => drive_sync::status(ctx),
+            ActionKind::DriveSyncExport => drive_sync::export(ctx),
             ActionKind::WindowList => metadata::window_list(&request.target, ctx),
             ActionKind::WindowInspect => metadata::window_inspect(&request.target, ctx),
             ActionKind::TabList => metadata::tab_list(&request.target, ctx),

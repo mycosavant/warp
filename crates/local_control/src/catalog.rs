@@ -20,6 +20,7 @@ pub enum TargetScope {
     Keybinding,
     Action,
     Capability,
+    Drive,
 }
 
 /// Whether an action has an app-side implementation in this stack layer.
@@ -64,6 +65,8 @@ pub enum ActionResultSpec {
     AppearanceState,
     CapabilityList,
     CapabilityMetadata,
+    DriveSyncExport,
+    DriveSyncStatus,
     InstanceList,
     InstanceMetadata,
     KeybindingList,
@@ -293,5 +296,15 @@ define_action_catalog! {
 
     file {
         FileOpen => { name: "file.open", status: Implemented, target: File, params: FileOpen, result: Acknowledgement },
+    }
+
+    // Fork-local. Namespaced under `drive.sync` rather than `drive` because
+    // upstream retired a whole `drive.*` group — `drive.list`, `drive.open`,
+    // `drive.object.*`, `drive.workflow.run` — and pins them as unparseable in
+    // `malformed_and_removed_action_names_are_not_deserialized`. These are not
+    // a revival of those; they drive the git-backed mirror and nothing else.
+    drive {
+        DriveSyncStatus => { name: "drive.sync.status", status: Implemented, target: Drive, params: None, result: DriveSyncStatus },
+        DriveSyncExport => { name: "drive.sync.export", status: Implemented, target: Drive, params: None, result: DriveSyncExport },
     }
 }

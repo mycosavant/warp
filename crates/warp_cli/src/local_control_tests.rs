@@ -585,6 +585,14 @@ fn retained_action_examples() -> Vec<(ActionKind, Vec<&'static str>)> {
             ActionKind::FileOpen,
             vec!["warpctrl", "file", "open", "/tmp/example.txt"],
         ),
+        (
+            ActionKind::DriveSyncStatus,
+            vec!["warpctrl", "drive", "status"],
+        ),
+        (
+            ActionKind::DriveSyncExport,
+            vec!["warpctrl", "drive", "export"],
+        ),
     ]
 }
 
@@ -738,6 +746,10 @@ fn parsed_action_kind(command: &ControlCommand) -> Option<ActionKind> {
             SurfaceCommand::AgentManagement(command) => match command {
                 SurfaceOpenCommand::Open(_) => Some(ActionKind::SurfaceAgentManagementOpen),
             },
+        },
+        ControlCommand::Drive(command) => match command {
+            DriveCommand::Status(_) => Some(ActionKind::DriveSyncStatus),
+            DriveCommand::Export(_) => Some(ActionKind::DriveSyncExport),
         },
         ControlCommand::Completions { .. } => None,
         // Not a single action: `mcp` serves the whole catalog over stdio.
