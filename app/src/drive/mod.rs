@@ -8,6 +8,7 @@ pub mod folders;
 pub mod import;
 pub(crate) mod index;
 pub mod items;
+pub mod local_sync;
 pub mod panel;
 pub mod settings;
 pub mod sharing;
