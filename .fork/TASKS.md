@@ -405,14 +405,20 @@ So this is "keep the store, neutralize the sync" — not a rewrite.
       about the network, not the account. Under local-first it becomes a lie
       when the network *does* drop — nothing is read-only then either — so it
       wants suppressing, but that is one condition in T4.2, not its own item.
-- [~] **T4.4** Git-backed sync — scoped, not started. See "T4.4 scope" below.
-      The hard part is not git; git2 is already a dependency and a live file
-      watcher already exists. The hard part is that no lossless file
-      representation of a cloud object exists yet.
-- [ ] **T4.5** Round-trip via the existing import/export paths — **premise is
+- [~] **T4.4** Git-backed sync — the store now has a portable on-disk form and
+      a working tree, and the live store bridges to both. What is missing is a
+      trigger and the write-back. See "T4.4 as built" below.
+  - [x] **T4.4a** Lossless object↔file format — `drive/local_sync/format.rs`
+  - [x] **T4.4b** Working-tree materializer — `drive/local_sync/tree.rs`
+  - [x] **T4.4c** Round trip, replacing T4.5 — three levels of it, below
+  - [ ] **T4.4d** Git operations, and something that invokes an export at all
+  - [ ] **T4.4e** Conflict policy
+  - [ ] **T4.4f** Apply an imported tree back into the store — new, and the
+        remaining hard half; see "What is left, and why it is the hard half"
+- [x] **T4.5** Round-trip via the existing import/export paths — **premise is
       wrong, same as T4.1's.** There is no round trip today: export and import
       do not even cover the same set of types, and neither carries identity.
-      Folded into T4.4c; see below.
+      Replaced by T4.4c, which is done.
 
 Explicitly **not** doing: Proton Drive. No general-purpose public API,
 E2E-encrypted with client-side key management; integration means
@@ -781,6 +787,126 @@ Recommendation: user-driven git (1), working tree as a materialized mirror with
 SQLite authoritative (2), extending Warp Drive rather than the project path
 (3). That keeps the sync engine out of the fork entirely — git is the sync —
 and leaves T4.4a as the only substantial piece of work.
+
+**All three settled as recommended, 2026-08-18.**
+
+## T4.4 as built
+
+Three files under `app/src/drive/local_sync/`, 31 tests, zero new
+dependencies. The layering is deliberate: `format` and `tree` know nothing
+about the app, so their tests are real rather than mock-shaped, and `snapshot`
+is the only file that knows about both sides.
+
+    format.rs     one object <-> one file
+    tree.rs       one drive <-> one directory
+    snapshot.rs   CloudModel  -> the above
+
+### What the format carries, and what it refuses to
+
+A file carries identity, content and content-level metadata. It deliberately
+drops:
+
+| dropped | why |
+| --- | --- |
+| `id`, `shareable_object_id`, `author_id` | per-machine integers, meaningless in another checkout |
+| `is_pending`, `retry_count`, `current_editor` | state of a server conversation this fork does not have |
+| `folders.is_open` | sidebar view state — expanding a folder would dirty the repo |
+| the parent folder id | placement *is* the path, so a move is a rename git can follow |
+| `notebooks.conversation_id` | names a conversation on Warp's server; SQLite has no column for it either |
+
+The `is_open` and `folder_id` exclusions are the two that matter. Both are
+about the property the whole thing rests on: **an object that has not changed
+must produce the bytes it produced last time**, or `git status` is permanently
+dirty and the repository is useless as a sync target. `is_open` would break
+that on every sidebar click. `folder_id` would not break it, but it would be a
+second representation of placement, and two representations of one fact are
+two things that can disagree — which is precisely the shape of the bug T4.6
+caught.
+
+### Two envelopes, one header
+
+    notebook          <slug>-<hash>.md      YAML front matter + markdown body
+    everything else   <slug>-<hash>.json    one JSON object, payload under "data"
+    folder            <dir>/.warp-folder.json
+
+Notebooks are prose and belong in a file a diff can read. Everything else is
+JSON `serde_json` already produced, and is **re-emitted rather than converted
+to YAML**: prettier diffs are not worth a format in which a workflow argument
+named `on` or `no` comes back as a boolean. `serde_json`'s maps are `BTreeMap`,
+so keys sort and the bytes are stable — pinned by a test, because a workspace
+that ever enabled `preserve_order` would silently make byte-stability depend on
+hash iteration order.
+
+The filename hash is not decoration. Without it two objects named "deploy"
+collide, and disambiguating against siblings would make one object's filename
+depend on another's existence — so creating a second "deploy" would rename the
+first and churn the repo. The hash makes the name a pure function of the
+object.
+
+Ten object types that upstream's export cannot represent at all — AI facts,
+MCP servers, execution profiles, cloud preferences, scheduled agents and the
+rest — collapse into a single case, because they share one payload column.
+
+### Reading a payload out of a `dyn CloudObject`
+
+There is no accessor for it, and there cannot be a simple one: `CloudObject` is
+object-safe and non-generic because `CloudModel` stores its objects as trait
+objects, so the model is only reachable by downcasting to the concrete
+`GenericCloudObject<K, M>` — thirteen downcasts and a list to maintain by hand.
+
+`update_object_queue_item` is the way through. It is object-safe, it is a pure
+constructor that delegates to the model, and every object type has exactly one
+`Update*` variant carrying its typed model. One `match` covers all thirteen,
+and a new type upstream fails to compile here rather than silently exporting
+nothing. Nothing is enqueued — the item is constructed, read and dropped.
+
+### Writing into a directory the user owns
+
+The export target is a repository the user keeps their own things in. An
+exporter that treats it as its own is a data-loss bug, not a sync feature, so
+the pruning rule is timid: a file is deleted only after it has been read and
+**recognised as one this exporter wrote**, a directory only once it is empty,
+and dot-directories are never entered. The test for this exports a drive into
+a directory holding a README, a `.git`, and the user's own notes, then exports
+an *empty* drive over it — the most destructive thing a caller can ask for —
+and asserts every one of the user's files is still there.
+
+Trashed objects are exported, with their timestamp. Dropping them would make
+an export quietly destructive: emptying the trash is the user's decision, and
+an export that pre-empted it would take the undo away.
+
+### Three levels of round trip
+
+Deliberately three, because two correct halves that disagree in the middle is
+exactly how T4.6's bug survived a green suite:
+
+1. `format` — one object through one file's bytes and back
+2. `tree` — a drive with nested folders through a directory and back
+3. `snapshot` — the **live store** through the bridge, onto a disk, and back
+
+Only the third spans the seam between the other two.
+
+### What is left, and why it is the hard half
+
+- **T4.4d** — nothing invokes an export yet. Needs a repository path setting
+  and a trigger. The natural trigger is a local-control action, which folds in
+  T1.12 and makes the whole feature drivable and verifiable without clicking;
+  it costs a catalog entry, a handler and permission wiring.
+- **T4.4f** — applying an imported tree *back into* the store. `snapshot` only
+  reads. Writing means creating and updating objects through `CloudModel`'s
+  typed paths, which is thirteen constructors rather than thirteen accessors,
+  and it has to reconcile against what is already there rather than replacing
+  it. This is where the remaining risk lives.
+- **T4.4e** — conflict policy, which is nearly free given decision 1: a
+  conflict is a text conflict in the user's own repo. What is *not* free is
+  what Warp does when it reads a file with conflict markers in it; right now
+  that is "ignored, with a reason", which is defensible but should be a
+  deliberate choice rather than a side effect.
+
+Two things the tests caught that reading would not have: serde_yaml 0.8 opens
+its output with a document-start marker, which is the same three characters as
+the front-matter fence and becomes the *closing* fence on read; and
+`user:local` contains a colon, so YAML quotes it.
 
 ## T5 — Claude in Oz's seat (the spike)
 

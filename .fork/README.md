@@ -660,12 +660,63 @@ store stays in your Personal space after it moves between machines. A
 per-machine identity would file a copied store under "Shared with me". This is
 what makes T4.4 (git-backed sync) possible without rewriting ownership.
 
-### Not yet verified in a running GUI
+### Verified in a running GUI
 
-The above is covered by unit tests but has not been exercised in a real window.
-Worth confirming by hand on the Windows build: that Warp Drive renders its
-contents instead of a perpetual spinner, and that a workflow created with no
-account is still there after a restart.
+Confirmed on the Windows build, 2026-08-18: Warp Drive renders its contents
+rather than a perpetual spinner, a workflow created with no account is still
+there after a restart, it sits under **PERSONAL** with the "Saved locally"
+icon, and its alias survives.
+
+That run was worth doing. It caught a bug every unit test had passed over:
+locally-created objects were coming back under **"Shared with me"**. T4.2
+taught `personal_drive` to *write* the local sentinel as owner but left
+`owner_to_space` *reading* `AuthStateProvider::user_id()` directly. Signed in
+those agree; account-free they do not, because `user_id()` is `None` while the
+sentinel is not. The tests covered the writing side and the reading side, each
+correctly — the defect lived in the *agreement between them*, which is not
+somewhere a unit test naturally looks. Both sides now resolve through
+`personal_drive`.
+
+## Your drive as a git repository
+
+The store has a portable on-disk form: a whole Warp Drive materializes into a
+directory you can keep in your own repository, and reads back with its object
+graph intact — identities, folder hierarchy and all.
+
+    <root>/
+      deploy-1f0e3a2b.json           a workflow
+      field-notes-8c4d1e07.md        a notebook: front matter + markdown
+      scripts-3b7a9f21/              a folder is a directory
+        .warp-folder.json
+        test-5e2c8d40.json
+
+**You drive git, not Warp.** Warp reads and writes the directory; you run
+`git commit`, `git pull`, and resolve conflicts with the tools you already
+have. That is the whole reason this is not a sync engine: a merge over a graph
+of objects with identities is precisely the machinery this fork exists to
+remove, and git already does the job on text.
+
+**SQLite stays authoritative; the tree is a mirror.** One source of truth plus
+a projection needs only a rule for which side wins, and the rule is that
+nothing happens implicitly.
+
+Two properties are worth knowing because they constrain everything else:
+
+- **An unchanged object produces unchanged bytes.** Otherwise `git status` is
+  permanently dirty and the repository is useless as a sync target. This is why
+  the format does not carry `folders.is_open` — expanding a folder in the
+  sidebar would dirty the repo — nor the local SQLite row ids, nor any sync
+  bookkeeping.
+- **An export never touches a file it did not write.** Your README, your notes,
+  your `.git` are safe: a file is deleted only after being read and recognised
+  as one Warp wrote, a directory only once it is empty, and dot-directories are
+  never entered.
+
+Trashed objects are exported, with their timestamp — emptying the trash is your
+decision, and an export that pre-empted it would take the undo away.
+
+Not yet wired: nothing invokes an export, and nothing applies an imported tree
+back into the store. See `.fork/TASKS.md` T4.4d and T4.4f.
 
 ## Driving the Windows build from WSL
 
