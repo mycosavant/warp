@@ -799,6 +799,12 @@ whether a file is ours is decided by parsing each side of the conflict, not by
 spotting a marker in it. And a bare row of `=` signs is a markdown heading
 underline, not a conflict, so notebooks written that way import fine.
 
+Verified on Windows against a real conflict in the mirror: `status` named the
+file and the object, both directions refused, the markers survived the refused
+export, and after resolving, `import` reported `trashed: 0` — the workflow was
+still there. A conflict in the repository's own `README.md` stopped neither
+direction and was reported as ignored, with the reason.
+
 ### Deleting things without an account
 
 Two bugs of the same shape, found by reading the path the import's deletion

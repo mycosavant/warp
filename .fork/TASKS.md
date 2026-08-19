@@ -1113,6 +1113,38 @@ inspect the setting.
 
 13 tests, all confirmed to fail with the detector stubbed out.
 
+#### Verified on Windows, 2026-08-19
+
+Against the same real repository, by hand-writing a genuine merge conflict into
+the exported `simple-workflow-test` file — both sides real, differing in the
+command:
+
+    status     conflicted: ["...\simple-workflow-test-8f89f76f.json:1
+                            (simple-workflow-test)"]
+    import     invalid_request: 1 file(s) under C:\dev\warp-drive-mirror have
+               unresolved merge conflicts
+    export     invalid_request: the same sentence
+
+    (the file still has its markers — the export did not overwrite the merge)
+
+    (resolve to our side)
+    status     no conflicted key
+    import     updated 1, unchanged 1, trashed 0   <- the workflow survived
+    export     written 1, unchanged 1
+
+`trashed: 0` is the line that matters. Before this, the refused import would
+have been a successful import that trashed `simple-workflow-test`.
+
+Then the other half, with a real conflict in the user's own `README.md`:
+
+    status     no conflicted key
+    export     unchanged 2, written 0
+    import     unchanged 2, trashed 0, and README.md in ignored with
+               "unresolved merge conflict at line 1, and neither side is a
+                Warp Drive file"
+
+Their merge, their file, their business — and it stops nothing.
+
 Two things the tests caught that reading would not have: serde_yaml 0.8 opens
 its output with a document-start marker, which is the same three characters as
 the front-matter fence and becomes the *closing* fence on read; and
