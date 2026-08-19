@@ -96,7 +96,7 @@ pub(crate) enum ToolPanelAvailability {
 }
 
 impl ToolPanelView {
-    fn availability(self, app: &AppContext) -> ToolPanelAvailability {
+    pub(crate) fn availability(self, app: &AppContext) -> ToolPanelAvailability {
         match self {
             ToolPanelView::ProjectExplorer | ToolPanelView::GlobalSearch { .. } => {
                 ToolPanelAvailability::Available
@@ -109,10 +109,27 @@ impl ToolPanelView {
                 }
             }
             ToolPanelView::ConversationListView => {
-                if AuthStateProvider::as_ref(app)
-                    .get()
-                    .is_anonymous_or_logged_out()
-                {
+                // Routed through `fork::is_anonymous_for_ui` for the same
+                // reason `is_warp_drive_available` is: this decides what to
+                // *draw*, and under fork policy there is something to draw.
+                //
+                // "Create an account to access your conversation history" was
+                // true when the only agent was Warp's, because the history was
+                // the server's. It stopped being true with T5. Conversations
+                // are written to the local database and read back from it at
+                // startup — `AgentConversationsModel::unfiltered_entries` ends
+                // with a loop over `get_local_conversations_metadata`, which
+                // touches no server at all. The two auth-dependent paths in
+                // that model are the cloud half: pulling ambient tasks and
+                // filling the creator filter. Neither is the list.
+                //
+                // So the panel was refusing to show a history that exists, on
+                // this disk, complete.
+                if crate::fork::is_anonymous_for_ui(
+                    AuthStateProvider::as_ref(app)
+                        .get()
+                        .is_anonymous_or_logged_out(),
+                ) {
                     ToolPanelAvailability::RequiresAccount
                 } else if AISettings::as_ref(app).is_conversation_history_available(app) {
                     ToolPanelAvailability::Available

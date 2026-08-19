@@ -13,8 +13,11 @@ use crate::network::NetworkStatus;
 use crate::server::cloud_objects::update_manager::{InitiatedBy, UpdateManager};
 use crate::server::ids::{ClientId, SyncId};
 use crate::server::sync_queue::{QueueItem, SyncQueue};
+use crate::settings::AISettings;
+use crate::settings::ai::FocusedTerminalInfo;
 use crate::workflows::workflow::Workflow;
 use crate::workflows::{CloudWorkflow, CloudWorkflowModel};
+use crate::workspace::view::left_panel::{ToolPanelAvailability, ToolPanelView};
 use crate::workspaces::team_tester::TeamTesterStatus;
 use crate::workspaces::user_workspaces::UserWorkspaces;
 
@@ -215,6 +218,34 @@ fn the_drive_availability_gate_depends_on_the_anonymous_user_flag() {
         FORCE_ENABLED.contains(&FeatureFlag::SkipFirebaseAnonymousUser),
         "the availability gate above is only reachable while this flag is forced on"
     );
+}
+
+/// The same shape as the drive gate, one panel over, and it outlived its own
+/// justification. "Create an account and enable AI to access your conversation
+/// history" was true while the only agent was Warp's, because the history was
+/// the server's. T5 made conversations local: they are written to the local
+/// database and read back at startup, and
+/// `AgentConversationsModel::unfiltered_entries` ends with a loop over
+/// `get_local_conversations_metadata` that touches no server. The panel was
+/// refusing to show a history that exists, complete, on this disk.
+#[test]
+fn agent_conversations_are_available_without_an_account() {
+    let _guard = FeatureFlag::SkipFirebaseAnonymousUser.override_enabled(true);
+
+    App::test((), |app| async move {
+        app.add_singleton_model(|_| AuthStateProvider::new_logged_out_for_test());
+        app.add_singleton_model(UserWorkspaces::default_mock);
+        app.add_singleton_model(FocusedTerminalInfo::new);
+        app.add_singleton_model(AISettings::new_with_defaults);
+
+        app.read(|ctx| {
+            assert_eq!(
+                ToolPanelView::ConversationListView.availability(ctx),
+                ToolPanelAvailability::Available,
+                "the conversation list is local, so an account-free user has one to read"
+            );
+        });
+    });
 }
 
 /// The writing side and the reading side have to agree on who "I" am.
