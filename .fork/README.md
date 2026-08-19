@@ -749,8 +749,48 @@ points at. So a workflow arrives on another machine without its alias. The
 format already preserves the id the alias refers to, so this is fixable; see
 `.fork/TASKS.md` T4.4g.
 
-Not yet wired: nothing applies an imported tree back into the store, so this is
-currently a one-way mirror. See `.fork/TASKS.md` T4.4f.
+### Reading it back
+
+After a `git pull`:
+
+    warpctrl drive import
+
+**The files win.** An object is overwritten by its file; no merge, no revision
+comparison. Git is the sync, and it is better at three-way merges than anything
+this fork should write.
+
+**An object whose file is gone is moved to the trash, not deleted.** That is
+recoverable from the Warp Drive panel, and it is what makes deletions travel at
+all: a trashed object still exports, carrying its timestamp, so "I deleted
+this" reaches the other machine as content. A file that has vanished entirely
+means the trash was emptied, and a local trash is the conservative echo of that.
+
+Renaming a file is not a delete — identity lives in the header, not the
+filename.
+
+An import from a tree with no Warp Drive objects in it is refused: pointed at
+the wrong directory it would read as "everything was deleted". One consequence
+is worth knowing — on a drive with a single object, deleting it *and* emptying
+the trash leaves an empty tree, so that last deletion cannot propagate.
+
+Verified on Windows: export, edit the file, import → `updated: 1`, and the next
+export reports `unchanged`, so the store and the file agree. Hand-author a file
+→ `created: 1`. Delete it → `trashed: 1`, and the object still exports carrying
+`"trashed": "2026-08-19T03:54:17.595874Z"`.
+
+### Deleting things without an account
+
+Two bugs of the same shape, found by reading the path the import's deletion
+rule depends on.
+
+**Fixed:** `trash_object` began by requiring a server id, and account-free no
+object has one — so the Drive panel's Trash item did nothing at all. Worse if
+it had got past that: the local timestamp is set optimistically and *reverted*
+when the request fails, which without credentials it always does.
+
+**Not fixed:** emptying the trash is a bare server call, so it also does
+nothing. A trashed object currently cannot be permanently removed. See
+`.fork/TASKS.md` T4.7.
 
 ## Driving the Windows build from WSL
 

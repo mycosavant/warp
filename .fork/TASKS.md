@@ -414,10 +414,13 @@ So this is "keep the store, neutralize the sync" — not a rewrite.
   - [x] **T4.4d** A trigger — `drive.sync.status` and `drive.sync.export`,
         verified on the Windows build against a real git repository
   - [ ] **T4.4e** Conflict policy
-  - [ ] **T4.4f** Apply an imported tree back into the store — new, and the
-        remaining hard half; see "What is left, and why it is the hard half"
+  - [x] **T4.4f** Apply an imported tree back into the store — done and
+        verified live; see "T4.4f as built" below
   - [ ] **T4.4g** Workflow aliases do not travel with the drive — new, found by
         the live run; see "The alias gap" below
+- [~] **T4.7** Deleting a Warp Drive object without an account. `trash_object`
+      is fixed; permanently deleting is still broken. See "Two things that were
+      never possible without an account" below.
 - [x] **T4.5** Round-trip via the existing import/export paths — **premise is
       wrong, same as T4.1's.** There is no round trip today: export and import
       do not even cover the same set of types, and neither carries identity.
@@ -942,6 +945,94 @@ That last line is the one worth having. The unit tests assert the same thing
 against a tempdir, but "an export leaves a real git repository clean" is the
 claim the whole format was designed around, and until now it had only ever been
 checked against a directory this code also created.
+
+### T4.4f as built — the mirror is two-way
+
+`drive.sync.import` reads the configured directory into the live store, so a
+`git pull` reaches Warp Drive. Thirteen constructors where `snapshot` was
+thirteen accessors, but only three bodies: the ten JSON types share a payload
+column and therefore share a deserializer.
+
+**An object missing from the tree is trashed, not deleted.** Both alternatives
+are wrong, and the reasoning is the load-bearing part of the design:
+
+- *Ignore it* and deletions never propagate. Delete a workflow on machine A,
+  pull on B, and B's next export puts the file straight back. The two machines
+  resurrect each other's deletions forever.
+- *Delete it* and one import against the wrong directory destroys the drive
+  with no undo.
+
+Trashing composes with the format instead. A trashed object still exports,
+carrying its `trashed` timestamp, so "I deleted this" travels as **content**
+rather than as absence. Absence therefore means something stronger — the trash
+was emptied — and echoing that as a local trash is the recoverable reading of
+it.
+
+The tree wins: no revision comparison, no merge. The moment this starts
+deciding which side is newer it is a sync engine, which decision 1 exists to
+avoid.
+
+`is_open` is preserved from whatever the machine already had rather than
+decided by the import, since it is sidebar state the format deliberately omits.
+
+An empty tree is refused. Pointed at the wrong directory it would read as
+"everything was deleted" and trash the whole drive in one call, and a genuinely
+empty drive is not distinguishable from a wrong path.
+
+**Consequence worth knowing:** with a single-object drive, deleting that object
+and emptying the trash produces an empty tree, which the guard refuses. So the
+very last deletion cannot propagate. The safety trade is deliberate, but it is
+a real edge and not a theoretical one.
+
+#### Verified on Windows, 2026-08-19
+
+Against the same real store, through the action surface:
+
+    export                     unchanged 1
+    (edit the file)
+    import                     updated 1
+    export                     unchanged 1     <- store and file now agree
+
+    (hand-author a new file)
+    import                     created 1
+    (delete that file)
+    import                     trashed 1
+    export                     the object still exports, carrying
+                               "trashed": "2026-08-19T03:54:17.595874Z"
+
+    (move the drive files aside)
+    import                     invalid_request: refusing to import from a tree
+                               with no Warp Drive objects in it
+
+The import also reported the user's own `README.md`, `notes.json` and
+`my-notes/todo.md` as ignored, each with the reason — so files that are not
+ours are visible rather than silently skipped.
+
+One thing the first attempt at this got wrong, worth recording: copying a file
+aside before deleting it produced `unchanged`, not `trashed`. That is correct —
+identity is in the header, so a rename is not a delete — but it meant the test
+proved nothing until it was redone without the copy.
+
+### Two things that were never possible without an account — T4.7
+
+Found while designing T4.4f's deletion rule, by reading the path it depends on.
+
+**Trashing — fixed.** `UpdateManager::trash_object` opens with
+`let Some(server_id) = id.server_id() else { return; }`. Account-free no object
+has a server id, so the Drive panel's Trash item, `WorkflowAction::Trash` and
+the workflow modal's delete all silently did nothing. Worse if it had got past
+that gate: the local `trashed_ts` is set optimistically and **reverted** when
+the request fails, and without credentials it always fails — so there was no
+ordering in which the upstream path worked here. Now routed through
+`fork::drive_deletes_are_local`, and pinned by a test that was confirmed to
+fail with the guard disabled.
+
+**Permanent deletion — still broken.** `UpdateManager::empty_trash` is a bare
+server call: it asks `object_client.empty_trash(owner)` and only removes
+anything locally on success. Account-free that request cannot succeed, so
+emptying the trash does nothing. Same shape as the bug above, not yet fixed,
+and not a T4.4f dependency — but it means a trashed object currently cannot be
+got rid of at all.
 
 ### The alias gap — T4.4g
 
