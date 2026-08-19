@@ -2,12 +2,18 @@ use warpui::{App, SingletonEntity};
 
 use super::*;
 use crate::auth::AuthStateProvider;
-use crate::cloud_object::{CloudObjectEventEntrypoint, ObjectType, Space};
+use crate::cloud_object::model::persistence::CloudModel;
+use crate::cloud_object::{
+    CloudObject, CloudObjectEventEntrypoint, CloudObjectMetadata, CloudObjectPermissions,
+    ObjectType, Space,
+};
 use crate::drive::settings::WarpDriveSettings;
 use crate::network::NetworkStatus;
 use crate::server::cloud_objects::update_manager::{InitiatedBy, UpdateManager};
-use crate::server::ids::ClientId;
+use crate::server::ids::{ClientId, SyncId};
 use crate::server::sync_queue::{QueueItem, SyncQueue};
+use crate::workflows::workflow::Workflow;
+use crate::workflows::{CloudWorkflow, CloudWorkflowModel};
 use crate::workspaces::team_tester::TeamTesterStatus;
 use crate::workspaces::user_workspaces::UserWorkspaces;
 
@@ -286,6 +292,100 @@ fn another_users_object_is_still_shared() {
             );
         });
     });
+}
+
+/// Deleting a workflow you made yourself. It did nothing at all before this.
+///
+/// `UpdateManager::trash_object` opens by requiring a server id, and
+/// account-free no object has one, so the Drive panel's Trash item and
+/// `WorkflowAction::Trash` both returned immediately. Found by reading the
+/// trash path while designing T4.4f, whose deletion rule depends on it.
+#[test]
+fn an_object_created_without_an_account_can_be_trashed() {
+    App::test((), |mut app| async move {
+        app.add_singleton_model(|_| NetworkStatus::new());
+        app.add_singleton_model(TeamTesterStatus::mock);
+        app.add_singleton_model(|_| AuthStateProvider::new_logged_out_for_test());
+        app.add_singleton_model(SyncQueue::mock);
+
+        let workflow = local_workflow();
+        let type_and_id = workflow.cloud_object_type_and_id();
+        let uid = workflow.sync_id().uid();
+        app.add_singleton_model(|_| CloudModel::new(None, vec![workflow], None));
+        let update_manager = app.add_singleton_model(UpdateManager::mock);
+
+        update_manager.update(&mut app, |update_manager, ctx| {
+            update_manager.trash_object(type_and_id, ctx);
+        });
+
+        app.read(|ctx| {
+            let cloud_model = CloudModel::as_ref(ctx);
+            let object = cloud_model
+                .get_by_uid(&uid)
+                .expect("the object is still there");
+
+            assert!(
+                object.metadata().trashed_ts.is_some(),
+                "a locally-created object could not be deleted"
+            );
+            assert!(
+                !object
+                    .metadata()
+                    .pending_changes_statuses
+                    .has_pending_metadata_change,
+                "nothing is pending: there is no server to wait for"
+            );
+        });
+    });
+}
+
+/// The same call with an account still goes to the server, and upstream's
+/// no-server-id guard still applies, because a signed-in user's objects really
+/// do live somewhere else too.
+#[test]
+fn a_signed_in_user_still_trashes_through_the_server() {
+    App::test((), |mut app| async move {
+        app.add_singleton_model(|_| NetworkStatus::new());
+        app.add_singleton_model(TeamTesterStatus::mock);
+        app.add_singleton_model(|_| AuthStateProvider::new_for_test());
+        app.add_singleton_model(SyncQueue::mock);
+
+        let workflow = local_workflow();
+        let type_and_id = workflow.cloud_object_type_and_id();
+        let uid = workflow.sync_id().uid();
+        app.add_singleton_model(|_| CloudModel::new(None, vec![workflow], None));
+        let update_manager = app.add_singleton_model(UpdateManager::mock);
+
+        update_manager.update(&mut app, |update_manager, ctx| {
+            update_manager.trash_object(type_and_id, ctx);
+        });
+
+        app.read(|ctx| {
+            assert!(
+                CloudModel::as_ref(ctx)
+                    .get_by_uid(&uid)
+                    .expect("the object is still there")
+                    .metadata()
+                    .trashed_ts
+                    .is_none(),
+                "fork policy must not change what a signed-in user's delete does"
+            );
+        });
+    });
+}
+
+fn local_workflow() -> Box<dyn CloudObject> {
+    Box::new(CloudWorkflow::new(
+        SyncId::ClientId(ClientId::new()),
+        CloudWorkflowModel::new(Workflow::new("deploy", "echo hi")),
+        CloudObjectMetadata::mock(),
+        CloudObjectPermissions {
+            owner: local_drive_owner().expect("fork policy provides a local drive owner"),
+            permissions_last_updated_ts: None,
+            anyone_with_link: None,
+            guests: Vec::new(),
+        },
+    ))
 }
 
 fn local_object_creation() -> QueueItem {

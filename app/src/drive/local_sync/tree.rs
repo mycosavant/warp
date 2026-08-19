@@ -53,13 +53,6 @@ pub struct ExportSummary {
 }
 
 /// What an import found, including what it refused.
-///
-/// Unused until T4.4f. `import` is complete and is what the round-trip tests
-/// read back through, but nothing *applies* an imported tree to the store yet —
-/// that means creating and updating objects through `CloudModel`'s typed paths
-/// and reconciling against what is already there, which is the remaining half
-/// of T4.4 and deliberately not smuggled in with the export trigger.
-#[allow(dead_code)]
 #[derive(Debug, Default)]
 pub struct ImportSummary {
     pub objects: Vec<PlacedObject>,
@@ -108,7 +101,6 @@ pub fn export(root: &Path, objects: &[PlacedObject]) -> Result<ExportSummary> {
 }
 
 /// Reads a drive back out of `root`.
-#[allow(dead_code)]
 pub fn import(root: &Path) -> Result<ImportSummary> {
     let mut summary = ImportSummary::default();
     if !root.exists() {

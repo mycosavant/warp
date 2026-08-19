@@ -21,6 +21,7 @@
 //!
 //! See `.fork/TASKS.md` T4.4 for the full scope.
 
+pub mod apply;
 pub mod format;
 pub mod snapshot;
 pub mod tree;

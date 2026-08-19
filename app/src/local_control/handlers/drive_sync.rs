@@ -1,5 +1,5 @@
-//! `drive.sync.status` and `drive.sync.export` — the trigger for the git-backed
-//! Warp Drive mirror.
+//! `drive.sync.status`, `drive.sync.export` and `drive.sync.import` — the
+//! trigger for the git-backed Warp Drive mirror.
 //!
 //! A local-control action rather than a button, for three reasons. It makes the
 //! feature drivable by an agent, which is the fork's whole orchestration story;
@@ -22,12 +22,15 @@
 
 use std::path::{Path, PathBuf};
 
-use ::local_control::protocol::{DriveSyncExportResult, DriveSyncStatusResult};
+use ::local_control::protocol::{
+    DriveSyncExportResult, DriveSyncImportResult, DriveSyncStatusResult,
+};
 use ::local_control::{ControlError, ErrorCode};
 use serde::Serialize;
 use settings::Setting as _;
 use warpui::{ModelContext, SingletonEntity};
 
+use crate::drive::local_sync::apply::apply;
 use crate::drive::local_sync::snapshot::{SnapshotSummary, snapshot};
 use crate::drive::local_sync::tree;
 use crate::local_control::LocalControlBridge;
@@ -94,6 +97,72 @@ pub(crate) fn export(
     })
 }
 
+/// Reads the configured directory back into the store.
+///
+/// The direction that changes the user's data rather than a directory, so it
+/// reports what it did in the same shape the export does. The files win, and an
+/// object whose file is gone is trashed rather than deleted — see
+/// `drive::local_sync::apply` for why absence means what it means.
+pub(crate) fn import(
+    ctx: &mut ModelContext<LocalControlBridge>,
+) -> Result<serde_json::Value, ControlError> {
+    let path = usable_path(ctx)?;
+    if !path.is_dir() {
+        return Err(ControlError::with_details(
+            ErrorCode::InvalidRequest,
+            "there is nothing at warp_drive.local_sync.path to import",
+            format!("{} does not exist", path.display()),
+        ));
+    }
+
+    let found = tree::import(&path).map_err(|err| {
+        ControlError::with_details(
+            ErrorCode::Internal,
+            format!("drive.sync.import failed reading {}", path.display()),
+            format!("{err:#}"),
+        )
+    })?;
+
+    let summary = apply(&found.objects, ctx).map_err(|err| {
+        // The empty-tree refusal lands here, and it is a request problem rather
+        // than an internal one: the user pointed this somewhere with nothing in
+        // it, and applying that would have trashed the whole drive.
+        ControlError::with_details(
+            ErrorCode::InvalidRequest,
+            format!("drive.sync.import refused {}", path.display()),
+            format!("{err:#}"),
+        )
+    })?;
+
+    log::info!(
+        "Warp Drive mirror: imported {} created, {} updated, {} unchanged, {} trashed from {}",
+        summary.created,
+        summary.updated,
+        summary.unchanged,
+        summary.trashed,
+        path.display()
+    );
+
+    to_control_data(DriveSyncImportResult {
+        path: path.display().to_string(),
+        created: summary.created,
+        updated: summary.updated,
+        unchanged: summary.unchanged,
+        trashed: summary.trashed,
+        ignored: found
+            .ignored
+            .into_iter()
+            .map(|(path, reason)| format!("{}: {reason}", path.display()))
+            .collect(),
+        duplicates: found
+            .duplicates
+            .into_iter()
+            .map(|(path, id)| format!("{}: {id}", path.display()))
+            .collect(),
+        unreadable: summary.unreadable,
+    })
+}
+
 fn configured_path(ctx: &mut ModelContext<LocalControlBridge>) -> Option<PathBuf> {
     let path = LocalDriveSyncSettings::as_ref(ctx)
         .local_drive_sync_path
@@ -115,7 +184,7 @@ fn usable_path(ctx: &mut ModelContext<LocalControlBridge>) -> Result<PathBuf, Co
     if !crate::fork::local_drive_enabled() {
         return Err(ControlError::new(
             ErrorCode::UnsupportedAction,
-            "drive.sync.export needs fork policy, which WARP_FORK_POLICY has disabled",
+            "the drive mirror needs fork policy, which WARP_FORK_POLICY has disabled",
         ));
     }
 

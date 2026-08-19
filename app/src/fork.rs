@@ -203,6 +203,29 @@ pub fn local_drive_is_authoritative(app: &AppContext) -> bool {
         && !AuthStateProvider::as_ref(app).get().is_logged_in()
 }
 
+/// Whether trashing a Warp Drive object should happen without the server.
+///
+/// Upstream's `UpdateManager::trash_object` opens with
+/// `let Some(server_id) = id.server_id() else { return; }` — an object the
+/// server has never heard of cannot be trashed, because trashing *is* a server
+/// mutation. Account-free, no object ever has a server id, so the Drive
+/// panel's Trash menu item, `WorkflowAction::Trash` and the workflow modal's
+/// delete all silently do nothing.
+///
+/// Worse if it got past that gate: the request is made optimistically and the
+/// local `trashed_ts` is *reverted* when it fails, and without credentials it
+/// always fails. So there is no ordering in which upstream's path works here.
+///
+/// Under this policy the trash is what it already claims to be locally — a
+/// timestamp on the object plus a row update — and the server round trip is
+/// skipped rather than attempted and rolled back.
+///
+/// Found while designing T4.4f, whose "an object missing from the tree is
+/// trashed rather than deleted" rule depends on trashing working at all.
+pub fn drive_deletes_are_local(app: &AppContext) -> bool {
+    local_drive_is_authoritative(app)
+}
+
 /// Whether an object belongs to the account-free local drive.
 ///
 /// Used to keep locally-owned objects out of the sync queue if an account is

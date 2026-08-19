@@ -66,6 +66,7 @@ pub enum ActionResultSpec {
     CapabilityList,
     CapabilityMetadata,
     DriveSyncExport,
+    DriveSyncImport,
     DriveSyncStatus,
     InstanceList,
     InstanceMetadata,
@@ -306,5 +307,6 @@ define_action_catalog! {
     drive {
         DriveSyncStatus => { name: "drive.sync.status", status: Implemented, target: Drive, params: None, result: DriveSyncStatus },
         DriveSyncExport => { name: "drive.sync.export", status: Implemented, target: Drive, params: None, result: DriveSyncExport },
+        DriveSyncImport => { name: "drive.sync.import", status: Implemented, target: Drive, params: None, result: DriveSyncImport },
     }
 }

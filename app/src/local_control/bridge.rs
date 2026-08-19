@@ -80,6 +80,7 @@ impl LocalControlBridge {
             ActionKind::SurfaceList => metadata::surface_list(ctx),
             ActionKind::DriveSyncStatus => drive_sync::status(ctx),
             ActionKind::DriveSyncExport => drive_sync::export(ctx),
+            ActionKind::DriveSyncImport => drive_sync::import(ctx),
             ActionKind::WindowList => metadata::window_list(&request.target, ctx),
             ActionKind::WindowInspect => metadata::window_inspect(&request.target, ctx),
             ActionKind::TabList => metadata::tab_list(&request.target, ctx),

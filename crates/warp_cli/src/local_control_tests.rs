@@ -593,6 +593,10 @@ fn retained_action_examples() -> Vec<(ActionKind, Vec<&'static str>)> {
             ActionKind::DriveSyncExport,
             vec!["warpctrl", "drive", "export"],
         ),
+        (
+            ActionKind::DriveSyncImport,
+            vec!["warpctrl", "drive", "import"],
+        ),
     ]
 }
 
@@ -750,6 +754,7 @@ fn parsed_action_kind(command: &ControlCommand) -> Option<ActionKind> {
         ControlCommand::Drive(command) => match command {
             DriveCommand::Status(_) => Some(ActionKind::DriveSyncStatus),
             DriveCommand::Export(_) => Some(ActionKind::DriveSyncExport),
+            DriveCommand::Import(_) => Some(ActionKind::DriveSyncImport),
         },
         ControlCommand::Completions { .. } => None,
         // Not a single action: `mcp` serves the whole catalog over stdio.

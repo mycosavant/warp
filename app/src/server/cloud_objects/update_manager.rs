@@ -277,7 +277,10 @@ impl UpdateManager {
         &self.spawned_futures
     }
 
-    fn save_to_db(&self, events: impl IntoIterator<Item = ModelEvent>) {
+    // `pub(crate)` for the fork: `drive::local_sync::apply` writes imported
+    // objects into the store and has to land them in SQLite the same way every
+    // other mutation here does, or the import is gone at the next restart.
+    pub(crate) fn save_to_db(&self, events: impl IntoIterator<Item = ModelEvent>) {
         let model_event_sender = self.model_event_sender.clone();
         if let Some(model_event_sender) = &model_event_sender {
             for event in events {
@@ -4218,6 +4221,31 @@ impl UpdateManager {
         }
     }
 
+    /// Trashes an object with no server involved.
+    ///
+    /// The whole of trashing that is not a server round trip: a `trashed_ts` on
+    /// the object and the same row update SQLite would get afterwards. The
+    /// pending-metadata flag that `mark_object_trashed_and_return_timestamps`
+    /// sets is cleared again, because it means "waiting on the server" and
+    /// nothing is.
+    fn trash_object_locally(&mut self, id: CloudObjectTypeAndId, ctx: &mut ModelContext<Self>) {
+        let uid = id.uid();
+        self.mark_object_trashed_and_return_timestamps(&uid, ctx);
+
+        CloudModel::handle(ctx).update(ctx, |cloud_model, _| {
+            let Some(object) = cloud_model.get_mut_by_uid(&uid) else {
+                return;
+            };
+            object
+                .metadata_mut()
+                .pending_changes_statuses
+                .has_pending_metadata_change = false;
+
+            let hashed_sqlite_id = object.hashed_sqlite_id();
+            self.save_in_memory_object_metadata_to_sqlite(cloud_model, &uid, &hashed_sqlite_id);
+        });
+    }
+
     /// Optimistically marks the object as trashed, updates the metadata sync status to pending, and returns both
     /// the metadata timestamp and the newly-set trashed timestamp. We need to check the metadata timestamp
     /// in the case where we need to revert this (i.e. if there was a rtc message in the meantime, we shouldn't
@@ -4256,6 +4284,14 @@ impl UpdateManager {
     }
 
     pub fn trash_object(&mut self, id: CloudObjectTypeAndId, ctx: &mut ModelContext<Self>) {
+        // Fork: with no account there is no server id to trash against, and the
+        // early return below would make every delete a no-op. See
+        // `fork::drive_deletes_are_local`.
+        if crate::fork::drive_deletes_are_local(ctx) {
+            self.trash_object_locally(id, ctx);
+            return;
+        }
+
         // // If the object isn't known to the server yet, we can't trash it.
         let Some(server_id) = id.server_id() else {
             return;

@@ -719,6 +719,12 @@ pub(super) fn run_drive_command(
             EmptyParams {},
             output_format,
         ),
+        DriveCommand::Import(args) => run_action_with_params(
+            args,
+            ActionKind::DriveSyncImport,
+            EmptyParams {},
+            output_format,
+        ),
     }
 }
 

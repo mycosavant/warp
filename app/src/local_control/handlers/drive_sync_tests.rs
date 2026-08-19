@@ -5,10 +5,14 @@ use super::*;
 use crate::auth::AuthStateProvider;
 use crate::cloud_object::model::persistence::CloudModel;
 use crate::cloud_object::{CloudObject, CloudObjectMetadata, CloudObjectPermissions};
+use crate::network::NetworkStatus;
+use crate::server::cloud_objects::update_manager::UpdateManager;
 use crate::server::ids::{ClientId, SyncId};
+use crate::server::sync_queue::SyncQueue;
 use crate::settings::LocalDriveSyncPath;
 use crate::workflows::workflow::Workflow;
 use crate::workflows::{CloudWorkflow, CloudWorkflowModel};
+use crate::workspaces::team_tester::TeamTesterStatus;
 use crate::workspaces::user_workspaces::UserWorkspaces;
 
 /// The trigger, end to end: a store, an action, files on a disk.
@@ -143,9 +147,15 @@ fn drive_app(
         .map(|path| path.display().to_string())
         .unwrap_or_default();
 
+    app.add_singleton_model(|_| NetworkStatus::new());
+    app.add_singleton_model(TeamTesterStatus::mock);
     app.add_singleton_model(|_| AuthStateProvider::new_logged_out_for_test());
     app.add_singleton_model(UserWorkspaces::default_mock);
+    app.add_singleton_model(SyncQueue::mock);
     app.add_singleton_model(|_| CloudModel::new(None, objects, None));
+    // `apply` persists through the update manager and routes deletions through
+    // its trash path, so an import needs it registered where an export does not.
+    app.add_singleton_model(UpdateManager::mock);
     app.add_singleton_model(|_| LocalDriveSyncSettings {
         local_drive_sync_path: LocalDriveSyncPath::new(Some(configured)),
     });
@@ -205,4 +215,68 @@ fn the_mirror_path_cannot_be_repointed_through_local_control() {
         "{key} became settable through local control, which lets a caller \
          choose the directory drive.sync.export prunes"
     );
+}
+
+/// The whole loop through the action surface: export, edit the file the way a
+/// `git pull` would have, import, and see the store follow.
+#[test]
+fn an_edit_on_disk_reaches_the_store_through_the_actions() {
+    App::test((), |mut app| async move {
+        let root = TempDir::new().unwrap();
+        let bridge = drive_app(&mut app, Some(root.path()), vec![workflow("deploy")]);
+
+        bridge.update(&mut app, |_, ctx| export(ctx).unwrap());
+
+        let file = std::fs::read_dir(root.path())
+            .unwrap()
+            .next()
+            .unwrap()
+            .unwrap()
+            .path();
+        let edited = std::fs::read_to_string(&file)
+            .unwrap()
+            .replace("echo hi", "echo edited");
+        std::fs::write(&file, edited).unwrap();
+
+        let result = bridge.update(&mut app, |_, ctx| {
+            import(ctx).expect("drive.sync.import succeeds")
+        });
+
+        assert_eq!(result["updated"], 1);
+        assert_eq!(result["created"], 0);
+        assert_eq!(result["trashed"], 0);
+    });
+}
+
+/// An import that would trash the drive because it was pointed somewhere with
+/// nothing in it. Reported as a bad request rather than an internal error,
+/// because it is the caller's path that is wrong.
+#[test]
+fn an_import_from_an_empty_directory_is_refused() {
+    App::test((), |mut app| async move {
+        let root = TempDir::new().unwrap();
+        let bridge = drive_app(&mut app, Some(root.path()), vec![workflow("deploy")]);
+
+        let err = bridge.update(&mut app, |_, ctx| {
+            import(ctx).expect_err("an empty tree must be refused")
+        });
+
+        assert_eq!(err.code, ErrorCode::InvalidRequest);
+    });
+}
+
+/// A directory that is not there at all, told apart from one that is empty:
+/// the first is a mistyped setting, the second is a drive someone emptied.
+#[test]
+fn an_import_from_a_missing_directory_says_so() {
+    App::test((), |mut app| async move {
+        let root = TempDir::new().unwrap();
+        let missing = root.path().join("never-created");
+        let bridge = drive_app(&mut app, Some(&missing), vec![workflow("deploy")]);
+
+        let err = bridge.update(&mut app, |_, ctx| import(ctx).unwrap_err());
+
+        assert_eq!(err.code, ErrorCode::InvalidRequest);
+        assert!(err.message.contains("nothing at"), "{}", err.message);
+    });
 }

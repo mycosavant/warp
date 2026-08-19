@@ -195,6 +195,14 @@ no longer correspond to an object are deleted, and directories are removed once 
 empty. Files Warp did not write are never touched. The destination comes from \
 settings and cannot be passed in."
             .to_string(),
+        "drive.sync.import" => "Read the directory set by \
+`warp_drive.local_sync.path` back into Warp Drive, after the user has pulled. \
+The FILES WIN: an object is overwritten by its file, and an object whose file \
+is gone is moved to the trash — recoverable from the Warp Drive panel, but a \
+visible change to the user's data. Refuses a tree with no Warp Drive objects \
+in it, since that would read as \"everything was deleted\". Run \
+warp_drive_sync_status first."
+            .to_string(),
         other => format!("Warp local control action `{other}`."),
     };
     description.push_str(&format!(

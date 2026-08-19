@@ -598,6 +598,12 @@ pub enum DriveCommand {
 
     /// Write the drive into the configured directory. Warp does not run git.
     Export(TargetArgs),
+
+    /// Read the configured directory back into the drive, after your `git pull`.
+    ///
+    /// The files win. An object the tree no longer has is moved to the trash,
+    /// not deleted, so a mistake here is recoverable from the Warp Drive panel.
+    Import(TargetArgs),
 }
 
 /// Exact selectors for a target within the selected Warp instance.

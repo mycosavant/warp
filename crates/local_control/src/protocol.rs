@@ -337,6 +337,28 @@ pub struct DriveSyncExportResult {
     pub unreadable: Vec<String>,
 }
 
+/// What `drive.sync.import` did to the store.
+///
+/// `trashed` counts objects the store had and the tree did not. They are
+/// trashed rather than deleted, so the number is recoverable rather than final.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DriveSyncImportResult {
+    pub path: String,
+    pub created: usize,
+    pub updated: usize,
+    pub unchanged: usize,
+    pub trashed: usize,
+    /// Files that are not Warp Drive objects — a README, a note — with the
+    /// reason each was left alone.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub ignored: Vec<String>,
+    /// One identity found in more than one file. The first by path won.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub duplicates: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub unreadable: Vec<String>,
+}
+
 /// Typed success payloads for catalog actions that need stable structured data.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
