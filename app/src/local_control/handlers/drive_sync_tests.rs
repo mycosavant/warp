@@ -138,6 +138,102 @@ fn an_export_refuses_a_path_that_is_not_a_directory() {
     });
 }
 
+/// T4.4e, and the reason it is a refusal rather than a skip.
+///
+/// A conflicted file does not parse, so the object it describes is absent from
+/// the tree — and absence is precisely how this import is told an object was
+/// deleted. Skipping the file would trash the one object the user is in the
+/// middle of merging. So the import stops, and the store is untouched.
+#[test]
+fn an_import_refuses_a_tree_with_an_unresolved_conflict() {
+    App::test((), |mut app| async move {
+        let root = TempDir::new().unwrap();
+        let bridge = drive_app(&mut app, Some(root.path()), vec![workflow("deploy")]);
+        bridge.update(&mut app, |_, ctx| export(ctx).unwrap());
+        conflict_the_only_file(root.path());
+
+        let err = bridge.update(&mut app, |_, ctx| {
+            import(ctx).expect_err("a half-merged tree must be refused")
+        });
+
+        assert_eq!(err.code, ErrorCode::InvalidRequest);
+        assert!(err.message.contains("merge conflicts"), "{}", err.message);
+        assert!(
+            err.details.unwrap_or_default().contains("(deploy)"),
+            "the refusal must name the object, not just the file"
+        );
+        app.read(|ctx| {
+            let (objects, _) = snapshot(ctx);
+            assert_eq!(objects.len(), 1, "the object is still there");
+            assert!(
+                objects[0].object.trashed_ts.is_none(),
+                "a conflicted file was read as a deletion"
+            );
+        });
+    });
+}
+
+/// The same condition in the other direction, and it must not read as an
+/// internal error: nothing is broken, the user is simply mid-merge.
+#[test]
+fn an_export_refuses_to_overwrite_a_half_merged_file() {
+    App::test((), |mut app| async move {
+        let root = TempDir::new().unwrap();
+        let bridge = drive_app(&mut app, Some(root.path()), vec![workflow("deploy")]);
+        bridge.update(&mut app, |_, ctx| export(ctx).unwrap());
+        conflict_the_only_file(root.path());
+
+        let err = bridge.update(&mut app, |_, ctx| {
+            export(ctx).expect_err("a half-merged file must not be overwritten")
+        });
+
+        assert_eq!(err.code, ErrorCode::InvalidRequest);
+        assert!(err.message.contains("merge conflicts"), "{}", err.message);
+    });
+}
+
+/// An unresolved merge is the only condition that stops both directions, so the
+/// action whose job is answering "why will this not run" has to see it.
+#[test]
+fn status_names_the_files_with_unresolved_conflicts() {
+    App::test((), |mut app| async move {
+        let root = TempDir::new().unwrap();
+        let bridge = drive_app(&mut app, Some(root.path()), vec![workflow("deploy")]);
+        bridge.update(&mut app, |_, ctx| export(ctx).unwrap());
+
+        let clean = bridge.update(&mut app, |_, ctx| status(ctx).unwrap());
+        conflict_the_only_file(root.path());
+        let conflicted = bridge.update(&mut app, |_, ctx| status(ctx).unwrap());
+
+        assert!(clean.get("conflicted").is_none(), "{clean}");
+        assert_eq!(conflicted["conflicted"].as_array().unwrap().len(), 1);
+        assert!(
+            conflicted["conflicted"][0]
+                .as_str()
+                .unwrap()
+                .contains("(deploy)"),
+            "{conflicted}"
+        );
+    });
+}
+
+/// Leaves the exported file half-merged, the way `git pull` would.
+fn conflict_the_only_file(root: &std::path::Path) {
+    let path = std::fs::read_dir(root)
+        .unwrap()
+        .next()
+        .unwrap()
+        .unwrap()
+        .path();
+    let ours = std::fs::read_to_string(&path).unwrap();
+    let theirs = ours.replace("echo hi", "echo elsewhere");
+    std::fs::write(
+        &path,
+        format!("<<<<<<< HEAD\n{ours}=======\n{theirs}>>>>>>> theirs\n"),
+    )
+    .unwrap();
+}
+
 fn drive_app(
     app: &mut App,
     path: Option<&std::path::Path>,

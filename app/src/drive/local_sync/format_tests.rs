@@ -294,6 +294,112 @@ fn a_file_from_a_newer_format_is_refused() {
     assert!(format!("{err:#}").contains("newer"), "{err:#}");
 }
 
+/// A real `git merge` result, split back into the two files that produced it.
+///
+/// The point of reconstructing both sides is not to pick one. It is that a
+/// caller can ask "is this one of mine?" of a file that no parser will touch,
+/// and get a truthful answer about a workflow rather than a shrug.
+#[test]
+fn a_conflicted_file_yields_both_sides() {
+    let ours = workflow_fixture().to_file_contents().unwrap();
+    let theirs = ours.replace("echo hello world", "echo goodbye");
+    let merged = merge_markers(&ours, &theirs, None);
+
+    let conflict = conflict(&merged).expect("this is a merge conflict");
+
+    assert_eq!(conflict.ours, ours);
+    assert_eq!(conflict.theirs, theirs);
+    assert_eq!(
+        PortableObject::from_file_contents(&conflict.ours).unwrap(),
+        workflow_fixture()
+    );
+}
+
+/// `merge.conflictStyle = diff3` adds a third section. The common ancestor is
+/// neither side, so it must not leak into either reconstruction.
+#[test]
+fn the_diff3_common_ancestor_is_not_mistaken_for_a_side() {
+    let ours = workflow_fixture().to_file_contents().unwrap();
+    let theirs = ours.replace("echo hello world", "echo goodbye");
+    let base = ours.replace("echo hello world", "echo original");
+    let merged = merge_markers(&ours, &theirs, Some(&base));
+
+    let conflict = conflict(&merged).expect("diff3 output is still a conflict");
+
+    assert_eq!(conflict.ours, ours);
+    assert_eq!(conflict.theirs, theirs);
+    assert!(!conflict.ours.contains("echo original"));
+    assert!(!conflict.theirs.contains("echo original"));
+}
+
+/// The false positive that would matter most, because notebooks are markdown
+/// and this is how markdown underlines a heading.
+///
+/// A row of equals signs is a setext `<h1>`. Reading one as a conflict
+/// separator would make every notebook written in that style unimportable.
+#[test]
+fn a_setext_heading_is_not_a_conflict() {
+    let notebook = notebook_fixture("Release notes\n=============\n\nShipped it.\n");
+
+    let contents = notebook.to_file_contents().unwrap();
+
+    assert_eq!(conflict(&contents), None);
+    assert_eq!(
+        PortableObject::from_file_contents(&contents).unwrap(),
+        notebook
+    );
+}
+
+/// Prose about merge conflicts is prose, not a merge conflict. An unclosed
+/// marker is somebody writing about the thing rather than being in it.
+#[test]
+fn an_unclosed_marker_is_not_a_conflict() {
+    let cases = [
+        "Git writes <<<<<<< HEAD when it cannot merge.\n",
+        "<<<<<<< HEAD\nhalf a region and no end to it\n=======\n",
+        ">>>>>>> theirs\nan end with no beginning\n",
+        "=======\n",
+        "<<<<<< six is not enough\n=======\n>>>>>> six\n",
+    ];
+
+    for contents in cases {
+        assert_eq!(conflict(contents), None, "{contents:?}");
+    }
+}
+
+/// The line number is the whole value of the report: it is what turns "one of
+/// your files is broken" into somewhere to put the cursor.
+#[test]
+fn the_reported_line_is_where_the_conflict_opens() {
+    let contents = "one\ntwo\n<<<<<<< HEAD\nmine\n=======\ntheirs\n>>>>>>> branch\n";
+
+    let conflict = conflict(contents).unwrap();
+
+    assert_eq!(conflict.line, 3);
+    assert_eq!(conflict.ours, "one\ntwo\nmine\n");
+    assert_eq!(conflict.theirs, "one\ntwo\ntheirs\n");
+}
+
+/// Git labels the outer markers and sizes them by `conflict-marker-size`, so
+/// the detector matches a run and a label rather than a literal seven.
+#[test]
+fn longer_markers_and_labels_are_still_markers() {
+    let contents = "<<<<<<<<<<< ours\nmine\n===========\ntheirs\n>>>>>>>>>>> theirs\n";
+
+    let conflict = conflict(contents).expect("a widened marker is still a marker");
+
+    assert_eq!(conflict.ours, "mine\n");
+    assert_eq!(conflict.theirs, "theirs\n");
+}
+
+/// Renders what git leaves in the working tree when two edits collide.
+fn merge_markers(ours: &str, theirs: &str, base: Option<&str>) -> String {
+    let base = base
+        .map(|base| format!("||||||| merged common ancestors\n{base}"))
+        .unwrap_or_default();
+    format!("<<<<<<< HEAD\n{ours}{base}=======\n{theirs}>>>>>>> theirs\n")
+}
+
 fn workflow_fixture() -> PortableObject {
     PortableObject {
         id: SyncId::ClientId(ClientId::from_hash(TEST_CLIENT_UID).unwrap()),

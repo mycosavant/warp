@@ -19,6 +19,15 @@
 //! or a filesystem root is refused before anything is read or written — a
 //! mistyped `/` would otherwise walk the entire filesystem reading every file
 //! to decide whether it was one of ours.
+//!
+//! # The third refusal
+//!
+//! Both directions also stop dead while any mirrored file still has git
+//! conflict markers in it, and `status` reports those files so this is
+//! diagnosable rather than mysterious. The reasoning is in
+//! `drive::local_sync`'s module docs; the short version is that a conflicted
+//! file does not parse, an object whose file does not parse is absent, and
+//! absence is how an import is told to trash something.
 
 use std::path::{Path, PathBuf};
 
@@ -50,6 +59,12 @@ pub(crate) fn status(
         objects: objects.len(),
         not_personal: summary.not_personal,
         unreadable: summary.unreadable,
+        // Reading the tree is the one thing this action does not have to do to
+        // answer its literal question, and the reason it does it anyway is the
+        // sentence above: an unresolved merge is the only condition that stops
+        // *both* directions, so a status that could not see it would send the
+        // user looking at the setting instead of at their working tree.
+        conflicted: conflicts(path.as_deref()),
     })
 }
 
@@ -70,11 +85,15 @@ pub(crate) fn export(
     // also synchronous on purpose, because the caller is asking "is my drive on
     // disk now" and a result that arrives before the work does is a lie.
     let summary = tree::export(&path, &objects).map_err(|err| {
-        ControlError::with_details(
-            ErrorCode::Internal,
-            format!("drive.sync.export failed writing {}", path.display()),
-            format!("{err:#}"),
-        )
+        // A half-merged file in the way is the caller's tree to fix, and saying
+        // "internal error" about it would send them to the wrong place.
+        conflict_refusal(&err, &path).unwrap_or_else(|| {
+            ControlError::with_details(
+                ErrorCode::Internal,
+                format!("drive.sync.export failed writing {}", path.display()),
+                format!("{err:#}"),
+            )
+        })
     })?;
 
     log::info!(
@@ -123,6 +142,18 @@ pub(crate) fn import(
         )
     })?;
 
+    // Refused whole, not file by file. Skipping the conflicted files would look
+    // tidier and would be the most destructive thing this action can do: a file
+    // that fails to parse is absent from the tree, and absence is how the store
+    // is told an object was deleted. The objects mid-merge — the ones the user
+    // is actively working on — would be exactly the ones trashed.
+    //
+    // Nothing is auto-resolved either. `--ours` and `--theirs` are git's words
+    // and belong to the user; guessing here is what decision 1 ruled out.
+    if !found.conflicted.is_empty() {
+        return Err(unresolved(&found.conflicted, &path));
+    }
+
     let summary = apply(&found.objects, ctx).map_err(|err| {
         // The empty-tree refusal lands here, and it is a request problem rather
         // than an internal one: the user pointed this somewhere with nothing in
@@ -161,6 +192,43 @@ pub(crate) fn import(
             .collect(),
         unreadable: summary.unreadable,
     })
+}
+
+/// Conflicted files under `path`, or nothing when there is no directory to look
+/// in. A tree that cannot be read is not reported as conflicted — that is a
+/// different failure, and `export` will name it properly.
+fn conflicts(path: Option<&Path>) -> Vec<String> {
+    path.filter(|path| path.is_dir())
+        .and_then(|path| tree::import(path).ok())
+        .map(|found| describe(&found.conflicted))
+        .unwrap_or_default()
+}
+
+fn describe(conflicted: &[tree::Conflicted]) -> Vec<String> {
+    conflicted
+        .iter()
+        .map(|file| format!("{}:{} ({})", file.path.display(), file.line, file.name))
+        .collect()
+}
+
+/// The same refusal in both directions, named the same way, so a caller that
+/// hits it exporting recognises it when it happens importing.
+fn unresolved(conflicted: &[tree::Conflicted], path: &Path) -> ControlError {
+    ControlError::with_details(
+        ErrorCode::InvalidRequest,
+        format!(
+            "{} file(s) under {} have unresolved merge conflicts",
+            conflicted.len(),
+            path.display()
+        ),
+        describe(conflicted).join("; "),
+    )
+}
+
+/// Recognises an export stopped by a merge, rather than by a disk.
+fn conflict_refusal(err: &anyhow::Error, path: &Path) -> Option<ControlError> {
+    let conflicts = err.downcast_ref::<tree::ConflictsInTheWay>()?;
+    Some(unresolved(&conflicts.0, path))
 }
 
 fn configured_path(ctx: &mut ModelContext<LocalControlBridge>) -> Option<PathBuf> {

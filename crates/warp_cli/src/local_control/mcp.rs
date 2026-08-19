@@ -185,7 +185,8 @@ cannot accept tab or pane mutations yet."
 to discover keys and their current values first."
             .to_string(),
         "drive.sync.status" => "Report where Warp Drive would be mirrored on disk \
-and how many objects would go there, WITHOUT writing anything. Run this before \
+and how many objects would go there, WITHOUT writing anything, plus any \
+mirrored files left half-merged by git. Run this before \
 warp_drive_sync_export to check the destination."
             .to_string(),
         "drive.sync.export" => "Write the whole of Warp Drive into the directory \
@@ -193,15 +194,18 @@ set by `warp_drive.local_sync.path`, for the user to keep under git. Warp never 
 runs git itself. This PRUNES: files in that directory that Warp wrote and that \
 no longer correspond to an object are deleted, and directories are removed once \
 empty. Files Warp did not write are never touched. The destination comes from \
-settings and cannot be passed in."
+settings and cannot be passed in. Refuses, writing nothing at all, if a file it \
+would overwrite still has git conflict markers in it."
             .to_string(),
         "drive.sync.import" => "Read the directory set by \
 `warp_drive.local_sync.path` back into Warp Drive, after the user has pulled. \
 The FILES WIN: an object is overwritten by its file, and an object whose file \
 is gone is moved to the trash — recoverable from the Warp Drive panel, but a \
 visible change to the user's data. Refuses a tree with no Warp Drive objects \
-in it, since that would read as \"everything was deleted\". Run \
-warp_drive_sync_status first."
+in it, since that would read as \"everything was deleted\". Also refuses while \
+any mirrored file still has git conflict markers in it: DO NOT resolve those \
+yourself, report them to the user, because the two versions are theirs to \
+choose between. Run warp_drive_sync_status first."
             .to_string(),
         other => format!("Warp local control action `{other}`."),
     };

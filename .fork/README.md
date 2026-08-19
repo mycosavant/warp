@@ -778,6 +778,27 @@ export reports `unchanged`, so the store and the file agree. Hand-author a file
 → `created: 1`. Delete it → `trashed: 1`, and the object still exports carrying
 `"trashed": "2026-08-19T03:54:17.595874Z"`.
 
+### When a pull leaves a conflict
+
+**Both directions refuse while any mirrored file still has conflict markers in
+it, and neither one ever picks a side.** Resolve it in git — it is your merge,
+and the two versions are yours to choose between — then run the command again.
+
+    warpctrl drive status    # lists them as path:line (object name)
+
+Import refuses rather than skipping the conflicted files, and that is the whole
+point of the rule. A file with markers in it does not parse, an object whose
+file does not parse is absent from the tree, and absence is how an import is
+told an object was deleted — so skipping would trash the objects you are in the
+middle of merging. Export refuses rather than overwriting them, because a
+half-merged file is the only copy of that merge in front of you. Nothing is
+written before the refusal: it reads every file it would write first.
+
+Only *Warp's* files count. Your own conflicted README does not stop anything —
+whether a file is ours is decided by parsing each side of the conflict, not by
+spotting a marker in it. And a bare row of `=` signs is a markdown heading
+underline, not a conflict, so notebooks written that way import fine.
+
 ### Deleting things without an account
 
 Two bugs of the same shape, found by reading the path the import's deletion

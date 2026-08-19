@@ -246,6 +246,139 @@ fn unreadable_files_are_reported_with_a_reason() {
     assert!(imported.ignored[0].0.ends_with("README.md"));
 }
 
+/// T4.4e. A half-merged file has to be told apart from a missing one, because
+/// this layer reports absence and the layer above reads absence as deletion.
+///
+/// Left in `ignored` — where it landed before, as an unparseable file — the
+/// object is simply not in the tree, and the next import trashes it. That is the
+/// worst possible response to "the user is in the middle of merging this".
+#[test]
+fn a_half_merged_file_is_reported_as_conflicted_rather_than_missing() {
+    let root = TempDir::new().unwrap();
+    let drive = a_drive_with_nested_folders();
+    export(root.path(), &drive).unwrap();
+
+    conflict_the_file(&root.path().join(drive[2].object.file_name()));
+
+    let imported = import(root.path()).unwrap();
+
+    assert_eq!(imported.conflicted.len(), 1, "{:?}", imported.conflicted);
+    assert_eq!(imported.conflicted[0].name, "deploy");
+    assert_eq!(imported.conflicted[0].line, 1);
+    assert!(imported.ignored.is_empty(), "{:?}", imported.ignored);
+    assert_eq!(
+        imported.objects.len(),
+        drive.len() - 1,
+        "the conflicted object must not be half-imported"
+    );
+}
+
+/// The repository belongs to the user, and so does their merge. A conflict in a
+/// file that was never ours must not stop their drive from working — which is
+/// why the test for ours-ness is "does either side parse", and not "is there a
+/// marker in it".
+#[test]
+fn a_conflict_in_a_file_that_is_not_ours_stops_nothing() {
+    let root = TempDir::new().unwrap();
+    let drive = a_drive_with_nested_folders();
+    export(root.path(), &drive).unwrap();
+    std::fs::write(
+        root.path().join("README.md"),
+        "<<<<<<< HEAD\nmine\n=======\ntheirs\n>>>>>>> theirs\n",
+    )
+    .unwrap();
+
+    let imported = import(root.path()).unwrap();
+
+    assert!(imported.conflicted.is_empty(), "{:?}", imported.conflicted);
+    assert_eq!(imported.objects.len(), drive.len());
+    assert!(
+        imported.ignored.iter().any(|(path, reason)| {
+            path.ends_with("README.md") && reason.contains("neither side")
+        }),
+        "{:?}",
+        imported.ignored
+    );
+    export(root.path(), &drive).expect("someone else's merge is not our business");
+}
+
+/// The refusal is all-or-nothing, and it has to be: a merge that stopped an
+/// export half way through would leave the tree in a state neither the store
+/// nor git could explain.
+#[test]
+fn an_export_writes_nothing_at_all_when_a_file_it_owns_is_half_merged() {
+    let root = TempDir::new().unwrap();
+    let mut drive = a_drive_with_nested_folders();
+    export(root.path(), &drive).unwrap();
+
+    let conflicted = root.path().join(drive[2].object.file_name());
+    conflict_the_file(&conflicted);
+
+    // An unrelated edit the export would otherwise write out. Changing the
+    // revision rather than the name keeps the filename — and so the path being
+    // asserted on — the same.
+    drive[3].object.revision_ts = Some(1_755_544_456_999_999);
+    let unrelated = root
+        .path()
+        .join("scripts-".to_owned() + &hash_of(&drive[0]))
+        .join("nested-".to_owned() + &hash_of(&drive[1]))
+        .join(drive[3].object.file_name());
+    let before = std::fs::read_to_string(&unrelated).unwrap();
+
+    let err = export(root.path(), &drive).unwrap_err();
+
+    assert!(
+        err.downcast_ref::<ConflictsInTheWay>().is_some(),
+        "a merge in the way must be its own error, not a write failure: {err:#}"
+    );
+    assert_eq!(
+        std::fs::read_to_string(&unrelated).unwrap(),
+        before,
+        "a file was written before the refusal"
+    );
+    assert!(
+        std::fs::read_to_string(&conflicted)
+            .unwrap()
+            .contains("<<<<<<<"),
+        "the export overwrote the merge the user was in the middle of"
+    );
+}
+
+/// A folder's marker file can conflict too — two machines renaming the same
+/// folder — and it is reported under the folder's name rather than the
+/// directory's, because the directory name is derived from the old one.
+#[test]
+fn a_conflicted_folder_marker_is_reported_under_the_folders_name() {
+    let root = TempDir::new().unwrap();
+    let drive = a_drive_with_nested_folders();
+    export(root.path(), &drive).unwrap();
+
+    conflict_the_file(
+        &root
+            .path()
+            .join("scripts-".to_owned() + &hash_of(&drive[0]))
+            .join(FOLDER_FILE_NAME),
+    );
+
+    let imported = import(root.path()).unwrap();
+
+    assert_eq!(imported.conflicted.len(), 1, "{:?}", imported.conflicted);
+    assert_eq!(imported.conflicted[0].name, "Scripts");
+}
+
+/// Replaces a file with what git leaves in the working tree when two edits to
+/// it collide. Both sides are the real file, so both sides still parse.
+fn conflict_the_file(path: &Path) {
+    let ours = std::fs::read_to_string(path).unwrap();
+    let theirs = ours.replace("2025-08-18T19:14:16", "2025-08-19T09:30:00");
+    assert_ne!(ours, theirs, "the fixture's two sides are identical");
+    std::fs::write(
+        path,
+        format!("<<<<<<< HEAD\n{ours}=======\n{theirs}>>>>>>> theirs\n"),
+    )
+    .unwrap();
+}
+
 fn a_drive_with_nested_folders() -> Vec<PlacedObject> {
     let scripts = placed(folder("Scripts"), None);
     let nested = placed(folder("Nested"), Some(scripts.object.id));

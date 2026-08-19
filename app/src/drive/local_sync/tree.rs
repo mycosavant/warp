@@ -23,7 +23,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 
-use super::format::{FOLDER_FILE_NAME, Payload, PortableObject};
+use super::format::{self, Conflict, FOLDER_FILE_NAME, Payload, PortableObject};
 use crate::server::ids::SyncId;
 
 /// An object together with the folder it sits in.
@@ -62,7 +62,50 @@ pub struct ImportSummary {
     /// The same object id found in more than one file, which a copy-paste or a
     /// bungled merge produces. The first by path wins; the rest are listed.
     pub duplicates: Vec<(PathBuf, SyncId)>,
+    /// Warp Drive files with an unresolved merge in them.
+    ///
+    /// Kept apart from `ignored` because the two mean opposite things to a
+    /// caller. An ignored file is somebody else's and always will be; a
+    /// conflicted one is *ours*, and the object it describes is missing from
+    /// `objects` only because the merge has not been finished yet. Treating the
+    /// second as the first is how a half-finished merge turns into a deletion.
+    pub conflicted: Vec<Conflicted>,
 }
+
+/// One of our files, mid-merge.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Conflicted {
+    pub path: PathBuf,
+    /// 1-based line of the opening `<<<<<<<`.
+    pub line: usize,
+    /// The object's name, taken from whichever side still parses.
+    ///
+    /// Worth carrying: "resolve `deploy-a1b2c3d4.json`" is a chore handed to
+    /// someone who has to work out what it is first, and "your `deploy`
+    /// workflow has an unresolved conflict" is a sentence they can act on.
+    pub name: String,
+}
+
+/// The one thing that stops an export outright.
+///
+/// A type rather than a message, so a caller can tell "your working tree is
+/// mid-merge" — which is the caller's to fix and takes ten seconds — apart from
+/// "the disk is full", which is neither.
+#[derive(Debug)]
+pub struct ConflictsInTheWay(pub Vec<Conflicted>);
+
+impl std::fmt::Display for ConflictsInTheWay {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            formatter,
+            "refusing to overwrite {} file(s) with unresolved merge conflicts. \
+             Finish the merge in git, then export again",
+            self.0.len()
+        )
+    }
+}
+
+impl std::error::Error for ConflictsInTheWay {}
 
 /// Writes the whole drive into `root`, creating it if needed.
 pub fn export(root: &Path, objects: &[PlacedObject]) -> Result<ExportSummary> {
@@ -73,8 +116,37 @@ pub fn export(root: &Path, objects: &[PlacedObject]) -> Result<ExportSummary> {
     let layout = Layout::build(root, objects, &mut summary);
     let mut written = HashSet::new();
 
+    // Every file this export would overwrite, read before a single one is
+    // written. The read is not extra work — the loop below needs it anyway to
+    // decide whether the file is already correct — but doing it up front is
+    // what makes the refusal below all-or-nothing rather than half a drive.
+    let mut planned = Vec::with_capacity(objects.len());
+    let mut conflicted = Vec::new();
     for placed in objects {
         let path = layout.path_of(placed);
+        let existing = std::fs::read_to_string(&path).ok();
+        if let Some(conflict) = existing.as_deref().and_then(format::conflict) {
+            conflicted.push(Conflicted {
+                path: path.clone(),
+                line: conflict.line,
+                // Taken from the object rather than parsed back out of the
+                // file: we are the ones about to write it, so we know.
+                name: placed.object.name.clone(),
+            });
+        }
+        planned.push((path, existing, placed));
+    }
+
+    // Only the paths this export owns are checked, never the whole tree: the
+    // user's own conflicted README shares the repository and is none of our
+    // business. Within those paths the refusal is absolute, because writing
+    // over a half-merged file destroys the one copy of the merge that is in
+    // front of the user, and they would have no reason to expect it.
+    if !conflicted.is_empty() {
+        return Err(anyhow::Error::new(ConflictsInTheWay(conflicted)));
+    }
+
+    for (path, existing, placed) in planned {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)
                 .with_context(|| format!("creating {}", parent.display()))?;
@@ -85,7 +157,7 @@ pub fn export(root: &Path, objects: &[PlacedObject]) -> Result<ExportSummary> {
             .to_file_contents()
             .with_context(|| format!("serializing {}", placed.object.name))?;
 
-        if std::fs::read_to_string(&path).is_ok_and(|existing| existing == contents) {
+        if existing.is_some_and(|existing| existing == contents) {
             summary.unchanged += 1;
         } else {
             std::fs::write(&path, &contents)
@@ -171,6 +243,27 @@ fn read_object(
         }
     };
 
+    if let Some(conflict) = format::conflict(&contents) {
+        match conflicted_name(&conflict) {
+            Some(name) => summary.conflicted.push(Conflicted {
+                path: path.to_owned(),
+                line: conflict.line,
+                name,
+            }),
+            // Neither side is ours, so this is the user's own file in the
+            // middle of their own merge. Not our business, and not our problem
+            // to make them solve before they can use their drive.
+            None => summary.ignored.push((
+                path.to_owned(),
+                format!(
+                    "unresolved merge conflict at line {}, and neither side is a Warp Drive file",
+                    conflict.line
+                ),
+            )),
+        }
+        return Ok(None);
+    }
+
     match PortableObject::from_file_contents(&contents) {
         Ok(object) => {
             if !seen.insert(object.id.to_string()) {
@@ -210,6 +303,18 @@ fn prune(directory: &Path, written: &HashSet<PathBuf>, summary: &mut ExportSumma
     }
 
     Ok(())
+}
+
+/// Decides whether a conflicted file is one of ours, by asking whether either
+/// side of it parses — and takes the name while it is there.
+///
+/// Both sides are tried because a merge that touched the header leaves one side
+/// unreadable, and one readable side is enough to know whose file this is.
+fn conflicted_name(conflict: &Conflict) -> Option<String> {
+    PortableObject::from_file_contents(&conflict.ours)
+        .or_else(|_| PortableObject::from_file_contents(&conflict.theirs))
+        .map(|object| object.name)
+        .ok()
 }
 
 fn is_one_of_ours(path: &Path) -> bool {

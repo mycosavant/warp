@@ -281,6 +281,102 @@ impl PortableObject {
     }
 }
 
+/// A file git has left half-merged.
+///
+/// Warp never resolves one of these, and T4.4e is the decision to say so out
+/// loud. Picking a side would be exactly the "work out which version wins"
+/// behaviour that decision 1 rejected — and it would do it silently, on the one
+/// occasion the user is demonstrably already looking at the file. Both sides are
+/// reconstructed here for one purpose only: telling a conflicted *Warp Drive*
+/// file apart from a conflicted README that happens to share the repository.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Conflict {
+    /// 1-based line of the opening `<<<<<<<`, so a message can point at it.
+    pub line: usize,
+    /// The file as it would read with our side of every region taken.
+    pub ours: String,
+    /// The same, with their side taken.
+    pub theirs: String,
+}
+
+/// Git writes seven marker characters by default, and the `conflict-marker-size`
+/// attribute only ever raises that — so the length is a minimum, not a match.
+const CONFLICT_MARKER_LEN: usize = 7;
+
+/// Detects an unresolved merge, or `None` for an ordinary file.
+///
+/// Two deliberate narrowings, both there to avoid crying conflict over a
+/// perfectly good file:
+///
+/// * a region must be **closed**. An opening marker on its own is a line
+///   somebody wrote, not a merge.
+/// * `=======` counts as a separator only *between* markers. A bare row of
+///   equals signs is a markdown setext heading underline far more often than it
+///   is anything else, and notebooks are markdown — so a notebook whose
+///   headings are underlined that way has to pass through untouched.
+pub fn conflict(contents: &str) -> Option<Conflict> {
+    enum Side {
+        Outside,
+        Ours,
+        /// The `|||||||` common ancestor of `merge.conflictStyle = diff3`.
+        /// Discarded: it is neither side, and no one merges by hand from it.
+        Base,
+        Theirs,
+    }
+
+    let mut ours = String::new();
+    let mut theirs = String::new();
+    let mut side = Side::Outside;
+    let mut opened_at = None;
+    let mut closed = false;
+
+    for (index, line) in contents.split_inclusive('\n').enumerate() {
+        match side {
+            Side::Outside if is_marker(line, '<') => {
+                opened_at.get_or_insert(index + 1);
+                side = Side::Ours;
+            }
+            Side::Outside => {
+                ours.push_str(line);
+                theirs.push_str(line);
+            }
+            Side::Ours if is_marker(line, '|') => side = Side::Base,
+            Side::Ours if is_marker(line, '=') => side = Side::Theirs,
+            // A region closed without a separator is malformed, but it is still
+            // unmistakably a merge, and reading the rest of the file as content
+            // would be worse than tolerating it.
+            Side::Ours if is_marker(line, '>') => {
+                closed = true;
+                side = Side::Outside;
+            }
+            Side::Ours => ours.push_str(line),
+            Side::Base if is_marker(line, '=') => side = Side::Theirs,
+            Side::Base => {}
+            Side::Theirs if is_marker(line, '>') => {
+                closed = true;
+                side = Side::Outside;
+            }
+            Side::Theirs => theirs.push_str(line),
+        }
+    }
+
+    closed.then(|| Conflict {
+        line: opened_at.unwrap_or(1),
+        ours,
+        theirs,
+    })
+}
+
+/// A marker line: at least [`CONFLICT_MARKER_LEN`] of the character, then either
+/// nothing or the label git appends (`<<<<<<< HEAD`).
+fn is_marker(line: &str, marker: char) -> bool {
+    let line = line.trim_end();
+    // Every marker character is ASCII, so the count is also the byte offset.
+    let run = line.chars().take_while(|ch| *ch == marker).count();
+    let rest = &line[run..];
+    run >= CONFLICT_MARKER_LEN && (rest.is_empty() || rest.starts_with(char::is_whitespace))
+}
+
 /// Renders the header as a front-matter block, fences included.
 fn front_matter(header: &Header) -> Result<String> {
     let mut yaml = serde_yaml::to_string(header).context("serializing the object header")?;

@@ -19,6 +19,32 @@
 //!   That split is a confusion upstream already has, and the fork should not
 //!   double down on it.
 //!
+//! # What happens when git leaves a conflict behind (T4.4e)
+//!
+//! The first decision above settles who resolves a conflict — the user, in
+//! their repository, with `git mergetool`. It does not settle what Warp does
+//! when it *meets* one, and until T4.4e that was a side effect rather than a
+//! choice: a file with markers in it failed to parse, landed in
+//! [`tree::ImportSummary::ignored`] alongside the user's README, and the object
+//! it described was therefore absent from the tree. Absence is how [`apply`]
+//! is told an object was deleted. So the objects in the middle of being merged
+//! — the only ones the user was demonstrably working on — were the ones that
+//! got trashed.
+//!
+//! The policy is now three rules, and the first is the one the other two serve:
+//!
+//! * **Warp never resolves a conflict, and never guesses.** Both sides are
+//!   reconstructed, but only to answer "is this file one of mine?". Choosing a
+//!   side is the merge behaviour decision 1 rejected, and it would happen
+//!   silently.
+//! * **Both directions refuse, whole.** An import stops rather than skipping the
+//!   conflicted files, because skipping is what turns a merge into a deletion;
+//!   an export stops rather than overwriting them, because the half-merged file
+//!   is the only copy of the merge in front of the user.
+//! * **Only our files count.** Ours-ness is decided by parsing each side, not by
+//!   spotting a marker — the mirror shares a repository with the user's own
+//!   work, and their conflicted README is not ours to have an opinion about.
+//!
 //! See `.fork/TASKS.md` T4.4 for the full scope.
 
 pub mod apply;

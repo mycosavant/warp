@@ -405,15 +405,16 @@ So this is "keep the store, neutralize the sync" — not a rewrite.
       about the network, not the account. Under local-first it becomes a lie
       when the network *does* drop — nothing is read-only then either — so it
       wants suppressing, but that is one condition in T4.2, not its own item.
-- [~] **T4.4** Git-backed sync — the store now has a portable on-disk form and
-      a working tree, and the live store bridges to both. What is missing is a
-      trigger and the write-back. See "T4.4 as built" below.
+- [~] **T4.4** Git-backed sync — the mirror is two-way and drivable, and it
+      refuses to act on a half-merged tree. Only the alias gap is left. See
+      "T4.4 as built" below.
   - [x] **T4.4a** Lossless object↔file format — `drive/local_sync/format.rs`
   - [x] **T4.4b** Working-tree materializer — `drive/local_sync/tree.rs`
   - [x] **T4.4c** Round trip, replacing T4.5 — three levels of it, below
   - [x] **T4.4d** A trigger — `drive.sync.status` and `drive.sync.export`,
         verified on the Windows build against a real git repository
-  - [ ] **T4.4e** Conflict policy
+  - [x] **T4.4e** Conflict policy — both directions refuse a half-merged tree
+        rather than reading it as a deletion; see "T4.4e as built" below
   - [x] **T4.4f** Apply an imported tree back into the store — done and
         verified live; see "T4.4f as built" below
   - [ ] **T4.4g** Workflow aliases do not travel with the drive — new, found by
@@ -1055,16 +1056,62 @@ the link would survive if the aliases travelled. What needs deciding is whether
 settings-shaped data belongs in a *drive* mirror at all, and what happens to an
 alias pointing at a workflow that is not in the personal space. That is a
 design call, not a line of code, which is why it is its own task.
-- **T4.4f** — applying an imported tree *back into* the store. `snapshot` only
-  reads. Writing means creating and updating objects through `CloudModel`'s
-  typed paths, which is thirteen constructors rather than thirteen accessors,
-  and it has to reconcile against what is already there rather than replacing
-  it. This is where the remaining risk lives.
-- **T4.4e** — conflict policy, which is nearly free given decision 1: a
-  conflict is a text conflict in the user's own repo. What is *not* free is
-  what Warp does when it reads a file with conflict markers in it; right now
-  that is "ignored, with a reason", which is defensible but should be a
-  deliberate choice rather than a side effect.
+### T4.4e as built — what happens when git leaves a conflict behind
+
+Decision 1 settles *who* resolves a conflict: the user, in their own
+repository, with the tools they already have. It says nothing about what Warp
+does when it **meets** one, and that was a side effect rather than a decision.
+
+It was also a bug, and a bad one. A file with `<<<<<<<` in it does not parse, so
+it landed in `ignored` next to the user's README, so the object it describes was
+absent from the tree — and absence is exactly how T4.4f's import is told an
+object was deleted. **The objects in the middle of being merged were the ones
+that got trashed.** Nothing about the old behaviour announced this; the import
+reported success and a trash count.
+
+The policy is three rules, and the first is the one the other two serve.
+
+**Warp never resolves a conflict, and never guesses.** Both sides are
+reconstructed, but only to answer "is this file one of mine?" — never to pick
+one. Choosing a side is the merge behaviour decision 1 rejected, and it would
+happen silently, on the one occasion the user is demonstrably already looking at
+the file. `--ours` and `--theirs` are git's words and they belong to the user.
+
+**Both directions refuse, whole.** Import stops rather than skipping the
+conflicted files, for the reason above. Export stops rather than overwriting
+them, because the half-merged file is the only copy of the merge in front of the
+user and git will not put it back for them. All-or-nothing in both cases: the
+export reads every file it would write *before* writing any of them, so a
+refusal never leaves half a drive on disk. That pre-read is not extra work — the
+"is this file already correct" check needed it anyway.
+
+**Only our files count.** Ours-ness is decided by parsing each side, not by
+spotting a marker. The mirror shares a repository with the user's own work, and
+their conflicted README is not ours to have an opinion about — it stays in
+`ignored`, and an export runs straight past it.
+
+Two narrowings in the detector, both aimed at not crying conflict over a good
+file. A region must be **closed**: an opening marker alone is somebody writing
+*about* merges. And `=======` counts as a separator only between markers,
+because a bare row of equals signs is a markdown setext `<h1>` — and notebooks
+are markdown, so reading one as a conflict would make every notebook written in
+that style unimportable. The diff3 `|||||||` ancestor is parsed and discarded;
+it is neither side.
+
+The refusal is a type (`tree::ConflictsInTheWay`) rather than a message, so
+`drive.sync.export` can answer `invalid_request` — your tree is mid-merge, ten
+seconds to fix — instead of `internal`, which would send the user to look at the
+wrong thing entirely. Both directions produce the same sentence, naming
+`path:line (object name)`. The name is the point: "resolve `deploy-a1b2c3d4.json`"
+is a chore handed to someone who has to work out what it is first.
+
+`drive.sync.status` now reads the tree as well as the store, and lists the
+conflicted files. It already described itself as the action you run to find out
+why an export will not run, and an unresolved merge is the only condition that
+stops *both* directions — a status that could not see it would send the user to
+inspect the setting.
+
+13 tests, all confirmed to fail with the detector stubbed out.
 
 Two things the tests caught that reading would not have: serde_yaml 0.8 opens
 its output with a document-start marker, which is the same three characters as

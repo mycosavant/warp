@@ -318,6 +318,12 @@ pub struct DriveSyncStatusResult {
     /// Objects whose payload could not be read. Should always be empty.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub unreadable: Vec<String>,
+    /// Mirrored files with an unresolved merge in them, as `path:line (name)`.
+    ///
+    /// Both directions refuse while this is non-empty, so it is the first thing
+    /// to look at when either one stops working.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub conflicted: Vec<String>,
 }
 
 /// What `drive.sync.export` did. `written == 0` with a full `unchanged` is the
