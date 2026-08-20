@@ -597,6 +597,16 @@ fn retained_action_examples() -> Vec<(ActionKind, Vec<&'static str>)> {
             ActionKind::DriveSyncImport,
             vec!["warpctrl", "drive", "import"],
         ),
+        (ActionKind::AgentList, vec!["warpctrl", "agent", "list"]),
+        (
+            ActionKind::AgentPrompt,
+            vec!["warpctrl", "agent", "prompt", "summarise the diff"],
+        ),
+        (ActionKind::SlashList, vec!["warpctrl", "slash", "list"]),
+        (
+            ActionKind::SlashRun,
+            vec!["warpctrl", "slash", "run", "compact"],
+        ),
     ]
 }
 
@@ -755,6 +765,14 @@ fn parsed_action_kind(command: &ControlCommand) -> Option<ActionKind> {
             DriveCommand::Status(_) => Some(ActionKind::DriveSyncStatus),
             DriveCommand::Export(_) => Some(ActionKind::DriveSyncExport),
             DriveCommand::Import(_) => Some(ActionKind::DriveSyncImport),
+        },
+        ControlCommand::Agent(command) => match command {
+            AgentCommand::List(_) => Some(ActionKind::AgentList),
+            AgentCommand::Prompt(_) => Some(ActionKind::AgentPrompt),
+        },
+        ControlCommand::Slash(command) => match command {
+            SlashCommand::List(_) => Some(ActionKind::SlashList),
+            SlashCommand::Run(_) => Some(ActionKind::SlashRun),
         },
         ControlCommand::Completions { .. } => None,
         // Not a single action: `mcp` serves the whole catalog over stdio.

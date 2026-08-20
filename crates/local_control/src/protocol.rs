@@ -184,6 +184,44 @@ pub struct ThemeNameParams {
     pub theme_name: String,
 }
 
+/// Parameters for `agent.prompt`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AgentPromptParams {
+    /// The prompt. Newlines are allowed here, unlike [`TextParams`]: that
+    /// restriction exists so one `input.submit` runs exactly one shell command,
+    /// and a prompt is not a command.
+    pub prompt: String,
+    /// The conversation to continue. `None` starts a new one.
+    ///
+    /// A conversation is addressed rather than a pane because that is the unit
+    /// an agent hands work to — the pane it lives in can be split, moved
+    /// between tabs, or closed and reopened underneath it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub conversation_id: Option<String>,
+}
+
+/// Parameters for `slash.run`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SlashRunParams {
+    /// The command name as it appears in the menu, with or without the leading
+    /// `/` — `compact` and `/compact` both resolve.
+    pub command: String,
+    /// The argument, for commands that take one: the instructions to
+    /// `/compact-and`, the prompt to `/agent`, the name to `/model`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub argument: Option<String>,
+    /// Run a command outside the orchestration allowlist.
+    ///
+    /// The registry holds `/logout`, `/exit` and `/clear` next to `/compact`
+    /// and `/plan`. An agent driving `warpctrl` should not end its own session
+    /// by mistyping a command name, so anything not on the allowlist is refused
+    /// unless this is set. See `slash_command_is_orchestration`.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub force: bool,
+}
+
 pub type KeybindingGetParams = BindingNameParams;
 pub type KeybindingListParams = EmptyParams;
 pub type SettingGetParams = KeyParams;
@@ -211,6 +249,68 @@ pub struct ActiveTargetChain {
     pub pane_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub session_id: Option<String>,
+}
+
+/// One agent conversation, as `agent.list` reports it.
+///
+/// Deliberately flat and stringly-typed: this is what an orchestrating agent
+/// reads to decide what to do next, and it has to survive `jq`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AgentConversationSummary {
+    pub conversation_id: String,
+    /// The conversation's own title — its task description, or failing that its
+    /// first query. Absent for a conversation that has not been given one yet.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    /// `in_progress`, `success`, `error`, `transient_error`, `cancelled`,
+    /// `blocked`, `waiting_for_events`. The one field a caller polling for "is
+    /// it my turn yet" needs.
+    pub status: String,
+    /// What `blocked` is blocked on, when it is.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub blocked_action: Option<String>,
+    /// Whether the agent is still working. True for `in_progress` only —
+    /// `waiting_for_events` is quiescent, and `blocked` is waiting on a person.
+    pub is_busy: bool,
+    /// The pane hosting it, when it is on screen in this window. Absent for a
+    /// conversation whose terminal surface has been closed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pane_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tab_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AgentListResult {
+    pub conversations: Vec<AgentConversationSummary>,
+}
+
+/// The result of `agent.prompt`: which conversation the prompt went to.
+///
+/// Returned rather than acknowledged, because an orchestrator that starts three
+/// agents needs to be able to tell them apart afterwards, and `agent.list`
+/// alone cannot say which of three new conversations was the one it just made.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AgentPromptResult {
+    pub conversation_id: String,
+    /// True when this call created the conversation rather than continuing one.
+    pub created: bool,
+}
+
+/// One slash command, as `slash.list` reports it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SlashCommandSummary {
+    pub name: String,
+    /// Whether `slash.run` will execute it without `force`.
+    pub is_orchestration: bool,
+    /// Whether it submits its argument as a prompt to the agent, as `/agent`
+    /// and `/compact-and` do, rather than acting on the UI.
+    pub submits_prompt: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SlashListResult {
+    pub commands: Vec<SlashCommandSummary>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

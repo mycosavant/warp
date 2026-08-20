@@ -16,6 +16,7 @@ use crate::ai::blocklist::agent_view::{
 use crate::ai::blocklist::history_model::CloudConversationData;
 use crate::global_resource_handles::GlobalResourceHandlesProvider;
 use crate::persistence::ModelEvent;
+use crate::search::slash_command_menu::static_commands::StaticCommand;
 use crate::server::telemetry::TelemetryAgentViewEntryOrigin;
 use crate::terminal::TerminalView;
 use crate::terminal::input::message_bar::{Message, MessageItem};
@@ -32,6 +33,68 @@ use crate::workspace::ToastStack;
 pub const ENTER_AGAIN_TO_SEND_MESSAGE_ID: &str = "enter_again_to_send";
 
 impl TerminalView {
+    /// Sends `prompt` to the agent, on behalf of `warpctrl agent prompt`.
+    ///
+    /// Returns the conversation the prompt went to, or `None` when the agent is
+    /// monitoring a long-running command and cannot take one. An orchestrator
+    /// needs the id back: having started three conversations it has no other way
+    /// to tell which is which, and `agent.list` cannot say which of three new
+    /// entries belongs to the call that just returned.
+    ///
+    /// Deliberately *not* built on `enter_agent_view`, which is what the
+    /// keybinding path uses: that swallows the id and reports failure by
+    /// raising a toast, which is the right behaviour for a person at the
+    /// keyboard and useless to a caller over a socket.
+    pub(crate) fn start_agent_conversation_from_local_control(
+        &mut self,
+        prompt: String,
+        conversation_id: Option<AIConversationId>,
+        ctx: &mut ViewContext<Self>,
+    ) -> Option<AIConversationId> {
+        // The same guard `enter_agent_view_for_new_conversation` applies, minus
+        // the toast. Continuing an existing conversation is exempt, exactly as
+        // it is there — the guard is about *starting* one.
+        if conversation_id.is_none()
+            && !self
+                .ai_context_model
+                .as_ref(ctx)
+                .can_start_new_conversation()
+        {
+            return None;
+        }
+
+        let origin = AgentViewEntryOrigin::Input {
+            was_prompt_autodetected: false,
+        };
+        match self.try_enter_agent_view(Some(prompt), origin.clone(), conversation_id, ctx) {
+            Ok(id) => {
+                self.redetermine_global_focus(ctx);
+                Some(id)
+            }
+            Err(error) => {
+                report_error!(
+                    anyhow::Error::new(error)
+                        .context("Failed to enter agent view for local control"),
+                    extra: { "origin" => ?origin }
+                );
+                None
+            }
+        }
+    }
+
+    /// Runs a slash command in this terminal's input, on behalf of
+    /// `warpctrl slash run`. See [`Input::run_slash_command_from_local_control`].
+    pub(crate) fn run_slash_command_from_local_control(
+        &mut self,
+        command: &StaticCommand,
+        argument: Option<String>,
+        ctx: &mut ViewContext<Self>,
+    ) -> bool {
+        self.input().update(ctx, |input, ctx| {
+            input.run_slash_command_from_local_control(command, argument, ctx)
+        })
+    }
+
     pub fn enter_agent_view(
         &mut self,
         initial_prompt: Option<String>,

@@ -163,10 +163,11 @@ fn malformed_and_removed_action_names_are_not_deserialized() {
 }
 
 #[test]
-fn catalog_has_exactly_88_retained_actions() {
-    // 84 upstream actions, plus the fork's `input.submit` and the three
-    // `drive.sync.*` actions.
-    assert_eq!(ActionKind::ALL.len(), 88);
+fn catalog_has_exactly_92_retained_actions() {
+    // 84 upstream actions, plus the fork's `input.submit`, the three
+    // `drive.sync.*` actions, and the four that let an agent drive an agent:
+    // `agent.list`, `agent.prompt`, `slash.list`, `slash.run` (T6.5).
+    assert_eq!(ActionKind::ALL.len(), 92);
 }
 
 #[test]

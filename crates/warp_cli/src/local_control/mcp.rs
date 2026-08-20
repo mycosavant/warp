@@ -237,6 +237,8 @@ fn scope_label(scope: TargetScope) -> &'static str {
         TargetScope::Action => "action",
         TargetScope::Capability => "capability",
         TargetScope::Drive => "drive",
+        TargetScope::Agent => "agent",
+        TargetScope::Slash => "slash",
     }
 }
 
@@ -483,6 +485,45 @@ fn add_parameter_properties(
             "theme_name",
             json!({ "type": "string", "description": "Theme name from warp_theme_list." }),
         ),
+        ActionParameterSpec::AgentPrompt => {
+            require(
+                "prompt",
+                json!({
+                    "type": "string",
+                    "description": "Prompt to send to the agent. Newlines are allowed, unlike input text.",
+                }),
+            );
+            properties.insert(
+                "conversation_id".to_owned(),
+                json!({
+                    "type": "string",
+                    "description": "Conversation to continue, from warp_agent_list. Omit to start a new one.",
+                }),
+            );
+        }
+        ActionParameterSpec::SlashRun => {
+            require(
+                "command",
+                json!({
+                    "type": "string",
+                    "description": "Slash command name from warp_slash_list, with or without the leading slash.",
+                }),
+            );
+            properties.insert(
+                "argument".to_owned(),
+                json!({
+                    "type": "string",
+                    "description": "Argument for commands that take one, such as the instructions to /compact-and.",
+                }),
+            );
+            properties.insert(
+                "force".to_owned(),
+                json!({
+                    "type": "boolean",
+                    "description": "Run a command outside the orchestration allowlist. Refused without this.",
+                }),
+            );
+        }
     }
 }
 

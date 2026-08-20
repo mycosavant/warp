@@ -259,6 +259,43 @@ impl Input {
             .command_is_active(command, ctx)
     }
 
+    /// Runs `command` with `argument`, on behalf of `warpctrl slash run`.
+    ///
+    /// Returns whether the command was handled — which is not whether it
+    /// succeeded. `execute_slash_command` reports the same thing to every other
+    /// caller, and a handled command can still raise an error toast, so this
+    /// passes the distinction through rather than inventing a success it cannot
+    /// vouch for.
+    ///
+    /// Goes to `execute_slash_command` rather than `select_slash_command`
+    /// because the latter recovers the argument from the input buffer — right
+    /// for someone who typed `/compact-and tidy up` and pressed enter, wrong
+    /// here, where the argument arrived over a socket and the buffer belongs to
+    /// whoever is sitting in front of the window.
+    ///
+    /// Availability is still honoured: a command the menu would not offer in
+    /// this context is refused here too, so `warpctrl` cannot reach a state the
+    /// keyboard cannot.
+    pub(crate) fn run_slash_command_from_local_control(
+        &mut self,
+        command: &StaticCommand,
+        argument: Option<String>,
+        ctx: &mut ViewContext<Self>,
+    ) -> bool {
+        if !self.is_slash_command_available(command, ctx) {
+            return false;
+        }
+        self.execute_slash_command(
+            command,
+            argument.as_ref(),
+            SlashCommandTrigger::keybinding(),
+            /*is_queued_prompt*/ false,
+            None,
+            None,
+            ctx,
+        )
+    }
+
     pub(super) fn select_slash_command(
         &mut self,
         command: &StaticCommand,

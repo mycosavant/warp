@@ -1,11 +1,11 @@
 //! Implementations for user-facing `warpctrl` command groups.
 use local_control::discovery::InstanceRecord;
 use local_control::protocol::{
-    Action, ActionKind, ActionNameParams, BindingNameParams, BooleanValueParams, ColorValueParams,
-    ControlError, DirectionParams, EmptyParams, ErrorCode, FileOpenParams, KeyParams,
-    KeyValueParams, PageQueryParams, QueryParams, RenameParams, RequestEnvelope, ResizeParams,
-    SettingListParams, TabActivateParams, TabActivationMode, TabCloseMode, TabCloseParams,
-    TabCreateParams, TextParams, ThemeNameParams,
+    Action, ActionKind, ActionNameParams, AgentPromptParams, BindingNameParams, BooleanValueParams,
+    ColorValueParams, ControlError, DirectionParams, EmptyParams, ErrorCode, FileOpenParams,
+    KeyParams, KeyValueParams, PageQueryParams, QueryParams, RenameParams, RequestEnvelope,
+    ResizeParams, SettingListParams, SlashRunParams, TabActivateParams, TabActivationMode,
+    TabCloseMode, TabCloseParams, TabCreateParams, TextParams, ThemeNameParams,
 };
 use local_control::selection::select_instance;
 use serde::Serialize;
@@ -15,11 +15,12 @@ use crate::agent::OutputFormat;
 use crate::local_control::output::{write_json, write_json_line};
 use crate::local_control::selectors::{instance_selector, target_selector};
 use crate::local_control::{
-    ActionCatalogCommand, AppCommand, AppearanceCommand, CapabilityCommand, DriveCommand,
-    FileCommand, InputCommand, InstanceCommand, KeybindingCommand, PaneCommand, SessionCommand,
-    SettingCommand, SurfaceCommand, SurfaceOpenCommand, SurfaceOpenToggleCommand,
-    SurfaceQueryCommand, SurfaceSettingsCommand, SurfaceToggleCommand, TabActivateArgs,
-    TabCloseArgs, TabColorCommand, TabCommand, TargetArgs, ThemeCommand, WindowCommand,
+    ActionCatalogCommand, AgentCommand, AppCommand, AppearanceCommand, CapabilityCommand,
+    DriveCommand, FileCommand, InputCommand, InstanceCommand, KeybindingCommand, PaneCommand,
+    SessionCommand, SettingCommand, SlashCommand, SurfaceCommand, SurfaceOpenCommand,
+    SurfaceOpenToggleCommand, SurfaceQueryCommand, SurfaceSettingsCommand, SurfaceToggleCommand,
+    TabActivateArgs, TabCloseArgs, TabColorCommand, TabCommand, TargetArgs, ThemeCommand,
+    WindowCommand,
 };
 
 pub(super) fn run_surface_command(
@@ -696,6 +697,49 @@ pub(super) fn run_file_command(
                 line: args.line,
                 column: args.column,
                 new_tab: args.new_tab,
+            },
+            output_format,
+        ),
+    }
+}
+
+/// `warpctrl agent …` — the actions that let an agent drive an agent.
+pub(super) fn run_agent_command(
+    command: AgentCommand,
+    output_format: OutputFormat,
+) -> Result<(), ControlError> {
+    match command {
+        AgentCommand::List(args) => {
+            run_action_with_params(args, ActionKind::AgentList, EmptyParams {}, output_format)
+        }
+        AgentCommand::Prompt(args) => run_action_with_params(
+            args.target,
+            ActionKind::AgentPrompt,
+            AgentPromptParams {
+                prompt: args.prompt,
+                conversation_id: args.conversation,
+            },
+            output_format,
+        ),
+    }
+}
+
+/// `warpctrl slash …` — Warp's slash-command registry, behind the allowlist.
+pub(super) fn run_slash_command(
+    command: SlashCommand,
+    output_format: OutputFormat,
+) -> Result<(), ControlError> {
+    match command {
+        SlashCommand::List(args) => {
+            run_action_with_params(args, ActionKind::SlashList, EmptyParams {}, output_format)
+        }
+        SlashCommand::Run(args) => run_action_with_params(
+            args.target,
+            ActionKind::SlashRun,
+            SlashRunParams {
+                command: args.command,
+                argument: args.argument,
+                force: args.force,
             },
             output_format,
         ),

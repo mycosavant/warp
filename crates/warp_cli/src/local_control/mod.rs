@@ -10,10 +10,11 @@ use std::process::ExitCode;
 use clap::{Args, CommandFactory, FromArgMatches, Parser, Subcommand, ValueEnum};
 use clap_complete::aot::Shell;
 use commands::{
-    run_action_catalog_command, run_app_command, run_appearance_command, run_capability_command,
-    run_drive_command, run_file_command, run_input_command, run_instance_command,
-    run_keybinding_command, run_pane_command, run_session_command, run_setting_command,
-    run_surface_command, run_tab_command, run_theme_command, run_window_command,
+    run_action_catalog_command, run_agent_command, run_app_command, run_appearance_command,
+    run_capability_command, run_drive_command, run_file_command, run_input_command,
+    run_instance_command, run_keybinding_command, run_pane_command, run_session_command,
+    run_setting_command, run_slash_command, run_surface_command, run_tab_command,
+    run_theme_command, run_window_command,
 };
 use completions::generate_completions_to_stdout;
 use output::write_control_error;
@@ -204,6 +205,14 @@ pub enum ControlCommand {
     /// Mirror Warp Drive into a directory you keep under git.
     #[command(subcommand)]
     Drive(DriveCommand),
+
+    /// Talk to Warp's agent: list conversations, send prompts, hand off work.
+    #[command(subcommand)]
+    Agent(AgentCommand),
+
+    /// Run Warp's slash commands — `/compact`, `/plan`, `/fork-and-compact`.
+    #[command(subcommand)]
+    Slash(SlashCommand),
 
     /// Open or toggle local Warp surfaces.
     #[command(subcommand)]
@@ -606,6 +615,77 @@ pub enum DriveCommand {
     Import(TargetArgs),
 }
 
+#[derive(Debug, Clone, Subcommand)]
+pub enum AgentCommand {
+    /// List live agent conversations with their status.
+    ///
+    /// `status` is the field to poll: `in_progress` means still working;
+    /// `success`, `error` and `cancelled` are terminal; `waiting_for_events`
+    /// means the agent yielded and is listening; `blocked` means it is waiting
+    /// on a person, and `blocked_action` says what for.
+    List(TargetArgs),
+
+    /// Send a prompt to the agent, starting a conversation or continuing one.
+    ///
+    /// Unlike `input submit`, this reaches the agent rather than the shell.
+    /// `input submit '/agent do the thing'` runs `/agent` as a command and gets
+    /// `No such file or directory`; the keyboard equivalent of this is
+    /// ctrl+shift+Return.
+    ///
+    /// Prints the `conversation_id` the prompt went to, which is how a caller
+    /// that started several tells them apart afterwards.
+    Prompt(AgentPromptArgs),
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct AgentPromptArgs {
+    /// The prompt. Newlines are allowed, unlike `input submit`.
+    pub prompt: String,
+
+    /// Continue this conversation instead of starting a new one.
+    ///
+    /// Take the id from `warpctrl agent list`.
+    #[arg(long = "conversation")]
+    pub conversation: Option<String>,
+
+    #[command(flatten)]
+    pub target: TargetArgs,
+}
+
+#[derive(Debug, Clone, Subcommand)]
+pub enum SlashCommand {
+    /// List Warp's slash commands.
+    ///
+    /// `is_orchestration` is whether `slash run` will execute it without
+    /// `--force`; `submits_prompt` is whether it sends its argument to the
+    /// agent rather than acting on the UI.
+    List(TargetArgs),
+
+    /// Run a slash command.
+    ///
+    /// Commands outside the orchestration set — `/logout`, `/exit`, `/clear`
+    /// and the rest of the account and appearance verbs — are refused without
+    /// `--force`, so a mistyped command name cannot end the session.
+    Run(SlashRunArgs),
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct SlashRunArgs {
+    /// The command name, with or without the leading `/`.
+    pub command: String,
+
+    /// The argument, for commands that take one: the instructions to
+    /// `/compact-and`, the prompt to `/agent`, the name to `/model`.
+    pub argument: Option<String>,
+
+    /// Run a command outside the orchestration allowlist.
+    #[arg(long = "force")]
+    pub force: bool,
+
+    #[command(flatten)]
+    pub target: TargetArgs,
+}
+
 /// Exact selectors for a target within the selected Warp instance.
 #[derive(Debug, Clone, Args, Default)]
 pub struct TargetArgs {
@@ -980,6 +1060,8 @@ fn run_inner(args: ControlArgs) -> Result<(), local_control::protocol::ControlEr
         ControlCommand::Keybinding(command) => run_keybinding_command(command, output_format),
         ControlCommand::File(command) => run_file_command(command, output_format),
         ControlCommand::Drive(command) => run_drive_command(command, output_format),
+        ControlCommand::Agent(command) => run_agent_command(command, output_format),
+        ControlCommand::Slash(command) => run_slash_command(command, output_format),
         ControlCommand::Surface(command) => run_surface_command(command, output_format),
         ControlCommand::Completions { shell } => generate_completions_to_stdout(shell),
     }

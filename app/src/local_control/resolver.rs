@@ -1,10 +1,10 @@
 //! Target resolution and parameter validation for retained local-control actions.
 use ::local_control::protocol::{
-    ActionNameParams, ActionParameterSpec, BindingNameParams, BooleanValueParams, ColorValueParams,
-    DirectionParams, EmptyParams, FileOpenParams, KeyParams, KeyValueParams, NamespaceParams,
-    PageQueryParams, PaneTarget, QueryParams, RenameParams, ResizeParams, SessionTarget,
-    TabActivateParams, TabCloseParams, TabCreateParams, TabTarget, TargetSelector, TextParams,
-    ThemeNameParams, WindowTarget,
+    ActionNameParams, ActionParameterSpec, AgentPromptParams, BindingNameParams,
+    BooleanValueParams, ColorValueParams, DirectionParams, EmptyParams, FileOpenParams, KeyParams,
+    KeyValueParams, NamespaceParams, PageQueryParams, PaneTarget, QueryParams, RenameParams,
+    ResizeParams, SessionTarget, SlashRunParams, TabActivateParams, TabCloseParams,
+    TabCreateParams, TabTarget, TargetSelector, TextParams, ThemeNameParams, WindowTarget,
 };
 use ::local_control::{ActionKind, ControlError, ErrorCode, TargetScope};
 use warpui::{AppContext, ModelContext, TypedActionView, ViewHandle, WindowId};
@@ -51,6 +51,8 @@ pub(crate) fn validate_action_params(action: &::local_control::Action) -> Result
         ActionParameterSpec::TabCreate => parse_params::<TabCreateParams>(action),
         ActionParameterSpec::Text => parse_params::<TextParams>(action),
         ActionParameterSpec::ThemeName => parse_params::<ThemeNameParams>(action),
+        ActionParameterSpec::AgentPrompt => parse_params::<AgentPromptParams>(action),
+        ActionParameterSpec::SlashRun => parse_params::<SlashRunParams>(action),
     }
 }
 
@@ -80,7 +82,13 @@ pub(crate) fn validate_action_target(
         | TargetScope::Session
         | TargetScope::Input
         | TargetScope::Surface
-        | TargetScope::File => false,
+        | TargetScope::File
+        // These act on one terminal's input, exactly as `Input` does — a
+        // selector chooses which. The *list* verbs are `Instance`-scoped above
+        // and reject selectors, because "conversations in this pane" is not
+        // something they answer.
+        | TargetScope::Agent
+        | TargetScope::Slash => false,
     };
     if rejects_all_targets && has_target {
         return Err(ControlError::new(

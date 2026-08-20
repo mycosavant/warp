@@ -21,6 +21,8 @@ pub enum TargetScope {
     Action,
     Capability,
     Drive,
+    Agent,
+    Slash,
 }
 
 /// Whether an action has an app-side implementation in this stack layer.
@@ -54,6 +56,8 @@ pub enum ActionParameterSpec {
     TabCreate,
     Text,
     ThemeName,
+    AgentPrompt,
+    SlashRun,
 }
 
 /// Typed result contract for a catalog action.
@@ -79,6 +83,9 @@ pub enum ActionResultSpec {
     TargetMetadata,
     ThemeList,
     ThemeState,
+    AgentConversationList,
+    AgentConversation,
+    SlashCommandList,
 }
 
 /// Discoverable metadata describing one local-control action.
@@ -308,5 +315,25 @@ define_action_catalog! {
         DriveSyncStatus => { name: "drive.sync.status", status: Implemented, target: Drive, params: None, result: DriveSyncStatus },
         DriveSyncExport => { name: "drive.sync.export", status: Implemented, target: Drive, params: None, result: DriveSyncExport },
         DriveSyncImport => { name: "drive.sync.import", status: Implemented, target: Drive, params: None, result: DriveSyncImport },
+    }
+
+    // Fork-local. `warpctrl` could open every surface and type into exactly one
+    // of them — the terminal — so an agent could start a shell command and
+    // nothing else. `input.submit` runs its text as a *command*: sending
+    // `/agent do the thing` that way reaches `bash`, not the agent
+    // (`.fork/TASKS.md`, T6.5). These are the missing half.
+    agent {
+        AgentList => { name: "agent.list", status: Implemented, target: Instance, params: None, result: AgentConversationList },
+        AgentPrompt => { name: "agent.prompt", status: Implemented, target: Agent, params: AgentPrompt, result: AgentConversation },
+    }
+
+    // Fork-local. The slash-command registry is where Warp keeps the verbs an
+    // agent needs to manage a conversation rather than merely hold one —
+    // `/compact`, `/fork-and-compact`, `/plan`, `/queue`, `/model`. They all
+    // route through one function, `Input::execute_slash_command`, so exposing
+    // the registry costs one action rather than one per verb.
+    slash {
+        SlashList => { name: "slash.list", status: Implemented, target: Instance, params: None, result: SlashCommandList },
+        SlashRun => { name: "slash.run", status: Implemented, target: Slash, params: SlashRun, result: Acknowledgement },
     }
 }

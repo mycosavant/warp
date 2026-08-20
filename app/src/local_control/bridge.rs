@@ -10,7 +10,7 @@ use ::local_control::{
 use warpui::{Entity, ModelContext, SingletonEntity};
 
 use crate::local_control::handlers::{
-    app_state, close, drive_sync, metadata, metadata_config, settings_surfaces,
+    agent, app_state, close, drive_sync, metadata, metadata_config, settings_surfaces,
 };
 use crate::local_control::permissions::{
     ensure_action_allowed, ensure_feature_enabled, ensure_protocol_version,
@@ -126,6 +126,21 @@ impl LocalControlBridge {
             | ActionKind::FileOpen => app_state::handle(
                 &self.instance_id,
                 request.action.kind,
+                &request.action.params,
+                &request.target,
+                ctx,
+            ),
+            // Fork-local: the agent and slash surfaces (`.fork/TASKS.md` T6.5).
+            ActionKind::AgentList => agent::agent_list(&self.instance_id, ctx),
+            ActionKind::AgentPrompt => agent::agent_prompt(
+                &self.instance_id,
+                &request.action.params,
+                &request.target,
+                ctx,
+            ),
+            ActionKind::SlashList => agent::slash_list(&self.instance_id),
+            ActionKind::SlashRun => agent::slash_run(
+                &self.instance_id,
                 &request.action.params,
                 &request.target,
                 ctx,
