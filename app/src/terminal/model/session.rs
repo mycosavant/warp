@@ -1077,11 +1077,21 @@ impl Session {
 
     /// Returns the function that converts a Windows-native path into this session's native
     /// representation, or `None` when no conversion is appropriate.
-    pub fn windows_path_converter(&self) -> Option<fn(&str) -> String> {
+    ///
+    /// Boxed rather than a plain `fn` pointer because the WSL conversion needs this session's
+    /// distribution: a path already inside *this* distribution converts to its Linux path, and
+    /// one inside another distribution does not. See
+    /// [`warp_util::path::convert_windows_path_to_wsl_in_distro`].
+    pub fn windows_path_converter(&self) -> Option<Box<dyn Fn(&str) -> String>> {
         if self.is_wsl() {
-            Some(warp_util::path::convert_windows_path_to_wsl)
+            // `None` only if `is_wsl` and `wsl_distro_name` disagree, which they cannot: both
+            // read the same `SessionInfo::wsl_name`.
+            let distro = self.wsl_distro_name()?.to_owned();
+            Some(Box::new(move |path| {
+                warp_util::path::convert_windows_path_to_wsl_in_distro(path, &distro)
+            }))
         } else if self.is_msys2() {
-            Some(warp_util::path::convert_windows_path_to_msys2)
+            Some(Box::new(warp_util::path::convert_windows_path_to_msys2))
         } else {
             None
         }

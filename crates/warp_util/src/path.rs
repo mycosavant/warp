@@ -877,8 +877,36 @@ fn convert_windows_path_with_drive_prefix(windows_path: &str, drive_prefix: &str
 }
 
 /// Converts a Windows-native path to a WSL path, e.g. `C:\foo` → `/mnt/c/foo`.
+///
+/// Knows only about drives. Prefer [`convert_windows_path_to_wsl_in_distro`] wherever the
+/// distribution is known, since this cannot do anything sensible with a path that already lives
+/// inside WSL.
 pub fn convert_windows_path_to_wsl(windows_path: &str) -> String {
     convert_windows_path_with_drive_prefix(windows_path, "/mnt/")
+}
+
+/// Converts a Windows-native path into one a shell inside the WSL distribution `distro` can open.
+///
+/// Drive paths become `/mnt/<drive>/…` as before. What this adds is the case where the file is
+/// *already* inside the distribution: Explorer shows WSL files as `\\wsl$\Ubuntu\home\…`, and
+/// dropping one of those into an Ubuntu session should insert the path Ubuntu knows it by.
+///
+/// [`convert_windows_path_to_wsl`] alone only swaps separators for a UNC path, producing
+/// `//wsl$/Ubuntu/home/…`. That is not a path inside the distribution, which is checked by
+/// running it rather than reasoned about — Linux collapses the leading `//`, so the shell looks
+/// for `/wsl$/Ubuntu/…` and reports `No such file or directory`, while the Linux path resolves.
+///
+/// A UNC path naming a *different* distribution falls through to the generic conversion. There
+/// is no path from inside one distribution to another's filesystem to offer instead, and
+/// inventing one would be worse than handing back what was dropped. Distributions are matched
+/// case-insensitively, as they are in `warp_util::git` and by `wsl.exe --distribution` itself.
+pub fn convert_windows_path_to_wsl_in_distro(windows_path: &str, distro: &str) -> String {
+    if let Some(unc) = parse_wsl_unc_path(Path::new(windows_path))
+        && unc.distro.eq_ignore_ascii_case(distro)
+    {
+        return unc.linux_path;
+    }
+    convert_windows_path_to_wsl(windows_path)
 }
 
 /// Converts a Windows-native path to an MSYS2 POSIX-style path, e.g. `C:\foo` → `/c/foo`.

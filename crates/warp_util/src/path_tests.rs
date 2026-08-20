@@ -1228,3 +1228,71 @@ fn non_wsl_paths_skip_the_fold_entirely() {
         );
     }
 }
+
+// ── Dragging a WSL file into a WSL session (T6.2) ────────────────────────
+
+/// Explorer shows WSL files as `\\wsl$\Ubuntu\home\…`. Dropping one into a session on that same
+/// distribution has to insert the path the distribution knows the file by. The generic
+/// conversion only swaps separators, and `//wsl$/Ubuntu/home/…` is not a path inside WSL —
+/// Linux collapses the leading `//` and looks for `/wsl$/Ubuntu/…`, which does not exist.
+#[test]
+fn a_file_dropped_from_this_distribution_converts_to_its_linux_path() {
+    for path in [
+        r"\\wsl$\Ubuntu\home\effatha\git\warp\README.md",
+        r"\\WSL$\Ubuntu\home\effatha\git\warp\README.md",
+        r"\\wsl.localhost\ubuntu\home\effatha\git\warp\README.md",
+        r"\\?\UNC\WSL$\Ubuntu\home\effatha\git\warp\README.md",
+    ] {
+        assert_eq!(
+            convert_windows_path_to_wsl_in_distro(path, "Ubuntu"),
+            "/home/effatha/git/warp/README.md",
+            "{path} should convert to the path Ubuntu knows it by"
+        );
+    }
+
+    // The distribution in the path and the session's distribution are compared the way
+    // `wsl.exe --distribution` compares them, and the way `git.rs` already did.
+    assert_eq!(
+        convert_windows_path_to_wsl_in_distro(r"\\wsl$\UBUNTU\home\effatha", "ubuntu"),
+        "/home/effatha"
+    );
+}
+
+/// A drive path is what this conversion was always for, and it has to keep working — most drops
+/// are still ordinary Windows files.
+#[test]
+fn a_file_dropped_from_a_windows_drive_still_converts_to_mnt() {
+    assert_eq!(
+        convert_windows_path_to_wsl_in_distro(r"C:\Users\aloke\file.txt", "Ubuntu"),
+        "/mnt/c/Users/aloke/file.txt"
+    );
+    assert_eq!(
+        convert_windows_path_to_wsl_in_distro(r"E:\foo", "Ubuntu"),
+        "/mnt/e/foo"
+    );
+}
+
+/// A file in another distribution has no path from inside this one. Falling back to the generic
+/// conversion hands back what was dropped rather than inventing a path that resolves to the
+/// wrong file, or to nothing.
+#[test]
+fn a_file_dropped_from_another_distribution_is_not_rewritten() {
+    assert_eq!(
+        convert_windows_path_to_wsl_in_distro(r"\\wsl$\Debian\home\user\file.txt", "Ubuntu"),
+        "//wsl$/Debian/home/user/file.txt"
+    );
+    // Nor is an ordinary network share, which is reachable from neither side by a Linux path.
+    assert_eq!(
+        convert_windows_path_to_wsl_in_distro(r"\\server\share\file", "Ubuntu"),
+        "//server/share/file"
+    );
+}
+
+/// The distribution root itself, which `parse_wsl_unc_path` reports as `/`.
+#[test]
+fn the_distribution_root_converts_to_the_filesystem_root() {
+    assert_eq!(
+        convert_windows_path_to_wsl_in_distro(r"\\wsl$\Ubuntu", "Ubuntu"),
+        "/"
+    );
+}

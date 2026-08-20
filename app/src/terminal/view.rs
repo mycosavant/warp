@@ -26067,15 +26067,21 @@ impl TerminalView {
 
             // For WSL sessions on Windows, convert paths to /mnt/<drive>/... format
             // so the WSL session can read the file at the correct path.
+            //
+            // The distribution matters because a dropped file may already be inside it —
+            // Explorer shows WSL files as `\\wsl$\Ubuntu\home\…`, and dragging one of those in
+            // used to insert `//wsl$/Ubuntu/home/…`, which no shell in the distribution can
+            // open. See `convert_windows_path_to_wsl_in_distro`.
             let paths_converted;
-            let paths = if session.is_wsl() {
-                paths_converted = paths
-                    .iter()
-                    .map(|p| warp_util::path::convert_windows_path_to_wsl(p))
-                    .collect::<Vec<_>>();
-                paths_converted.as_slice()
-            } else {
-                paths
+            let paths = match session.wsl_distro_name() {
+                Some(distro) => {
+                    paths_converted = paths
+                        .iter()
+                        .map(|p| warp_util::path::convert_windows_path_to_wsl_in_distro(p, distro))
+                        .collect::<Vec<_>>();
+                    paths_converted.as_slice()
+                }
+                None => paths,
             };
 
             let input =

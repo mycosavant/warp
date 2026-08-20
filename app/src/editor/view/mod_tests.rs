@@ -4678,6 +4678,27 @@ fn test_drag_and_drop_files_applies_path_transformer() {
             view.drag_and_drop_files(&paths(), ctx);
             assert_eq!(view.buffer_text(ctx), "/c/foo/bar /d/baz ");
         });
+
+        // The transformer a WSL session actually installs is distribution-aware, because a
+        // dropped file may already be inside the distribution — Explorer shows WSL files as
+        // `\\wsl$\Ubuntu\…`. The drive path in the same drop still becomes a mount.
+        view.update(&mut app, |view, ctx| {
+            view.clear_buffer(ctx);
+            view.set_drag_drop_path_transformer(Some(Box::new(|path| {
+                warp_util::path::convert_windows_path_to_wsl_in_distro(path, "Ubuntu")
+            })));
+            view.drag_and_drop_files(
+                &[
+                    UserInput::new(r"\\wsl$\Ubuntu\home\effatha\notes.md".to_string()),
+                    UserInput::new(r"C:\foo\bar".to_string()),
+                ],
+                ctx,
+            );
+            assert_eq!(
+                view.buffer_text(ctx),
+                "/home/effatha/notes.md /mnt/c/foo/bar "
+            );
+        });
     });
 }
 

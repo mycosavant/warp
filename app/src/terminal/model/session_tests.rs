@@ -174,3 +174,57 @@ fn powershell_read_command_embeds_escaped_path_without_args() {
         OsString::from(r"[System.IO.File]::ReadAllText('C:\o''brien\history.txt')")
     );
 }
+
+// ── Dropping a file into a WSL session (T6.2) ────────────────────────────
+
+/// The converter has to carry *this* session's distribution, because a dropped file may already
+/// be inside it. Before this fork the WSL branch returned a bare `fn` pointer, which could not,
+/// so `\\wsl$\Ubuntu\home\…` became `//wsl$/Ubuntu/home/…` — a path no shell in the
+/// distribution can open.
+#[test]
+fn a_wsl_sessions_path_converter_knows_its_own_distribution() {
+    use crate::terminal::ShellLaunchData;
+    use crate::terminal::shell::ShellType;
+
+    let session = Session::new(
+        SessionInfo::new_for_test().with_shell_type(ShellType::Bash),
+        Arc::new(TestCommandExecutor::default()),
+    )
+    .with_shell_launch_data(ShellLaunchData::WSL {
+        distro: "Ubuntu".to_owned(),
+    });
+
+    let convert = session
+        .windows_path_converter()
+        .expect("a WSL session converts paths");
+
+    // Already inside this distribution: the path it knows the file by.
+    assert_eq!(
+        convert(r"\\wsl$\Ubuntu\home\effatha\notes.md"),
+        "/home/effatha/notes.md"
+    );
+    // An ordinary Windows file: the mount, as before.
+    assert_eq!(
+        convert(r"C:\dev\warp\README.md"),
+        "/mnt/c/dev/warp/README.md"
+    );
+    // Another distribution: nothing better to offer, so left as the generic conversion.
+    assert_eq!(
+        convert(r"\\wsl$\Debian\home\user\notes.md"),
+        "//wsl$/Debian/home/user/notes.md"
+    );
+}
+
+/// A session that is not WSL and not MSYS2 has nothing to convert, and must not acquire a
+/// converter by accident when the WSL branch started returning a closure.
+#[test]
+fn a_plain_session_has_no_path_converter() {
+    use crate::terminal::shell::ShellType;
+
+    let session = Session::new(
+        SessionInfo::new_for_test().with_shell_type(ShellType::PowerShell),
+        Arc::new(TestCommandExecutor::default()),
+    );
+
+    assert!(session.windows_path_converter().is_none());
+}
