@@ -63,9 +63,16 @@ impl TerminalView {
             return None;
         }
 
-        let origin = AgentViewEntryOrigin::Input {
-            was_prompt_autodetected: false,
-        };
+        // `Cli` and not `Input`, and the difference is the whole feature.
+        // `try_enter_agent_view` asks the origin whether to submit the prompt or
+        // merely stage it in the composer, and `Input` answers
+        // `AutoTriggerBehavior::InAgentView` — submit only if the pane was
+        // *already* in agent view. Driving this from `warpctrl` it never is, so
+        // the first version put the prompt on screen and left it there, which
+        // looked exactly like success until the screenshot was read.
+        // `Cli => AutoTriggerBehavior::Always` is the case this already had a
+        // name for.
+        let origin = AgentViewEntryOrigin::Cli;
         match self.try_enter_agent_view(Some(prompt), origin.clone(), conversation_id, ctx) {
             Ok(id) => {
                 self.redetermine_global_focus(ctx);
