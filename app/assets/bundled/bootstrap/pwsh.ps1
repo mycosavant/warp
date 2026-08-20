@@ -134,6 +134,27 @@ $null = New-Module -Name Warp-Module -ScriptBlock {
         [decimal]([DateTime]::UtcNow - [DateTime]::new(1970, 1, 1, 0, 0, 0, 0)).Ticks / 1e7
     }
 
+    # The current directory as a path, rather than as a PowerShell location.
+    #
+    # For a drive path the two are the same, but for a UNC path `(Get-Location).Path` is
+    # provider-qualified:
+    #
+    #     C:\dev\warp        -> C:\dev\warp
+    #     \\wsl$\Ubuntu\home -> Microsoft.PowerShell.Core\FileSystem::\\wsl$\Ubuntu\home
+    #
+    # Warp takes that string literally, so a PowerShell session anywhere under `\\wsl$\...` — the
+    # ordinary way to reach a WSL directory from a Windows shell — reported a working directory
+    # that is not a path: `normalize_cwd` canonicalizes it and gets nothing, and the tilde
+    # substitution below can never match `$HOME`. `ProviderPath` is the same location with the
+    # provider stripped.
+    #
+    # It is empty on the non-filesystem drives (`Env:`, `Function:`), which have no filesystem
+    # path at all, so those fall back to the qualified form — Warp cannot canonicalize either
+    # one, and a literal `Env:\` is a better thing to hand it than an empty string.
+    function Warp-Get-Location {
+        if ($PWD.ProviderPath) { $PWD.ProviderPath } else { (Get-Location).Path }
+    }
+
     function Warp-Bootstrapped {
         [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseDeclaredVarsMoreThanAssignments', 'WARP_BOOTSTRAPPED', Justification = 'False positive as we are assigning to global')]
         param([decimal]$rcStartTime, [decimal]$rcEndTime)
@@ -448,7 +469,7 @@ $null = New-Module -Name Warp-Module -ScriptBlock {
             $code
         }
 
-        $newTitle = (Get-Location).Path
+        $newTitle = Warp-Get-Location
         # Replace the literal home dir with a tilde.
         if ($newTitle.StartsWith($HOME)) {
             $newTitle = '~' + $newTitle.Substring($HOME.length)
@@ -599,7 +620,7 @@ $null = New-Module -Name Warp-Module -ScriptBlock {
                 value = @{
                     exit_code = $exitCode
                     next_block_id = $nextBlockId
-                    pwd = (Get-Location).Path
+                    pwd = Warp-Get-Location
                     # TODO(PLAT-687) - honor the PS1
                     ps1 = ''
                     honor_ps1 = $honor_ps1
