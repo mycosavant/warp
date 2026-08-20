@@ -195,11 +195,21 @@ What you get, scoped by running it (`.fork/TASKS.md` T6.1):
 | git branch and dirty count | works — routed through `wsl.exe` |
 | Code review panel | works, real diffs |
 | Opening a WSL file in the editor | works |
+| `@`-mentions, both inputs | works — but see the note below |
+| Ctrl-clicking a file link in agent output | works, opens your system file manager |
 | **Project explorer** | **looks empty for minutes** — see below |
 | **Global search** | **refuses: "doesn't currently work in Git Bash or WSL"** |
 | **First index of a large repo** | **minutes, sometimes very many** (see the 9p table below) |
 
 Three things are worth knowing rather than discovering:
+
+**`@` shows two different things under one label.** The menu heading "Files and
+folders" is two categories: inside a git repository you get the whole recursive
+index, so `@app/src/fork.rs` works; outside one you get a single
+non-recursive listing of the current directory and nothing else. Nothing here
+is WSL-specific — but it is easy to read a folder-heavy directory like `~/git`
+as "the picker won't show me files". It will: type two characters and files
+rank above folders by design.
 
 **The empty project explorer is not empty, it is still indexing.** The root
 appears immediately — it comes from the session's working directory, which does

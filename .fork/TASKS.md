@@ -1880,12 +1880,49 @@ same treatment `warp_util::git` already gives `git`, arrived at for the same
 reason and with the same login-shell caveat. Four tests, on a pure function, so
 the decision is assertable without a Windows host or a distribution.
 
-**Not reached, and deliberately named rather than quietly skipped:** `@`-file
-mention in agent input, drag-and-drop, and clicking a file link in WSL output.
-The first two need an agent turn that this fork cannot yet complete in WSL; the
-third has an upstream carve-out already (`is_network_resource` excludes WSL UNC
-hosts precisely so `is_path_valid` does not reject WSL file links, with a test
-saying so) and was not independently confirmed.
+**`@`-mentions work in WSL. The one report against them was the directory, not
+the boundary.**
+
+Reported from the keyboard: the `@` picker opens in both the terminal and the
+agent input in a WSL session; the terminal offers files, and the agent panel
+seemed to offer only folders.
+
+It offers both. `AIContextMenu::get_categories_for_mode` picks between two
+categories that share the label "Files and folders":
+
+    if is_active_dir_in_git_repo { RepoFiles } else { CurrentFolderFiles }
+
+— and that line is *identical* in the agent branch and the terminal branch, so
+the two inputs cannot disagree about a directory. They were looking at
+different ones. The terminal pane was in `~/git/warp`, a repository, so it got
+`RepoFiles`: the whole recursive index. The agent pane was in `~/git`, which is
+not a repository, so it got `CurrentFolderFiles`:
+`std::fs::read_dir` of that one directory, which on this machine holds **39
+directories and exactly one file**. Nothing filtered the files out; there was
+one, and zero-state sorts reverse-alphabetically (`data_source.rs`,
+`file_data_source_for_pwd`), so `Clipboard Text.txt` sorts to the bottom of a
+list of folders.
+
+Worth knowing rather than discovering: with a non-empty query, files are
+deliberately ranked *above* directories — `match_result.score += 100` for
+`!is_directory`. So `@` alone in a folder-heavy directory looks folder-only,
+and `@` plus two characters does not.
+
+The distinction that is actually load-bearing, and is invisible in the UI
+because both categories carry the same label: `RepoFiles` is the recursive
+repository index, `CurrentFolderFiles` is one non-recursive `read_dir`. Inside
+a repo you can mention `app/src/fork.rs`; outside one you can only mention what
+is in front of you.
+
+**Also confirmed from the keyboard, and previously only assumed here:**
+ctrl-clicking a file link in agent output opens the system file manager
+(Directory Opus) on the WSL path. That is the `is_network_resource` carve-out
+earning its keep — it excludes WSL UNC hosts precisely so `is_path_valid` does
+not reject WSL file links, and there is an upstream test saying so. It is no
+longer an assumption.
+
+**Still not reached, and named rather than quietly skipped:** drag-and-drop
+across the boundary.
 
 **What this means for T6.2 and T6.3.** The work is not "add path translation" —
 translation already exists and is used in a dozen places. It is, cheapest and
