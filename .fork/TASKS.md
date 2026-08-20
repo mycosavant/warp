@@ -2559,7 +2559,8 @@ So the work is wrapping, not inventing:
    place it visibly. All four targets the user asked for, and three of them are
    already reachable by composing T6.5 with `pane.split` / `tab.create` /
    `window.create` — `agent.spawn` is the one that makes the fourth possible
-   and the other three atomic.
+   and the other three atomic. Carries the guardrails below: `--allow-tools`
+   and the depth cap.
 2. **`agent.reveal <conversation> [--pane|--tab]`** — the toggle. Three events
    already exist for it.
 3. **`agent.cancel <conversation>`** — stop a turn. An orchestrator that cannot
@@ -2572,14 +2573,187 @@ So the work is wrapping, not inventing:
    surface id mapped through the pane group. Cheap, and it is what makes
    "reveal the one that is blocked" possible.
 
-**The safety question this raises, and it is not the same one as T6.5's.**
-`slash.run`'s allowlist stops an agent ending its own session. A spawn action
-raises fan-out: an agent that can spawn agents can spawn agents that spawn
-agents. Worth deciding before building — a depth limit, a fleet cap, or
-parent-conversation accounting — rather than after.
+#### Guardrails: what a child agent is allowed to do
+
+Decided with the user, 2026-08-20, and the reason both are needed is that
+**there are two different spawn paths and one lever does not cover both.**
+
+**1. A tool allowlist per child.** The seam exists and is already load-bearing:
+`RequestInput::with_supported_tools(Vec<ToolType>)` sets
+`supported_tools_override`, and `generate_multi_agent_output` uses it *instead
+of* `get_supported_tools`. There is exactly one caller today — passive
+suggestions, which are read-only — so the mechanism is proven and has room for
+a second consumer.
+
+The vocabulary is `ToolType` in `task.proto`, 34 entries. The safety-relevant
+ones are the obvious ones: `RUN_SHELL_COMMAND`, `APPLY_FILE_DIFFS`,
+`EDIT_DOCUMENTS`, `CREATE_DOCUMENTS` are the write half; `READ_FILES`, `GREP`,
+`FILE_GLOB`, `SEARCH_CODEBASE` are the read half. So "read-only child" is
+expressible exactly, which is the case the user named.
+
+**2. A spawn-depth cap, configurable.** Because the tool list only governs what
+the *model* may do. `warpctrl` itself is a second spawn path, and a lead agent
+that can run `warpctrl agent spawn` can run it in a loop regardless of its own
+tool list. The cap is the backstop for the path the allowlist cannot see.
+
+Note which of these is the stronger control, because it is not the obvious one:
+**`SUBAGENT` and `RUN_AGENTS` are entries in the tool list.** Withholding them
+from a child forbids further fan-out at the point the request is built, which
+is a harder guarantee than a counter someone has to remember to increment. The
+depth cap is the belt; the tool list is the braces, and the braces are load
+bearing.
+
+**The trap, and it would have shipped a guardrail that does nothing.** In this
+fork the local agent intercepts *before* the tool list is read:
+
+    generate_multi_agent_output(...)
+        if local_agent_enabled() && local_agent::handles(&params) {
+            return local_agent::generate(...)      // <- returns here
+        }
+        let supported_tools = params.supported_tools_override.take()...
+
+So a tool allowlist set on the Warp side is silently ignored for every request
+the local agent answers — which, in this fork, is every plain user query. The
+child would be told it is read-only and would have a shell.
+
+The fix is available rather than theoretical: `claude` takes `--allowedTools`,
+`--disallowedTools`, `--tools` and `--permission-mode`, so the local agent can
+honour the same restriction once the vocabulary is mapped. The safety-relevant
+correspondences are clean — `RUN_SHELL_COMMAND`↔`Bash`, `READ_FILES`↔`Read`,
+`APPLY_FILE_DIFFS`↔`Edit`/`Write`, `GREP`↔`Grep`, `FILE_GLOB`↔`Glob`,
+`SUBAGENT`↔`Task` — which is what matters, since a guardrail only needs to be
+exact about the things it forbids.
+
+**These two ship together or not at all.** A tool allowlist that the local
+agent ignores is worse than no allowlist, because it reads as a guarantee.
+
+**And it is a guardrail, not a sandbox.** It stops the model *calling* a tool.
+It does not stop a long-running shell command that a tool already started, and
+it is not a boundary against a determined prompt injection — the child is still
+a process on this machine with the user's credentials. Worth saying plainly in
+the docs when this ships, because "read-only agent" invites the stronger
+reading.
 
 **What is *not* in scope**: making `/compact` work, which is T6.7 and about
-where summarization runs, not about `warpctrl`.
+where summarization runs, not about `warpctrl`. And dependency chains between
+handoffs, which is T7 and is not a `warpctrl` feature at all.
+
+## T7 — Work that outlives a turn
+
+Raised by the user, 2026-08-20, as three ideas that felt related and were hard
+to separate: telling a child agent what it may do, telling child agents what
+order to run in and who to hand results to, and planning a release a year out.
+The first is a guardrail and belongs in T6.6. The other two are the same shape
+at two scales, and **the scales want different homes**. This section is the
+argument for which.
+
+### The runtime already exists. The *plan* does not.
+
+Worth establishing first, because it changes what is left to build. Warp can
+already do all of this at runtime — these are entries in `ToolType`:
+
+    RUN_AGENTS = 32              spawn a batch of children
+    SUBAGENT = 16                spawn one
+    SEND_MESSAGE_TO_AGENT = 27   pass a result to a named agent
+    WAIT_FOR_EVENTS = 33         block until something arrives
+
+with `AIAgentInput::MessagesReceivedFromAgents` and `EventsFromAgents` on the
+receiving side, and `ConversationStatus::WaitingForEvents` as the visible
+state. That is a message-passing concurrency substrate, and "B waits for A,
+then A hands B its result" is expressible in it today.
+
+So what is missing is not the mechanism. **It is that the sequencing is a
+decision the model makes in the moment, rather than a declaration made before
+the run.** That is the whole of the user's instinct that this should be "more
+deterministic than saying plan-then-spawn-a-reviewer, but not programmatic in
+the same way". The difference between the model *choosing* to wait and the
+plan *saying* it must is the feature.
+
+### Two edges, or one?
+
+The user described `depends-on` (ordering) and "dictate what and where the
+child hands off to" (routing) as separate ideas. They collapse:
+
+> **A dependency is an edge that carries a payload.** `hands-to` is
+> `depends-on` plus "and here is what to pass".
+
+One edge type with an optional payload spec covers both, and the collapse is
+worth taking because two edge types would have to be kept consistent — a graph
+where B `hands-to` C but C does not `depends-on` B is a bug you can draw.
+
+Which makes the unit:
+
+    node: id, prompt, agent/harness/model, tool allowlist, working directory
+    edge: from -> to, optional payload ("pass your diff", "pass your summary")
+
+Nodes are the T6.6 spawn parameters, exactly. **`RunAgentsAgentRunConfig`
+already carries `name`, `prompt`, `title` and a per-child `model_id`** — so the
+node is two fields short (tool allowlist, cwd) of something that exists.
+
+### Where the graph lives, and why not in Warp
+
+Three candidates. The middle one is what happens today, and it is the one that
+fails.
+
+**In Warp, as a model.** Rejected. Warp's job is running agents; holding your
+project plan is not that. And it dies with the process — the plan would not
+survive a restart, which is the one thing a long-horizon plan must do.
+
+**In the lead agent's context.** This is the status quo, and it is why the
+question gets asked. The plan lives in the context window, so it degrades
+exactly as the work gets long enough to need it. **This is the real reason
+`/compact` matters** (T6.7): compaction is the moment the plan is most at risk,
+and no amount of careful summarization makes a context window a durable store.
+
+**In a file, with a small runner.** Recommended. The plan is a document in the
+repository; a runner — an external process, or the lead agent in a loop — polls
+`agent.list`, fires `agent.spawn` when a node's dependencies are satisfied, and
+reads results with `agent.read`. Everything it needs is T6.5 plus T6.6.
+
+The argument for the file, beyond durability: it is diffable, reviewable, and
+lands in a commit next to the work it describes. And **the fork is already
+doing this by hand** — `.fork/TASKS.md` is a dependency graph in prose, with
+T6.1 blocking T6.2 and T6.5 opening T6.6 and T6.7. Making that machine-readable
+is the entire feature, and the fact that it was written by hand first is
+evidence the shape is right.
+
+Note what this buys that is easy to miss: **the plan surviving compaction is
+the actual requirement**, not the scheduling. Scheduling is a `while` loop over
+statuses. Durability is the hard part, and a file solves it completely.
+
+### And the year-long version: don't build it
+
+The user's EOY26 example — many workstreams, some parallel, some blocking — is
+the same graph and a different system, and the tell is the failure mode:
+
+| | Run-scale | Project-scale |
+|:--|:--|:--|
+| Horizon | minutes to hours | weeks to months |
+| Lives in | one session | many, and outlives all of them |
+| A node fails and | you retry it in 30 seconds | someone renegotiates a date |
+| Readers | one lead agent | people, in a meeting |
+
+Those want different storage, different UI, and different notions of "done".
+Merging them produces something that is a bad scheduler *and* a bad issue
+tracker.
+
+**Recommendation: the project tracker owns *what and when*; the orchestrator
+owns *how, right now*.** GitHub Issues, Linear or a milestone file already do
+the first, adequately and — the part a home-grown one cannot match — somewhere
+people already look. The join is one sentence of the lead agent's job:
+
+> Given this milestone, emit a run-scale graph.
+
+That keeps the run-scale graph small enough to be worth trusting, and keeps the
+project-scale record somewhere a human can argue with it.
+
+- [ ] **T7.1** A run-scale task graph: schema, and a runner over T6.5/T6.6.
+      Blocked on T6.6, which supplies `agent.spawn`, `agent.read` and
+      `agent.cancel` — without `agent.read` a graph can sequence work but not
+      hand anything along it, which is half the point.
+- [ ] **T7.2** Read a milestone from an issue tracker and emit a T7.1 graph.
+      Deliberately last, and deliberately thin: the moment this grows a
+      scheduler of its own it has become the thing this section argues against.
 
 ---
 
