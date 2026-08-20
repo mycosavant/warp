@@ -195,6 +195,9 @@ mod windows {
         })
     }
 
+    /// The host path is the canonical spelling — lower-case host and distribution — so that a
+    /// path built here and a path canonicalized elsewhere are the same map key and the same
+    /// string on screen. See `warp_util::path::canonicalize_wsl_unc_path`.
     #[test]
     fn open_file_command_converts_wsl_paths_to_host_paths() {
         let session = wsl_session();
@@ -202,25 +205,25 @@ mod windows {
             (
                 "/home/ubuntu",
                 "subdir/test.txt",
-                r"\\WSL$\Ubuntu\home\ubuntu\subdir\test.txt",
+                r"\\wsl$\ubuntu\home\ubuntu\subdir\test.txt",
                 None,
             ),
             (
                 "/home/ubuntu/project",
                 "../test.txt",
-                r"\\WSL$\Ubuntu\home\ubuntu\test.txt",
+                r"\\wsl$\ubuntu\home\ubuntu\test.txt",
                 None,
             ),
             (
                 "/home/ubuntu",
                 "subdir/file\\ name.txt",
-                r"\\WSL$\Ubuntu\home\ubuntu\subdir\file name.txt",
+                r"\\wsl$\ubuntu\home\ubuntu\subdir\file name.txt",
                 None,
             ),
             (
                 "/home/ubuntu",
                 "subdir/test.txt:4:2",
-                r"\\WSL$\Ubuntu\home\ubuntu\subdir\test.txt",
+                r"\\wsl$\ubuntu\home\ubuntu\subdir\test.txt",
                 Some(LineAndColumnArg {
                     line_num: 4,
                     column_num: Some(2),

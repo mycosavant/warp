@@ -191,7 +191,10 @@ fn test_wsl_paths() {
             &wsl_shell,
             &Some("/mnt/c/Users/username".to_string())
         ),
-        r"\\WSL$\Ubuntu\home\user\file.txt"
+        // The canonical spelling: lower-case host and distribution, matching
+        // `warp_util::path::canonicalize_wsl_unc_path` so this path is the same map key and the
+        // same displayed string as one that reached here any other way.
+        r"\\wsl$\ubuntu\home\user\file.txt"
     );
 }
 

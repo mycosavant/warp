@@ -104,6 +104,13 @@ impl StandardizedPath {
         let canonical = dunce::canonicalize(path)?;
         // dunce::simplified strips the UNC prefix when safe.
         let simplified = dunce::simplified(&canonical);
+        // "When safe" excludes UNC, so a WSL directory comes back as a verbatim
+        // `\\?\UNC\...` path in whatever host and distribution casing the caller happened to use
+        // — canonicalization that normalizes nothing. `canonicalize_wsl_unc_path` is the part
+        // `dunce` cannot do, because only Warp knows the host is the local WSL redirector rather
+        // than a machine on the network. It returns `None` for every other kind of path.
+        let wsl_canonical = crate::path::canonicalize_wsl_unc_path(simplified);
+        let simplified = wsl_canonical.as_deref().unwrap_or(simplified);
         let path_str = simplified.to_str().ok_or_else(|| {
             io::Error::new(
                 io::ErrorKind::InvalidData,

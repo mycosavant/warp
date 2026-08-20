@@ -87,7 +87,20 @@ pub fn warp_shell_path() -> Option<String> {
 
 /// Abbreviates the session home directory in the given path to '~', if it is in the given path,
 /// otherwise returns the path unchanged.
+///
+/// A WSL directory is first folded to its canonical spelling — see
+/// [`canonicalize_wsl_unc_path`] — so that one directory reads the same way everywhere it is
+/// displayed, and so that the verbatim `\\?\UNC\...` form never reaches a human.
 pub fn user_friendly_path<'a>(path: &'a str, home_dir: Option<&str>) -> Cow<'a, str> {
+    match display_spelling_of_wsl_path(path) {
+        // The canonical spelling is owned, so the abbreviation cannot borrow from `path` any
+        // more and the `Cow` has to be collapsed here.
+        Some(canonical) => Cow::Owned(abbreviate_home_dir(&canonical, home_dir).into_owned()),
+        None => abbreviate_home_dir(path, home_dir),
+    }
+}
+
+fn abbreviate_home_dir<'a>(path: &'a str, home_dir: Option<&str>) -> Cow<'a, str> {
     home_dir
         .and_then(|home| {
             if path.starts_with(home) {
@@ -496,7 +509,13 @@ pub fn convert_wsl_to_windows_host_path(
             }
         }
         _ => {
-            windows_path.push(format!(r"\\WSL$\{distro_name}"));
+            // Emitted in the same spelling [`canonicalize_wsl_unc_path`] folds to. A producer
+            // that disagreed with the normal form would reintroduce the second key for every
+            // path that reaches a map without passing through canonicalization.
+            windows_path.push(format!(
+                r"\\{CANONICAL_WSL_UNC_HOST}\{}",
+                distro_name.to_ascii_lowercase()
+            ));
             for component in unix_path
                 .with_windows_encoding()
                 .components()
@@ -521,6 +540,14 @@ pub struct WslUncPath {
 
 /// The host components that identify a WSL UNC path.
 const WSL_UNC_HOSTS: &[&str] = &["wsl$", "wsl.localhost"];
+
+/// The one host spelling a WSL UNC path is held in. See [`canonicalize_wsl_unc_path`].
+///
+/// `wsl$` rather than `wsl.localhost` because it is the form Warp already emits
+/// ([`convert_wsl_to_windows_host_path`]) and the form the rest of this module documents, so
+/// choosing it leaves every existing spelling in the tree already canonical. Both name the same
+/// provider and both resolve; that is measured, not assumed (`.fork/TASKS.md`, T6.2).
+const CANONICAL_WSL_UNC_HOST: &str = "wsl$";
 
 /// Returns true if the given UNC host component names the WSL filesystem provider rather than a
 /// remote machine. UNC host names are case-insensitive, so `\\WSL$\...`, `\\wsl$\...`, and
@@ -564,6 +591,85 @@ pub fn parse_wsl_unc_path(path: &Path) -> Option<WslUncPath> {
             linux_path
         },
     })
+}
+
+/// Rewrites any spelling of a WSL UNC path into the single spelling this fork keys on:
+/// `\\wsl$\<lower-case distro>\<linux path>`. Returns `None` for everything else, including
+/// drive-letter paths, non-WSL UNC paths, and Unix paths — callers keep those unchanged.
+///
+/// **Why this has to exist.** Canonicalizing a path is supposed to give one name to one
+/// directory, and for a WSL directory it does not. `dunce::canonicalize` — Warp's normal-form
+/// function, in [`StandardizedPath::from_local_canonicalized`] and in `normalize_cwd` — resolves
+/// to whatever `GetFinalPathNameByHandleW` returns, and for the WSL redirector that is the input
+/// spelling with `\\?\UNC\` bolted on front. Measured on this fork (`.fork/TASKS.md`, T6.2), one
+/// directory, seven spellings, seven distinct "canonical" strings:
+///
+/// ```text
+/// \\wsl$\Ubuntu\...          -> \\?\UNC\wsl$\Ubuntu\...
+/// \\WSL$\Ubuntu\...          -> \\?\UNC\WSL$\Ubuntu\...
+/// \\wsl$\ubuntu\...          -> \\?\UNC\wsl$\ubuntu\...
+/// \\wsl.localhost\Ubuntu\... -> \\?\UNC\wsl.localhost\Ubuntu\...
+/// ```
+///
+/// A drive path is normalized to its real on-disk case; a WSL path is normalized to nothing at
+/// all. So two code paths that reach the same directory by different spellings hold different
+/// `HashMap<PathBuf, _>` keys for ever, and the user sees one directory listed twice.
+///
+/// **What is safe to fold, and what is not.** The same measurement settled it:
+///
+/// * The host is case-insensitive and both hosts resolve — folded.
+/// * The distribution is case-insensitive too: `\\wsl$\UBUNTU\...` opens the same directory, and
+///   `wsl.exe --distribution ubuntu` starts the same distribution, so nothing downstream can tell
+///   the difference. Folded to lower case. `git.rs` already compares distributions with
+///   `eq_ignore_ascii_case`, so this only makes the map keys agree with a decision the tree had
+///   already taken.
+/// * The Linux path components are **case-sensitive** — `\\wsl$\Ubuntu\home\...\WARP` is
+///   `ERROR_FILE_NOT_FOUND` where `warp` exists. Left exactly as given. Folding case there would
+///   silently name a different file, or none.
+pub fn canonicalize_wsl_unc_path(path: &Path) -> Option<PathBuf> {
+    let WslUncPath { distro, linux_path } = parse_wsl_unc_path(path)?;
+    let mut canonical = format!(
+        r"\\{CANONICAL_WSL_UNC_HOST}\{}",
+        distro.to_ascii_lowercase()
+    );
+    // The distribution root, whose Linux path is `/`, is the whole path already — appending a
+    // translated `/` would leave a trailing separator on it.
+    if linux_path != "/" {
+        // `parse_wsl_unc_path` built `linux_path` by joining components that a Windows path
+        // parser had already split on both `/` and `\`, so no component can contain either and
+        // this substitution is exact rather than a guess about which slashes are separators.
+        canonical.push_str(&linux_path.replace('/', r"\"));
+    }
+    Some(PathBuf::from(canonical))
+}
+
+/// The spelling of `path` to put in front of a person, or `None` when what they were going to be
+/// shown was already right.
+///
+/// This is [`canonicalize_wsl_unc_path`] over a string, and it is the same function on purpose:
+/// a directory that is keyed one way and displayed another is how three spellings of one
+/// directory ended up on screen at once (`.fork/TASKS.md`, T6.1(c)).
+///
+/// The form that most needs to go is the verbatim `\\?\UNC\...` one, which is not a path anybody
+/// typed — it is what `dunce::canonicalize` hands back for a UNC path, leaked. It is also not a
+/// path that generally works if copied back out: measured on this fork, `cmd.exe` opens
+/// `\\wsl$\Ubuntu\home\...` and refuses `\\?\UNC\wsl$\Ubuntu\home\...` with "UNC paths are not
+/// supported". So this is not only cosmetic — it is the difference between a string the user can
+/// paste somewhere and one that fails when they do.
+fn display_spelling_of_wsl_path(path: &str) -> Option<String> {
+    // A WSL path always starts with two separators, in one order or the other. Checking that
+    // first keeps every ordinary path out of the path parser, since this runs on every path Warp
+    // displays, including once per block.
+    let mut leading = path.chars().take(2);
+    if !leading.all(|c| c == '\\' || c == '/') {
+        return None;
+    }
+    let canonical = canonicalize_wsl_unc_path(Path::new(path))?
+        .to_str()?
+        .to_owned();
+    // `None` when there is nothing to change, both to save the allocation and so callers that
+    // recurse or compare cannot loop.
+    (canonical != path).then_some(canonical)
 }
 
 #[cfg(windows)]

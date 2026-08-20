@@ -735,7 +735,9 @@ fn test_convert_wsl_to_windows_host_path() {
             "Ubuntu"
         )
         .unwrap(),
-        PathBuf::from(r"\\WSL$\Ubuntu\home\andy")
+        // The canonical spelling, not the caller's: lower-case host and distribution, so this
+        // agrees with `canonicalize_wsl_unc_path` without being run through it.
+        PathBuf::from(r"\\wsl$\ubuntu\home\andy")
     );
     assert!(matches!(
         convert_wsl_to_windows_host_path(
@@ -758,7 +760,7 @@ fn test_convert_wsl_to_windows_host_path() {
             "Ubuntu"
         )
         .unwrap(),
-        PathBuf::from(r"\\WSL$\Ubuntu\mnt\aa\invalid_drive")
+        PathBuf::from(r"\\wsl$\ubuntu\mnt\aa\invalid_drive")
     );
     assert_eq!(
         convert_wsl_to_windows_host_path(
@@ -766,7 +768,7 @@ fn test_convert_wsl_to_windows_host_path() {
             "Ubuntu"
         )
         .unwrap(),
-        PathBuf::from(r"\\WSL$\Ubuntu\mnt\😊\invalid_drive")
+        PathBuf::from(r"\\wsl$\ubuntu\mnt\😊\invalid_drive")
     );
     assert!(matches!(
         convert_wsl_to_windows_host_path(
@@ -1036,6 +1038,193 @@ mod group_roots_by_common_ancestor_tests {
         assert_eq!(
             grouping.absorbed_by_root[&pb("/a")],
             vec![pb("/a/b"), pb("/a/b/c")]
+        );
+    }
+}
+
+// ── One spelling for a WSL directory (T6.2) ──────────────────────────────
+
+/// The whole point of the function: every spelling Windows accepts for one directory has to come
+/// back as one string, because a `HashMap<PathBuf, _>` cannot compare hosts case-insensitively
+/// the way `is_wsl_unc_host` does. The list is the one measured on the fork — all seven of these
+/// open the same directory, and `GetFinalPathNameByHandleW` returns seven different answers.
+#[test]
+fn every_spelling_of_one_wsl_directory_canonicalizes_to_the_same_string() {
+    let canonical = PathBuf::from(r"\\wsl$\ubuntu\home\effatha\git\warp");
+
+    for path in [
+        r"\\wsl$\Ubuntu\home\effatha\git\warp",
+        r"\\WSL$\Ubuntu\home\effatha\git\warp",
+        r"\\wsl$\ubuntu\home\effatha\git\warp",
+        r"\\wsl$\UBUNTU\home\effatha\git\warp",
+        r"\\wsl.localhost\Ubuntu\home\effatha\git\warp",
+        r"\\WSL.LOCALHOST\Ubuntu\home\effatha\git\warp",
+        r"\\?\UNC\WSL$\Ubuntu\home\effatha\git\warp",
+        r"\\?\UNC\wsl.localhost\ubuntu\home\effatha\git\warp",
+        "//wsl$/Ubuntu/home/effatha/git/warp",
+    ] {
+        assert_eq!(
+            canonicalize_wsl_unc_path(Path::new(path)),
+            Some(canonical.clone()),
+            "{path} should canonicalize to {}",
+            canonical.display()
+        );
+    }
+}
+
+/// Linux file names are case-sensitive: `\\wsl$\Ubuntu\home\effatha\git\WARP` is
+/// `ERROR_FILE_NOT_FOUND` on the machine where `warp` exists. Folding case past the distribution
+/// would name a different file, or none, so the fold has to stop exactly there.
+#[test]
+fn the_linux_path_keeps_its_case() {
+    assert_eq!(
+        canonicalize_wsl_unc_path(Path::new(r"\\WSL$\Ubuntu\home\Effatha\Git\WARP")),
+        Some(PathBuf::from(r"\\wsl$\ubuntu\home\Effatha\Git\WARP"))
+    );
+}
+
+/// A distribution root has no Linux path to append; it must not come back with a trailing
+/// separator, or it stops being a prefix of its own children by string comparison.
+#[test]
+fn a_distribution_root_canonicalizes_without_a_trailing_separator() {
+    for path in [
+        r"\\wsl$\Ubuntu",
+        r"\\WSL$\Ubuntu\",
+        r"\\?\UNC\wsl.localhost\Ubuntu",
+    ] {
+        assert_eq!(
+            canonicalize_wsl_unc_path(Path::new(path)),
+            Some(PathBuf::from(r"\\wsl$\ubuntu")),
+            "{path} should canonicalize to the bare distribution root"
+        );
+    }
+}
+
+/// Everything that is not a WSL UNC path is somebody else's normal form. Returning `None` rather
+/// than a guess is what lets the call sites say `.unwrap_or(original)`.
+#[test]
+fn non_wsl_paths_are_left_to_their_own_canonicalization() {
+    for path in [
+        r"C:\dev\warp",
+        r"\\?\C:\dev\warp",
+        r"\\server\share\file",
+        r"\\?\UNC\server\share\file",
+        r"\\wsl\Ubuntu\home",
+        "/home/effatha/git/warp",
+        r"relative\path",
+    ] {
+        assert_eq!(
+            canonicalize_wsl_unc_path(Path::new(path)),
+            None,
+            "{path} is not a WSL UNC path"
+        );
+    }
+}
+
+/// Canonicalizing an already-canonical path must be a no-op, or repeated normalization walks the
+/// key away from itself.
+#[test]
+fn canonicalization_is_idempotent() {
+    for path in [r"\\wsl$\ubuntu\home\effatha", r"\\wsl$\ubuntu"] {
+        let once = canonicalize_wsl_unc_path(Path::new(path)).expect("is a WSL UNC path");
+        assert_eq!(once, PathBuf::from(path));
+        assert_eq!(canonicalize_wsl_unc_path(&once), Some(once.clone()));
+    }
+}
+
+/// The spelling chosen as canonical has to be one the rest of the module still recognizes —
+/// otherwise `is_network_resource` would start calling this fork's own paths remote.
+#[test]
+fn the_canonical_spelling_is_still_recognized_as_wsl() {
+    assert!(is_wsl_unc_host(CANONICAL_WSL_UNC_HOST));
+
+    let canonical =
+        canonicalize_wsl_unc_path(Path::new(r"\\WSL.localhost\Ubuntu\home\effatha")).unwrap();
+    assert_eq!(
+        parse_wsl_unc_path(&canonical),
+        Some(WslUncPath {
+            distro: "ubuntu".to_string(),
+            linux_path: "/home/effatha".to_string(),
+        })
+    );
+}
+
+/// The verbatim form is the one that most needs to go: nobody typed it, and `cmd.exe` refuses it
+/// ("UNC paths are not supported") where it accepts the canonical spelling of the same directory.
+#[test]
+fn a_verbatim_wsl_path_is_never_what_a_person_is_shown() {
+    assert_eq!(
+        user_friendly_path(r"\\?\UNC\WSL$\Ubuntu\home\effatha\git\warp", None),
+        r"\\wsl$\ubuntu\home\effatha\git\warp"
+    );
+}
+
+/// The display seam folds the same spellings the key does, so a directory reads one way wherever
+/// it appears rather than three ways at once.
+#[test]
+fn one_wsl_directory_is_displayed_one_way() {
+    let home = Some(r"C:\Users\effatha");
+    let displayed: Vec<_> = [
+        r"\\wsl$\Ubuntu\home\effatha",
+        r"\\WSL$\Ubuntu\home\effatha",
+        r"\\wsl.localhost\ubuntu\home\effatha",
+        r"\\?\UNC\WSL.localhost\Ubuntu\home\effatha",
+    ]
+    .iter()
+    .map(|path| user_friendly_path(path, home).into_owned())
+    .collect();
+
+    assert_eq!(
+        displayed,
+        vec![r"\\wsl$\ubuntu\home\effatha".to_string(); 4]
+    );
+}
+
+/// The home-directory abbreviation still has to work, and still has to leave ordinary paths
+/// alone — the WSL fold sits in front of it, not instead of it.
+#[test]
+fn the_home_abbreviation_is_unaffected_by_the_wsl_fold() {
+    assert_eq!(
+        user_friendly_path("/Users/blue/warp", Some("/Users/blue")),
+        "~/warp"
+    );
+    assert_eq!(
+        user_friendly_path(r"\\server\share\file", None),
+        r"\\server\share\file"
+    );
+
+    // A WSL path whose home directory matches is abbreviated too, after the fold rather than
+    // instead of it. Windows-only because the abbreviation only accepts a `\` separator when
+    // compiled for Windows — see the TODO on `abbreviate_home_dir`, which this fork has not
+    // touched.
+    #[cfg(windows)]
+    assert_eq!(
+        user_friendly_path(
+            r"\\?\UNC\WSL$\Ubuntu\home\effatha\git",
+            Some(r"\\wsl$\ubuntu\home\effatha")
+        ),
+        r"~\git"
+    );
+}
+
+/// Everything that is not a WSL path has to come back borrowed, untouched, and without having
+/// been through a path parser — this runs on every path Warp displays, once per block among
+/// other places.
+#[test]
+fn non_wsl_paths_skip_the_fold_entirely() {
+    for path in [
+        "",
+        "/",
+        "/home/effatha/git/warp",
+        r"C:\dev\warp",
+        r"\\server\share",
+        r"\\?\C:\dev\warp",
+        "relative/path",
+    ] {
+        assert_eq!(
+            display_spelling_of_wsl_path(path),
+            None,
+            "{path} should not be re-spelled for display"
         );
     }
 }

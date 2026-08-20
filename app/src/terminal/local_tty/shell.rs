@@ -571,7 +571,8 @@ impl WslShellStarter {
         self.session_id
     }
 
-    /// Gives the Windows path to the WSL home directory (e.g. `\\WSL$\home\user`).
+    /// Gives the Windows path to the WSL home directory, in the canonical spelling
+    /// (e.g. `\\wsl$\ubuntu\home\user`).
     pub(super) fn home_directory(&self) -> Option<PathBuf> {
         let command_result = command::blocking::Command::new("wsl")
             .arg("--distribution")

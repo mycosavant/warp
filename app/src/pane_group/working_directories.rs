@@ -1139,7 +1139,12 @@ fn normalize_cwd(raw_cwd: &str) -> Option<PathBuf> {
     let path = PathBuf::from(raw_cwd.to_string());
     // Use dunce::canonicalize to avoid Windows extended-length path prefix (\\?\)
     // which would cause path comparison mismatches with CanonicalizedPath.
-    dunce::canonicalize(&path).ok()
+    let canonical = dunce::canonicalize(&path).ok()?;
+    // dunce leaves the `\\?\` prefix on a UNC path, and Windows normalizes neither the host nor
+    // the distribution casing of a WSL one, so this is where the mismatch dunce was chosen to
+    // prevent comes back for exactly the paths this fork cares about. Matches
+    // `StandardizedPath::from_local_canonicalized`; non-WSL paths are returned untouched.
+    Some(warp_util::path::canonicalize_wsl_unc_path(&canonical).unwrap_or(canonical))
 }
 
 #[cfg(test)]
