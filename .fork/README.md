@@ -346,6 +346,33 @@ spare. 9p is a cost paid per file. If your code lives in WSL, the Linux build
 is the faster answer — and it sidesteps the WSL-boundary bugs in `.fork/TASKS.md`
 T6.1 entirely, because there is no boundary.
 
+**The end-to-end version of that table**, same repository, same machine:
+
+| Build | `~/git/warp` (209,644 files) in the project explorer |
+|:--|:--|
+| Windows, over 9p | still a loading skeleton at **10 minutes** |
+| Linux, native ext4 | **already populated at 10 seconds** |
+
+10 s is an upper bound — that was simply when the first screenshot was taken —
+and the page cache was warm. Neither dents a ratio of at least 60×.
+
+**So: run the Linux build if your code is in WSL, the Windows build if it is on
+`C:`.** That is `.fork/TASKS.md` T6.4, and it is a real decision rather than a
+preference, because the same 9p number decides it in both directions.
+
+Two things to know before switching, both real costs rather than caveats:
+
+* **The Linux install has its own profile.** Settings, themes and the Drive
+  store do not come with you.
+* **The local agent is not working there yet** — the whole point of this fork,
+  so this matters. In a fresh Linux profile every route to it does nothing:
+  the composer's `auto (genius)` mode classifies prompts as shell commands and
+  runs them, `/agent …` is not intercepted, and agent management opens
+  nothing. Most likely it is the profile rather than the build — the Linux
+  install has never been through this fork's agent setup — but that is a
+  hypothesis, and the work is tracked as T6.5. Until it is done, the Windows
+  build is still where the agent runs.
+
 Unsetting `WAYLAND_DISPLAY` routes through Xwayland instead
 (`windowing system: X11`) and the window renders. Under X11 you can confirm it
 directly, which is impossible for a Wayland client:

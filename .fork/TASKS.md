@@ -1714,14 +1714,15 @@ seamless across Windows and WSL2.
 - [x] **T6.2** Path translation (`\\wsl.localhost\...` ↔ `/mnt/c/...`). Reframed
       by T6.1: translation already existed. What was missing was *one spelling*
       — see "T6.2 — as built" below.
-- [ ] **T6.3** File explorer across the boundary
-- [ ] **T6.4** Decide the WSLg window-forwarding story or stay Windows-native.
-      T1.11 changed the terms of this decision: the WSLg build works, so this
-      is now a choice between two working options rather than a workaround for
-      one broken one. What the Linux build costs is llvmpipe — software
-      rendering, real CPU, no GPU passthrough — and what it buys is a Warp that
-      is *inside* WSL, where the files and the shell already are.
-      **T6.1 changed them again — see "What this means for T6.4" below.**
+- [x] **T6.3** File explorer across the boundary — see "T6.3 — as built" below.
+- [x] **T6.4** Decided: **run the Linux build when your code is in WSL, keep the
+      Windows build for code on `C:`.** Both sides are now measured rather than
+      argued. See "T6.4 — decided" below.
+- [ ] **T6.5** Make the local agent work in the Linux profile. Opened by T6.4,
+      which is the only thing standing between that decision and acting on it.
+      The Linux install has its own store and has never been through this
+      fork's agent setup; in it, every route to the agent — the composer, the
+      `/agent` slash command, `surface agent-management` — does nothing.
 
 ### T6.1 — as built
 
@@ -2248,6 +2249,134 @@ override (T6.1's recipe), which is not in `warpctrl`'s allowlisted settings.
 Ten new tests; 107 pass in `warp_util` on Windows against 103 on Linux, the
 difference being the `#[cfg(windows)]` ones. Three existing expectations moved
 to the canonical spelling, which is the point of changing the producer.
+
+#### And the last surface T6.1 named: drag-and-drop
+
+Dragging a file out of Explorer's `\\wsl$\Ubuntu\…` view into a WSL session
+inserted `//wsl$/Ubuntu/home/…`, because `convert_windows_path_to_wsl` knows
+only about drive letters and swaps separators for everything else. Linux
+collapses the leading `//`, so the shell looks for `/wsl$/Ubuntu/…`:
+
+    $ ls '//wsl$/Ubuntu/home/effatha/git/warp/.fork/README.md'
+    ls: cannot access ...: No such file or directory
+    $ ls /home/effatha/git/warp/.fork/README.md
+    /home/effatha/git/warp/.fork/README.md
+
+The answer was already in `parse_wsl_unc_path`. What it needed was the
+session's distribution, which `Session::windows_path_converter` could not
+supply because it returned a bare `fn` pointer with nowhere to put one; it now
+returns a boxed closure. A path in another distribution falls through to the
+generic conversion, there being no path from inside one distribution to
+another's filesystem.
+
+Both drop seams covered — the terminal and the rich input — and the
+session-level test was confirmed to fail without the fix. **Not verified on
+screen, and it cannot be from here:** winit takes file drops through OLE
+`IDropTarget`, which needs a real drag over the window rather than a message
+that can be posted to it.
+
+### T6.4 — decided
+
+**Run the Linux build when your code is in WSL. Keep the Windows build for
+code on `C:`.** With one condition attached at the bottom of this section: the
+local agent has not been made to work in the Linux profile yet.
+
+T6.1 argued this from the 9p numbers. What was missing was the other half —
+whether the Linux build is actually usable at *current* code, since T1.11
+verified it five commits and two sessions ago. Checked by running it at
+`342867ee6`, under WSLg with the documented `env -u WAYLAND_DISPLAY
+LIBGL_ALWAYS_SOFTWARE=1`:
+
+| | |
+|:--|:--|
+| `window list` | `has_workspace: true` straight from launch |
+| UI | renders fully; no grey rectangle, no onboarding wall (the flag persisted) |
+| Project explorer | the whole `~/git/warp` tree, ignored dirs in italics |
+| git chip | `⎇ dev  1 ● +98 −8`, native, no `wsl.exe` wrapper |
+| Global search | **`blocker` typed into the live box → 173 results in 41 files** |
+
+That search result closes the gap T6.3 recorded and could not close: "a query
+typed into the live box". It could not be done on Windows, where `warpctrl` has
+no action for it and raising the window would steal the user's focus. Under
+WSLg it is reachable, because XTEST posts to a specific window: `warp-xin.py
+click 345 113`, then one `key` per character. `_` needs a modifier and came out
+as `-` on the first attempt, which is its own small proof that the box is live —
+`wsl-unc` returned "No results found" and `blocker` returned 173.
+
+And the number that decides it. Same repository — `~/git/warp`, 209,644 files —
+indexed from a `cd`:
+
+| Build | Time to a populated project explorer |
+|:--|:--|
+| Windows, over 9p (T6.1(d)) | still a skeleton at **10 minutes** |
+| Linux, native ext4 | **populated at the first capture, 10 s** |
+
+10 s is an upper bound, not a measurement: the first screenshot was taken at
+t+10 s and the tree was already there. Two caveats stated rather than buried —
+the page cache was warm from building in that tree, and the poll interval is
+coarse. Neither dents a ratio of at least 60×, and T6.1's controlled tree walk
+(26 ms native / 101 ms Windows disk / 1323 ms over 9p, same 2247 files) is the
+clean version of the same comparison.
+
+What the Linux build costs, all of it named:
+
+- **Software rendering.** Measured in T1.11, not assumed: 0% CPU at idle, ~280%
+  of one core while painting 50,000 lines of scrollback, back to zero within
+  two seconds.
+- **X11, not Wayland.** With `WAYLAND_DISPLAY` set the window is created and
+  never paints. Unsetting it routes through Xwayland and works.
+- **A separate profile.** Settings, themes and the Drive store do not carry
+  over from the Windows install; T1.11 saw the Linux profile report 0 objects.
+  This is the real switching cost, and it is a one-off.
+
+**The one thing that did not work, and it is the fork's own feature.** The
+local agent could not be reached in the Linux profile at all. Everything tried,
+so the next person does not repeat it:
+
+- `warpctrl input submit` — goes to the terminal input, always. The prompt ran
+  in bash.
+- Typing the prompt into the composer of a `tab create --type agent` tab and
+  pressing Return — the input is in `auto (genius)` mode and classified both
+  natural-language prompts as commands: `Command 'reply' not found`,
+  `Command 'what' not found, did you mean: chat / phat / jhat / wham`.
+- `ctrl shift Return`, the chord the agent tab's own header advertises as
+  "start a new agent conversation" — no visible effect with text in the box.
+- Typing `/agent what is 6 times 7` into the terminal input — `bash: /agent: No
+  such file or directory`. It is not intercepted as a slash command here.
+- `surface agent-management open` — returns `ok` and renders nothing.
+
+The likely reason is not the build but the **profile**: the Linux install has
+its own store, has never been through this fork's agent setup, and has no
+account, so there may be no agent for the input to route to. That is the
+"separate profile" cost above, met in the flesh. It is a hypothesis — what is
+established is only that the surface is unreachable in a fresh Linux profile.
+
+By inspection rather than by running: the Linux build takes the *simplest*
+agent path. `spawn_for` runs plain `claude` with the working directory when
+there is no distribution to cross, which is exactly the Linux case; the whole
+`wsl.exe --distribution … --cd …` wrapper T6.1(e) had to add exists only
+because Warp-on-Windows is outside the distribution. `claude` 2.1.234 is on
+`PATH` at `~/.local/bin/claude`. **So the recommendation above is conditional
+on setting the agent up in the Linux profile, which has not been done.**
+
+And a correction to something this file has implied twice, now that the Linux
+side has been tried properly:
+
+> **`warpctrl` can open any surface but can only type into the terminal.**
+> `input insert|replace|submit` all reach the terminal input. There is no
+> action that enters a global-search query and none that sends a prompt to the
+> agent composer — `action list` has `surface.conversation_list.open` and
+> `surface.agent_management.open` and nothing that writes. On Windows that is
+> the end of it. Under WSLg it is not: XTEST posts to a chosen window without
+> touching focus, so `warp-xin.py` gets past it, which is how the search query
+> above was finally typed. The wall is `warpctrl`, not the app.
+
+**Why this is not "the Windows build is a failure".** Software rendering is a
+cost paid once per frame on a machine with cores to spare. 9p is a cost paid
+per file, by every index, search, diff and agent read. The Windows build is
+the faster one whenever the files are on `C:` — 101 ms against 1323 ms, the
+same comparison pointing the other way — and T6.2 and T6.3 were worth doing
+for exactly that case. What changed is which one is the fallback.
 
 ---
 
