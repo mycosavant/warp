@@ -197,8 +197,8 @@ What you get, scoped by running it (`.fork/TASKS.md` T6.1):
 | Opening a WSL file in the editor | works |
 | `@`-mentions, both inputs | works — but see the note below |
 | Ctrl-clicking a file link in agent output | works, opens your system file manager |
-| **Project explorer** | **looks empty for minutes** — see below |
-| **Global search** | **refuses: "doesn't currently work in Git Bash or WSL"** |
+| Project explorer | works — says "loading" while it indexes, which is slow (see below) |
+| Global search | works — slowly over 9p, ~9 s where `C:` takes 0.1 s |
 | **First index of a large repo** | **minutes, sometimes very many** (see the 9p table below) |
 
 Three things are worth knowing rather than discovering:
@@ -211,12 +211,13 @@ is WSL-specific — but it is easy to read a folder-heavy directory like `~/git`
 as "the picker won't show me files". It will: type two characters and files
 rank above folders by design.
 
-**The empty project explorer is not empty, it is still indexing.** The root
-appears immediately — it comes from the session's working directory, which does
-not wait for anything — and the file list appears whenever the walk over 9p
-finishes, which for a large repo is minutes. There is no spinner, because
-Warp's loading state only shows when there are *no* roots at all, and there is
-one. So a directory being indexed looks exactly like a directory that is empty.
+**The project explorer says "loading" now, and it means it.** The root appears
+immediately — it comes from the session's working directory, which does not wait
+for anything — and the file list appears whenever the walk over 9p finishes,
+which for a large repo is minutes. Upstream that wait rendered as a named root
+with no children, indistinguishable from an empty folder, because the loading
+state only showed when there were *no* roots at all and there was one. This fork
+distinguishes "not read yet" from "nothing in it", so the wait looks like a wait.
 Leave it open; it fills in.
 
 **`cd /mnt/c/...` makes most of it work again.** That path converts to `C:\...`
@@ -224,15 +225,29 @@ and everything downstream is ordinary Windows. The project explorer fills in
 immediately. So the breakage is about *where the files are*, not about running
 bash.
 
-**Global search is the exception, and it asks the wrong question.** Its gate is
-on the shell you launched, not the directory you are in — so a WSL session
-sitting in `/mnt/c/dev/warp` still refuses, in the same window where the file
-tree for that very directory renders perfectly. One line in
-`app/src/workspace/view.rs`:
+**Global search used to refuse WSL outright; this fork lets it run.** Upstream
+gates it on the shell you launched rather than the directory you are in, so a
+WSL session sitting in `/mnt/c/dev/warp` was refused in the same window where
+the file tree for that very directory rendered perfectly. But global search is
+in-process ripgrep over paths — it never consults the shell, and it is handed
+the same roots the project explorer indexes. The same query, from Windows:
+
+| root | time | matches |
+| --- | ---: | ---: |
+| `C:\dev\warp` | 0.12 s | 40 |
+| `\\wsl.localhost\…\git\warp` | 9.52 s | 40 |
+| `\\wsl.localhost\…\git\lapce` (12,372 files) | 17.16 s | 54 |
+
+Identical results, about 39× the wall clock. Results stream in as they are
+found, so it is slow rather than unusable. It now refuses only when the session
+has given it no directory at all.
+
+The shared seam is still there — `app/src/workspace/view.rs` has
 
     let is_unsupported_session = is_wsl_session;
 
-Unpicking that is T6.2/T6.3 and is not done yet.
+and the file tree and code review panels still read it. Only global search has
+been moved off it so far.
 
 If your code lives in WSL rather than on `C:`, the Linux build below avoids all
 of this — see "Why you might actually want this build".

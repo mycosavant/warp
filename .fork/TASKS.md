@@ -1929,9 +1929,9 @@ translation already exists and is used in a dozen places. It is, cheapest and
 most valuable first:
 
 1. ~~**Say that a root is loading.**~~ Done — see "T6.3 — as built" below.
-2. **Move the global-search gate from the shell to the path.** A WSL session in
-   `/mnt/c/...` is a Windows directory and should search like one; a WSL
-   session in `~/…` is the case that needs a real answer, not a refusal.
+2. ~~**Move the global-search gate from the shell to the path.**~~ Done — see
+   "T6.3 — as built" below. The answer turned out to be simpler than "translate
+   the path": search never needed the shell in the first place.
 3. **One spelling.** Pick the canonical form for a WSL directory and hold every
    map key in it. `dunce::canonicalize` cannot be that function, since it
    preserves whatever case and host it was handed.
@@ -2039,6 +2039,68 @@ override set to Ubuntu and `cd`-ing into a repository Warp has never indexed
 One thing that attempt did surface, unasked: steering a *resumed* local-agent
 turn fails with `No deferred tool marker found in the resumed session`. That is
 the already-recorded `--input-format stream-json` gap wearing a different face.
+
+#### Item 2 — global search was refusing the shell, not the path
+
+The list said "move the gate from the shell to the path". The gate turned out
+not to need a path at all.
+
+Global search is in-process ripgrep over `search_roots`
+(`GlobalSearch::run_warp_ripgrep_cli` → `warp_ripgrep::search::search_streaming`)
+— filesystem I/O and nothing else, with no shell anywhere in it. And
+`left_panel.rs` hands global search and the project explorer **the same**
+`active_directories`, so the two panels cannot disagree about what is there.
+Which is exactly what T6.1 watched happen: the tree rendering a directory
+perfectly while the search panel refused it, in one window.
+
+So the refusal was wrong twice. A WSL session in `/mnt/c/...` is looking at a
+Windows directory and searches at full speed. And a WSL session in `~/...`
+searches correctly too — measured from Windows, same query, same repo:
+
+| root | time | matches |
+| --- | ---: | ---: |
+| `C:\dev\warp` | 0.12 s | 40 |
+| `\\wsl.localhost\…\git\warp` | 9.52 s | 40 |
+| `\\wsl.localhost\…\git\lapce` (12,372 files) | 17.16 s | 54 |
+
+Identical results, ~39× the wall clock, no benefit from a warm cache on the 9p
+side. Results stream in batches, so slow and correct beats a wall.
+
+The decision moved out of `render` into `blocker`, a pure function over the
+enablement state and whether any root arrived — testable without a window.
+`UnsupportedSession` now blocks search only when there is no directory at all,
+and the message says that. The old one — "Global search doesn't currently work
+in Git Bash or WSL" — was wrong about WSL and had never been true of Git Bash
+either: the state is set from `Session::is_wsl`, and nothing else.
+
+Scoped to global search on purpose. The file tree and code review read the same
+`UnsupportedSession`, and the shared seam at `workspace/view.rs:17484` is still
+
+    let is_unsupported_session = is_wsl_session;
+
+Moving that moves three panels at once and needs its own evidence.
+
+#### Verified on Windows, 2026-08-19
+
+`68ec5d437`, debug build, restored WSL session. The session is genuinely WSL and
+genuinely in a Linux-native directory:
+
+    uname -sr; pwd
+    Linux 6.18.33.2-microsoft-standard-WSL2
+    /home/effatha/git
+
+With `warpctrl surface global-search open`, the panel renders its ordinary zero
+state — "Search in files across your current directories" — where T6.1 recorded
+"Global search unavailable / doesn't currently work in Git Bash or WSL" for this
+same session.
+
+**Not verified: a query typed into the live box.** `warpctrl` has no action for
+entering a search query (`surface.global_search.open` is the only search action
+in the catalogue), the panel's query editor was occluded, and raising the window
+would mean stealing focus from the user's own desktop. What the query *would*
+do is the ripgrep table above, measured directly against the same roots.
+
+Five tests over `blocker`, including that remote sessions are unchanged.
 
 ---
 
