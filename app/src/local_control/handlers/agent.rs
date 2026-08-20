@@ -337,8 +337,35 @@ pub fn slash_run(
 
     let argument = params.argument.clone();
     let handled = terminal_view.update(ctx, |terminal_view, ctx| {
-        terminal_view.run_slash_command_from_local_control(command, argument, ctx)
+        terminal_view.run_slash_command_from_local_control(command, argument.clone(), ctx)
     });
+
+    // `false` here is not failure. `/compact`, `/plan` and `/orchestrate`
+    // return it *deliberately*: they are not actions, they are prompts, and the
+    // meaning is "send my text to the agent and let the downstream handler
+    // recognise the prefix". The keyboard path says as much in a comment and
+    // falls through to `send_queued_user_query_in_conversation`; this is the
+    // same fall-through.
+    //
+    // Reconstructing `/compact <argument>` rather than passing the argument
+    // alone is the point — the prefix *is* the instruction.
+    let submitted_as_prompt = !handled && slash_command_is_submitted_as_prompt(command);
+    let conversation_id = if submitted_as_prompt {
+        let prompt = match argument.as_deref().map(str::trim).filter(|a| !a.is_empty()) {
+            Some(argument) => format!("{} {argument}", command.name),
+            None => command.name.to_owned(),
+        };
+        // Into the conversation in front of the pane, not a new one: compacting
+        // a fresh conversation would compact nothing.
+        let conversation_id = terminal_view.read(ctx, |terminal_view, ctx| {
+            terminal_view.selected_conversation_for_local_control(ctx)
+        });
+        terminal_view.update(ctx, |terminal_view, ctx| {
+            terminal_view.start_agent_conversation_from_local_control(prompt, conversation_id, ctx)
+        })
+    } else {
+        None
+    };
 
     let mut response = ack(instance_id, ActionKind::SlashRun);
     if let Some(object) = response.as_object_mut() {
@@ -346,11 +373,19 @@ pub fn slash_run(
             "command".to_owned(),
             serde_json::Value::String(name.to_owned()),
         );
-        // `execute_slash_command` reports whether it took the command, which is
-        // not the same as whether the command succeeded — a command can be
-        // handled and then show the user an error toast. Reported as-is rather
-        // than translated into a success this cannot vouch for.
+        // Reported as-is rather than translated into a success this cannot
+        // vouch for: a command can be handled and then raise an error toast.
         object.insert("handled".to_owned(), serde_json::Value::Bool(handled));
+        object.insert(
+            "submitted_as_prompt".to_owned(),
+            serde_json::Value::Bool(submitted_as_prompt),
+        );
+        if let Some(conversation_id) = conversation_id {
+            object.insert(
+                "conversation_id".to_owned(),
+                serde_json::Value::String(conversation_id.to_string()),
+            );
+        }
     }
     Ok(response)
 }

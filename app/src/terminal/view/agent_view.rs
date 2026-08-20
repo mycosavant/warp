@@ -89,6 +89,21 @@ impl TerminalView {
         }
     }
 
+    /// The conversation this terminal's input would act on, for the
+    /// prompt-submitting slash commands.
+    ///
+    /// `/compact` has to apply to the conversation in front of you, not to a
+    /// new one, so `slash.run` resolves it here rather than letting the agent
+    /// view pick.
+    pub(crate) fn selected_conversation_for_local_control(
+        &self,
+        ctx: &AppContext,
+    ) -> Option<AIConversationId> {
+        self.ai_context_model
+            .as_ref(ctx)
+            .selected_conversation_id(ctx)
+    }
+
     /// Whether a slash command would run in this terminal right now.
     pub(crate) fn slash_command_is_available_for_local_control(
         &self,
