@@ -1711,7 +1711,9 @@ User-stated high-priority feature-add. File explorer and remaining features
 seamless across Windows and WSL2.
 
 - [x] **T6.1** Scope what "seamless" means concretely; enumerate broken surfaces
-- [ ] **T6.2** Path translation (`\\wsl.localhost\...` ↔ `/mnt/c/...`)
+- [x] **T6.2** Path translation (`\\wsl.localhost\...` ↔ `/mnt/c/...`). Reframed
+      by T6.1: translation already existed. What was missing was *one spelling*
+      — see "T6.2 — as built" below.
 - [ ] **T6.3** File explorer across the boundary
 - [ ] **T6.4** Decide the WSLg window-forwarding story or stay Windows-native.
       T1.11 changed the terms of this decision: the WSLg build works, so this
@@ -1932,10 +1934,11 @@ most valuable first:
 2. ~~**Move the global-search gate from the shell to the path.**~~ Done — see
    "T6.3 — as built" below. The answer turned out to be simpler than "translate
    the path": search never needed the shell in the first place.
-3. **One spelling.** Pick the canonical form for a WSL directory and hold every
-   map key in it. `dunce::canonicalize` cannot be that function, since it
-   preserves whatever case and host it was handed.
-4. **Do not present a verbatim `\\?\UNC\…` path to a human.**
+3. ~~**One spelling.**~~ Done — see "T6.2 — as built" below. `dunce::canonicalize`
+   indeed could not be that function.
+4. ~~**Do not present a verbatim `\\?\UNC\…` path to a human.**~~ Done, by the
+   same function: keying a directory one way and displaying it another is what
+   put three spellings on screen in the first place.
 
 Note what is *not* on this list: making the index fast. Nothing in Warp can
 make 9p cheap, which is why T6.4 is the more consequential decision.
@@ -2101,6 +2104,150 @@ would mean stealing focus from the user's own desktop. What the query *would*
 do is the ripgrep table above, measured directly against the same roots.
 
 Five tests over `blocker`, including that remote sessions are unchanged.
+
+### T6.2 — as built
+
+Items 3 and 4 of T6.1's list, which turned out to be one function: a directory
+that is *keyed* one way and *displayed* another is how three spellings ended up
+on screen at once.
+
+#### Item 3 — canonicalization normalizes a WSL path to nothing at all
+
+Canonicalizing is supposed to give one name to one directory. Measured with
+`CreateFileW` + `GetFinalPathNameByHandleW`, which is exactly what Rust's
+`canonicalize` calls — one directory, every spelling Windows accepts:
+
+| input | `GetFinalPathNameByHandleW` | opens |
+|:--|:--|:--|
+| `\\wsl$\Ubuntu\home\…\warp` | `\\?\UNC\wsl$\Ubuntu\…` | yes |
+| `\\WSL$\Ubuntu\home\…\warp` | `\\?\UNC\WSL$\Ubuntu\…` | yes |
+| `\\wsl$\ubuntu\home\…\warp` | `\\?\UNC\wsl$\ubuntu\…` | yes |
+| `\\wsl$\UBUNTU\home\…\warp` | `\\?\UNC\wsl$\UBUNTU\…` | yes |
+| `\\wsl.localhost\Ubuntu\…` | `\\?\UNC\wsl.localhost\Ubuntu\…` | yes |
+| `\\wsl.localhost\ubuntu\…` | `\\?\UNC\wsl.localhost\ubuntu\…` | yes |
+| `\\WSL.LOCALHOST\Ubuntu\…` | `\\?\UNC\WSL.LOCALHOST\Ubuntu\…` | yes |
+| `\\wsl$\Ubuntu\home\…\WARP` | — | **no**, `ERROR_FILE_NOT_FOUND` |
+| `C:\dev\warp` | `\\?\C:\dev\warp` | yes |
+
+Seven spellings of one directory, seven distinct "canonical" strings. A drive
+path normalizes to its real on-disk case; a WSL path normalizes to nothing —
+it is a pass-through with a prefix bolted on.
+
+That last-but-one row is the boundary, and it is why this cannot be a blanket
+`to_lowercase`: **the Linux path components are case-sensitive.** `…\git\WARP`
+does not exist where `…\git\warp` does. The host and the distribution are
+case-insensitive; everything after them is not.
+
+`canonicalize_wsl_unc_path` (`warp_util::path`) is the part `dunce` cannot do,
+because only Warp knows the host is the local WSL redirector rather than a
+machine on the network. Host and distribution fold to lower case, the Linux
+path is left exactly as given. Wired at both normal forms
+(`StandardizedPath::from_local_canonicalized`, `normalize_cwd`) *and* at the
+producer (`convert_wsl_to_windows_host_path`, which emitted `\\WSL$\` before),
+so a path that reaches a map without passing through canonicalization is still
+the same key.
+
+Folding the distribution is safe past the filesystem too: `wsl.exe
+--distribution ubuntu` and `--distribution UBUNTU` both start Ubuntu, so
+`git.rs`, which parses the distribution back out of the path, is unaffected.
+It already compared distributions with `eq_ignore_ascii_case`; this only makes
+the map keys agree with a decision the tree had already taken.
+
+#### Item 4 — the verbatim spelling is not a path you can hand back
+
+Same function at the display seam (`user_friendly_path`, which every path Warp
+shows already goes through), on purpose rather than a second one.
+
+Not only cosmetic. `\\?\UNC\…` is what `dunce::canonicalize` returns, leaked —
+nobody typed it, and it does not generally work if copied back out:
+
+    cmd /c dir "\\wsl$\Ubuntu\home\effatha\git"        -> OK
+    cmd /c dir "\\?\UNC\wsl$\Ubuntu\home\effatha\git"  -> "UNC paths are not supported"
+
+PowerShell accepts both. So the fold is the difference between a string the
+user can paste somewhere and one that fails when they do.
+
+#### A third spelling, found by running it: PowerShell reports a *location*
+
+Not on T6.1's list, because T6.1 never put a PowerShell session in a WSL
+directory long enough to read its window title. `(Get-Location).Path` is
+provider-qualified, and for a UNC path the qualifier is part of the string:
+
+    C:\dev\warp        -> C:\dev\warp
+    \\wsl$\Ubuntu\home -> Microsoft.PowerShell.Core\FileSystem::\\wsl$\Ubuntu\home
+
+Warp took it literally. The most direct evidence is the OS window title, which
+is set from the same string:
+
+    MainWindowTitle: Microsoft.PowerShell.Core\FileSystem::\\WSL.LOCALHOST\Ubuntu\home\effatha\.clau…
+
+In the chip log the only three working directories ever recorded were
+`C:\Users\onemind`, `C:\dev\warp`, and the qualified WSL one — drive paths come
+back bare, every UNC path carries the prefix.
+
+Fixed in the bootstrap (`app/assets/bundled/bootstrap/pwsh.ps1`) with
+`$PWD.ProviderPath`, falling back to the qualified form on the non-filesystem
+drives (`Env:`, `Function:`) where `ProviderPath` is empty — Warp cannot
+canonicalize either, and a literal `Env:\` is a better thing to hand it than an
+empty string. Two call sites, both of which pass the string on: the `pwd` in
+the precmd message and the window title.
+
+Deliberately not changed, having checked rather than assumed: the node-version
+cache key, which only compares the string with itself, and the inner runspace's
+`Set-Location`, which round-trips through PowerShell's own location parser.
+`Get-Item -LiteralPath` accepts the qualified form and returns a clean
+`FullName`, so the node chip's directory walk was never affected.
+
+#### Verified on Windows, 2026-08-20
+
+`746bbc1ab`, debug build. The isolating experiment is two panes of one tab in
+**one** directory reached by **two** spellings — `\\WSL.LOCALHOST\Ubuntu\…` in
+the left pane, `\\wsl$\Ubuntu\…` in the right — with the project explorer open.
+
+| | project explorer |
+|:--|:--|
+| without the fold | **`t6repo` twice**, each with its own `.git` and `a.txt` |
+| with the fold | `t6repo` once |
+
+That is the symptom T6.1 predicted from the source ("any two code paths that
+reach the same WSL directory by different spellings hold different map keys"),
+watched happening and then watched stopping.
+
+The counterfactual build is worth describing because the confound is real:
+reverting the whole commit would also revert the PowerShell fix, and *then*
+neither pane produces a root at all, which proves nothing about spelling. So
+the counterfactual build kept the new `pwsh.ps1` — read from disk at runtime in
+a debug build, since `rust-embed`'s `debug-embed` is enabled only for wasm — and
+put back only the four Rust files. Two spellings were the only variable.
+
+Item 4 in the same window, in one line of the block header. The command typed
+was `Set-Location '\\WSL.LOCALHOST\Ubuntu\home\effatha\…'`; what Warp renders
+above the block is
+
+    \\wsl$\ubuntu\home\effatha\.claude\jobs\9f032504\tmp\t6repo git:(main)
+
+— host folded, distribution folded, `.claude`/`9f032504`/`t6repo` untouched, no
+provider prefix, no `\\?\UNC\`. Before the fix the same element read
+`Microsoft.PowerShell.Core\FileSystem::\\WSL.LOCALHOST\Ubuntu\home\…`.
+
+Incidentally confirmed, having been broken in the same session: the git branch
+chip and the diff-stats chip. `ShellGitBranch` went 11 executions / 11 failures,
+all `phase: value`, `status: failure`, empty stdout, `exit_code: <none>`; after
+the fix, `status: success` / `* main` in the same directory, and the panel shows
+`⎇ main` and `1 ● +1 −1`. **The mechanism is inferred, not traced:** the absent
+exit code is the shape of a process that never spawned, which fits Warp handing
+the provider-qualified string to a child process as its working directory, but
+the chip execution path was not read.
+
+**Not verified: a WSL *session*.** Everything above is a PowerShell session
+sitting on a WSL UNC path, which is what exercises `normalize_cwd`. The WSL-
+session route runs through `convert_wsl_to_windows_host_path` instead — covered
+by tests on Windows, not on screen. Reaching it needs the Settings shell
+override (T6.1's recipe), which is not in `warpctrl`'s allowlisted settings.
+
+Ten new tests; 107 pass in `warp_util` on Windows against 103 on Linux, the
+difference being the `#[cfg(windows)]` ones. Three existing expectations moved
+to the canonical spelling, which is the point of changing the producer.
 
 ---
 

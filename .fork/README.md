@@ -201,6 +201,10 @@ What you get, scoped by running it (`.fork/TASKS.md` T6.1):
 | Global search | works — slowly over 9p, ~9 s where `C:` takes 0.1 s |
 | **First index of a large repo** | **minutes, sometimes very many** (see the 9p table below) |
 
+And in a **PowerShell** session sitting on a `\\wsl$\…` path — the other way to
+reach WSL files from Windows — the git chips, the window title and the project
+explorer all work in this fork and none of them did upstream; see below.
+
 Three things are worth knowing rather than discovering:
 
 **`@` shows two different things under one label.** The menu heading "Files and
@@ -248,6 +252,31 @@ The shared seam is still there — `app/src/workspace/view.rs` has
 
 and the file tree and code review panels still read it. Only global search has
 been moved off it so far.
+
+**One WSL directory now has one name.** Windows accepts a startling number of
+spellings for the same folder — `\\wsl$\Ubuntu\…`, `\\WSL$\…`, `\\wsl$\ubuntu\…`,
+`\\wsl.localhost\…`, and each of those again behind `\\?\UNC\` — and
+canonicalizing does not reduce them, it just adds the `\\?\UNC\` prefix to
+whatever it was given. Upstream, two parts of Warp reaching one directory by
+two spellings therefore held two different keys, and the project explorer showed
+the same folder **twice**, each copy with its own contents. This fork folds the
+host and the distribution to one form and keys everything on it. What is
+deliberately *not* folded is the Linux path itself: `…/git/WARP` and `…/git/warp`
+are different files on ext4, and treating them as one would open the wrong one.
+
+The same fold applies to what you are shown, so the `\\?\UNC\…` form no longer
+leaks into the UI. That is worth more than tidiness — `cmd.exe` accepts
+`\\wsl$\Ubuntu\home\…` and rejects `\\?\UNC\wsl$\Ubuntu\home\…` outright, so
+before, a path copied out of Warp could fail when pasted back in.
+
+**PowerShell in a WSL directory used to report a location, not a path.** If you
+`cd` a *PowerShell* session onto `\\wsl$\…`, `(Get-Location).Path` returns
+`Microsoft.PowerShell.Core\FileSystem::\\wsl$\…` — the provider qualifier is
+part of the string, and only for UNC paths. Warp took it literally, so that
+session had no usable working directory: the git and diff chips failed on every
+prompt and the window title read `Microsoft.PowerShell.Core\FileSystem::\\…`.
+This fork's bootstrap sends `$PWD.ProviderPath` instead. Chips work, the title
+is a path, and the project explorer indexes the directory.
 
 If your code lives in WSL rather than on `C:`, the Linux build below avoids all
 of this — see "Why you might actually want this build".
