@@ -306,6 +306,13 @@ pub struct SlashCommandSummary {
     /// Whether it submits its argument as a prompt to the agent, as `/agent`
     /// and `/compact-and` do, rather than acting on the UI.
     pub submits_prompt: bool,
+    /// Whether it would run *in the targeted pane right now*.
+    ///
+    /// Availability is a property of the pane, not of the build: `/compact`
+    /// needs an agent view with an active conversation, `/host` needs a
+    /// configured default host. Without this a caller has to discover the
+    /// difference by running commands and watching them do nothing.
+    pub is_available: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

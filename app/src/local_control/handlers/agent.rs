@@ -161,15 +161,24 @@ fn status_name(status: &ConversationStatus) -> &'static str {
 /// `/rewind`, `/profile`, `/host`, `/harness` and `/environment` are each
 /// gated. A caller that hardcodes a name will eventually be wrong; one that
 /// reads this will not.
-pub fn slash_list(instance_id: &Option<InstanceId>) -> Result<serde_json::Value, ControlError> {
-    let mut commands = COMMAND_REGISTRY
-        .all_commands()
-        .map(|command| SlashCommandSummary {
-            name: command.name.to_owned(),
-            is_orchestration: slash_command_is_orchestration(command.kind),
-            submits_prompt: slash_command_is_submitted_as_prompt(command),
-        })
-        .collect::<Vec<_>>();
+pub fn slash_list(
+    instance_id: &Option<InstanceId>,
+    target: &TargetSelector,
+    ctx: &mut ModelContext<LocalControlBridge>,
+) -> Result<serde_json::Value, ControlError> {
+    let terminal_view = terminal_view_for(ActionKind::SlashList, target, ctx)?;
+    let mut commands = terminal_view.read(ctx, |terminal_view, ctx| {
+        COMMAND_REGISTRY
+            .all_commands()
+            .map(|command| SlashCommandSummary {
+                name: command.name.to_owned(),
+                is_orchestration: slash_command_is_orchestration(command.kind),
+                submits_prompt: slash_command_is_submitted_as_prompt(command),
+                is_available: terminal_view
+                    .slash_command_is_available_for_local_control(command, ctx),
+            })
+            .collect::<Vec<_>>()
+    });
     commands.sort_by(|left, right| left.name.cmp(&right.name));
 
     let mut response = ack(instance_id, ActionKind::SlashList);
@@ -307,6 +316,25 @@ pub fn slash_run(
     }
 
     let terminal_view = terminal_view_for(ActionKind::SlashRun, target, ctx)?;
+
+    // Availability is per-pane, and refusing here rather than reporting
+    // `handled: false` is the difference between a caller that can act on the
+    // answer and one that has to guess. `/compact` needs an agent view with an
+    // active conversation; asking for it from a shell pane is a target problem,
+    // not a command problem, and the error says which.
+    let available = terminal_view.read(ctx, |terminal_view, ctx| {
+        terminal_view.slash_command_is_available_for_local_control(command, ctx)
+    });
+    if !available {
+        return Err(ControlError::new(
+            ErrorCode::TargetStateConflict,
+            format!(
+                "`{name}` is not available in this pane right now; `slash.list` reports \
+                 `is_available` for each command against the pane you target"
+            ),
+        ));
+    }
+
     let argument = params.argument.clone();
     let handled = terminal_view.update(ctx, |terminal_view, ctx| {
         terminal_view.run_slash_command_from_local_control(command, argument, ctx)

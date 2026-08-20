@@ -3,7 +3,7 @@ use warp_core::send_telemetry_from_ctx;
 use warp_core::ui::appearance::Appearance;
 use warp_errors::report_error;
 use warpui::keymap::Keystroke;
-use warpui::{EntityId, SingletonEntity, ViewContext};
+use warpui::{AppContext, EntityId, SingletonEntity, ViewContext};
 
 use crate::TelemetryEvent;
 use crate::ai::agent::conversation::AIConversationId;
@@ -87,6 +87,17 @@ impl TerminalView {
                 None
             }
         }
+    }
+
+    /// Whether a slash command would run in this terminal right now.
+    pub(crate) fn slash_command_is_available_for_local_control(
+        &self,
+        command: &StaticCommand,
+        ctx: &AppContext,
+    ) -> bool {
+        self.input()
+            .as_ref(ctx)
+            .slash_command_is_available_for_local_control(command, ctx)
     }
 
     /// Runs a slash command in this terminal's input, on behalf of

@@ -333,7 +333,7 @@ define_action_catalog! {
     // route through one function, `Input::execute_slash_command`, so exposing
     // the registry costs one action rather than one per verb.
     slash {
-        SlashList => { name: "slash.list", status: Implemented, target: Instance, params: None, result: SlashCommandList },
+        SlashList => { name: "slash.list", status: Implemented, target: Slash, params: None, result: SlashCommandList },
         SlashRun => { name: "slash.run", status: Implemented, target: Slash, params: SlashRun, result: Acknowledgement },
     }
 }

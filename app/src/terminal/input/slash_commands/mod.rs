@@ -259,6 +259,22 @@ impl Input {
             .command_is_active(command, ctx)
     }
 
+    /// Whether `command` would run in this input right now, for
+    /// `warpctrl slash list` and for `slash.run`'s refusal message.
+    ///
+    /// Availability is a property of the *pane*, not of the build: `/compact`
+    /// needs an agent view with an active conversation, `/host` needs a
+    /// configured default host, `/continue-locally` needs a cloud Oz
+    /// conversation. A caller that cannot see this has to discover it by
+    /// running commands and watching them do nothing.
+    pub(crate) fn slash_command_is_available_for_local_control(
+        &self,
+        command: &StaticCommand,
+        ctx: &AppContext,
+    ) -> bool {
+        self.is_slash_command_available(command, ctx)
+    }
+
     /// Runs `command` with `argument`, on behalf of `warpctrl slash run`.
     ///
     /// Returns whether the command was handled — which is not whether it
