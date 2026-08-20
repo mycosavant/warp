@@ -364,14 +364,18 @@ Two things to know before switching, both real costs rather than caveats:
 
 * **The Linux install has its own profile.** Settings, themes and the Drive
   store do not come with you.
-* **The local agent is not working there yet** — the whole point of this fork,
-  so this matters. In a fresh Linux profile every route to it does nothing:
-  the composer's `auto (genius)` mode classifies prompts as shell commands and
-  runs them, `/agent …` is not intercepted, and agent management opens
-  nothing. Most likely it is the profile rather than the build — the Linux
-  install has never been through this fork's agent setup — but that is a
-  hypothesis, and the work is tracked as T6.5. Until it is done, the Windows
-  build is still where the agent runs.
+* **The local agent has not been tried there** — untested, not broken. Every
+  ingredient is present (`claude` on `PATH`, `WARP_FORK_LOCAL_AGENT=1`, and the
+  Linux build takes the *simplest* agent path, with no distribution to cross),
+  but it has not been watched working, because the way to send a prompt is
+  `ctrl`+`shift`+`Return` and the XTEST injection this fork uses under WSLg
+  delivers plain keys to Warp but not modified ones. Tracked as T6.5.
+
+  Worth knowing at the keyboard either way, because it is easy to read as a
+  broken agent: **plain Enter runs your prompt as a shell command**, in both
+  builds. `what is 6 times 7` comes back as `command not found`, complete with
+  a package suggestion. `ctrl`+`shift`+`Return` is what starts an agent
+  conversation, and on the Windows build the fork's local agent answers `42`.
 
 Unsetting `WAYLAND_DISPLAY` routes through Xwayland instead
 (`windowing system: X11`) and the window renders. Under X11 you can confirm it

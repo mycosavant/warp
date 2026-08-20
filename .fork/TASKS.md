@@ -1718,11 +1718,13 @@ seamless across Windows and WSL2.
 - [x] **T6.4** Decided: **run the Linux build when your code is in WSL, keep the
       Windows build for code on `C:`.** Both sides are now measured rather than
       argued. See "T6.4 — decided" below.
-- [ ] **T6.5** Make the local agent work in the Linux profile. Opened by T6.4,
-      which is the only thing standing between that decision and acting on it.
-      The Linux install has its own store and has never been through this
-      fork's agent setup; in it, every route to the agent — the composer, the
-      `/agent` slash command, `surface agent-management` — does nothing.
+- [ ] **T6.5** Exercise the local agent in the Linux build. Untested, not
+      broken — see T6.4. The route is `input replace` then
+      `ctrl`+`shift`+`Return`, which works on Windows and which XTEST cannot
+      deliver under WSLg: plain keys reach Warp, modified keys do not. Either
+      find an injection that carries modifiers, or add a `warpctrl` action that
+      sends a prompt to the agent composer, which would also close the
+      global-search-query gap on Windows.
 
 ### T6.1 — as built
 
@@ -2278,8 +2280,9 @@ that can be posted to it.
 ### T6.4 — decided
 
 **Run the Linux build when your code is in WSL. Keep the Windows build for
-code on `C:`.** With one condition attached at the bottom of this section: the
-local agent has not been made to work in the Linux profile yet.
+code on `C:`.** One thing is untested rather than working: the local agent in
+the Linux build — see the end of this section for what that does and does not
+mean.
 
 T6.1 argued this from the 9p numbers. What was missing was the other half —
 whether the Linux build is actually usable at *current* code, since T1.11
@@ -2329,35 +2332,52 @@ What the Linux build costs, all of it named:
   over from the Windows install; T1.11 saw the Linux profile report 0 objects.
   This is the real switching cost, and it is a one-off.
 
-**The one thing that did not work, and it is the fork's own feature.** The
-local agent could not be reached in the Linux profile at all. Everything tried,
-so the next person does not repeat it:
+**The local agent in the Linux build: still untested, and the first answer here
+was wrong.**
 
-- `warpctrl input submit` — goes to the terminal input, always. The prompt ran
-  in bash.
-- Typing the prompt into the composer of a `tab create --type agent` tab and
-  pressing Return — the input is in `auto (genius)` mode and classified both
-  natural-language prompts as commands: `Command 'reply' not found`,
-  `Command 'what' not found, did you mean: chat / phat / jhat / wham`.
-- `ctrl shift Return`, the chord the agent tab's own header advertises as
-  "start a new agent conversation" — no visible effect with text in the box.
-- Typing `/agent what is 6 times 7` into the terminal input — `bash: /agent: No
-  such file or directory`. It is not intercepted as a slash command here.
-- `surface agent-management open` — returns `ok` and renders nothing.
+What was written first — and committed — was that the agent "does not work in
+the Linux profile", on the evidence that every route to it did nothing:
+`warpctrl input submit` ran the prompt in bash; typing it into a
+`tab create --type agent` composer and pressing Return ran it in bash
+(`Command 'what' not found, did you mean: chat / phat / jhat / wham`);
+`/agent …` was not intercepted; `surface agent-management open` returned `ok`
+and rendered nothing. The hypothesis attached to it was that the Linux profile
+has its own store and had never been through this fork's agent setup.
 
-The likely reason is not the build but the **profile**: the Linux install has
-its own store, has never been through this fork's agent setup, and has no
-account, so there may be no agent for the input to route to. That is the
-"separate profile" cost above, met in the flesh. It is a hypothesis — what is
-established is only that the surface is unreachable in a fresh Linux profile.
+**The control disproves it.** Running the identical sequence on the *Windows*
+build — where the local agent is known to work — produced the identical
+failure, PowerShell's version of it: `what: The term 'what' is not recognized
+as a name of a cmdlet`. Nothing about the Linux profile was being observed. The
+sequence was simply wrong.
 
-By inspection rather than by running: the Linux build takes the *simplest*
-agent path. `spawn_for` runs plain `claude` with the working directory when
-there is no distribution to cross, which is exactly the Linux case; the whole
-`wsl.exe --distribution … --cd …` wrapper T6.1(e) had to add exists only
-because Warp-on-Windows is outside the distribution. `claude` 2.1.234 is on
-`PATH` at `~/.local/bin/claude`. **So the recommendation above is conditional
-on setting the agent up in the Linux profile, which has not been done.**
+The route is `input replace` to put the prompt in the composer **without**
+running it, then **`ctrl`+`shift`+`Return`** — the chord the agent tab's own
+header advertises and which had been read past four times. On Windows that
+works, and the fork's local agent answers:
+
+    /agent what is 6 times 7 answer with only the number
+           42
+
+On Linux it still could not be sent, for a reason that says nothing about the
+build: XTEST delivers plain keys to Warp — `Return` submits, and every
+character of the search query above arrived — but a *modified* key does not
+register with Warp's keybinding matcher, with 0.03 s or 0.2 s modifier holds.
+So the agent is **untested in the Linux build**, and there is no evidence
+either way. The blocker is the injection tool.
+
+What is established, by inspection rather than by running: the Linux build
+takes the *simplest* agent path. `spawn_for` runs plain `claude` with the
+working directory when there is no distribution to cross, which is exactly the
+Linux case; the whole `wsl.exe --distribution … --cd …` wrapper T6.1(e) had to
+add exists only because Warp-on-Windows is outside the distribution. `claude`
+2.1.234 is on `PATH` at `~/.local/bin/claude`, and `WARP_FORK_LOCAL_AGENT=1`
+was set on the launch. Every ingredient is present and none of it was watched
+working.
+
+The generalisable bit, and the reason this is written up rather than quietly
+fixed: **a failure observed only in the new environment is not evidence about
+the new environment until it has been tried in the old one.** Four symptoms all
+pointed at "the Linux profile", and all four were the harness.
 
 And a correction to something this file has implied twice, now that the Linux
 side has been tried properly:
