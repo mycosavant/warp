@@ -315,6 +315,62 @@ impl Match {
     }
 }
 
+/// What the panel shows in place of a search box, when it cannot offer one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum GlobalSearchBlocker {
+    /// An SSH session is still bootstrapping; searching becomes possible when
+    /// the remote server answers.
+    RemoteConnecting,
+    /// A remote session with no server behind it (tmux or subshell SSH).
+    RemoteUnavailable,
+    /// There is no directory to search. Nothing about the shell — the panel
+    /// was simply never handed a root.
+    NoSearchableRoots,
+    /// The coding panels are switched off.
+    Unavailable,
+}
+
+/// Decides whether global search can run at all, separately from drawing it.
+///
+/// Notably absent: any question about which shell the session is running.
+/// Global search is in-process ripgrep over `search_roots` (see
+/// [`GlobalSearch::run_warp_ripgrep_cli`]) and never consults the shell, and
+/// those roots are the very ones the project explorer indexes — `left_panel.rs`
+/// hands both panels the same `active_directories`.
+///
+/// Until this fork a WSL session was refused outright, which was wrong twice
+/// over. A WSL session sitting in `/mnt/c/...` is looking at a Windows
+/// directory and searches at full speed; the panel refused it in the same
+/// window where the project explorer rendered that directory perfectly. And a
+/// WSL session in `~/...` searches correctly too, just slowly: measured on this
+/// fork, the same query over `C:\dev\warp` and over the same tree reached
+/// through `\\wsl.localhost\...` returned the same 40 matches in 0.12 s and
+/// 9.5 s (`.fork/TASKS.md`, T6.3). Results stream in batches, so slow and
+/// correct beats a wall.
+fn blocker(
+    enablement: CodingPanelEnablementState,
+    has_search_roots: bool,
+) -> Option<GlobalSearchBlocker> {
+    match enablement {
+        CodingPanelEnablementState::PendingRemoteSession => {
+            Some(GlobalSearchBlocker::RemoteConnecting)
+        }
+        // Remote-server sessions can search via the daemon; sessions
+        // without one (tmux / subshell SSH) stay unavailable.
+        CodingPanelEnablementState::RemoteSession { has_remote_server } => {
+            (!has_remote_server).then_some(GlobalSearchBlocker::RemoteUnavailable)
+        }
+        // The state is still named for the shell, and the file tree and code
+        // review panels still read it that way. For search it means only
+        // "this session may not have given us a directory".
+        CodingPanelEnablementState::UnsupportedSession => {
+            (!has_search_roots).then_some(GlobalSearchBlocker::NoSearchableRoots)
+        }
+        CodingPanelEnablementState::Disabled => Some(GlobalSearchBlocker::Unavailable),
+        CodingPanelEnablementState::Enabled => None,
+    }
+}
+
 pub struct GlobalSearchView {
     find_model: ModelHandle<GlobalSearch>,
     query_editor: ViewHandle<EditorView>,
@@ -2062,24 +2118,20 @@ impl View for GlobalSearchView {
     }
 
     fn render(&self, app: &AppContext) -> Box<dyn Element> {
-        match self.enablement {
-            CodingPanelEnablementState::PendingRemoteSession => {
+        match blocker(self.enablement, !self.search_roots.is_empty()) {
+            Some(GlobalSearchBlocker::RemoteConnecting) => {
                 return self.render_remote_loading_state(app);
             }
-            CodingPanelEnablementState::RemoteSession { has_remote_server } => {
-                // Remote-server sessions can search via the daemon; sessions
-                // without one (tmux / subshell SSH) stay unavailable.
-                if !has_remote_server {
-                    return self.render_remote_state(app);
-                }
+            Some(GlobalSearchBlocker::RemoteUnavailable) => {
+                return self.render_remote_state(app);
             }
-            CodingPanelEnablementState::UnsupportedSession => {
-                return self.render_unsupported_session_state(app);
+            Some(GlobalSearchBlocker::NoSearchableRoots) => {
+                return self.render_no_searchable_roots_state(app);
             }
-            CodingPanelEnablementState::Disabled => {
+            Some(GlobalSearchBlocker::Unavailable) => {
                 return self.render_unavailable_state(app);
             }
-            CodingPanelEnablementState::Enabled => {}
+            None => {}
         }
 
         let appearance = Appearance::as_ref(app);
@@ -2355,12 +2407,96 @@ impl GlobalSearchView {
         )
     }
 
-    fn render_unsupported_session_state(&self, app: &AppContext) -> Box<dyn Element> {
+    /// Reached only when the session has given the panel no directory at all.
+    /// It used to say "doesn't currently work in Git Bash or WSL", which was
+    /// wrong about WSL — see [`blocker`] — and had never been true of Git Bash,
+    /// which this state does not cover: it is set from `Session::is_wsl`, and
+    /// nothing else.
+    fn render_no_searchable_roots_state(&self, app: &AppContext) -> Box<dyn Element> {
         self.render_zero_state(
             Icon::AlertTriangle,
-            "Global search unavailable",
-            "Global search doesn't currently work in Git Bash or WSL.",
+            "Nothing to search",
+            "This session hasn't reported a directory that can be read from here.",
             app,
         )
+    }
+}
+
+#[cfg(test)]
+mod view_tests {
+    use super::*;
+
+    const NO_ROOTS: bool = false;
+    const HAS_ROOTS: bool = true;
+
+    #[test]
+    fn a_wsl_session_with_a_directory_can_search() {
+        // The bug. Global search is ripgrep over paths and the paths are the
+        // same ones the project explorer indexes, so a session being WSL was
+        // never a reason to refuse. Measured: identical matches over
+        // `C:\dev\warp` and over the same tree via `\\wsl.localhost\...`.
+        // See `.fork/TASKS.md`, T6.3.
+        assert_eq!(
+            blocker(CodingPanelEnablementState::UnsupportedSession, HAS_ROOTS),
+            None
+        );
+    }
+
+    #[test]
+    fn a_session_with_no_directory_says_so() {
+        assert_eq!(
+            blocker(CodingPanelEnablementState::UnsupportedSession, NO_ROOTS),
+            Some(GlobalSearchBlocker::NoSearchableRoots)
+        );
+    }
+
+    #[test]
+    fn remote_sessions_are_unchanged() {
+        assert_eq!(
+            blocker(CodingPanelEnablementState::PendingRemoteSession, HAS_ROOTS),
+            Some(GlobalSearchBlocker::RemoteConnecting)
+        );
+        assert_eq!(
+            blocker(
+                CodingPanelEnablementState::RemoteSession {
+                    has_remote_server: false
+                },
+                HAS_ROOTS
+            ),
+            Some(GlobalSearchBlocker::RemoteUnavailable),
+            "a tmux or subshell SSH session has no daemon to search through"
+        );
+        assert_eq!(
+            blocker(
+                CodingPanelEnablementState::RemoteSession {
+                    has_remote_server: true
+                },
+                HAS_ROOTS
+            ),
+            None,
+            "a warpified remote session searches through its server"
+        );
+    }
+
+    #[test]
+    fn a_disabled_panel_stays_disabled_whatever_the_roots() {
+        // Not a roots question: the user or the workspace turned the coding
+        // panels off, and having directories does not turn them back on.
+        assert_eq!(
+            blocker(CodingPanelEnablementState::Disabled, HAS_ROOTS),
+            Some(GlobalSearchBlocker::Unavailable)
+        );
+        assert_eq!(
+            blocker(CodingPanelEnablementState::Disabled, NO_ROOTS),
+            Some(GlobalSearchBlocker::Unavailable)
+        );
+    }
+
+    #[test]
+    fn an_ordinary_local_session_is_never_blocked() {
+        assert_eq!(
+            blocker(CodingPanelEnablementState::Enabled, HAS_ROOTS),
+            None
+        );
     }
 }
