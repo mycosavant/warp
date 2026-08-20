@@ -955,7 +955,7 @@ impl FileTreeView {
                     self.root_directories.insert(
                         repo_path.clone(),
                         RootDirectory {
-                            entry: Self::create_empty_entry(repo_path),
+                            entry: Self::create_unloaded_entry(repo_path),
                             expanded_folders: HashSet::new(),
                             items: Vec::new(),
                             item_states: HashMap::new(),
@@ -1228,7 +1228,7 @@ impl FileTreeView {
         self.root_directories
             .entry(ancestor.clone())
             .or_insert_with(|| RootDirectory {
-                entry: Self::create_empty_entry(ancestor),
+                entry: Self::create_unloaded_entry(ancestor),
                 expanded_folders: HashSet::new(),
                 items: Vec::new(),
                 item_states: HashMap::new(),
@@ -1294,7 +1294,7 @@ impl FileTreeView {
             self.root_directories
                 .entry(root_path.clone())
                 .or_insert_with(|| RootDirectory {
-                    entry: Self::create_empty_entry(root_path),
+                    entry: Self::create_unloaded_entry(root_path),
                     expanded_folders: HashSet::new(),
                     items: Vec::new(),
                     item_states: HashMap::new(),
@@ -1550,7 +1550,7 @@ impl FileTreeView {
         self.root_directories
             .entry(path.clone())
             .or_insert_with(|| RootDirectory {
-                entry: Self::create_empty_entry(path),
+                entry: Self::create_unloaded_entry(path),
                 expanded_folders: HashSet::new(),
                 items: Vec::new(),
                 item_states: HashMap::new(),
@@ -1584,15 +1584,56 @@ impl FileTreeView {
                     // have so the tree doesn't flash back to a loading state
                     // during the Pending → Indexed transition.
                 }
-                Some(IndexedRepoState::Failed(_)) | None => {
+                Some(IndexedRepoState::Failed(_)) => {
+                    // The read happened and did not work. Nothing more is
+                    // coming, so this must not be left looking like a load in
+                    // progress — an empty root is at least honest about the
+                    // fact that the panel has nothing to show.
                     root_dir.entry = Self::create_empty_entry(path);
+                }
+                None => {
+                    // The model has not been asked about this path yet, or the
+                    // registration above failed and will be retried. Contents
+                    // are still expected.
+                    root_dir.entry = Self::create_unloaded_entry(path);
                 }
             }
         }
     }
 
+    /// An entry for a root that has been read and turned out to hold nothing,
+    /// or that could not be read at all. Either way no contents are coming, so
+    /// it is marked loaded and the panel draws it as the empty directory it is.
     fn create_empty_entry(path: &StandardizedPath) -> FileTreeEntry {
         FileTreeEntry::new_for_directory(Arc::new(path.clone()))
+    }
+
+    /// An entry for a root whose contents have not arrived yet.
+    ///
+    /// `loaded: false` is the whole difference between "this folder is empty"
+    /// and "we have not read this folder yet". Both flatten to the same single
+    /// item — the root's own header — so without the flag the panel cannot
+    /// tell them apart, and it used to draw both as a named root with nothing
+    /// under it. That is invisible when reading is instant and a bug report
+    /// when it is not: over WSL's 9p redirector the first index of a
+    /// repository takes minutes (`.fork/TASKS.md`, T6.1), and for all of them
+    /// the file explorer looked broken rather than busy.
+    ///
+    /// `FileTreeEntry::new_for_directory` hardcodes `loaded: true`, which is
+    /// right for its other caller (the remote model, which fills the entry in
+    /// immediately afterwards) and wrong for every placeholder here, so this
+    /// builds the entry from a bare [`Entry::Directory`] instead.
+    ///
+    /// See [`FileTreeView::is_awaiting_contents`].
+    fn create_unloaded_entry(path: &StandardizedPath) -> FileTreeEntry {
+        FileTreeEntry::from(repo_metadata::entry::Entry::Directory(
+            repo_metadata::entry::DirectoryEntry {
+                path: path.clone(),
+                children: Vec::new(),
+                ignored: false,
+                loaded: false,
+            },
+        ))
     }
 
     /// Rebuilds the flattened items list for a single root directory only,
@@ -2623,6 +2664,28 @@ impl FileTreeView {
         })
     }
 
+    /// Whether the panel is still waiting to be told what is in its roots.
+    ///
+    /// True when no displayed root has been read yet. A root that has been
+    /// read is marked loaded even if it turned out to be empty, so a genuinely
+    /// empty directory renders as an empty directory rather than spinning
+    /// forever; see [`FileTreeView::create_unloaded_entry`] for why the two
+    /// are otherwise indistinguishable.
+    ///
+    /// Deliberately "no root has been read" rather than "some root has not":
+    /// with a repository open in one pane and a slow root in another, the
+    /// tree that already has contents should keep showing them.
+    fn is_awaiting_contents(&self) -> bool {
+        !self
+            .displayed_root_directories()
+            .any(|(root_path, root_dir)| {
+                root_dir
+                    .entry
+                    .get(root_path)
+                    .is_some_and(|entry| entry.loaded())
+            })
+    }
+
     /// Get total count of items across all roots
     fn total_item_count(&self) -> usize {
         self.displayed_root_directories()
@@ -2662,7 +2725,10 @@ impl FileTreeView {
         let appearance = Appearance::as_ref(app);
         let theme = appearance.theme();
         let num_items = self.total_item_count();
-        if num_items == 0 {
+        // `num_items == 0` catches a tree with no roots at all. A root whose
+        // contents have not arrived is not that case — it contributes its own
+        // header — so it needs asking about separately.
+        if num_items == 0 || self.is_awaiting_contents() {
             return self.render_loading_state(app);
         }
 

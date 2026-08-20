@@ -1219,3 +1219,156 @@ fn absorbed_descendant_is_unregistered_from_lazy_loaded_paths() {
         });
     });
 }
+
+// ── A root that has not been read yet is not an empty root (T6.3) ────
+//
+// Both flatten to a single item, the root's own header, so the panel used
+// to draw them identically. Over WSL's 9p redirector the first index of a
+// repository takes minutes, and for all of them the file explorer looked
+// broken rather than busy. See `.fork/TASKS.md`, T6.1.
+
+#[test]
+fn a_root_that_is_still_indexing_reads_as_loading_not_as_empty() {
+    VirtualFS::test("file_tree_pending_root_is_loading", |dirs, mut vfs| {
+        vfs.mkdir("repo/.git/objects").with_files(vec![
+            Stub::FileWithContent("repo/.git/HEAD", "ref: refs/heads/main"),
+            Stub::FileWithContent("repo/.git/config", "[core]\n\trepositoryformatversion = 0"),
+            Stub::FileWithContent("repo/README.md", "hi"),
+        ]);
+
+        let repo_root = dirs.tests().join("repo");
+        let canonical_repo_root =
+            warp_util::standardized_path::StandardizedPath::from_local_canonicalized(&repo_root)
+                .unwrap();
+
+        App::test((), |mut app| async move {
+            let (detected_repositories, repository_metadata_model) = initialize_app(&mut app);
+            let directory_watcher = app.add_singleton_model(DirectoryWatcher::new);
+            let (_, file_tree_view) = app.add_window(WindowStyle::NotStealFocus, FileTreeView::new);
+
+            let repository_handle = directory_watcher.update(&mut app, |watcher, ctx| {
+                watcher
+                    .add_directory(canonical_repo_root.clone(), ctx)
+                    .unwrap()
+            });
+            detected_repositories.update(&mut app, |repositories, _ctx| {
+                repositories.insert_test_repo_root(canonical_repo_root.clone());
+            });
+            repository_metadata_model.update(&mut app, |model, ctx| {
+                model.index_directory(repository_handle, ctx).unwrap();
+            });
+
+            file_tree_view.update(&mut app, |view, ctx| {
+                view.set_is_active(true, ctx);
+                view.set_root_directories(vec![repo_root.clone()], ctx);
+            });
+
+            // The state the bug lived in: one item — the root header — so the
+            // pre-existing `num_items == 0` guard does not fire.
+            file_tree_view.read(&app, |view, _ctx| {
+                assert_eq!(
+                    flattened_paths(view, &repo_root),
+                    vec![std_path(&repo_root)],
+                    "an unindexed root flattens to its own header and nothing else"
+                );
+                assert!(
+                    view.is_awaiting_contents(),
+                    "a root whose index has not finished has not been read"
+                );
+            });
+
+            await_repository_indexed(&mut app, &repository_metadata_model, &repo_root).await;
+
+            file_tree_view.read(&app, |view, _ctx| {
+                assert!(
+                    !view.is_awaiting_contents(),
+                    "once the repository is indexed the panel has something to show"
+                );
+                assert!(
+                    flattened_paths(view, &repo_root)
+                        .contains(&std_path(&repo_root.join("README.md"))),
+                    "and it is the repository's contents: {:?}",
+                    flattened_paths(view, &repo_root)
+                );
+            });
+        });
+    });
+}
+
+#[test]
+fn a_directory_that_is_genuinely_empty_does_not_spin_forever() {
+    // The regression the `loaded` flag exists to prevent. An empty directory
+    // renders exactly like an unread one, so distinguishing them by item count
+    // alone would leave `cd` into an empty folder loading indefinitely.
+    VirtualFS::test("file_tree_empty_root_is_not_loading", |dirs, mut vfs| {
+        vfs.mkdir("empty_dir");
+
+        let empty_dir = dirs.tests().join("empty_dir");
+
+        App::test((), |mut app| async move {
+            let (_detected_repositories, repository_metadata_model) = initialize_app(&mut app);
+            let (_, file_tree_view) = app.add_window(WindowStyle::NotStealFocus, FileTreeView::new);
+
+            file_tree_view.update(&mut app, |view, ctx| {
+                view.set_is_active(true, ctx);
+                view.set_root_directories(vec![empty_dir.clone()], ctx);
+            });
+            await_repository_indexed(&mut app, &repository_metadata_model, &empty_dir).await;
+
+            file_tree_view.read(&app, |view, _ctx| {
+                assert_eq!(
+                    flattened_paths(view, &empty_dir),
+                    vec![std_path(&empty_dir)],
+                    "an empty directory has nothing under its header"
+                );
+                assert!(
+                    !view.is_awaiting_contents(),
+                    "it was read; there is simply nothing in it"
+                );
+            });
+        });
+    });
+}
+
+#[test]
+fn a_root_with_contents_keeps_showing_them_while_a_sibling_loads() {
+    // Why the predicate asks whether *any* root has been read rather than
+    // whether *every* root has. The mixed case is the ordinary one on this
+    // fork: a Windows-side root indexes instantly, a WSL-side root does not.
+    VirtualFS::test("file_tree_mixed_root_readiness", |dirs, mut vfs| {
+        vfs.mkdir("ready")
+            .with_files(vec![Stub::FileWithContent("ready/file.txt", "content")]);
+
+        let ready = dirs.tests().join("ready");
+        let slow = dirs.tests().join("slow");
+
+        App::test((), |mut app| async move {
+            let (_detected_repositories, repository_metadata_model) = initialize_app(&mut app);
+            let (_, file_tree_view) = app.add_window(WindowStyle::NotStealFocus, FileTreeView::new);
+
+            file_tree_view.update(&mut app, |view, ctx| {
+                view.set_is_active(true, ctx);
+                view.set_root_directories(vec![ready.clone()], ctx);
+            });
+            await_repository_indexed(&mut app, &repository_metadata_model, &ready).await;
+
+            // `slow` does not exist on disk, so it never gets contents — the
+            // stand-in for a root that has not finished being read.
+            file_tree_view.update(&mut app, |view, ctx| {
+                view.set_root_directories(vec![ready.clone(), slow.clone()], ctx);
+            });
+
+            file_tree_view.read(&app, |view, _ctx| {
+                assert!(
+                    !view.is_awaiting_contents(),
+                    "the root that is ready must not be hidden behind the one that is not"
+                );
+                assert!(
+                    flattened_paths(view, &ready).contains(&std_path(&ready.join("file.txt"))),
+                    "and its contents are still there: {:?}",
+                    flattened_paths(view, &ready)
+                );
+            });
+        });
+    });
+}
