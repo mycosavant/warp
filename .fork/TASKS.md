@@ -1928,10 +1928,7 @@ across the boundary.
 translation already exists and is used in a dozen places. It is, cheapest and
 most valuable first:
 
-1. **Say that a root is loading.** `file_tree/view.rs` reaches its loading state
-   only when there are no roots at all. An unloaded root should render as
-   loading, not as empty. This is the difference between "slow" and "broken"
-   for the panel the user actually asked about, and it is a few lines.
+1. ~~**Say that a root is loading.**~~ Done — see "T6.3 — as built" below.
 2. **Move the global-search gate from the shell to the path.** A WSL session in
    `/mnt/c/...` is a Windows directory and should search like one; a WSL
    session in `~/…` is the case that needs a real answer, not a refusal.
@@ -1979,6 +1976,69 @@ Warp's own log was no help: the second `warp-oss.exe` of a pair takes
 `warp-oss.log.recovery` when the first holds `warp-oss.log`, and that file
 stayed zero bytes for the whole session. Everything above came from the UI and
 from probes run beside it.
+
+### T6.3 — as built
+
+Item 1 of the list above: **an unread root is not an empty root.**
+
+The panel already had a loading state and simply never reached it. Its guard is
+`total_item_count() == 0`, and an unread root is not zero items — it
+contributes its own header. So a root that had not been indexed yet drew
+exactly what a folder with nothing in it draws: the name, expanded, no
+children.
+
+Measured rather than assumed, in the real view against the real model, with a
+repository held in `IndexedRepoState::Pending`:
+
+    total_item_count = 1
+    items            = ["…/repo"]
+    root entry loaded = Some(true)
+    expanded          = true
+
+That `loaded = true` was the lie the whole bug rested on.
+`FileTreeEntry::new_for_directory` hardcodes it. That suits its other caller —
+`remote_model.rs` fills the entry in on the next line — and suits none of the
+four placeholders in `file_tree/view.rs`, each of which exists *because* the
+contents have not arrived. They now build an unloaded entry, and the panel asks
+whether any root has been read.
+
+Any, not every. With a repository open in one pane and a slow root in another,
+the tree that already has contents keeps showing them — and that mixed case is
+the ordinary one here, where a `C:` root indexes instantly and a `~/` root does
+not.
+
+A read that fails is still a read: `IndexedRepoState::Failed` keeps the
+loaded-and-empty entry so a root that cannot be indexed does not spin forever.
+Only `None` — the model has not been asked yet, or the registration will be
+retried — counts as pending.
+
+#### Verified 2026-08-19
+
+`dbe8c310b`. Three tests in `view_tests.rs`, run against the real
+`RepoMetadataModel` and `DetectedRepositories`, not mocks:
+
+| test | what it holds |
+| --- | --- |
+| `a_root_that_is_still_indexing_reads_as_loading_not_as_empty` | the fix. Fails without it — confirmed by reverting `create_unloaded_entry` to the old behaviour and re-running |
+| `a_directory_that_is_genuinely_empty_does_not_spin_forever` | the regression the `loaded` flag exists to prevent |
+| `a_root_with_contents_keeps_showing_them_while_a_sibling_loads` | why the predicate is "any", not "every" |
+
+48 file-tree tests pass. `cargo clippy -p warp --lib` clean. Builds and links
+on Windows.
+
+**Not verified on screen.** The remaining link is `render_file_tree`'s two-line
+branch into `render_loading_state` — read, not watched. Reproducing it live
+needs a cold WSL repository in a WSL session, and the attempt ran aground: the
+running window had cached metadata for every root it was pointed at, `warpctrl
+tab activate` does not take an index, and the `cd` landed in an agent pane's
+steering input instead of a terminal. Recorded here rather than papered over,
+per T1.7. Next hands-on session should catch it by launching with the shell
+override set to Ubuntu and `cd`-ing into a repository Warp has never indexed
+(`~/git/lapce`, 12,372 files, is the one to use).
+
+One thing that attempt did surface, unasked: steering a *resumed* local-agent
+turn fails with `No deferred tool marker found in the resumed session`. That is
+the already-recorded `--input-format stream-json` gap wearing a different face.
 
 ---
 
