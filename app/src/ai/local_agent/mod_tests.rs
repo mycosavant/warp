@@ -22,6 +22,7 @@ fn turn(prompt: &str, session: Option<String>) -> Turn {
         task_id: "task-1".to_owned(),
         task_needs_announcing: true,
         working_directory: None,
+        distro: None,
     }
 }
 
@@ -160,5 +161,90 @@ fn a_missing_binary_is_reported_in_the_stream_rather_than_swallowed() {
     assert!(
         format!("{error:#}").contains("claude"),
         "the error should name what failed to start: {error:#}"
+    );
+}
+
+#[test]
+fn a_windows_session_runs_claude_directly_in_its_own_directory() {
+    let spawn = spawn_for(None, Some(r"C:\dev\warp"), vec!["--print".to_owned()]);
+
+    assert_eq!(spawn.program, "claude");
+    assert_eq!(spawn.arguments, vec!["--print".to_owned()]);
+    assert_eq!(spawn.working_directory.as_deref(), Some(r"C:\dev\warp"));
+}
+
+#[test]
+fn a_wsl_session_runs_claude_inside_the_distribution() {
+    // The bug this is named after: Warp on Windows was handed the session's
+    // Linux working directory and passed it to `current_dir`, which fails with
+    // "The directory name is invalid" before Claude ever runs. See T6.1.
+    let spawn = spawn_for(
+        Some("Ubuntu"),
+        Some("/home/effatha/git/warp"),
+        vec!["--print".to_owned(), "--verbose".to_owned()],
+    );
+
+    assert_eq!(spawn.program, "wsl.exe");
+    assert_eq!(
+        spawn.working_directory, None,
+        "`wsl.exe` is a Windows process: it must not be asked to enter a Linux path"
+    );
+    assert_eq!(
+        spawn.arguments,
+        vec![
+            "--distribution",
+            "Ubuntu",
+            "--cd",
+            "/home/effatha/git/warp",
+            "--exec",
+            "/bin/sh",
+            "-lc",
+            r#"exec claude "$@""#,
+            "claude",
+            "--print",
+            "--verbose",
+        ]
+    );
+}
+
+#[test]
+fn a_wsl_session_with_no_working_directory_still_starts() {
+    // A session that has not reported a cwd yet must not become `--cd` with an
+    // empty argument, which `wsl.exe` rejects outright.
+    let spawn = spawn_for(Some("Ubuntu"), None, Vec::new());
+
+    assert!(
+        !spawn.arguments.iter().any(|argument| argument == "--cd"),
+        "no directory means no `--cd`: {:?}",
+        spawn.arguments
+    );
+    assert_eq!(
+        spawn.arguments.first().map(String::as_str),
+        Some("--distribution")
+    );
+}
+
+#[test]
+fn the_prompt_never_becomes_shell_syntax() {
+    // Claude's arguments ride as positional parameters after the script, so a
+    // prompt or a session id cannot be read as shell. The script itself is
+    // fixed text.
+    let spawn = spawn_for(
+        Some("Ubuntu"),
+        None,
+        vec!["--resume".to_owned(), "; rm -rf ~".to_owned()],
+    );
+
+    let script = spawn
+        .arguments
+        .iter()
+        .position(|argument| argument == "-lc")
+        .map(|index| spawn.arguments[index + 1].clone())
+        .expect("the login shell takes a script");
+    assert_eq!(script, r#"exec claude "$@""#);
+    assert!(
+        spawn.arguments.contains(&"; rm -rf ~".to_owned()),
+        "the argument travels intact, as an argument: {:?}",
+        spawn.arguments
     );
 }

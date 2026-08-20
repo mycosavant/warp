@@ -66,6 +66,7 @@ use futures::stream::{self, Stream, StreamExt as _};
 use futures_lite::io::BufReader;
 use futures_lite::{AsyncBufReadExt as _, AsyncReadExt as _, AsyncWriteExt as _};
 use uuid::Uuid;
+use warp_terminal::shell::ShellLaunchData;
 
 use self::translate::Translator;
 use crate::ai::agent::AIAgentInput;
@@ -128,6 +129,9 @@ pub(crate) struct Turn {
     task_id: String,
     task_needs_announcing: bool,
     working_directory: Option<String>,
+    /// The WSL distribution the session lives in, when it is a WSL session.
+    /// See [`spawn_for`] for what that changes.
+    distro: Option<String>,
 }
 
 impl Turn {
@@ -158,7 +162,79 @@ impl Turn {
             task_id,
             task_needs_announcing,
             working_directory: params.session_context.current_working_directory().clone(),
+            distro: match params.session_context.shell() {
+                Some(ShellLaunchData::WSL { distro }) => Some(distro.clone()),
+                _ => None,
+            },
         })
+    }
+}
+
+/// How one turn is spawned.
+///
+/// Split out from the spawn itself so the decision can be asserted without a
+/// `claude` binary, a WSL distribution, or a Windows host.
+#[derive(Debug, PartialEq, Eq)]
+struct Spawn {
+    program: &'static str,
+    arguments: Vec<String>,
+    working_directory: Option<String>,
+}
+
+/// Decides how to run one Claude turn.
+///
+/// A WSL session's working directory is a Linux path — `/home/you/project` —
+/// while Warp on Windows is a Windows process, so `current_dir` on it fails
+/// outright: `ERROR_DIRECTORY`, surfaced as "The directory name is invalid".
+/// That was this module's own bug, found by running it (`.fork/TASKS.md` T6.1).
+///
+/// Converting the path to its `\\wsl$\<distro>\...` UNC form would start the
+/// process but move the cost: Claude would then read every file through the 9p
+/// redirector, measured at ~13× the same tree on the Windows disk and ~50× the
+/// same tree from inside the distribution. An agent is a file-reading workload,
+/// so that is the whole job made slow.
+///
+/// So Claude is run *inside* the distribution — the same treatment
+/// [`warp_util::git`] gives `git`, for the same reason: run the tool where the
+/// files are.
+fn spawn_for(
+    distro: Option<&str>,
+    working_directory: Option<&str>,
+    arguments: Vec<String>,
+) -> Spawn {
+    let Some(distro) = distro else {
+        return Spawn {
+            program: "claude",
+            arguments,
+            working_directory: working_directory.map(str::to_owned),
+        };
+    };
+
+    let mut translated = vec!["--distribution".to_owned(), distro.to_owned()];
+    if let Some(directory) = working_directory {
+        translated.push("--cd".to_owned());
+        translated.push(directory.to_owned());
+    }
+    // A login shell rather than `--exec claude`: `wsl.exe --exec` searches only
+    // a minimal default `PATH` (`/usr/bin`, `/bin`, …), and `claude` is normally
+    // installed under the user's home — nvm, `~/.local/bin` — not there.
+    // Arguments ride along as positional parameters, so no shell quoting is
+    // involved and a prompt cannot become syntax.
+    translated.extend([
+        "--exec".to_owned(),
+        "/bin/sh".to_owned(),
+        "-lc".to_owned(),
+        r#"exec claude "$@""#.to_owned(),
+        "claude".to_owned(),
+    ]);
+    translated.extend(arguments);
+
+    Spawn {
+        program: "wsl.exe",
+        arguments: translated,
+        // Deliberately unset: `--cd` supplies it inside the distribution, and
+        // `wsl.exe` is a Windows process that could not enter it anyway.
+        working_directory: None,
     }
 }
 
@@ -169,26 +245,27 @@ async fn run(turn: Turn) -> anyhow::Result<impl Stream<Item = Event> + Send + us
         task_id,
         task_needs_announcing,
         working_directory,
+        distro,
     } = turn;
     let request_id = Uuid::new_v4().to_string();
     let started_at = Utc::now();
 
-    let mut command = command::r#async::Command::new("claude");
-    command
-        .arg("--print")
-        .arg("--output-format")
-        .arg("stream-json")
+    let mut arguments = vec![
+        "--print".to_owned(),
+        "--output-format".to_owned(),
+        "stream-json".to_owned(),
         // `--print --output-format stream-json` refuses to run without it.
-        .arg("--verbose");
+        "--verbose".to_owned(),
+    ];
     match session {
-        Some(id) => {
-            command.arg("--resume").arg(id);
-        }
-        None => {
-            command.arg("--session-id").arg(Uuid::new_v4().to_string());
-        }
+        Some(id) => arguments.extend(["--resume".to_owned(), id]),
+        None => arguments.extend(["--session-id".to_owned(), Uuid::new_v4().to_string()]),
     }
-    if let Some(directory) = working_directory {
+
+    let spawn = spawn_for(distro.as_deref(), working_directory.as_deref(), arguments);
+    let mut command = command::r#async::Command::new(spawn.program);
+    command.args(&spawn.arguments);
+    if let Some(directory) = &spawn.working_directory {
         command.current_dir(directory);
     }
     command
@@ -205,10 +282,21 @@ async fn run(turn: Turn) -> anyhow::Result<impl Stream<Item = Event> + Send + us
         // shutdown drops the stream, which kills it here.
         .kill_on_drop(true);
 
-    let mut child = command.spawn().context(
-        "Could not start `claude`. The local agent needs the Claude Code CLI on PATH \
-         (https://claude.com/claude-code).",
-    )?;
+    // Named after what was actually run. The first version of this said only
+    // "needs the Claude Code CLI on PATH", which was a confident wrong answer
+    // when the real failure was the WSL working directory — the cause was in
+    // the `Caused by:` line all along, being contradicted by the sentence above
+    // it.
+    let mut child = command.spawn().with_context(|| match &distro {
+        Some(distro) => format!(
+            "Could not start `claude` in the {distro} distribution. The local agent runs the \
+             Claude Code CLI inside WSL, where the session's files are, so it has to be installed \
+             there (https://claude.com/claude-code)."
+        ),
+        None => "Could not start `claude`. The local agent needs the Claude Code CLI on PATH \
+                 (https://claude.com/claude-code)."
+            .to_owned(),
+    })?;
 
     let mut stdin = child.stdin.take().context("claude stdin was not piped")?;
     stdin.write_all(prompt.as_bytes()).await?;
