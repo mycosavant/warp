@@ -1718,13 +1718,19 @@ seamless across Windows and WSL2.
 - [x] **T6.4** Decided: **run the Linux build when your code is in WSL, keep the
       Windows build for code on `C:`.** Both sides are now measured rather than
       argued. See "T6.4 — decided" below.
-- [ ] **T6.5** Exercise the local agent in the Linux build. Untested, not
-      broken — see T6.4. The route is `input replace` then
-      `ctrl`+`shift`+`Return`, which works on Windows and which XTEST cannot
-      deliver under WSLg: plain keys reach Warp, modified keys do not. Either
-      find an injection that carries modifiers, or add a `warpctrl` action that
-      sends a prompt to the agent composer, which would also close the
-      global-search-query gap on Windows.
+- [x] **T6.5** `warpctrl` can talk to the agent. Four actions — `agent.list`,
+      `agent.prompt`, `slash.list`, `slash.run` — see "T6.5 — as built" below.
+      The original framing (find a keystroke injection that carries modifiers)
+      was abandoned for the better half of the same task: give the app an action
+      rather than teach the harness to fake a keyboard.
+- [ ] **T6.6** Orchestration: one agent running several. Scoped from T6.5 —
+      see "T6.6 — scope" below. The machinery exists; what is missing is the
+      `warpctrl` surface onto it.
+- [ ] **T6.7** Local summarization, so `/compact` works without an account.
+      Found by T6.5: `/compact` submits correctly and then fails with
+      `missing authentication credentials`, because summarization is an
+      `AIAgentInput::SummarizeConversation` and `local_agent::handles` takes
+      only `UserQuery`. A T3-shaped job, not a T6.5 one.
 
 ### T6.1 — as built
 
@@ -2397,6 +2403,183 @@ per file, by every index, search, diff and agent read. The Windows build is
 the faster one whenever the files are on `C:` — 101 ms against 1323 ms, the
 same comparison pointing the other way — and T6.2 and T6.3 were worth doing
 for exactly that case. What changed is which one is the fallback.
+
+### T6.5 — as built
+
+`warpctrl` could open every surface and type into exactly one of them, so an
+agent driving it could start a shell command and nothing else. Four actions,
+all on seams that already existed:
+
+| | |
+|:--|:--|
+| `agent.list` | live conversations: id, title, status, `is_busy` |
+| `agent.prompt` | a prompt to a new conversation or an existing one |
+| `slash.list` | the registry, with `is_orchestration`, `is_available`, `submits_prompt` |
+| `slash.run` | any slash command, argument and all |
+
+**`agent.prompt` addresses a conversation, not a pane.** That is the unit work
+is handed to: the pane can be split, moved between tabs, or closed underneath
+it. It returns the conversation id, which the keyboard path throws away — an
+orchestrator that started three agents has no other way to tell them apart.
+
+**`slash.run` is one action for the whole registry** because
+`Input::execute_slash_command` is one function for the whole registry.
+
+#### The allowlist
+
+The user's call, taken as a question rather than assumed: orchestration
+commands run freely, everything else needs `force`. `/exit` and `/logout` sit
+in the same registry as `/compact`, and an agent should not end its own session
+by mistyping a command name.
+
+An allowlist rather than a deny-list, because the registry is upstream's and
+grows: a command added tomorrow is excluded by default. A test asserts that
+property rather than trusting it — it walks every command the running build has
+and fails if one is admitted that is not on the list.
+
+29 of 63 commands are admitted in this build. Off the list on purpose:
+`/clear` (discards a conversation, no undo), `/auto-approve` (an agent widening
+its own permissions is a decision for a person), and the account and appearance
+verbs.
+
+#### Four things found by running it
+
+**1. `input.submit '/agent …'` was never going to work,** and neither was any
+amount of cleverness about it. `input.submit` runs its text as a command.
+
+**2. The registry stores names with the slash** — `StaticCommand::name` is
+`"/compact"`, not `"compact"`. The first version stripped the slash from the
+caller's input only, so every lookup missed.
+
+**3. Which commands exist is a property of the build, not the source.**
+`/compact` is behind `SummarizationConversationCommand`; `/queue`,
+`/fork-from`, `/rewind`, `/profile`, `/host`, `/harness`, `/environment` behind
+their own flags. In a unit-test process none of them are registered at all,
+which is why the allowlist is tested against `SlashCommandKind` rather than
+against the registry. It is also why `slash.list` exists.
+
+**4. A staged prompt is not a sent prompt.** The first `agent.prompt` created
+the conversation, returned its id, reported `in_progress` — and left the text
+sitting in the composer. Every JSON field said success; the screenshot did not.
+`try_enter_agent_view` asks the *origin* whether to submit or stage, and
+`AgentViewEntryOrigin::Input` answers "only if already in agent view", which
+from `warpctrl` is never. `AgentViewEntryOrigin::Cli` is `Always`, and is the
+case this already had a name for.
+
+#### And `/compact`, which is the one that does not work
+
+`slash.run compact` reported `handled: false`. Twice, for two different
+reasons, and the second is the interesting one.
+
+First it was availability — a property of the *pane*, not the build. That is
+now visible (`slash.list` reports `is_available` against the pane you target)
+and `slash.run` refuses up front instead of executing into a `false`. Three
+failure modes, distinguishable, which is what an orchestrator can act on:
+
+    not in this build   invalid_params            -> slash.list has the list
+    not in this pane    target_state_conflict     -> target another pane
+    not allowlisted     insufficient_permissions  -> re-run with force
+
+Then it was still `false`, and upstream's own comment says why:
+
+> Some slash commands (e.g. /plan, /compact) return false to indicate the full
+> text should be sent as a regular AI query — fall through in that case.
+
+`/compact` is not an action. It is a prompt whose *prefix* is the instruction.
+`slash.run` now falls through the same way, reconstructing `/compact
+<argument>` into the conversation the pane is showing.
+
+And then it failed for real:
+
+    I'm sorry, I couldn't complete that request.
+    Request failed with error: Other(missing authentication credentials)
+
+Summarization is `AIAgentInput::SummarizeConversation`, and
+`local_agent::handles` takes only `AIAgentInput::UserQuery` — deliberately, per
+T5: "silently answering them from a local model would be worse than not
+answering". So the request goes upstream, and this fork has no account. **The
+plumbing is right and the feature is absent.** Tracked as T6.7.
+
+#### Verified on Windows, 2026-08-20
+
+`fa6f25092`, debug build, every claim from the CLI with no keyboard involved.
+
+    warpctrl agent prompt 'Reply with exactly one word: warpctrl-ok'
+      -> conversation_id 84ee4216…, created: true
+      -> on screen: /agent Reply with exactly one word: warpctrl-ok
+                    warpctrl-ok
+
+    warpctrl agent prompt 'Now reply with exactly: second-turn-ok' --conversation 84ee4216…
+      -> created: false, and the same conversation now has two turns
+
+    warpctrl agent list      in_progress -> success, title taken from the prompt
+    warpctrl slash run logout
+      -> insufficient_permissions: refused: `logout` is not an orchestration
+         command. Re-run with force if you meant it.
+    warpctrl slash run copy-debugging-id --force
+      -> handled: true, and the toast appears
+    warpctrl slash run not-a-real-command
+      -> invalid_params, naming `slash.list`
+
+Handoff, which is the point of all of it:
+
+| Target | Result |
+|:--|:--|
+| New tab | `tab.create` then `agent.prompt` — works |
+| New pane | `pane.split` then `agent.prompt` — works; agent right, terminal left |
+| New window | `window.create` then `agent.prompt` — same composition, untested |
+| Background | not attempted; see T6.6 |
+
+Ten tests. `warp_util` unaffected; `local_control` 40, `warp_cli` 244.
+
+### T6.6 — scope
+
+**One agent running several, from `warpctrl`.** T6.5 makes an agent
+addressable; this makes a fleet of them manageable. The finding that shapes it:
+**almost all of the machinery already exists**, because `/orchestrate` needs
+it. What is missing is the `warpctrl` surface onto it.
+
+**Background agents are real and already have a name.**
+`HiddenPaneReason::ChildAgent`, in `pane_group/tree.rs`:
+
+> Pane is a child agent spawned by an orchestrator. It stays hidden until the
+> user explicitly reveals it from the status card.
+
+That is exactly the "create the surface but set the pane to hidden" idea, built
+and in use. `create_hidden_child_agent_conversation` takes a
+`HiddenChildAgentConversationRequest` — parent pane, name, parent conversation,
+harness, env vars, task context — and returns the conversation. The reveal side
+exists too: `Event::RevealChildAgent`, `OpenChildAgentInNewTab`,
+`OpenChildAgentInNewPane`.
+
+So the work is wrapping, not inventing:
+
+1. **`agent.spawn`** — a child conversation under a parent, with a name and a
+   prompt. `--background` uses the hidden pane; `--pane`, `--tab`, `--window`
+   place it visibly. All four targets the user asked for, and three of them are
+   already reachable by composing T6.5 with `pane.split` / `tab.create` /
+   `window.create` — `agent.spawn` is the one that makes the fourth possible
+   and the other three atomic.
+2. **`agent.reveal <conversation> [--pane|--tab]`** — the toggle. Three events
+   already exist for it.
+3. **`agent.cancel <conversation>`** — stop a turn. An orchestrator that cannot
+   stop a runaway child is not in charge of it.
+4. **`agent.read <conversation>`** — the transcript, or the last message. The
+   gap that makes the rest hard to use: `agent.list` says *that* a conversation
+   finished, never *what it said*. Handing work back needs the answer.
+5. **`agent.list` should report the pane and tab.** Left `None` in T6.5 — the
+   fields are in the protocol and unpopulated — because it needs the terminal
+   surface id mapped through the pane group. Cheap, and it is what makes
+   "reveal the one that is blocked" possible.
+
+**The safety question this raises, and it is not the same one as T6.5's.**
+`slash.run`'s allowlist stops an agent ending its own session. A spawn action
+raises fan-out: an agent that can spawn agents can spawn agents that spawn
+agents. Worth deciding before building — a depth limit, a fleet cap, or
+parent-conversation accounting — rather than after.
+
+**What is *not* in scope**: making `/compact` work, which is T6.7 and about
+where summarization runs, not about `warpctrl`.
 
 ---
 

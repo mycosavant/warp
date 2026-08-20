@@ -527,9 +527,8 @@ function warpctrl { & 'C:\dev\warp\target\debug\warp-oss.exe' --warpctrl @args }
 
 ### What it can do
 
-**88 actions. Every one of them run against the live Windows build on
-2026-08-19 — this list is the verified surface, not the catalog's own claim
-about itself.** `warpctrl action list` emits the catalog as JSON with
+**92 actions. Every one of them run against the live Windows build — this list
+is the verified surface, not the catalog's own claim about itself.** `warpctrl action list` emits the catalog as JSON with
 `parameter_spec`, `result_spec` and `target_scope` per action, so tool
 definitions can be generated from it rather than hardcoded.
 
@@ -551,6 +550,8 @@ definitions can be generated from it rather than hardcoded.
 | `surface`    | 20 | list, plus 19 panels and modals |
 | `file`       | 1  | open |
 | `drive`      | 3  | status export import — **fork-added**, see T4.4 |
+| `agent`      | 2  | list prompt — **fork-added**, see T6.5 |
+| `slash`      | 2  | list run — **fork-added**, see T6.5 |
 
 `input insert` and `input replace` stage text without running it; **`input
 submit` runs it** — that one is a fork addition, because without it an agent
@@ -558,6 +559,72 @@ can type but never execute. All three reject newlines and control characters,
 so one call runs exactly one command and nothing can be smuggled in behind it.
 `submit` returns an error rather than a false acknowledgement when the target
 pane is busy.
+
+**`agent` and `slash` are the half that talks to the agent rather than the
+shell.** `input submit '/agent do the thing'` does not work and never could —
+it runs the text as a command, and `bash` says `/agent: No such file or
+directory`. The keyboard route is ctrl+shift+Return, which no action could
+reach. So:
+
+```bash
+warpctrl agent prompt 'summarise what changed in this repo today'
+#   -> { "conversation_id": "84ee4216-…", "created": true }
+
+warpctrl agent list
+#   -> id, title, status, is_busy per live conversation
+
+warpctrl agent prompt 'now write it up' --conversation 84ee4216-…
+#   -> { "created": false } — a second turn in the same conversation
+```
+
+`agent prompt` addresses a *conversation*, not a pane, because that is the unit
+work is handed to — the pane can be split, moved or closed underneath it. It
+returns the id, which is how a caller that started three agents tells them
+apart. Poll `agent list` for `is_busy`; `waiting_for_events` and `blocked` are
+*not* busy, and treating them as busy waits forever for something that is
+already waiting for you.
+
+`slash run` reaches Warp's slash commands — `/compact`, `/compact-and`,
+`/fork-and-compact`, `/fork-from`, `/plan`, `/queue`, `/model`, `/harness`:
+
+```bash
+warpctrl slash list          # what this build has; is_available per pane
+warpctrl slash run compact
+warpctrl slash run compact-and 'then run the tests'
+```
+
+Commands outside the orchestration set are refused, so an agent driving this
+cannot end its own session by mistyping a command name:
+
+```
+$ warpctrl slash run logout
+error: insufficient_permissions: refused: `logout` is not an orchestration
+command. Re-run with force if you meant it.
+```
+
+`--force` runs it anyway. 29 of the 63 commands in this build are on the list.
+
+Three different reasons a slash command will not run, and they are
+distinguishable because a caller has to act differently on each:
+
+| | |
+|:--|:--|
+| `invalid_params` | not in this build — the registry is assembled behind feature flags; `slash list` has the real list |
+| `target_state_conflict` | not in this pane — `/compact` needs an agent view with an active conversation |
+| `insufficient_permissions` | not allowlisted — re-run with `--force` |
+
+**`/compact` currently fails, and not for a `warpctrl` reason.** It submits
+correctly and then comes back `missing authentication credentials`:
+summarization is a different request type from a user query, this fork's local
+agent handles only user queries, and so it goes to Warp's server — which needs
+an account. Tracked as `.fork/TASKS.md` T6.7.
+
+**Handing work to another agent** is composition, and all of this is verified:
+
+```bash
+warpctrl tab create   && warpctrl agent prompt 'take the tests'   # own tab
+warpctrl pane split --direction right && warpctrl agent prompt '…'  # own pane
+```
 
 ### Targets: the rule that decides whether a call works
 
