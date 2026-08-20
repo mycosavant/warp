@@ -1707,10 +1707,10 @@ Both halves. Before the fix a restored conversation showed only the answers.
 
 ## T6 — WSL integration
 
-User-stated high-priority feature-add, not yet scoped. File explorer and
-remaining features seamless across Windows and WSL2.
+User-stated high-priority feature-add. File explorer and remaining features
+seamless across Windows and WSL2.
 
-- [ ] **T6.1** Scope what "seamless" means concretely; enumerate broken surfaces
+- [x] **T6.1** Scope what "seamless" means concretely; enumerate broken surfaces
 - [ ] **T6.2** Path translation (`\\wsl.localhost\...` ↔ `/mnt/c/...`)
 - [ ] **T6.3** File explorer across the boundary
 - [ ] **T6.4** Decide the WSLg window-forwarding story or stay Windows-native.
@@ -1719,6 +1719,229 @@ remaining features seamless across Windows and WSL2.
       one broken one. What the Linux build costs is llvmpipe — software
       rendering, real CPU, no GPU passthrough — and what it buys is a Warp that
       is *inside* WSL, where the files and the shell already are.
+      **T6.1 changed them again — see "What this means for T6.4" below.**
+
+### T6.1 — as built
+
+Scoped by running it, on Windows, with a live `bash` session in Ubuntu-WSL2,
+following T1.7's method. The whole enumeration is empirical: every line below
+is a thing that was watched happening, not a thing read in the source and
+assumed.
+
+**Setup.** Settings → Features → "Default shell for new sessions" → `Ubuntu`,
+which is `session.new_session_shell_override` in `settings.toml`. Warp reads
+the distribution list straight out of `HKCU\...\Lxss` (`terminal/wsl/model.rs`),
+filtering `docker-desktop` and `rancher-desktop`; Ubuntu was offered and
+launched first try. Restored sessions keep the shell they were saved with, so
+the setting only shows up on a *new* tab. It was set back to Default afterwards.
+
+**The surprise: most of it already works.** Upstream has been through this
+area recently — `d46473504` routes Warp's internal `git` through `wsl.exe` for
+UNC working directories, `136f451dc` matches `wsl$`/`wsl.localhost` hosts
+case-insensitively, `aa873b543` removes canonicalizations that froze the UI on
+WSL tabs. This is not a greenfield.
+
+Verified working, WSL session, `cd ~/git/warp`:
+
+| Surface | Result |
+|:--|:--|
+| Warpify (blocks, timing, exit codes) | works |
+| cwd chip | `~/git/warp` — shell-native, correct |
+| git branch + dirty count | `dev`, `± 0` — real, via `wsl.exe` |
+| Code review panel | works, real diffs |
+| Opening a WSL file in the editor | works (`warpctrl file open '\\wsl.localhost\...'` rendered the markdown) |
+
+**Broken, in order of how much it costs the user.**
+
+**(a) The project explorer looks empty for a WSL-native directory — and it is
+not empty, it is unindexed, and it says nothing about that.** The root appears,
+named correctly, expanded, with no children. No spinner, no message, no error.
+
+The controlled experiment, same session, same window, one `cd` apart:
+
+    cd ~/git/warp        -> root "warp", zero children
+    cd /mnt/c/dev/warp   -> full tree, ~46 entries, instant
+
+So it is not "WSL sessions"; it is the path. `/mnt/c/...` converts to `C:\...`
+by `convert_wsl_to_windows_host_path` and everything downstream is ordinary.
+
+**Correction, and it matters.** The first reading of this — "empty tree, a hard
+failure" — was wrong, and the thing that showed it was wrong was leaving the
+window open. On a later launch the same root filled in completely, about a
+minute after the tab was activated, with nothing changed but time. So (a) is
+the same fault as (d): the walk is running, over 9p, and until it lands the
+panel is a root with no children and no indication that anything is happening.
+
+Why it renders as an empty tree rather than a spinner is exact, in
+`file_tree/view.rs`: the loading and "doesn't work in WSL" states are both
+inside `if self.displayed_directories.is_empty()`. A root *had* arrived — from
+the pane group's own working directories, which do not wait for an index — so
+that branch was never taken and `render_file_tree` drew a root with nothing
+under it. A directory that is being indexed is indistinguishable from a
+directory that is empty.
+
+That is the whole user-visible bug, and it is a small fix independent of
+everything else: an unloaded root should say so.
+
+**(b) Global search refuses outright, on the shell rather than the path.**
+
+    Global search unavailable
+    Global search doesn't currently work in Git Bash or WSL.
+
+Same session, `cd /mnt/c/dev/warp` — an ordinary Windows directory, whose file
+tree renders perfectly a panel away — and global search *still* refuses. The
+gate asks what shell you launched, not what directory you are in. One line:
+
+    app/src/workspace/view.rs
+        let is_unsupported_session = is_wsl_session;
+
+feeding `CodingPanelEnablementState::UnsupportedSession`. Three panels read it,
+but only global search treats it as a hard block: the file tree
+(`file_tree/view.rs`) and code review (`code_review_view.rs`) consult it only
+when they have nothing to show, as a fallback *message*. That is why (a) shows
+an empty tree rather than the "doesn't currently work in WSL" text — the tree
+had a root, so it never reached the message.
+
+**(c) Three spellings of one directory, in one window, at one time.**
+
+    ~/git/warp                                          (cwd chip)
+    \\WSL$\Ubuntu\home\effatha\git\warp                 (agent pane)
+    \\?\UNC\WSL$\Ubuntu\home\effatha\git\warp           (code review header)
+
+The third is a verbatim path leaking into the UI. It is also the fingerprint of
+the underlying problem, and worth stating precisely, because it is not obvious
+and it is the thing T6.2 has to be built on:
+
+> `dunce::simplified` strips the `\\?\` prefix only for `VerbatimDisk`. Every
+> other prefix is left alone. So `dunce::canonicalize` — which Warp uses as its
+> normal-form function, in `StandardizedPath::from_local_canonicalized` and in
+> `normalize_cwd` — turns `C:\dev\warp` into `C:\dev\warp` and turns
+> `\\WSL$\Ubuntu\...` into `\\?\UNC\WSL$\Ubuntu\...`.
+
+Measured on this machine with `CreateFileW` + `GetFinalPathNameByHandleW`,
+which is exactly what Rust's `canonicalize` calls:
+
+    C:\dev\warp                        -> \\?\C:\dev\warp        (dunce strips)
+    \\wsl$\Ubuntu\home\...\warp        -> \\?\UNC\wsl$\...
+    \\WSL$\Ubuntu\home\...\warp        -> \\?\UNC\WSL$\...
+    \\wsl.localhost\Ubuntu\home\...    -> \\?\UNC\wsl.localhost\...
+
+Two things follow, and both bite. Canonicalization is not idempotent-as-
+identity for WSL paths: it is a pass-through with a prefix bolted on. And it
+does not normalise case or host — `WSL$`, `wsl$` and `wsl.localhost` all name
+the same directory and canonicalize to three different strings, where a drive
+path canonicalizes to its real on-disk case. Any two code paths that reach the
+same WSL directory by different spellings hold different map keys, for ever.
+`parse_wsl_unc_path` compares hosts case-insensitively; a `HashMap<PathBuf, _>`
+does not.
+
+**(d) The first index of a WSL repo from Windows takes minutes, and can take
+longer than anyone will wait.** The clean isolating experiment — a *PowerShell*
+session (not WSL) whose cwd is `\\wsl$\Ubuntu\home\effatha\git\warp` — proves
+the file tree is willing to index a WSL UNC path: it goes straight into a
+proper loading skeleton, so this is not a refusal. It was still a skeleton
+**ten minutes later**, and the git chip had disappeared meanwhile. The same
+repo on the Windows disk: instant.
+
+The 9p redirector is why, and it is measurable. Same 2247-file tree, three ways
+in:
+
+    inside WSL (native ext4)                        26 ms
+    Windows disk (C:\dev\warp\crates)              101 ms
+    Windows -> WSL over 9p (\\wsl$\...)           1323 ms
+
+**13× the Windows disk, 50× native.** And Warp indexes ignored files too — the
+tree renders them in italics — so the walk does not stop at `.gitignore`. The
+WSL checkout is 209,644 files, of which 197,136 are under `target/` (76 GB).
+`MAX_FILES_PER_REPO` is 200,000. At the measured 9p rate that budget alone is
+two minutes of `stat` before anything else.
+
+**(e) The local agent could not start at all in a WSL session — this fork's own
+bug.** Found by running (d)'s sibling experiment, an agent pane in the WSL
+session:
+
+    Request failed with error: Other(Could not start `claude`. The local agent
+    needs the Claude Code CLI on PATH (https://claude.com/claude-code).
+    Caused by:
+        The directory name is invalid. (os error 267))
+
+`os error 267` is `ERROR_DIRECTORY`. T5's `Turn::from_request` took
+`session_context.current_working_directory()` — which is deliberately
+*shell*-native, so `/home/effatha/git/warp` — and handed it to `current_dir` on
+a Windows process. Two faults in one message: the failure, and a first sentence
+confidently blaming something else while the real cause sat in the `Caused by:`
+line underneath.
+
+Fixed in `efa59bf81`. Not by converting the path — that would start the process
+and move the cost onto the 9p numbers above, and an agent is a file-reading
+workload. Claude now runs *inside* the distribution, `wsl.exe --distribution X
+--cd <linux path> --exec /bin/sh -lc 'exec claude "$@"' claude …`, which is the
+same treatment `warp_util::git` already gives `git`, arrived at for the same
+reason and with the same login-shell caveat. Four tests, on a pure function, so
+the decision is assertable without a Windows host or a distribution.
+
+**Not reached, and deliberately named rather than quietly skipped:** `@`-file
+mention in agent input, drag-and-drop, and clicking a file link in WSL output.
+The first two need an agent turn that this fork cannot yet complete in WSL; the
+third has an upstream carve-out already (`is_network_resource` excludes WSL UNC
+hosts precisely so `is_path_valid` does not reject WSL file links, with a test
+saying so) and was not independently confirmed.
+
+**What this means for T6.2 and T6.3.** The work is not "add path translation" —
+translation already exists and is used in a dozen places. It is, cheapest and
+most valuable first:
+
+1. **Say that a root is loading.** `file_tree/view.rs` reaches its loading state
+   only when there are no roots at all. An unloaded root should render as
+   loading, not as empty. This is the difference between "slow" and "broken"
+   for the panel the user actually asked about, and it is a few lines.
+2. **Move the global-search gate from the shell to the path.** A WSL session in
+   `/mnt/c/...` is a Windows directory and should search like one; a WSL
+   session in `~/…` is the case that needs a real answer, not a refusal.
+3. **One spelling.** Pick the canonical form for a WSL directory and hold every
+   map key in it. `dunce::canonicalize` cannot be that function, since it
+   preserves whatever case and host it was handed.
+4. **Do not present a verbatim `\\?\UNC\…` path to a human.**
+
+Note what is *not* on this list: making the index fast. Nothing in Warp can
+make 9p cheap, which is why T6.4 is the more consequential decision.
+
+**What this means for T6.4.** The decision was framed as "two working options,
+and the Linux build costs llvmpipe". T6.1 puts a number on the other side of
+that trade. A Warp *inside* WSL reads the files ~50× faster than a Warp on
+Windows reaching in, and skips (a) through (e) entirely — there is no boundary
+to be seamless across, so none of the five bugs can exist. Software rendering
+is a cost paid once per frame on a machine with cores to spare; 9p is a cost
+paid per file, by every index, search, diff and agent read. **T6.1's finding is
+that the WSLg build is the stronger option, not the fallback** — and that the
+Windows build's WSL support is worth fixing for the case where the files really
+are on `C:`.
+
+#### Verified on Windows, 2026-08-19
+
+`efa59bf81`, Ubuntu-WSL2, warp-oss debug build. (a) and (b) reproduced by
+screenshot; (c) read off three visible panels at once; (d) timed with
+`Get-ChildItem -Recurse` on both sides and `find` inside the distribution; (e)
+reproduced in the agent pane and fixed.
+
+The (e) fix, verified after rebuild, in a restored WSL session at `~/git/warp`:
+
+    /agent Run pwd and reply with just the directory path, nothing else.
+           Bash
+           /home/effatha/git/warp
+
+Claude ran inside Ubuntu, in the session's own directory, and said so. Before
+the fix the same prompt returned `os error 267`.
+
+The same screenshot is also where (a)'s correction came from: the project
+explorer, empty a minute earlier, was by then showing the whole WSL tree. Which
+is the T5.5 lesson again — the verification screenshot is worth reading for
+what it happens to contain, not only for the thing it was taken to prove.
+
+Warp's own log was no help: the second `warp-oss.exe` of a pair takes
+`warp-oss.log.recovery` when the first holds `warp-oss.log`, and that file
+stayed zero bytes for the whole session. Everything above came from the UI and
+from probes run beside it.
 
 ---
 

@@ -179,6 +179,54 @@ cargo build --bin warp-oss --features gui
 ~8 GB of build artifacts. Verified: fork markers present in the binary, zero
 Sentry symbols, real `MainWindowHandle`, onboarding renders.
 
+## A WSL session in the Windows build
+
+Settings → Features → **Default shell for new sessions** → your distribution.
+Warp reads the list from `HKCU\…\Lxss`, so anything `wsl -l` shows is offered
+(minus `docker-desktop` and `rancher-desktop`). Restored sessions keep the
+shell they were saved with, so the change only shows up on a *new* tab.
+
+What you get, scoped by running it (`.fork/TASKS.md` T6.1):
+
+| Surface | In a WSL session at a Linux path |
+|:--|:--|
+| Terminal, blocks, exit codes, timing | works |
+| cwd chip | works, shell-native (`~/git/warp`) |
+| git branch and dirty count | works — routed through `wsl.exe` |
+| Code review panel | works, real diffs |
+| Opening a WSL file in the editor | works |
+| **Project explorer** | **looks empty for minutes** — see below |
+| **Global search** | **refuses: "doesn't currently work in Git Bash or WSL"** |
+| **First index of a large repo** | **minutes, sometimes very many** (see the 9p table below) |
+
+Three things are worth knowing rather than discovering:
+
+**The empty project explorer is not empty, it is still indexing.** The root
+appears immediately — it comes from the session's working directory, which does
+not wait for anything — and the file list appears whenever the walk over 9p
+finishes, which for a large repo is minutes. There is no spinner, because
+Warp's loading state only shows when there are *no* roots at all, and there is
+one. So a directory being indexed looks exactly like a directory that is empty.
+Leave it open; it fills in.
+
+**`cd /mnt/c/...` makes most of it work again.** That path converts to `C:\...`
+and everything downstream is ordinary Windows. The project explorer fills in
+immediately. So the breakage is about *where the files are*, not about running
+bash.
+
+**Global search is the exception, and it asks the wrong question.** Its gate is
+on the shell you launched, not the directory you are in — so a WSL session
+sitting in `/mnt/c/dev/warp` still refuses, in the same window where the file
+tree for that very directory renders perfectly. One line in
+`app/src/workspace/view.rs`:
+
+    let is_unsupported_session = is_wsl_session;
+
+Unpicking that is T6.2/T6.3 and is not done yet.
+
+If your code lives in WSL rather than on `C:`, the Linux build below avoids all
+of this — see "Why you might actually want this build".
+
 ## Running under WSL2 (WSLg)
 
 **Use this:**
@@ -219,6 +267,30 @@ alt-tab and the taskbar as a blank grey rectangle, with focus thrashing
 between `Some(WindowId(0))` and `None`. Likely cause: `sctk_adwaita`
 client-side decorations failing, visible as
 `XDG Settings Portal did not return response in time`.
+
+### Why you might actually want this build
+
+Not as a fallback. The Windows build can open a WSL session — that works, and
+most of it works well — but everything it does with those files goes through
+the 9p redirector, and the cost is not small. Same 2247-file tree, three ways
+in, measured on this machine:
+
+| From | Time |
+|:--|--:|
+| Inside WSL (native ext4) | 26 ms |
+| Windows disk (`C:\dev\warp\crates`) | 101 ms |
+| Windows → WSL over 9p (`\\wsl$\…`) | 1323 ms |
+
+**13× the Windows disk, 50× native.** And that is per file, paid by every
+index, search, diff and agent read. Warp's project explorer indexes ignored
+files too, so a checkout with a `target/` directory is 200,000 stats over that
+boundary: pointing the Windows build at a WSL repo left the file tree in its
+loading skeleton for **ten minutes** without finishing.
+
+Software rendering is a cost paid once a frame, by a machine with cores to
+spare. 9p is a cost paid per file. If your code lives in WSL, the Linux build
+is the faster answer — and it sidesteps the WSL-boundary bugs in `.fork/TASKS.md`
+T6.1 entirely, because there is no boundary.
 
 Unsetting `WAYLAND_DISPLAY` routes through Xwayland instead
 (`windowing system: X11`) and the window renders. Under X11 you can confirm it
@@ -782,6 +854,38 @@ dangerous.
 Also absent: model selection (Claude Code picks its own), attachments, MCP
 context. Only a plain user query is claimed at all — passive suggestions,
 conversation resume, code review and project init still go upstream untouched.
+
+### In a WSL session, Claude runs inside the distribution
+
+If the session is WSL, the working directory Warp hands the agent is a *Linux*
+path — `/home/you/project` — because that is what the shell reports. Warp on
+Windows is a Windows process, so the first version of this simply failed:
+
+    Could not start `claude`. The local agent needs the Claude Code CLI on PATH.
+    Caused by:
+        The directory name is invalid. (os error 267)
+
+The fix is not to translate the path to `\\wsl$\…`. That starts the process and
+moves the cost: Claude would then read every file through the 9p redirector,
+which on this machine measures **13× slower than the Windows disk and 50×
+slower than the same tree read from inside the distribution** (2247 files: 26 ms
+native, 101 ms on `C:`, 1323 ms over 9p). An agent is a file-reading workload,
+so that is the entire job made slow.
+
+So Claude is run inside the distribution:
+
+    wsl.exe --distribution Ubuntu --cd /home/you/project \
+            --exec /bin/sh -lc 'exec claude "$@"' claude --print …
+
+which is exactly what `warp_util::git` already does for `git`, for the same
+reason. The login shell matters: `wsl.exe --exec` alone searches a minimal
+`PATH` (`/usr/bin`, `/bin`, …) and `claude` normally lives under your home —
+nvm, `~/.local/bin`. Arguments ride as positional parameters, so a prompt can
+never be read as shell syntax; there is a test named after that.
+
+**Consequence worth knowing:** Claude Code must be installed *inside* the
+distribution for the agent to work in a WSL session. The Windows install is not
+used there, and the error message now says so.
 
 ## Warp Drive without an account
 
