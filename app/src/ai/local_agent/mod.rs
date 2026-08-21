@@ -49,8 +49,8 @@
 //! and is the next step rather than part of the spike.
 //!
 //! Also not done: model selection (Claude Code picks its own), attachments,
-//! MCP context, and every input type other than a user query — those fall
-//! through to upstream untouched.
+//! MCP context, and every input type other than a user query and a `/compact`
+//! — those fall through to upstream untouched.
 
 mod tools;
 mod translate;
@@ -69,24 +69,64 @@ use futures_lite::{AsyncBufReadExt as _, AsyncReadExt as _, AsyncWriteExt as _};
 use uuid::Uuid;
 use warp_terminal::shell::ShellLaunchData;
 
-use self::translate::Translator;
+use self::translate::{Mode, Translator};
 use crate::ai::agent::AIAgentInput;
 use crate::ai::agent::api::{Event, RequestParams, ResponseStream};
 use crate::server::server_api::AIApiError;
 
 /// Whether this request is one the local agent handles.
 ///
-/// Only a plain user query. Passive suggestions, conversation resume, code
-/// review, project init and the rest keep going to upstream's implementation —
-/// they have server-side behaviour this spike does not reproduce, and silently
-/// answering them from a local model would be worse than not answering.
+/// A plain user query, and a `/compact`. Passive suggestions, conversation
+/// resume, code review, project init and the rest keep going to upstream's
+/// implementation — they have server-side behaviour this spike does not
+/// reproduce, and silently answering them from a local model would be worse
+/// than not answering.
 pub(crate) fn handles(params: &RequestParams) -> bool {
-    user_query(params).is_some()
+    ask(params).is_some()
 }
 
-fn user_query(params: &RequestParams) -> Option<&str> {
+/// What a request is asking for, in the only two dialects this speaks.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum Ask {
+    /// A user's turn, as typed.
+    Query(String),
+    /// `/compact` — summarize the conversation and drop what the summary
+    /// covers.
+    ///
+    /// Upstream this is a server-side operation over the message list the
+    /// client uploads. Here it is Claude's own `/compact`, run against the
+    /// session Claude is already holding, because *that* is the context under
+    /// pressure: this fork sends Claude a prompt and Claude keeps the
+    /// transcript, so compacting Warp's copy would free nothing.
+    Compact {
+        /// `/compact <instructions>`, when the user gave any. Both ends spell
+        /// it the same way, so this passes straight through.
+        instructions: Option<String>,
+    },
+}
+
+impl Ask {
+    /// What gets written to Claude's stdin.
+    fn prompt(&self) -> String {
+        match self {
+            Self::Query(query) => query.clone(),
+            Self::Compact { instructions: None } => "/compact".to_owned(),
+            Self::Compact {
+                instructions: Some(instructions),
+            } => format!("/compact {instructions}"),
+        }
+    }
+}
+
+fn ask(params: &RequestParams) -> Option<Ask> {
     params.input.iter().find_map(|input| match input {
-        AIAgentInput::UserQuery { query, .. } => Some(query.as_str()),
+        AIAgentInput::UserQuery { query, .. } => Some(Ask::Query(query.clone())),
+        AIAgentInput::SummarizeConversation { prompt, .. } => Some(Ask::Compact {
+            instructions: prompt
+                .as_ref()
+                .map(|prompt| prompt.trim().to_owned())
+                .filter(|prompt| !prompt.is_empty()),
+        }),
         _ => None,
     })
 }
@@ -123,7 +163,7 @@ pub(crate) async fn generate(
 /// built from this module, which would otherwise put every line below here
 /// out of reach of a test.
 pub(crate) struct Turn {
-    prompt: String,
+    ask: Ask,
     /// The Claude session to continue, i.e. Warp's conversation token. `None`
     /// starts a new one.
     session: Option<String>,
@@ -144,9 +184,24 @@ pub(crate) struct Turn {
 
 impl Turn {
     fn from_request(params: &RequestParams) -> anyhow::Result<Self> {
-        let prompt = user_query(params)
-            .ok_or_else(|| anyhow!("The local agent was handed a request with no user query."))?
-            .to_owned();
+        let ask = ask(params)
+            .ok_or_else(|| anyhow!("The local agent was handed a request it does not serve."))?;
+        let session = params
+            .conversation_token
+            .as_ref()
+            .map(|token| token.as_str().to_owned());
+
+        // A conversation with no token has never had a turn, so there is no
+        // Claude session behind it and nothing to compact. Refusing here says
+        // that; running anyway would start a *fresh* session and compact it,
+        // and Claude would answer "Not enough messages to compact" — a true
+        // sentence about the wrong conversation.
+        if matches!(ask, Ask::Compact { .. }) && session.is_none() {
+            return Err(anyhow!(
+                "There is nothing to compact: this conversation has not run a turn yet, so the \
+                 local agent has no Claude session to summarize."
+            ));
+        }
 
         // An existing conversation already has a task; a new one does not, and
         // the client learns about it from the CreateTask this mints an id for.
@@ -162,11 +217,8 @@ impl Turn {
         };
 
         Ok(Self {
-            prompt,
-            session: params
-                .conversation_token
-                .as_ref()
-                .map(|token| token.as_str().to_owned()),
+            ask,
+            session,
             task_id,
             task_needs_announcing,
             working_directory: params.session_context.current_working_directory().clone(),
@@ -249,7 +301,7 @@ fn spawn_for(
 
 async fn run(turn: Turn) -> anyhow::Result<impl Stream<Item = Event> + Send + use<>> {
     let Turn {
-        prompt,
+        ask,
         session,
         task_id,
         task_needs_announcing,
@@ -257,6 +309,7 @@ async fn run(turn: Turn) -> anyhow::Result<impl Stream<Item = Event> + Send + us
         distro,
         allowed_tools,
     } = turn;
+    let prompt = ask.prompt();
     let request_id = Uuid::new_v4().to_string();
     let started_at = Utc::now();
 
@@ -267,6 +320,17 @@ async fn run(turn: Turn) -> anyhow::Result<impl Stream<Item = Event> + Send + us
         // `--print --output-format stream-json` refuses to run without it.
         "--verbose".to_owned(),
     ];
+    let mode = match &ask {
+        Ask::Query(query) => Mode::Query {
+            prompt: query.clone(),
+        },
+        Ask::Compact { instructions } => Mode::Compact {
+            // `Turn::from_request` refuses a compact with no session, so this
+            // is the id `--resume` is about to be given.
+            session: session.clone().unwrap_or_default(),
+            instructions: instructions.clone(),
+        },
+    };
     match session {
         Some(id) => arguments.extend(["--resume".to_owned(), id]),
         None => arguments.extend(["--session-id".to_owned(), Uuid::new_v4().to_string()]),
@@ -323,13 +387,7 @@ async fn run(turn: Turn) -> anyhow::Result<impl Stream<Item = Event> + Send + us
         _child: child,
         lines: Box::pin(BufReader::new(stdout).lines()),
         stderr: Box::pin(stderr),
-        translator: Translator::new(
-            task_id,
-            task_needs_announcing,
-            request_id,
-            prompt,
-            started_at,
-        ),
+        translator: Translator::new(task_id, task_needs_announcing, request_id, mode, started_at),
         pending: VecDeque::new(),
         ended: false,
     }))

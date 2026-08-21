@@ -17,7 +17,7 @@ use super::*;
 
 fn turn(prompt: &str, session: Option<String>) -> Turn {
     Turn {
-        prompt: prompt.to_owned(),
+        ask: Ask::Query(prompt.to_owned()),
         session,
         task_id: "task-1".to_owned(),
         task_needs_announcing: true,

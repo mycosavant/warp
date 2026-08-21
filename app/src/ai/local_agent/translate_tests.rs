@@ -19,7 +19,9 @@ fn translator() -> Translator {
         "task-1".to_owned(),
         true,
         "req-1".to_owned(),
-        "what is the capital of France?".to_owned(),
+        Mode::Query {
+            prompt: "what is the capital of France?".to_owned(),
+        },
         started_at(),
     )
 }
@@ -29,7 +31,9 @@ fn continuing_translator() -> Translator {
         "task-1".to_owned(),
         false,
         "req-1".to_owned(),
-        "what is the capital of France?".to_owned(),
+        Mode::Query {
+            prompt: "what is the capital of France?".to_owned(),
+        },
         started_at(),
     )
 }
@@ -344,7 +348,7 @@ fn a_long_prompt_is_cut_to_a_readable_title_without_splitting_a_glyph() {
         "task-1".to_owned(),
         true,
         "req-1".to_owned(),
-        prompt,
+        Mode::Query { prompt },
         started_at(),
     );
     let events = translator.on_line(INIT);
@@ -360,5 +364,257 @@ fn a_long_prompt_is_cut_to_a_readable_title_without_splitting_a_glyph() {
         description.chars().count(),
         61,
         "60 glyphs plus the ellipsis"
+    );
+}
+
+// A `/compact`. Every line below is verbatim from
+// `claude --print --output-format stream-json --verbose --resume <id>` with the
+// summary body cut short — the shape is Claude's, not a guess at Claude's.
+
+fn compactor() -> Translator {
+    Translator::new(
+        "task-1".to_owned(),
+        false,
+        "req-1".to_owned(),
+        Mode::Compact {
+            session: "30461b56-4238-4d93-9acd-443eae43e5a1".to_owned(),
+            instructions: None,
+        },
+        started_at(),
+    )
+}
+
+const COMPACTING: &str = r#"{"type":"system","subtype":"status","status":"compacting","session_id":"30461b56-4238-4d93-9acd-443eae43e5a1"}"#;
+const COMPACTED: &str = r#"{"type":"system","subtype":"status","status":null,"compact_result":"success","session_id":"30461b56-4238-4d93-9acd-443eae43e5a1"}"#;
+const COMPACT_INIT: &str = r#"{"type":"system","subtype":"init","cwd":"/tmp","session_id":"30461b56-4238-4d93-9acd-443eae43e5a1","model":"claude-opus-5"}"#;
+const BOUNDARY: &str = r#"{"type":"system","subtype":"compact_boundary","session_id":"30461b56-4238-4d93-9acd-443eae43e5a1","compact_metadata":{"trigger":"manual","pre_tokens":22988,"post_tokens":2156,"cumulative_dropped_tokens":62561,"duration_ms":18962}}"#;
+const SUMMARY: &str = r#"{"type":"user","message":{"role":"user","content":"This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.\n\nSummary:\n1. Primary Request and Intent:\n   The user asked for the codewords back."},"session_id":"30461b56-4238-4d93-9acd-443eae43e5a1"}"#;
+const ECHO: &str = r#"{"type":"user","message":{"role":"user","content":"<local-command-stdout>Compacted </local-command-stdout>"},"session_id":"30461b56-4238-4d93-9acd-443eae43e5a1"}"#;
+const COMPACT_RESULT: &str = r#"{"type":"result","subtype":"success","is_error":false,"result":"","session_id":"30461b56-4238-4d93-9acd-443eae43e5a1","usage":{"input_tokens":0,"output_tokens":0}}"#;
+
+fn summarizations(events: &[api::ResponseEvent]) -> Vec<&api::message::Summarization> {
+    events
+        .iter()
+        .filter_map(|event| match &event.r#type {
+            Some(api::response_event::Type::ClientActions(actions)) => Some(&actions.actions),
+            _ => None,
+        })
+        .flatten()
+        .filter_map(|action| match &action.action {
+            Some(api::client_action::Action::AddMessagesToTask(add)) => Some(&add.messages),
+            _ => None,
+        })
+        .flatten()
+        .filter_map(|message| match &message.message {
+            Some(api::message::Message::Summarization(summarization)) => Some(summarization),
+            _ => None,
+        })
+        .collect()
+}
+
+fn conversation_summary(
+    summarization: &api::message::Summarization,
+) -> &api::message::summarization::ConversationSummary {
+    match &summarization.summary_type {
+        Some(api::message::summarization::SummaryType::ConversationSummary(summary)) => summary,
+        other => panic!("expected a conversation summary, got {other:?}"),
+    }
+}
+
+/// A whole compaction, in the order Claude sends it.
+#[test]
+fn a_compaction_becomes_one_summarization_message() {
+    let mut translator = compactor();
+    let mut events = Vec::new();
+    for line in [
+        COMPACTING,
+        COMPACTED,
+        COMPACT_INIT,
+        BOUNDARY,
+        SUMMARY,
+        ECHO,
+        COMPACT_RESULT,
+    ] {
+        events.extend(translator.on_line(line));
+    }
+
+    let summaries = summarizations(&events);
+    assert_eq!(
+        summaries.len(),
+        1,
+        "the summary is one message; the CLI's `Compacted` echo is not a second one"
+    );
+    let summary = conversation_summary(summaries[0]);
+    assert!(
+        summary.summary.starts_with("1. Primary Request"),
+        "the preamble addressed to the next model should be gone: {:?}",
+        summary.summary
+    );
+    assert_eq!(
+        summary.token_count, 2156,
+        "the post-compaction context size is what is left"
+    );
+    assert_eq!(
+        summaries[0].finished_duration,
+        Some(prost_types::Duration {
+            seconds: 18,
+            nanos: 962_000_000
+        }),
+        "18962ms, kept to the millisecond"
+    );
+}
+
+/// The stream opens once, on the first line, whatever Claude does next.
+///
+/// A compaction's own `system/init` arrives in the middle — after the work is
+/// done, for the session it has just rewritten. Relaying that as the client's
+/// `StreamInit` would put the opening event two thirds of the way through the
+/// stream, and relaying *both* would hand the client a second conversation
+/// token mid-turn.
+#[test]
+fn a_compaction_opens_its_stream_once_and_at_the_start() {
+    let mut translator = compactor();
+    let opening = translator.on_line(COMPACTING);
+
+    let Some(api::response_event::Type::Init(init)) = &opening[0].r#type else {
+        panic!("expected StreamInit, got {:?}", opening[0]);
+    };
+    assert_eq!(
+        init.conversation_id, "30461b56-4238-4d93-9acd-443eae43e5a1",
+        "compaction leaves the session id alone, so the token must not move"
+    );
+
+    let later: Vec<_> = [COMPACTED, COMPACT_INIT, BOUNDARY, SUMMARY]
+        .into_iter()
+        .flat_map(|line| translator.on_line(line))
+        .filter(|event| matches!(event.r#type, Some(api::response_event::Type::Init(_))))
+        .collect();
+    assert!(later.is_empty(), "a second StreamInit: {later:?}");
+}
+
+/// The request is recorded, so a restored conversation is not a summary that
+/// nobody asked for.
+#[test]
+fn a_compaction_records_what_was_asked() {
+    let mut translator = Translator::new(
+        "task-1".to_owned(),
+        false,
+        "req-1".to_owned(),
+        Mode::Compact {
+            session: "30461b56-4238-4d93-9acd-443eae43e5a1".to_owned(),
+            instructions: Some("keep only the codewords".to_owned()),
+        },
+        started_at(),
+    );
+    let opening = translator.on_line(COMPACTING);
+
+    let Some(api::message::Message::SystemQuery(query)) = &messages(&opening[1])[0].message else {
+        panic!(
+            "expected a system query, got {:?}",
+            messages(&opening[1])[0]
+        );
+    };
+    let Some(api::message::system_query::Type::SummarizeConversation(summarize)) = &query.r#type
+    else {
+        panic!("expected SummarizeConversation, got {:?}", query.r#type);
+    };
+    assert_eq!(summarize.prompt, "keep only the codewords");
+    assert!(
+        summarizations(&opening).is_empty(),
+        "nothing has been summarized yet"
+    );
+}
+
+/// A refusal is an answer, not an error.
+///
+/// Claude declines to compact a conversation that has barely started, and says
+/// so through a synthetic assistant message. There is no `compact_boundary`,
+/// no summary, and — the part that matters — no `system/init` either, so a
+/// stream that waited for one would end without ever having opened and be
+/// reported to the user as a dropped connection.
+#[test]
+fn a_refused_compaction_still_opens_and_still_finishes() {
+    const REFUSED: &str = r#"{"type":"system","subtype":"status","status":null,"compact_result":"failed","compact_error":"Not enough messages to compact.","session_id":"30461b56-4238-4d93-9acd-443eae43e5a1"}"#;
+    const EXPLANATION: &str = r#"{"type":"assistant","message":{"model":"<synthetic>","role":"assistant","content":[{"type":"text","text":"Not enough messages to compact."}]},"session_id":"30461b56-4238-4d93-9acd-443eae43e5a1"}"#;
+
+    let mut translator = compactor();
+    let mut events = Vec::new();
+    for line in [COMPACTING, REFUSED, EXPLANATION, COMPACT_RESULT] {
+        events.extend(translator.on_line(line));
+    }
+
+    assert!(
+        matches!(
+            events.first().and_then(|event| event.r#type.as_ref()),
+            Some(api::response_event::Type::Init(_))
+        ),
+        "first event was {:?}",
+        events.first()
+    );
+    assert!(translator.saw_result(), "the turn ended, and said so");
+    assert!(summarizations(&events).is_empty(), "nothing was summarized");
+
+    let explanation: Vec<_> = events
+        .iter()
+        .filter(|event| {
+            matches!(
+                event.r#type,
+                Some(api::response_event::Type::ClientActions(_))
+            )
+        })
+        .flat_map(|event| messages(event))
+        .filter_map(|message| match &message.message {
+            Some(api::message::Message::AgentOutput(output)) => Some(output.text.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        explanation,
+        vec!["Not enough messages to compact."],
+        "the reason belongs on screen"
+    );
+}
+
+/// The summary is found by position, not by prose.
+///
+/// On disk Claude flags it `isCompactSummary`; on the stream that field is
+/// gone, so the only handle is that it is the first user message after the
+/// boundary. A summary arriving before one would be some other user message
+/// entirely.
+#[test]
+fn a_user_message_outside_the_boundary_is_not_a_summary() {
+    let mut translator = compactor();
+    let events: Vec<_> = [COMPACTING, SUMMARY, ECHO]
+        .into_iter()
+        .flat_map(|line| translator.on_line(line))
+        .collect();
+
+    assert!(
+        summarizations(&events).is_empty(),
+        "a user message with no compaction behind it summarizes nothing"
+    );
+}
+
+/// The preamble is dropped only when it is really there.
+#[test]
+fn only_a_recognized_preamble_is_stripped() {
+    assert_eq!(
+        readable_summary(
+            "This session is being continued from a previous conversation that ran out of \
+             context.\n\nSummary:\nThe body."
+        ),
+        "The body."
+    );
+    // Reworded upstream: the marker is gone, so nothing is cut.
+    assert_eq!(
+        readable_summary("This session is being continued from a previous conversation. The body."),
+        "This session is being continued from a previous conversation. The body."
+    );
+    // A summary that simply does not have one.
+    assert_eq!(readable_summary("  The body.  "), "The body.");
+    // And a `Summary:` that is part of the summary rather than the preamble.
+    assert_eq!(
+        readable_summary("What we did.\nSummary:\nNot a preamble."),
+        "What we did.\nSummary:\nNot a preamble."
     );
 }
