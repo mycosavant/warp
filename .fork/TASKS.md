@@ -3607,10 +3607,58 @@ what could run in parallel, which is the plan it would emit next.
 
 ## Open questions
 
-- [ ] Log spam on window move (`workspace:save_app` per window event). Upstream,
-      present since the earliest runs, not fork-introduced. Silence via
-      `RUST_LOG` or debounce?
+- [x] ~~Log spam on window move (`workspace:save_app` per window event).~~
+      **Measured, and the premise was wrong. Nothing to silence.** See "The
+      log-spam question, answered by counting" below.
 - [ ] Windows Developer Mode so `.claude/skills` resolves as a symlink on the
       Windows checkout.
 - [ ] Proxy-based verification that nothing escapes under real activity — only
       idle runs observed so far.
+
+### The log-spam question, answered by counting
+
+`workspace:save_app` is **29 to 46 lines per run**, and the number barely moves
+between a 904-line log and a 4197-line one. It is not the spam. Six rotated
+logs:
+
+    warp-oss.log         total 1115   dispatching   67   save_app 46
+    warp-oss.log.old.0   total 1626   dispatching  301   save_app 43
+    warp-oss.log.old.1   total 1029   dispatching   62   save_app 44
+    warp-oss.log.old.2   total 4197   dispatching 3078   save_app 41
+    warp-oss.log.old.3   total  904   dispatching   47   save_app 29
+    warp-oss.log.old.4   total 1110   dispatching   60   save_app 34
+
+The volume is `warpui_core::core::app` logging **every dispatched action at
+`INFO`**, and in `old.2` that is 2975 lines of
+`EditorAction::UserInsert(UserInput(" "))` — one per character, over two
+minutes, at 25–40 a second. A held space bar, or WSLg key repeat. An
+environmental burst rather than a Warp defect, and not what the question was
+about.
+
+**Leave it.** That trace is not noise, it is the only record of what a person
+did in the window, and T5.6 was solved entirely from it — two hundred
+`SelectText` actions and a `CtrlC`, which no other log line in the app would
+have told us. Silencing the dispatcher to save forty lines a run would trade
+the app's only forensic trail for nothing.
+
+#### The thing worth having found
+
+`UserInsert` carries the character that was typed, so the obvious next thought
+is that the log is a plaintext keylog. **It is not, and upstream had already
+thought about it**: `warp_util::user_input::UserInput<T>` has a hand-written
+`Debug` that prints the value only under `cfg!(debug_assertions)`.
+
+What it did not have was a test. One `cfg!` in a hand-written impl is the whole
+of the guarantee — a careless `#[derive(Debug)]` would compile, pass every
+other test in the tree, and start writing what people type into
+`~/.local/state/warp-oss/warp-oss.log`. Now pinned in both profiles, and
+verified the way T5.6's was: with the redaction removed, the release run fails.
+
+    debug    shows "hunter2"    (deliberate; the doc comment promises it)
+    release  redacts it
+    release, redaction removed  -> FAILED
+
+Worth knowing while working on this fork, since `.fork/README.md` tells you to
+run `target/debug/warp-oss`: **your development build's log does contain what
+you typed.** That is upstream's stated intent for a dev build, not a leak, but
+it is a reason not to hand that file to anyone without reading it first.

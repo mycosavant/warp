@@ -438,6 +438,20 @@ Two things cost an hour between them, both worth knowing:
 missing (no XDG desktop portal), and the clipboard falling back from
 `ext-data-control` to X11. None affect the fork.
 
+### Your development build's log contains what you typed
+
+`~/.local/state/warp-oss/warp-oss.log` records every dispatched action at
+`INFO`, and `EditorAction::UserInsert` carries the character that was typed.
+In a **release** build that value is redacted; in a **debug** build — which is
+what everything above tells you to run — it is printed, on purpose.
+
+That is upstream's deliberate design (`warp_util::user_input::UserInput` has a
+hand-written `Debug` gated on `cfg!(debug_assertions)`, now pinned by a test in
+both profiles), not a leak. But it is a reason to read that file before handing
+it to anyone, and a reason the log is worth keeping rather than silencing: it
+is also the only record of what happened in the window, which is how T5.6 was
+solved.
+
 ## Local telemetry (OpenTelemetry)
 
 Upstream already ships an OTLP/HTTP exporter but locks it to cloud-agent runs:
