@@ -587,10 +587,95 @@ pub(super) fn run_graph_command(
     output_format: OutputFormat,
 ) -> Result<(), ControlError> {
     match command {
+        GraphCommand::Schema => {
+            print!("{SCHEMA}");
+            Ok(())
+        }
         GraphCommand::Check(args) => check(&args.plan, output_format),
         GraphCommand::Run(args) => execute(args, output_format),
     }
 }
+
+/// The format, written as a plan that runs.
+///
+/// Documentation that is also an artifact, for the reason every doc example
+/// should be: a comment can go stale silently, and this one is parsed by a test
+/// and validated by the same `validate` a real plan goes through. If a field is
+/// renamed and this is not, the suite says so.
+///
+/// Written for a reader who is a program. T7.2's premise is an agent turning a
+/// milestone into a plan, and an agent that has `warpctrl` should be able to
+/// learn the format from `warpctrl` — the alternative is a human pasting
+/// documentation into a prompt, which is the human this was supposed to remove.
+const SCHEMA: &str = r##"# A warpctrl task graph.
+#
+#   warpctrl graph check plan.toml     # parse, resolve edges, find cycles
+#   warpctrl graph run   plan.toml     # run it, blocking until it settles
+#
+# Every node is one `warpctrl agent spawn`: a fresh child agent, in a hidden
+# pane, with the prompt below and nothing else. A child does NOT inherit the
+# transcript of whatever wrote this plan, so each prompt has to stand alone.
+#
+# This file is itself a valid plan. `graph schema > plan.toml` is a starting
+# point, not just an illustration.
+
+[defaults]
+# Inherited by any node that does not name its own. Values are the preset
+# `read-only`, or ToolType names: READ_FILES, RUN_SHELL_COMMAND, GREP,
+# APPLY_FILE_DIFFS, SUBAGENT, ... Omit the key entirely for no restriction.
+#
+# Withholding SUBAGENT and RUN_AGENTS is what stops a node spawning children
+# of its own.
+allow_tools = ["read-only"]
+
+[[node]]
+# `id` names this node to the edges below. Unique; keep it short and mechanical.
+id = "survey"
+# `prompt` is the whole instruction. Say what to produce and in what form —
+# a downstream node receives this node's answer verbatim.
+prompt = """
+List every file under src/ that still calls the old API.
+Reply with one path per line and nothing else.
+"""
+
+[[node]]
+id = "fix"
+prompt = """
+Migrate the files listed below to the new API.
+"""
+# A node's own allowlist replaces the default; it does not add to it.
+allow_tools = ["read-only", "APPLY_FILE_DIFFS"]
+# `needs` is the only edge type, because a dependency IS an edge that carries
+# a payload. Two spellings, one concept:
+#
+#   needs = ["survey"]                                   ordering only
+#   needs = [{ node = "survey", pass = "the files" }]     ordering + handoff
+#
+# With `pass`, the whole of `survey`'s answer is appended to this prompt under
+# a heading naming what it is. Without it, nothing is handed along.
+needs = [{ node = "survey", pass = "the list of files" }]
+
+[[node]]
+id = "report"
+prompt = """
+Write one line saying how many files were migrated.
+"""
+# Several edges join here. Nodes with no unmet edges run in parallel, bounded
+# by --max-parallel (default 4).
+needs = [
+  { node = "survey", pass = "the original list" },
+  { node = "fix", pass = "what was changed" },
+]
+
+# Notes that are not fields:
+#
+# * A node that fails stops the nodes that need it — reported as `skipped`,
+#   naming the blocker — and leaves every other branch running. The process
+#   exits non-zero if anything did not finish.
+# * Nothing is retried. An agent turn is not idempotent.
+# * A cycle, an unknown node in `needs`, a duplicate id, or a misspelled field
+#   is refused before anything spawns.
+"##;
 
 fn load(path: &Path) -> Result<Plan, ControlError> {
     let text = std::fs::read_to_string(path).map_err(|error| {

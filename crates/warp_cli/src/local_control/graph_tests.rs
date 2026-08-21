@@ -450,3 +450,36 @@ fn progress_shows_enough_of_an_answer_to_recognize_it() {
     assert!(first_line(&wide).ends_with('…'));
     assert_eq!(first_line(&wide).chars().count(), 73);
 }
+
+/// The printed format is a plan that would actually run.
+///
+/// The claim `graph schema` makes about itself, asserted rather than trusted.
+/// Documentation drifts silently; this cannot, because renaming a field
+/// without editing the schema fails here.
+#[test]
+fn the_schema_is_a_valid_plan() {
+    let plan: Plan = toml::from_str(SCHEMA).expect("the schema should parse as a plan");
+    validate(&plan).expect("the schema should be a runnable plan");
+
+    assert_eq!(
+        waves(&plan),
+        vec![
+            vec!["survey".to_owned()],
+            vec!["fix".to_owned()],
+            vec!["report".to_owned()],
+        ],
+        "the example should demonstrate edges, not three independent nodes"
+    );
+}
+
+/// The schema shows both spellings of an edge, because the shorthand is the
+/// one an agent will reach for and the payload is the one that matters.
+#[test]
+fn the_schema_documents_both_kinds_of_edge() {
+    assert!(SCHEMA.contains(r#"needs = ["survey"]"#));
+    assert!(SCHEMA.contains(r#"pass = "the files""#));
+    assert!(
+        SCHEMA.contains("allow_tools"),
+        "the guardrail is the field most worth spelling correctly"
+    );
+}

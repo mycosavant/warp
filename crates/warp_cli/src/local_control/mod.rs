@@ -722,6 +722,17 @@ pub struct AgentReadArgs {
 /// exactly when a plan held in context is most at risk.
 #[derive(Debug, Clone, Subcommand)]
 pub enum GraphCommand {
+    /// Print the plan format, as a plan.
+    ///
+    /// What it prints is itself valid and runnable, so the format cannot drift
+    /// from its own documentation: `graph schema > plan.toml` is a starting
+    /// point, and `graph check` accepts it unchanged.
+    ///
+    /// Exists so that an agent writing a plan can learn the format from the
+    /// tool rather than from a human pasting documentation at it — which is
+    /// the whole of T7.2, where the plan comes from an issue tracker.
+    Schema,
+
     /// Check a plan without running it: parse, resolve edges, find cycles.
     ///
     /// Needs no running Warp. Prints the order the nodes would run in.
