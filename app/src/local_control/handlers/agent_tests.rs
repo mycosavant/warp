@@ -121,6 +121,45 @@ fn a_command_resolves_with_or_without_its_slash() {
     assert_eq!(resolve("no-such-command"), None);
 }
 
+/// `--last N` counts from the newest end, and neither end of the range panics.
+///
+/// The saturating case is the one that matters in use: an orchestrator asking
+/// for the last 10 turns of a conversation that has had 2 wants both of them,
+/// not an error and not an empty list. The zero case is the other direction —
+/// a caller whose arithmetic produced 0 asked for nothing, and returning the
+/// whole transcript instead would be the most expensive possible way to be
+/// wrong about that.
+#[test]
+fn last_counts_back_from_the_newest_exchange() {
+    assert_eq!(exchange_window_start(5, None), 0);
+    assert_eq!(exchange_window_start(5, Some(1)), 4);
+    assert_eq!(exchange_window_start(5, Some(5)), 0);
+    assert_eq!(exchange_window_start(2, Some(10)), 0);
+    assert_eq!(exchange_window_start(0, Some(1)), 0);
+    assert_eq!(exchange_window_start(5, Some(0)), 5);
+}
+
+/// A malformed id and an unknown one are different failures.
+///
+/// An orchestrator polling a child it spawned needs to tell "I built this
+/// string wrong" from "the conversation I was watching has gone", because the
+/// second is a normal outcome of a child finishing and being closed, and the
+/// first is a bug in the caller. One error code for both would make the normal
+/// case look like a bug.
+#[test]
+fn a_bad_id_and_a_missing_one_are_told_apart() {
+    let malformed = parse_conversation_id("not-a-uuid").expect_err("should not parse");
+    assert_eq!(malformed.code, ErrorCode::InvalidParams);
+
+    let missing = unknown_conversation("f3f2e0a6-0000-4000-8000-000000000000");
+    assert_eq!(missing.code, ErrorCode::MissingTarget);
+    assert!(
+        missing.message.contains("agent.list"),
+        "the error should name the action that lists what exists: {}",
+        missing.message
+    );
+}
+
 /// Every conversation state is distinguishable, and only one of them is busy.
 ///
 /// A poller that treats `waiting_for_events` or `blocked` as busy waits for

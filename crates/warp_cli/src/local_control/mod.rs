@@ -635,6 +635,13 @@ pub enum AgentCommand {
     /// Prints the `conversation_id` the prompt went to, which is how a caller
     /// that started several tells them apart afterwards.
     Prompt(AgentPromptArgs),
+
+    /// Read what a conversation said.
+    ///
+    /// `agent list` reports that a conversation finished; this reports what it
+    /// produced. `--last 1` is the usual call: the answer to the prompt that
+    /// was just dispatched, without the transcript leading up to it.
+    Read(AgentReadArgs),
 }
 
 #[derive(Debug, Clone, Args)]
@@ -647,6 +654,26 @@ pub struct AgentPromptArgs {
     /// Take the id from `warpctrl agent list`.
     #[arg(long = "conversation")]
     pub conversation: Option<String>,
+
+    #[command(flatten)]
+    pub target: TargetArgs,
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct AgentReadArgs {
+    /// The conversation to read, from `warpctrl agent list`.
+    pub conversation: String,
+
+    /// Return only the last N exchanges, newest last.
+    #[arg(long = "last")]
+    pub last: Option<u32>,
+
+    /// Include tool-call results — every file read and command output.
+    ///
+    /// Off by default: without it this returns what the agent *said*, which is
+    /// what a caller passing the result to another agent wants to pay for.
+    #[arg(long = "tools")]
+    pub include_tool_results: bool,
 
     #[command(flatten)]
     pub target: TargetArgs,

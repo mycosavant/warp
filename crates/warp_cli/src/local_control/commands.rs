@@ -1,11 +1,11 @@
 //! Implementations for user-facing `warpctrl` command groups.
 use local_control::discovery::InstanceRecord;
 use local_control::protocol::{
-    Action, ActionKind, ActionNameParams, AgentPromptParams, BindingNameParams, BooleanValueParams,
-    ColorValueParams, ControlError, DirectionParams, EmptyParams, ErrorCode, FileOpenParams,
-    KeyParams, KeyValueParams, PageQueryParams, QueryParams, RenameParams, RequestEnvelope,
-    ResizeParams, SettingListParams, SlashRunParams, TabActivateParams, TabActivationMode,
-    TabCloseMode, TabCloseParams, TabCreateParams, TextParams, ThemeNameParams,
+    Action, ActionKind, ActionNameParams, AgentPromptParams, AgentReadParams, BindingNameParams,
+    BooleanValueParams, ColorValueParams, ControlError, DirectionParams, EmptyParams, ErrorCode,
+    FileOpenParams, KeyParams, KeyValueParams, PageQueryParams, QueryParams, RenameParams,
+    RequestEnvelope, ResizeParams, SettingListParams, SlashRunParams, TabActivateParams,
+    TabActivationMode, TabCloseMode, TabCloseParams, TabCreateParams, TextParams, ThemeNameParams,
 };
 use local_control::selection::select_instance;
 use serde::Serialize;
@@ -718,6 +718,16 @@ pub(super) fn run_agent_command(
             AgentPromptParams {
                 prompt: args.prompt,
                 conversation_id: args.conversation,
+            },
+            output_format,
+        ),
+        AgentCommand::Read(args) => run_action_with_params(
+            args.target,
+            ActionKind::AgentRead,
+            AgentReadParams {
+                conversation_id: args.conversation,
+                last: args.last,
+                include_tool_results: args.include_tool_results,
             },
             output_format,
         ),

@@ -705,7 +705,7 @@ fn select_window_entries(
     }
 }
 
-fn select_tab_entries(
+pub(super) fn select_tab_entries(
     target: &TargetSelector,
     action: ActionKind,
     ctx: &mut ModelContext<LocalControlBridge>,

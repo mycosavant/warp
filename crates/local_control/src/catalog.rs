@@ -57,6 +57,7 @@ pub enum ActionParameterSpec {
     Text,
     ThemeName,
     AgentPrompt,
+    AgentRead,
     SlashRun,
 }
 
@@ -85,6 +86,7 @@ pub enum ActionResultSpec {
     ThemeState,
     AgentConversationList,
     AgentConversation,
+    AgentTranscript,
     SlashCommandList,
 }
 
@@ -325,6 +327,9 @@ define_action_catalog! {
     agent {
         AgentList => { name: "agent.list", status: Implemented, target: Instance, params: None, result: AgentConversationList },
         AgentPrompt => { name: "agent.prompt", status: Implemented, target: Agent, params: AgentPrompt, result: AgentConversation },
+        // `Instance` rather than `Agent`: a conversation id addresses this on
+        // its own, and it outlives the pane that showed it.
+        AgentRead => { name: "agent.read", status: Implemented, target: Instance, params: AgentRead, result: AgentTranscript },
     }
 
     // Fork-local. The slash-command registry is where Warp keeps the verbs an

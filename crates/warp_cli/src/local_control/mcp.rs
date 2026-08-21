@@ -501,6 +501,29 @@ fn add_parameter_properties(
                 }),
             );
         }
+        ActionParameterSpec::AgentRead => {
+            require(
+                "conversation_id",
+                json!({
+                    "type": "string",
+                    "description": "Conversation to read, from warp_agent_list.",
+                }),
+            );
+            properties.insert(
+                "last".to_owned(),
+                json!({
+                    "type": "integer",
+                    "description": "Return only the last N exchanges. Omit for the whole transcript.",
+                }),
+            );
+            properties.insert(
+                "include_tool_results".to_owned(),
+                json!({
+                    "type": "boolean",
+                    "description": "Include tool-call results — every file read and command output — in the returned text.",
+                }),
+            );
+        }
         ActionParameterSpec::SlashRun => {
             require(
                 "command",

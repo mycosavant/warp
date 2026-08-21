@@ -138,6 +138,9 @@ impl LocalControlBridge {
                 &request.target,
                 ctx,
             ),
+            ActionKind::AgentRead => {
+                agent::agent_read(&self.instance_id, &request.action.params, ctx)
+            }
             ActionKind::SlashList => agent::slash_list(&self.instance_id, &request.target, ctx),
             ActionKind::SlashRun => agent::slash_run(
                 &self.instance_id,

@@ -1,6 +1,6 @@
 //! Target resolution and parameter validation for retained local-control actions.
 use ::local_control::protocol::{
-    ActionNameParams, ActionParameterSpec, AgentPromptParams, BindingNameParams,
+    ActionNameParams, ActionParameterSpec, AgentPromptParams, AgentReadParams, BindingNameParams,
     BooleanValueParams, ColorValueParams, DirectionParams, EmptyParams, FileOpenParams, KeyParams,
     KeyValueParams, NamespaceParams, PageQueryParams, PaneTarget, QueryParams, RenameParams,
     ResizeParams, SessionTarget, SlashRunParams, TabActivateParams, TabCloseParams,
@@ -52,6 +52,7 @@ pub(crate) fn validate_action_params(action: &::local_control::Action) -> Result
         ActionParameterSpec::Text => parse_params::<TextParams>(action),
         ActionParameterSpec::ThemeName => parse_params::<ThemeNameParams>(action),
         ActionParameterSpec::AgentPrompt => parse_params::<AgentPromptParams>(action),
+        ActionParameterSpec::AgentRead => parse_params::<AgentReadParams>(action),
         ActionParameterSpec::SlashRun => parse_params::<SlashRunParams>(action),
     }
 }

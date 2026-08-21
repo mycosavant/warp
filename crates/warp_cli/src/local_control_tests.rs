@@ -602,6 +602,17 @@ fn retained_action_examples() -> Vec<(ActionKind, Vec<&'static str>)> {
             ActionKind::AgentPrompt,
             vec!["warpctrl", "agent", "prompt", "summarise the diff"],
         ),
+        (
+            ActionKind::AgentRead,
+            vec![
+                "warpctrl",
+                "agent",
+                "read",
+                "3f2f0e6a-0000-4000-8000-000000000000",
+                "--last",
+                "1",
+            ],
+        ),
         (ActionKind::SlashList, vec!["warpctrl", "slash", "list"]),
         (
             ActionKind::SlashRun,
@@ -769,6 +780,7 @@ fn parsed_action_kind(command: &ControlCommand) -> Option<ActionKind> {
         ControlCommand::Agent(command) => match command {
             AgentCommand::List(_) => Some(ActionKind::AgentList),
             AgentCommand::Prompt(_) => Some(ActionKind::AgentPrompt),
+            AgentCommand::Read(_) => Some(ActionKind::AgentRead),
         },
         ControlCommand::Slash(command) => match command {
             SlashCommand::List(_) => Some(ActionKind::SlashList),

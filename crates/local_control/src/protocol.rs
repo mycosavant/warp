@@ -201,6 +201,30 @@ pub struct AgentPromptParams {
     pub conversation_id: Option<String>,
 }
 
+/// Parameters for `agent.read`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AgentReadParams {
+    /// The conversation to read. Required — unlike `agent.prompt` there is no
+    /// sensible default, since "the conversation in front of a pane" is exactly
+    /// the one an orchestrator already knows about.
+    pub conversation_id: String,
+    /// Return only the last N exchanges. `None` returns all of them.
+    ///
+    /// The common case is `1`: an orchestrator waiting on a child wants the
+    /// answer, not the whole transcript it already dispatched.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last: Option<u32>,
+    /// Include tool-call results in the output text.
+    ///
+    /// Off by default because it is the difference between an answer and a
+    /// session log: every file read, every command run and its full stdout are
+    /// in there, and a caller that pastes the result into another agent's
+    /// prompt pays for all of it.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub include_tool_results: bool,
+}
+
 /// Parameters for `slash.run`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -272,12 +296,20 @@ pub struct AgentConversationSummary {
     /// Whether the agent is still working. True for `in_progress` only —
     /// `waiting_for_events` is quiescent, and `blocked` is waiting on a person.
     pub is_busy: bool,
-    /// The pane hosting it, when it is on screen in this window. Absent for a
-    /// conversation whose terminal surface has been closed.
+    /// The pane hosting it. Absent for a conversation whose terminal surface
+    /// has been closed, which outlives the pane it was shown in.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pane_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tab_id: Option<String>,
+    /// Whether that pane exists but is not on screen — a background child
+    /// agent, hidden for `HiddenPaneReason::ChildAgent`.
+    ///
+    /// Reported rather than inferred from a missing `pane_id`, because the two
+    /// are different situations and `agent.reveal` only answers one of them: a
+    /// hidden pane can be shown, a closed one cannot.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub is_hidden: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -295,6 +327,51 @@ pub struct AgentPromptResult {
     pub conversation_id: String,
     /// True when this call created the conversation rather than continuing one.
     pub created: bool,
+}
+
+/// One turn of a conversation, as `agent.read` reports it.
+///
+/// Input and output are separate fields rather than one `USER:`/`AGENT:`
+/// transcript, because the caller is a program: the thing it usually wants is
+/// the last `output`, and making it parse a formatted transcript to find that
+/// would be the same mistake as `input.submit` returning a screenshot.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AgentExchangeSummary {
+    /// Position in the conversation, oldest first and stable across calls, so a
+    /// caller polling for new turns can ask "anything after 4?".
+    pub index: u32,
+    /// The user side of the turn. Absent for an exchange with no user query —
+    /// the agent's own follow-on requests are exchanges too.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub input: Option<String>,
+    /// The agent side. Absent while a turn is still streaming its first token.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub output: Option<String>,
+    /// Whether this turn has finished streaming.
+    ///
+    /// The last exchange of an `in_progress` conversation is the one that has
+    /// not, and reading it gives a partial answer — worth knowing before
+    /// handing it to another agent as a result.
+    pub is_complete: bool,
+}
+
+/// The result of `agent.read`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AgentReadResult {
+    /// The same summary `agent.list` gives, so a caller that reads a
+    /// conversation does not have to list to find out whether it has finished.
+    pub conversation: AgentConversationSummary,
+    pub exchanges: Vec<AgentExchangeSummary>,
+    /// How many exchanges the conversation has in total, which is what tells a
+    /// caller using `last` whether it saw everything.
+    pub exchange_count: u32,
+    /// Whether tool-call results are in the output text.
+    ///
+    /// Not simply an echo of the request: including them needs the action model
+    /// of the terminal surface that owns the conversation, and that surface can
+    /// be gone. Reported so a caller can tell "no tools were used" from "the
+    /// tool results were not reachable".
+    pub included_tool_results: bool,
 }
 
 /// One slash command, as `slash.list` reports it.

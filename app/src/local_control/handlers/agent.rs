@@ -15,17 +15,21 @@
 //! keyboard route is `ctrl`+`shift`+`Return`, which no local-control action
 //! could reach.
 
+use std::collections::HashMap;
+
 use ::local_control::protocol::{
-    AgentConversationSummary, AgentListResult, AgentPromptParams, AgentPromptResult,
-    SlashCommandSummary, SlashListResult, SlashRunParams, TargetSelector,
+    AgentConversationSummary, AgentExchangeSummary, AgentListResult, AgentPromptParams,
+    AgentPromptResult, AgentReadParams, AgentReadResult, SlashCommandSummary, SlashListResult,
+    SlashRunParams, TargetSelector,
 };
 use ::local_control::{ActionKind, ControlError, ErrorCode, InstanceId};
-use warpui::{ModelContext, SingletonEntity, ViewHandle};
+use warpui::{EntityId, ModelContext, SingletonEntity, ViewHandle};
 
-use crate::ai::agent::conversation::{AIConversationId, ConversationStatus};
+use crate::ai::agent::conversation::{AIConversation, AIConversationId, ConversationStatus};
 use crate::ai::blocklist::history_model::BlocklistAIHistoryModel;
 use crate::local_control::LocalControlBridge;
 use crate::local_control::handlers::ack;
+use crate::local_control::handlers::metadata::select_tab_entries;
 use crate::local_control::resolver::{input_target_pane_id, target_pane_group};
 use crate::search::slash_command_menu::static_commands::SlashCommandKind;
 use crate::search::slash_command_menu::static_commands::commands::COMMAND_REGISTRY;
@@ -95,39 +99,96 @@ pub fn slash_command_is_orchestration(kind: SlashCommandKind) -> bool {
     )
 }
 
+/// Where a conversation's terminal surface is, if it is anywhere.
+///
+/// Built by walking every tab rather than asked of one, because the panes a
+/// conversation can be in are not restricted to the window the caller targeted
+/// — an orchestrator's children can be scattered across tabs, and a hidden one
+/// is in a tab nobody is looking at.
+struct SurfaceLocation {
+    pane_id: String,
+    tab_id: String,
+    is_hidden: bool,
+    terminal_view: ViewHandle<TerminalView>,
+}
+
+/// Maps terminal-surface ids to the pane showing them, hidden panes included.
+///
+/// `pane.list` reports `visible_pane_ids` and is right to: a hidden pane is not
+/// addressable as a pane. This is the other question — *which* pane holds a
+/// conversation — and for a background child agent the answer is a real pane
+/// that happens to be hidden. Hence `pane_ids()`, which is every pane in the
+/// group, with visibility reported as a field instead of a filter.
+fn surface_locations(
+    ctx: &mut ModelContext<LocalControlBridge>,
+) -> HashMap<EntityId, SurfaceLocation> {
+    let mut locations = HashMap::new();
+    // Degrades to "location unknown" rather than failing the call: every
+    // consumer of this map treats a missing entry as a closed surface, which
+    // is the same answer a caller gets for a window that has gone away
+    // mid-request.
+    let tabs = select_tab_entries(&TargetSelector::default(), ActionKind::AgentList, ctx)
+        .unwrap_or_default();
+    for tab in tabs {
+        let tab_id = tab.pane_group.id().to_string();
+        tab.pane_group.read(ctx, |pane_group, ctx| {
+            let visible = pane_group.visible_pane_ids();
+            for pane_id in pane_group.pane_ids() {
+                let Some(terminal_view) = pane_group.terminal_view_from_pane_id(pane_id, ctx)
+                else {
+                    continue;
+                };
+                locations.insert(
+                    terminal_view.id(),
+                    SurfaceLocation {
+                        pane_id: pane_id.to_string(),
+                        tab_id: tab_id.clone(),
+                        is_hidden: !visible.contains(&pane_id),
+                        terminal_view,
+                    },
+                );
+            }
+        });
+    }
+    locations
+}
+
+fn conversation_summary(
+    conversation: &AIConversation,
+    location: Option<&SurfaceLocation>,
+) -> AgentConversationSummary {
+    let status = conversation.status();
+    AgentConversationSummary {
+        conversation_id: conversation.id().to_string(),
+        title: conversation.title(),
+        status: status_name(status).to_owned(),
+        blocked_action: match status {
+            ConversationStatus::Blocked { blocked_action } => Some(blocked_action.clone()),
+            _ => None,
+        },
+        // `InProgress` alone. `WaitingForEvents` is quiescent by design — the
+        // agent yielded and is listening — and `Blocked` is waiting on a
+        // person, so reporting either as busy would make a poller wait for
+        // something that is already waiting for it.
+        is_busy: matches!(status, ConversationStatus::InProgress),
+        pane_id: location.map(|location| location.pane_id.clone()),
+        tab_id: location.map(|location| location.tab_id.clone()),
+        is_hidden: location.is_some_and(|location| location.is_hidden),
+    }
+}
+
 /// `agent.list` — every live conversation, with the one field a caller polling
 /// for "is it my turn yet" needs.
 pub fn agent_list(
     instance_id: &Option<InstanceId>,
     ctx: &mut ModelContext<LocalControlBridge>,
 ) -> Result<serde_json::Value, ControlError> {
+    let locations = surface_locations(ctx);
     let conversations = BlocklistAIHistoryModel::as_ref(ctx)
         .all_live_conversations()
         .into_iter()
-        .map(|(_terminal_surface_id, conversation)| {
-            let status = conversation.status();
-            AgentConversationSummary {
-                conversation_id: conversation.id().to_string(),
-                title: conversation.title(),
-                status: status_name(status).to_owned(),
-                blocked_action: match status {
-                    ConversationStatus::Blocked { blocked_action } => Some(blocked_action.clone()),
-                    _ => None,
-                },
-                // `InProgress` alone. `WaitingForEvents` is quiescent by
-                // design — the agent yielded and is listening — and `Blocked`
-                // is waiting on a person, so reporting either as busy would
-                // make a poller wait for something that is already waiting for
-                // it.
-                is_busy: matches!(status, ConversationStatus::InProgress),
-                // Left unresolved for now: mapping a conversation back to the
-                // pane showing it needs the terminal-surface id translated
-                // through the pane group, and `agent.prompt` addresses
-                // conversations rather than panes precisely so callers do not
-                // need it. See `.fork/TASKS.md` T6.6.
-                pane_id: None,
-                tab_id: None,
-            }
+        .map(|(terminal_surface_id, conversation)| {
+            conversation_summary(conversation, locations.get(&terminal_surface_id))
         })
         .collect::<Vec<_>>();
 
@@ -135,6 +196,93 @@ pub fn agent_list(
     merge(
         &mut response,
         serde_json::to_value(AgentListResult { conversations })
+            .map_err(|error| ControlError::new(ErrorCode::Internal, error.to_string()))?,
+    );
+    Ok(response)
+}
+
+/// The first exchange `last` asks for, counting from the end.
+///
+/// From the end because that is the direction an orchestrator reads: the answer
+/// it is waiting for is the newest turn. Saturating rather than clamping so
+/// `--last 50` on a two-turn conversation returns both turns instead of
+/// nothing, and `--last 0` returns nothing rather than everything — a caller
+/// that computed a zero meant zero.
+fn exchange_window_start(exchange_count: usize, last: Option<u32>) -> usize {
+    match last {
+        Some(last) => exchange_count.saturating_sub(last as usize),
+        None => 0,
+    }
+}
+
+/// `agent.read` — what a conversation actually said.
+///
+/// The gap that made the rest of the surface hard to use: `agent.list` reports
+/// *that* a child finished and never *what it produced*, so an orchestrator
+/// could dispatch work and watch it complete without being able to collect the
+/// result. Handing work along a chain needs the answer, not the status.
+pub fn agent_read(
+    instance_id: &Option<InstanceId>,
+    params: &serde_json::Value,
+    ctx: &mut ModelContext<LocalControlBridge>,
+) -> Result<serde_json::Value, ControlError> {
+    let params: AgentReadParams = serde_json::from_value(params.clone())
+        .map_err(|error| ControlError::new(ErrorCode::InvalidParams, error.to_string()))?;
+    let conversation_id = parse_conversation_id(&params.conversation_id)?;
+    let locations = surface_locations(ctx);
+
+    let history = BlocklistAIHistoryModel::as_ref(ctx);
+    let Some(conversation) = history.conversation(&conversation_id) else {
+        return Err(unknown_conversation(&params.conversation_id));
+    };
+    let terminal_surface_id = history
+        .all_live_conversations()
+        .into_iter()
+        .find(|(_, live)| live.id() == conversation_id)
+        .map(|(terminal_surface_id, _)| terminal_surface_id);
+    let location = terminal_surface_id.and_then(|id| locations.get(&id));
+
+    // Tool results need the action model of the surface that owns the
+    // conversation, and that surface can be closed while the conversation
+    // survives. Asking for them and getting text is a smaller failure than
+    // refusing the read, so this reports what it managed rather than erroring —
+    // `included_tool_results` is the field that says which happened.
+    let action_model = params
+        .include_tool_results
+        .then(|| location.map(|location| location.terminal_view.as_ref(ctx).ai_action_model()))
+        .flatten()
+        .map(|action_model| action_model.as_ref(ctx));
+
+    let exchanges = conversation.root_task_exchanges().collect::<Vec<_>>();
+    let exchange_count = exchanges.len();
+    let skip = exchange_window_start(exchange_count, params.last);
+    let exchanges = exchanges
+        .into_iter()
+        .enumerate()
+        .skip(skip)
+        .map(|(index, exchange)| {
+            let input = exchange.format_input_for_copy();
+            let output = exchange.format_output_for_copy(action_model);
+            AgentExchangeSummary {
+                index: index as u32,
+                input: (!input.is_empty()).then_some(input),
+                output: (!output.is_empty()).then_some(output),
+                is_complete: exchange.finish_time.is_some(),
+            }
+        })
+        .collect::<Vec<_>>();
+
+    let result = AgentReadResult {
+        conversation: conversation_summary(conversation, location),
+        exchanges,
+        exchange_count: exchange_count as u32,
+        included_tool_results: action_model.is_some(),
+    };
+
+    let mut response = ack(instance_id, ActionKind::AgentRead);
+    merge(
+        &mut response,
+        serde_json::to_value(result)
             .map_err(|error| ControlError::new(ErrorCode::Internal, error.to_string()))?,
     );
     Ok(response)
@@ -211,24 +359,30 @@ pub fn resolve_conversation(
     let Some(raw) = params.conversation_id.as_deref() else {
         return Ok(None);
     };
-    let id = AIConversationId::try_from(raw.to_owned()).map_err(|_| {
-        ControlError::new(
-            ErrorCode::InvalidParams,
-            format!("conversation_id `{raw}` is not a UUID"),
-        )
-    })?;
+    let id = parse_conversation_id(raw)?;
     if BlocklistAIHistoryModel::as_ref(ctx)
         .conversation(&id)
         .is_none()
     {
-        return Err(ControlError::new(
-            ErrorCode::MissingTarget,
-            format!(
-                "no live conversation `{raw}`; `agent.list` reports the ones that exist right now"
-            ),
-        ));
+        return Err(unknown_conversation(raw));
     }
     Ok(Some(id))
+}
+
+fn parse_conversation_id(raw: &str) -> Result<AIConversationId, ControlError> {
+    AIConversationId::try_from(raw.to_owned()).map_err(|_| {
+        ControlError::new(
+            ErrorCode::InvalidParams,
+            format!("conversation_id `{raw}` is not a UUID"),
+        )
+    })
+}
+
+fn unknown_conversation(raw: &str) -> ControlError {
+    ControlError::new(
+        ErrorCode::MissingTarget,
+        format!("no live conversation `{raw}`; `agent.list` reports the ones that exist right now"),
+    )
 }
 
 /// `agent.prompt` — the action T6.5 was opened for.
