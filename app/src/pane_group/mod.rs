@@ -4694,6 +4694,18 @@ impl PaneGroup {
         allowed_tools: Option<Vec<warp_multi_agent_api::ToolType>>,
         ctx: &mut ViewContext<Self>,
     ) -> Option<AIConversationId> {
+        // Checked before anything is created, and fails the spawn rather than
+        // proceeding without it. A restriction that cannot be applied is the
+        // one failure mode this whole feature exists to avoid: a child told it
+        // is read-only and handed a shell. In the app the singleton is always
+        // registered, so this is a guard against a caller that isn't the app.
+        if allowed_tools.is_some() && !ctx.has_singleton_model::<ChildAgentToolPolicy>() {
+            report_error!(
+                "agent.spawn asked for a tool allowlist with no ChildAgentToolPolicy registered;                  refusing to spawn an unrestricted child"
+            );
+            return None;
+        }
+
         let child = child_agent::create_hidden_child_agent_conversation(
             self,
             child_agent::HiddenChildAgentConversationRequest {
@@ -4823,6 +4835,23 @@ impl PaneGroup {
         let Some(child_pane_id) = owner_child_pane else {
             return false;
         };
+        // Fork-local: the surface is going, so its tool allowlist should go
+        // with it (`.fork/TASKS.md`, T6.6). Entity ids come from a counter and
+        // are never reused, so a stale entry could not govern a later surface
+        // — but a policy that outlives what it applies to is the kind of state
+        // that eventually gets read by something that did not expect it.
+        //
+        // Guarded on the singleton being registered, like every other reader
+        // of it: plenty of tests build a narrow set without it, and panicking
+        // here would make an unrelated pane close fail.
+        if let Some(terminal_view) = self.terminal_view_from_pane_id(child_pane_id, ctx)
+            && ctx.has_singleton_model::<ChildAgentToolPolicy>()
+        {
+            let terminal_view_id = terminal_view.id();
+            ChildAgentToolPolicy::handle(ctx).update(ctx, |policy, _| {
+                policy.release(terminal_view_id);
+            });
+        }
         if self
             .child_agent_origin
             .as_ref()

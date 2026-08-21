@@ -34,7 +34,7 @@ use crate::local_control::LocalControlBridge;
 use crate::local_control::handlers::ack;
 use crate::local_control::handlers::metadata::select_tab_entries;
 use crate::local_control::resolver::{input_target_pane_id, target_pane_group};
-use crate::pane_group::PaneGroup;
+use crate::pane_group::{PaneGroup, PaneId};
 use crate::search::slash_command_menu::static_commands::SlashCommandKind;
 use crate::search::slash_command_menu::static_commands::commands::COMMAND_REGISTRY;
 use crate::terminal::input::slash_commands::slash_command_is_submitted_as_prompt;
@@ -110,7 +110,7 @@ pub fn slash_command_is_orchestration(kind: SlashCommandKind) -> bool {
 /// — an orchestrator's children can be scattered across tabs, and a hidden one
 /// is in a tab nobody is looking at.
 struct SurfaceLocation {
-    pane_id: String,
+    pane_id: PaneId,
     tab_id: String,
     is_hidden: bool,
     terminal_view: ViewHandle<TerminalView>,
@@ -147,7 +147,7 @@ fn surface_locations(
                 locations.insert(
                     terminal_view.id(),
                     SurfaceLocation {
-                        pane_id: pane_id.to_string(),
+                        pane_id,
                         tab_id: tab_id.clone(),
                         is_hidden: !visible.contains(&pane_id),
                         terminal_view,
@@ -178,7 +178,7 @@ fn conversation_summary(
         // person, so reporting either as busy would make a poller wait for
         // something that is already waiting for it.
         is_busy: matches!(status, ConversationStatus::InProgress),
-        pane_id: location.map(|location| location.pane_id.clone()),
+        pane_id: location.map(|location| location.pane_id.to_string()),
         tab_id: location.map(|location| location.tab_id.clone()),
         is_hidden: location.is_some_and(|location| location.is_hidden),
     }
@@ -574,7 +574,7 @@ pub fn agent_spawn(
             )
         })?;
     let pane_group = parent.pane_group.clone();
-    let parent_pane_id = parent.pane_id.clone();
+    let parent_pane_id = parent.pane_id;
 
     let name = params
         .name
@@ -585,9 +585,6 @@ pub fn agent_spawn(
         .unwrap_or_default();
 
     let conversation_id = pane_group.update(ctx, |pane_group, ctx| {
-        let parent_pane_id = pane_group
-            .pane_ids()
-            .find(|pane_id| pane_id.to_string() == parent_pane_id)?;
         pane_group.spawn_hidden_child_agent_for_local_control(
             parent_pane_id,
             parent_conversation_id,
@@ -736,7 +733,8 @@ pub fn agent_reveal(
         })?;
     let was_hidden = location.is_hidden;
     let conversation_tab_id = location.tab_id.clone();
-    let is_child_agent = location.pane_group.read(ctx, |pane_group, _| {
+    let conversation_pane_group = location.pane_group.clone();
+    let is_child_agent = conversation_pane_group.read(ctx, |pane_group, _| {
         pane_group
             .child_agent_pane_for_conversation(&conversation_id)
             .is_some()
@@ -753,7 +751,33 @@ pub fn agent_reveal(
         ));
     }
 
-    let host = terminal_view_for(ActionKind::AgentReveal, target, ctx)?;
+    // With no selector, the host is the focused pane of the tab that already
+    // holds the conversation — not the app's active pane.
+    //
+    // Every other action defaults to the active pane because it has no better
+    // idea; this one knows exactly where the conversation is. Deferring to the
+    // active pane instead would make `agent reveal <id>` fail whenever the
+    // person had looked at another tab since, and the fix — passing both
+    // `--tab` and `--pane` — would be something a caller has to learn by
+    // hitting it, since the pane selector resolves inside the active tab.
+    let host = if target.window.is_none()
+        && target.tab.is_none()
+        && target.pane.is_none()
+        && target.session.is_none()
+    {
+        conversation_pane_group
+            .read(ctx, |pane_group, ctx| {
+                pane_group.terminal_view_from_pane_id(pane_group.focused_pane_id(ctx), ctx)
+            })
+            .ok_or_else(|| {
+                ControlError::new(
+                    ErrorCode::MissingTarget,
+                    "the tab holding this conversation has no terminal pane to reveal it from",
+                )
+            })?
+    } else {
+        terminal_view_for(ActionKind::AgentReveal, target, ctx)?
+    };
     // The reveal events are scoped to one pane group: they ask *this* group
     // for the child's hidden pane. Emitting from a pane in another tab finds
     // nothing and logs, so the mismatch is refused here where it can be
