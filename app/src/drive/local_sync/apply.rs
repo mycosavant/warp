@@ -148,6 +148,51 @@ where
     Ok(summary)
 }
 
+/// Writes one object into the store, leaving everything else alone.
+///
+/// T1.12. [`apply`] is *reconciliation*: it reads absence as deletion, so
+/// handing it a single object would trash the rest of the drive. This is the
+/// other half of the same machinery — the thirteen constructors, for one
+/// object, with no opinion about what is not in front of it.
+///
+/// Returns `true` when the object was created rather than updated.
+pub fn put<A>(placed: &PlacedObject, app: &mut A) -> Result<bool>
+where
+    A: UpdateModel + ReadModel + GetSingletonModelHandle,
+{
+    let created = CloudModel::handle(app).update(app, |cloud_model, ctx| {
+        write_object(placed, cloud_model, ctx)
+    })?;
+    persist(&[placed.object.id.to_string()], app);
+    Ok(created)
+}
+
+/// Moves one object to the trash, by the route the panel's Trash button takes.
+///
+/// Returns `false` when there is no such object, or it was already trashed —
+/// neither of which is an error. Trashing an already-trashed object would only
+/// rewrite its timestamp, which is the same reason `trash_absent` skips them.
+pub fn trash<A>(id: SyncId, app: &mut A) -> bool
+where
+    A: UpdateModel + ReadModel + GetSingletonModelHandle,
+{
+    let type_and_id = CloudModel::handle(app).read(app, |cloud_model, _| {
+        cloud_model
+            .get_by_uid(&id.uid())
+            .filter(|object| object.metadata().trashed_ts.is_none())
+            .map(|object| object.cloud_object_type_and_id())
+    });
+
+    let Some(type_and_id) = type_and_id else {
+        return false;
+    };
+
+    UpdateManager::handle(app).update(app, |update_manager, ctx| {
+        update_manager.trash_object(type_and_id, ctx);
+    });
+    true
+}
+
 /// T4.4g — reconciles workflow aliases against the tree.
 ///
 /// # Only for the workflows the tree describes

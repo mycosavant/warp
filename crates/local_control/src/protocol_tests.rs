@@ -151,7 +151,9 @@ fn malformed_and_removed_action_names_are_not_deserialized() {
         "drive.notebook.open",
         "drive.env_var_collection.open",
         "drive.object.share.open",
-        "drive.object.create",
+        // `drive.object.create` was here until T1.12 and is now a real action.
+        // The rest of this list stays: they are still names with nothing
+        // behind them.
         "drive.object.update",
         "drive.object.delete",
         "drive.object.insert",
@@ -162,13 +164,50 @@ fn malformed_and_removed_action_names_are_not_deserialized() {
     }
 }
 
+/// T1.12 took one name back off that list, and this records the decision rather
+/// than leaving a deletion in a diff.
+///
+/// Upstream's `drive.*` group was twelve actions, every one of them
+/// `status: Stub, authenticated_user: true` — specified, never implemented, and
+/// gated on a sign-in. Removing them is why the list above exists. Four of them
+/// are also the obvious names for what T1.12 needed, and three
+/// (`drive.object.list`, `.get`, `.trash`) were never upstream names at all.
+///
+/// So the fork now implements, account-free, one action upstream specified as
+/// an account-gated stub and then deleted. The parameters are deliberately not
+/// upstream's: theirs was `{object_type, content, content_file}`, and this one
+/// takes `{object_type, name, body, folder}` because an object needs a name and
+/// a place to live. That difference is the reason the name could not simply be
+/// quietly reused — a caller written against the old spec would send `content`
+/// and be told `invalid_params`, which is the right answer and needs to be a
+/// deliberate one.
+///
+/// The other nine stay pinned. They are still names with nothing behind them,
+/// and this test is what keeps the distinction honest.
 #[test]
-fn catalog_has_exactly_92_retained_actions() {
+fn the_drive_object_actions_this_fork_implements_do_parse() {
+    for action in [
+        "drive.object.list",
+        "drive.object.get",
+        "drive.object.create",
+        "drive.object.trash",
+    ] {
+        assert!(
+            serde_json::from_value::<ActionKind>(serde_json::json!(action)).is_ok(),
+            "{action} should parse"
+        );
+    }
+}
+
+#[test]
+fn catalog_has_exactly_100_retained_actions() {
     // 84 upstream actions, plus the fork's `input.submit`, the three
-    // `drive.sync.*` actions, and the eight that let an agent drive an agent:
-    // `agent.list`, `agent.prompt`, `slash.list` and `slash.run` (T6.5), then
-    // `agent.read`, `agent.spawn`, `agent.cancel` and `agent.reveal` (T6.6).
-    assert_eq!(ActionKind::ALL.len(), 96);
+    // `drive.sync.*` actions, the eight that let an agent drive an agent
+    // (`agent.list`, `agent.prompt`, `slash.list` and `slash.run` from T6.5,
+    // then `agent.read`, `agent.spawn`, `agent.cancel` and `agent.reveal` from
+    // T6.6), and the four that reach the object store one object at a time:
+    // `drive.object.list`, `.get`, `.create` and `.trash` (T1.12).
+    assert_eq!(ActionKind::ALL.len(), 100);
 }
 
 #[test]

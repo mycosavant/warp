@@ -1,9 +1,12 @@
 //! Implementations for user-facing `warpctrl` command groups.
+use std::path::Path;
+
 use local_control::discovery::InstanceRecord;
 use local_control::protocol::{
     Action, ActionKind, ActionNameParams, AgentCancelParams, AgentPromptParams, AgentReadParams,
     AgentRevealParams, AgentRevealTarget, AgentSpawnParams, BindingNameParams, BooleanValueParams,
-    ColorValueParams, ControlError, DirectionParams, EmptyParams, ErrorCode, FileOpenParams,
+    ColorValueParams, ControlError, DirectionParams, DriveObjectCreateParams, DriveObjectGetParams,
+    DriveObjectListParams, DriveObjectTrashParams, EmptyParams, ErrorCode, FileOpenParams,
     KeyParams, KeyValueParams, PageQueryParams, QueryParams, RenameParams, RequestEnvelope,
     ResizeParams, SettingListParams, SlashRunParams, TabActivateParams, TabActivationMode,
     TabCloseMode, TabCloseParams, TabCreateParams, TextParams, ThemeNameParams,
@@ -17,11 +20,11 @@ use crate::local_control::output::{write_json, write_json_line};
 use crate::local_control::selectors::{instance_selector, target_selector};
 use crate::local_control::{
     ActionCatalogCommand, AgentCommand, AppCommand, AppearanceCommand, CapabilityCommand,
-    CliRevealTarget, DriveCommand, FileCommand, InputCommand, InstanceCommand, KeybindingCommand,
-    PaneCommand, SessionCommand, SettingCommand, SlashCommand, SurfaceCommand, SurfaceOpenCommand,
-    SurfaceOpenToggleCommand, SurfaceQueryCommand, SurfaceSettingsCommand, SurfaceToggleCommand,
-    TabActivateArgs, TabCloseArgs, TabColorCommand, TabCommand, TargetArgs, ThemeCommand,
-    WindowCommand,
+    CliRevealTarget, DriveCommand, DriveObjectCommand, FileCommand, InputCommand, InstanceCommand,
+    KeybindingCommand, PaneCommand, SessionCommand, SettingCommand, SlashCommand, SurfaceCommand,
+    SurfaceOpenCommand, SurfaceOpenToggleCommand, SurfaceQueryCommand, SurfaceSettingsCommand,
+    SurfaceToggleCommand, TabActivateArgs, TabCloseArgs, TabColorCommand, TabCommand, TargetArgs,
+    ThemeCommand, WindowCommand,
 };
 
 pub(super) fn run_surface_command(
@@ -812,7 +815,81 @@ pub(super) fn run_drive_command(
             EmptyParams {},
             output_format,
         ),
+        DriveCommand::Object(command) => run_drive_object_command(command, output_format),
     }
+}
+
+fn run_drive_object_command(
+    command: DriveObjectCommand,
+    output_format: OutputFormat,
+) -> Result<(), ControlError> {
+    match command {
+        DriveObjectCommand::List(args) => run_action_with_params(
+            args.target,
+            ActionKind::DriveObjectList,
+            DriveObjectListParams {
+                include_trashed: args.include_trashed,
+                object_type: args.object_type,
+            },
+            output_format,
+        ),
+        DriveObjectCommand::Get(args) => run_action_with_params(
+            args.target,
+            ActionKind::DriveObjectGet,
+            DriveObjectGetParams { id: args.id },
+            output_format,
+        ),
+        DriveObjectCommand::Create(args) => {
+            let body = match (&args.body, &args.body_file) {
+                (Some(body), _) => Some(body.clone()),
+                (None, Some(path)) => Some(read_body(path)?),
+                (None, None) => None,
+            };
+            run_action_with_params(
+                args.target,
+                ActionKind::DriveObjectCreate,
+                DriveObjectCreateParams {
+                    object_type: args.object_type,
+                    name: args.name,
+                    body,
+                    folder: args.folder,
+                },
+                output_format,
+            )
+        }
+        DriveObjectCommand::Trash(args) => run_action_with_params(
+            args.target,
+            ActionKind::DriveObjectTrash,
+            DriveObjectTrashParams { id: args.id },
+            output_format,
+        ),
+    }
+}
+
+/// Reads `--body-file`, or stdin when it is `-`.
+///
+/// Stdin matters more than it looks: a workflow's JSON is the output of
+/// `drive object get` piped through `jq`, and a notebook is a markdown file
+/// that already exists. Neither belongs on a command line.
+fn read_body(path: &Path) -> Result<String, ControlError> {
+    if path == Path::new("-") {
+        let mut body = String::new();
+        return std::io::Read::read_to_string(&mut std::io::stdin(), &mut body)
+            .map(|_| body)
+            .map_err(|err| {
+                ControlError::new(
+                    ErrorCode::InvalidParams,
+                    format!("could not read the body from stdin: {err}"),
+                )
+            });
+    }
+
+    std::fs::read_to_string(path).map_err(|err| {
+        ControlError::new(
+            ErrorCode::InvalidParams,
+            format!("could not read {}: {err}", path.display()),
+        )
+    })
 }
 
 fn tab_activation_mode(args: &TabActivateArgs) -> TabActivationMode {

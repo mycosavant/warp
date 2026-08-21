@@ -2,10 +2,11 @@
 use ::local_control::protocol::{
     ActionNameParams, ActionParameterSpec, AgentCancelParams, AgentPromptParams, AgentReadParams,
     AgentRevealParams, AgentSpawnParams, BindingNameParams, BooleanValueParams, ColorValueParams,
-    DirectionParams, EmptyParams, FileOpenParams, KeyParams, KeyValueParams, NamespaceParams,
-    PageQueryParams, PaneTarget, QueryParams, RenameParams, ResizeParams, SessionTarget,
-    SlashRunParams, TabActivateParams, TabCloseParams, TabCreateParams, TabTarget, TargetSelector,
-    TextParams, ThemeNameParams, WindowTarget,
+    DirectionParams, DriveObjectCreateParams, DriveObjectGetParams, DriveObjectListParams,
+    DriveObjectTrashParams, EmptyParams, FileOpenParams, KeyParams, KeyValueParams,
+    NamespaceParams, PageQueryParams, PaneTarget, QueryParams, RenameParams, ResizeParams,
+    SessionTarget, SlashRunParams, TabActivateParams, TabCloseParams, TabCreateParams, TabTarget,
+    TargetSelector, TextParams, ThemeNameParams, WindowTarget,
 };
 use ::local_control::{ActionKind, ControlError, ErrorCode, TargetScope};
 use warpui::{AppContext, ModelContext, TypedActionView, ViewHandle, WindowId};
@@ -58,6 +59,10 @@ pub(crate) fn validate_action_params(action: &::local_control::Action) -> Result
         ActionParameterSpec::AgentCancel => parse_params::<AgentCancelParams>(action),
         ActionParameterSpec::AgentReveal => parse_params::<AgentRevealParams>(action),
         ActionParameterSpec::SlashRun => parse_params::<SlashRunParams>(action),
+        ActionParameterSpec::DriveObjectList => parse_params::<DriveObjectListParams>(action),
+        ActionParameterSpec::DriveObjectGet => parse_params::<DriveObjectGetParams>(action),
+        ActionParameterSpec::DriveObjectCreate => parse_params::<DriveObjectCreateParams>(action),
+        ActionParameterSpec::DriveObjectTrash => parse_params::<DriveObjectTrashParams>(action),
     }
 }
 

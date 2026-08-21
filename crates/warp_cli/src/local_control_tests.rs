@@ -597,6 +597,33 @@ fn retained_action_examples() -> Vec<(ActionKind, Vec<&'static str>)> {
             ActionKind::DriveSyncImport,
             vec!["warpctrl", "drive", "import"],
         ),
+        (
+            ActionKind::DriveObjectList,
+            vec!["warpctrl", "drive", "object", "list"],
+        ),
+        (
+            ActionKind::DriveObjectGet,
+            vec!["warpctrl", "drive", "object", "get", "Client-example"],
+        ),
+        (
+            ActionKind::DriveObjectCreate,
+            vec![
+                "warpctrl",
+                "drive",
+                "object",
+                "create",
+                "--type",
+                "workflow",
+                "--name",
+                "ship",
+                "--body",
+                "{\"name\":\"ship\",\"command\":\"echo ship\"}",
+            ],
+        ),
+        (
+            ActionKind::DriveObjectTrash,
+            vec!["warpctrl", "drive", "object", "trash", "Client-example"],
+        ),
         (ActionKind::AgentList, vec!["warpctrl", "agent", "list"]),
         (
             ActionKind::AgentPrompt,
@@ -809,6 +836,12 @@ fn parsed_action_kind(command: &ControlCommand) -> Option<ActionKind> {
             DriveCommand::Status(_) => Some(ActionKind::DriveSyncStatus),
             DriveCommand::Export(_) => Some(ActionKind::DriveSyncExport),
             DriveCommand::Import(_) => Some(ActionKind::DriveSyncImport),
+            DriveCommand::Object(command) => match command {
+                DriveObjectCommand::List(_) => Some(ActionKind::DriveObjectList),
+                DriveObjectCommand::Get(_) => Some(ActionKind::DriveObjectGet),
+                DriveObjectCommand::Create(_) => Some(ActionKind::DriveObjectCreate),
+                DriveObjectCommand::Trash(_) => Some(ActionKind::DriveObjectTrash),
+            },
         },
         ControlCommand::Agent(command) => match command {
             AgentCommand::List(_) => Some(ActionKind::AgentList),

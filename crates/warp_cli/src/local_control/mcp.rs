@@ -380,6 +380,51 @@ fn add_parameter_properties(
             json!({ "type": "string", "description": "Tab color name or hex value." }),
         ),
         ActionParameterSpec::Direction => require("direction", direction_schema()),
+        ActionParameterSpec::DriveObjectList => {
+            properties.insert(
+                "include_trashed".to_owned(),
+                json!({ "type": "boolean", "description": "Include objects in the trash." }),
+            );
+            properties.insert(
+                "object_type".to_owned(),
+                json!({
+                    "type": "string",
+                    "description": "Only this type: \"workflow\", \"notebook\", \"folder\", \"prompt\" or \"env-vars\".",
+                }),
+            );
+        }
+        ActionParameterSpec::DriveObjectGet => require(
+            "id",
+            json!({ "type": "string", "description": "Object id, from drive.object.list." }),
+        ),
+        ActionParameterSpec::DriveObjectCreate => {
+            require(
+                "object_type",
+                json!({
+                    "type": "string",
+                    "description": "\"workflow\", \"notebook\", \"folder\", \"prompt\" or \"env-vars\".",
+                }),
+            );
+            require(
+                "name",
+                json!({ "type": "string", "description": "Display name." }),
+            );
+            properties.insert(
+                "body".to_owned(),
+                json!({
+                    "type": "string",
+                    "description": "Markdown for a notebook, JSON otherwise, omitted for a folder. Call drive.object.get on an object of the same type to see the shape.",
+                }),
+            );
+            properties.insert(
+                "folder".to_owned(),
+                json!({ "type": "string", "description": "Id of the folder to create it in." }),
+            );
+        }
+        ActionParameterSpec::DriveObjectTrash => require(
+            "id",
+            json!({ "type": "string", "description": "Object id, from drive.object.list." }),
+        ),
         ActionParameterSpec::FileOpen => {
             require(
                 "path",

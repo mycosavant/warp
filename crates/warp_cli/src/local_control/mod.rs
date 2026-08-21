@@ -619,6 +619,99 @@ pub enum DriveCommand {
     /// The files win. An object the tree no longer has is moved to the trash,
     /// not deleted, so a mistake here is recoverable from the Warp Drive panel.
     Import(TargetArgs),
+
+    /// Work on single objects: workflows, notebooks, folders.
+    #[command(subcommand)]
+    Object(DriveObjectCommand),
+}
+
+/// Commands for individual Warp Drive objects.
+///
+/// `drive status|export|import` move the whole store to and from a directory,
+/// which is the right shape for a git mirror and the wrong one for "make me a
+/// workflow that does X". These reach one object at a time.
+#[derive(Debug, Clone, Subcommand)]
+pub enum DriveObjectCommand {
+    /// List the objects in your personal drive.
+    List(DriveObjectListArgs),
+
+    /// Print one object, as the file an export would write.
+    ///
+    /// This is also how to learn a body's shape before creating one: run it on
+    /// an object of the same type and read the `data` (or the markdown).
+    Get(DriveObjectGetArgs),
+
+    /// Create a workflow, notebook or folder.
+    ///
+    /// The id and owner are not yours to choose — they are minted here. To
+    /// write an object with an identity you supply, put its file in the mirror
+    /// directory and run `drive import`.
+    Create(DriveObjectCreateArgs),
+
+    /// Move an object to the trash. Recoverable from the Warp Drive panel.
+    Trash(DriveObjectTrashArgs),
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct DriveObjectListArgs {
+    #[command(flatten)]
+    pub target: TargetArgs,
+
+    /// Include objects that are in the trash.
+    #[arg(long)]
+    pub include_trashed: bool,
+
+    /// Only this type: `workflow`, `notebook`, `folder`, `prompt` or
+    /// `env-vars`.
+    #[arg(long = "type")]
+    pub object_type: Option<String>,
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct DriveObjectGetArgs {
+    #[command(flatten)]
+    pub target: TargetArgs,
+
+    /// The object's id, from `drive object list`.
+    pub id: String,
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct DriveObjectCreateArgs {
+    #[command(flatten)]
+    pub target: TargetArgs,
+
+    /// `workflow`, `notebook`, `folder`, `prompt` or `env-vars`.
+    #[arg(long = "type")]
+    pub object_type: String,
+
+    /// The object's display name.
+    #[arg(long)]
+    pub name: String,
+
+    /// The body: markdown for a notebook, JSON otherwise, nothing for a folder.
+    ///
+    /// Mutually exclusive with `--body-file`. A workflow's JSON is easiest
+    /// learned from `drive object get` on one you already have.
+    #[arg(long, conflicts_with = "body_file")]
+    pub body: Option<String>,
+
+    /// Read the body from a file, or from stdin with `-`.
+    #[arg(long)]
+    pub body_file: Option<PathBuf>,
+
+    /// Create it inside this folder, by id.
+    #[arg(long)]
+    pub folder: Option<String>,
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct DriveObjectTrashArgs {
+    #[command(flatten)]
+    pub target: TargetArgs,
+
+    /// The object's id, from `drive object list`.
+    pub id: String,
 }
 
 #[derive(Debug, Clone, Subcommand)]

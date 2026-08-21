@@ -62,6 +62,10 @@ pub enum ActionParameterSpec {
     AgentCancel,
     AgentReveal,
     SlashRun,
+    DriveObjectList,
+    DriveObjectGet,
+    DriveObjectCreate,
+    DriveObjectTrash,
 }
 
 /// Typed result contract for a catalog action.
@@ -94,6 +98,10 @@ pub enum ActionResultSpec {
     AgentCancellation,
     AgentRevelation,
     SlashCommandList,
+    DriveObjectList,
+    DriveObject,
+    DriveObjectWritten,
+    DriveObjectTrashed,
 }
 
 /// Discoverable metadata describing one local-control action.
@@ -323,6 +331,18 @@ define_action_catalog! {
         DriveSyncStatus => { name: "drive.sync.status", status: Implemented, target: Drive, params: None, result: DriveSyncStatus },
         DriveSyncExport => { name: "drive.sync.export", status: Implemented, target: Drive, params: None, result: DriveSyncExport },
         DriveSyncImport => { name: "drive.sync.import", status: Implemented, target: Drive, params: None, result: DriveSyncImport },
+
+        // T1.12. `drive.sync.*` moves the whole store to and from a directory;
+        // these three reach one object at a time, which is what an agent that
+        // has been asked for "a workflow that does X" actually needs. Reading
+        // and writing both speak the mirror's file format rather than a second
+        // shape invented here — so `drive object get` prints something `drive
+        // object create` accepts, and the format is documented by being the
+        // one already on disk.
+        DriveObjectList => { name: "drive.object.list", status: Implemented, target: Drive, params: DriveObjectList, result: DriveObjectList },
+        DriveObjectGet => { name: "drive.object.get", status: Implemented, target: Drive, params: DriveObjectGet, result: DriveObject },
+        DriveObjectCreate => { name: "drive.object.create", status: Implemented, target: Drive, params: DriveObjectCreate, result: DriveObjectWritten },
+        DriveObjectTrash => { name: "drive.object.trash", status: Implemented, target: Drive, params: DriveObjectTrash, result: DriveObjectTrashed },
     }
 
     // Fork-local. `warpctrl` could open every surface and type into exactly one

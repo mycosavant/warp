@@ -672,6 +672,140 @@ pub struct DriveSyncImportResult {
     pub aliases_reassigned: Vec<String>,
 }
 
+/// Which objects `drive.object.list` should report.
+///
+/// Trashed objects are excluded by default and included on request rather than
+/// the other way round: the trash is where things go to be forgotten, and a
+/// list that silently mixed them in would have a caller acting on an object the
+/// user believes they deleted.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DriveObjectListParams {
+    #[serde(default)]
+    pub include_trashed: bool,
+    /// Only objects of this type — `workflow`, `notebook`, `folder`,
+    /// `env-vars`, or one of the other JSON types the store holds.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub object_type: Option<String>,
+}
+
+/// What `drive.object.list` reports.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DriveObjectListResult {
+    pub objects: Vec<DriveObjectSummary>,
+    /// Objects in a team drive or shared by someone else. Not listed, for the
+    /// same reason they are not mirrored, and counted so their absence has an
+    /// explanation.
+    pub not_personal: usize,
+    /// Objects matching the filter but hidden because they are in the trash.
+    /// Zero when `include_trashed` was set.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub trashed_hidden: usize,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub unreadable: Vec<String>,
+}
+
+/// One object, as `drive.object.list` reports it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DriveObjectSummary {
+    pub id: String,
+    pub object_type: String,
+    pub name: String,
+    /// The containing folders by display name, outermost first. Empty at the
+    /// top level of the drive.
+    ///
+    /// Names rather than the mirror's slugged directory names, because this
+    /// answers "where is it in the panel" and the panel shows names.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub path: Vec<String>,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub trashed: bool,
+    /// Shortcuts that run this workflow. Workflows only.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub aliases: Vec<String>,
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
+}
+
+/// Which object `drive.object.get` should return.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DriveObjectGetParams {
+    /// The object's `uid`, as `drive.object.list` reports it.
+    pub id: String,
+}
+
+/// One object in full.
+///
+/// `contents` is the object's file exactly as `drive.sync.export` would write
+/// it — front matter plus markdown for a notebook, a JSON envelope otherwise.
+/// That is deliberate: it means the format a caller must produce to *create* an
+/// object is one it can read back out of an existing one, so there is nothing
+/// to document that is not already on disk.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DriveObjectResult {
+    #[serde(flatten)]
+    pub summary: DriveObjectSummary,
+    pub contents: String,
+}
+
+/// What to create, and where.
+///
+/// Deliberately *not* the file format `drive.object.get` returns, even though
+/// symmetry would be pretty. That file's header opens with a `uid` and an
+/// `owner`, and neither is the caller's to choose — an id supplied from
+/// outside is how you overwrite an object by accident. Asking for a file and
+/// then ignoring half its header would be a worse contract than asking for the
+/// three things that are genuinely the caller's: what kind, what it is called,
+/// and what is in it. The action that writes a caller-supplied identity on
+/// purpose is `drive.sync.import`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DriveObjectCreateParams {
+    /// `workflow`, `notebook`, `folder`, or a JSON-backed type such as
+    /// `env-vars`.
+    pub object_type: String,
+    pub name: String,
+    /// The object's body: markdown for a notebook, JSON for a workflow or any
+    /// other JSON-backed type, and nothing at all for a folder.
+    ///
+    /// `drive.object.get` on an object of the same type prints a worked
+    /// example, which is the intended way to learn the shape.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub body: Option<String>,
+    /// The folder to create it in, by id. Top level when absent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub folder: Option<String>,
+}
+
+/// What `drive.object.create` made.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DriveObjectWrittenResult {
+    pub id: String,
+    pub object_type: String,
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub path: Vec<String>,
+}
+
+/// Which object to trash.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DriveObjectTrashParams {
+    pub id: String,
+}
+
+/// What `drive.object.trash` did.
+///
+/// Trashed, not deleted — the same rule an import follows, and for the same
+/// reason: it is recoverable from the Warp Drive panel, so a caller that got
+/// the id wrong has cost the user a restore rather than their work.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DriveObjectTrashedResult {
+    pub id: String,
+    pub name: String,
+    /// False when the object was already in the trash, which is not an error.
+    pub trashed: bool,
+}
+
 /// Typed success payloads for catalog actions that need stable structured data.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
