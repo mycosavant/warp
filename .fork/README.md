@@ -1286,6 +1286,26 @@ and the fork's account bypass cannot override a value you stored. Note that
 `warpctrl agent prompt` keeps working regardless, which makes the state
 confusing: agents run, but the UI that reaches them is dark.
 
+### ctrl-c over a selected answer copies it, and no longer kills the turn
+
+Select some of the agent's output with the mouse and press ctrl-c. Upstream,
+that cancels the turn. In this fork it copies the selection; press ctrl-c again
+and it stops the agent, as before.
+
+This is a bug fix rather than a preference. An AI block keeps its own text
+selection, and recording one *clears* the point-based `block_list().selection()`
+that `ctrl_c` consults — so the check for "is anything selected?" answers no in
+exactly the case where the user has selected an answer, and ctrl-c falls
+through to Stop. Upstream already has a `#[cfg(windows)]` branch whose comment
+says users expect ctrl-c to copy a selection; it reads the same wrong field, so
+it never fired for agent output on Windows either.
+
+Found the way these things usually are: a real turn died mid-run and the cause
+looked like a race in new fork code. It was the log line four seconds earlier —
+two hundred `SelectText` actions, a ctrl-c, and then a right-click → **Copy
+selected text**, which is what a person does when ctrl-c has not copied. T5.6
+in `TASKS.md` has the timeline.
+
 ### In a WSL session, Claude runs inside the distribution
 
 If the session is WSL, the working directory Warp hands the agent is a *Linux*

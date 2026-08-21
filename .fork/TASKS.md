@@ -1448,15 +1448,13 @@ stream.
 - [x] **T5.2** Map the SSE agent-event protocol
 - [x] **T5.3** Decide: implement the trait, or shim at the transport layer
 - [x] **T5.4** Prototype behind a fork flag, default off
-- [ ] **T5.5** Find out what cancelled a turn nobody cancelled. Seen once
-      during T7.2: a local-agent turn ended `ConversationStatus::Cancelled`
-      after four tool calls, with an empty log and nothing cancelling it from
-      the `warpctrl` side. `Cancelled` requires a real `StreamCancellation`,
-      and the only `CancellationReason` that could fire unprompted is
-      `UserCommandExecuted` — the pane's shell is live while the agent
-      streams. A candidate, not a diagnosis: it did not recur and was not
-      reproduced. Matters because a turn that stops on its own reports to the
-      user that *they* stopped it.
+- [x] **T5.6** Find out what cancelled a turn nobody cancelled. Somebody did:
+      a person pressed ctrl-c, meaning to copy the agent's answer they had
+      just selected with the mouse. Warp does not copy an AI block's selection
+      on ctrl-c — on any platform — so it cancelled the turn instead. Both
+      halves of the premise were wrong, the log was not empty, and the fix is
+      two lines and a predicate. See "T5.6 — the mystery was the user, again"
+      below.
 
 ### T5.1 — the premise was wrong, and that is the finding
 
@@ -1713,6 +1711,135 @@ Then closed with `CloseMainWindow` and relaunched:
            Red, green, blue
 
 Both halves. Before the fix a restored conversation showed only the answers.
+
+### T5.6 — the mystery was the user, again
+
+The task was written as "find out what cancelled a turn nobody cancelled",
+with two supporting claims and a named suspect. All three were wrong, and the
+way they were wrong is the useful part.
+
+**The evidence was on disk the whole time.** `~/.local/state/warp-oss/` keeps
+five rotated logs, and `warp-oss.log.old.0` is the instance that ran the failed
+T7.2 turn. Reading it end to end instead of grepping it for "cancel":
+
+    08:38:55   turn starts
+    08:40:04   AIBlockAction::SelectText
+    08:40:04   AIBlockAction::SelectText
+               ... 205 of them, over four seconds
+    08:40:12   EditorAction::CtrlC          <- the turn stops here
+    08:40:27   BlockListContextMenu(RichContentTextRightClick { .. })
+    08:40:28   ContextMenu(CopySelectedText)
+    08:40:33   the poll that reported `cancelled`
+
+Two hundred and five `SelectText` actions in four seconds is a mouse dragging
+across the agent's output. Then ctrl-c. Then — fifteen seconds later, and this
+is the line that settles it — right-click, context menu, **Copy selected
+text**. That is what somebody does when ctrl-c did not copy.
+
+So the turn was cancelled, honestly, with `ManuallyCancelled`, by the user. It
+reported exactly what happened. The bug is upstream of the report: **ctrl-c
+over selected agent output cancels the turn instead of copying it.**
+
+This is the second time in this fork that an unexplained mid-run stop turned
+out to be a person at the keyboard (`a3065d993`, "the mid-sweep exit was a
+person clicking a button"). Both times the tempting explanation was a race in
+code I had just written. Both times it was somebody using the app.
+
+#### Why ctrl-c does not copy an agent's answer
+
+`TerminalView::ctrl_c` asks "is anything selected?" through
+`model.block_list().selection()` — the point-based selection. An AI block does
+not use it. `set_rich_content_selection` records the selection in
+`rich_content_selections` **and sets `self.selection = None`**, so the field
+ctrl-c consults reads empty *precisely* when the user has selected agent text.
+Not merely unset — actively cleared, by the code that knows about the
+selection.
+
+The consequence is worse than a missing feature. There is a `#[cfg(windows)]`
+arm of `ctrl_c_internal` whose comment reads "Windows users expect ctrl-c to
+copy if there is selected text" — and it is gated on the same wrong field, so
+it never fires for agent output either. On Linux there is no copy branch at
+all: the selection is cleared and the turn is cancelled.
+
+The fix adds `BlockList::has_rich_content_selection()` and, in `ctrl_c`, one
+early branch: copy, clear, return. Unconditional rather than `#[cfg(windows)]`,
+because the Linux reading of ctrl-c is "interrupt the foreground process" and
+in agent view there is no foreground process — the only thing ctrl-c can do to
+a streaming turn is destroy it.
+
+Clearing afterwards is load-bearing, not tidiness. A second ctrl-c has to still
+stop the agent, and `clear_selections_when_shell_mode_without_focusing_input`
+is a no-op while `AgentView` is enabled, so nothing else would drop the
+selection and the keyboard could never reach Stop again. Copy, then stop, is
+also what the Windows arm already does.
+
+#### And the log was not empty — the wrong half of it was
+
+`try_cancel_streams_for_conversation` logs the reason *and a full backtrace*.
+`try_cancel_stream` — same file, twenty lines up — logged nothing. The plural
+one is the conversation-wide path; the singular one is what
+`status_bar::cancel_active_request_or_action` calls, and grepping for callers
+says that is the **only** caller. So:
+
+> The one cancellation a person can actually cause was the only one that left
+> no trace.
+
+Which is why the turn read as unexplained, and why the answer had to be
+reconstructed from `dispatching typed action` lines that happen to record every
+keystroke and are not a cancellation log. That is now one `log::info!`,
+mirroring its sibling.
+
+#### What was verified, and how
+
+Reproduced as a unit test, which is the part that matters: with the fix
+removed, `ctrl_c_over_selected_agent_output_copies_then_stops_on_the_second_
+press` fails with `left: Some(Cancelled), right: Some(InProgress)` — the T7.2
+failure, exactly, from a keystroke. The test drives the whole path
+(`handle_action(&TerminalAction::CtrlC)`) against a live agent-monitored
+command, so cancellation is genuinely reachable; without that it would pass for
+want of anything to cancel, which is the failure mode a regression test exists
+to avoid. It also asserts the trap directly — `selection().is_none()` *and*
+`has_rich_content_selection()` at the same moment — and that the second press
+still cancels and still writes `ETX` to the pty.
+
+Separately, the T7.2 prompt was re-run under the same conditions on a scratch
+`XDG_STATE_HOME`, and the turn finished `success`. That is the control: the
+local agent does not stop on its own. Nothing in `app/src/ai/local_agent/` was
+implicated or changed.
+
+The `log::info!` was not exercised live: no `warpctrl` action reaches the
+status-bar path (`agent cancel` goes through the conversation-wide sibling that
+already logged), and driving ctrl-c through the GUI needs keystroke synthesis,
+which does not work under WSLg.
+
+#### Three claims retracted
+
+| Claim in the task | Actually |
+|:--|:--|
+| "nobody cancelled it" | the user did, with ctrl-c, trying to copy |
+| "an empty log" | the log had the keystroke; it lacked the cancellation |
+| "`Cancelled` requires a real `StreamCancellation`" | true, and it was one — `ManuallyCancelled`, from the status bar |
+
+The named suspect, `UserCommandExecuted`, was wrong. It was reasoned from the
+enum ("which reason *could* fire unprompted") rather than from the log, and
+reasoning about which arm of a match is plausible is not evidence. T1.7's rule
+holds: run it, or in this case, read what it already wrote down.
+
+#### Two things found and left alone
+
+Both real, both out of scope, both untouched:
+
+* **Restore relabels incomplete exchanges as cancelled.** `create_exchange_
+  from_messages` reconstructs an exchange with no outputs — or a trailing tool
+  call with no result — as `Cancelled { reason: ManuallyCancelled }`, and
+  `derive_status_from_root_task` turns that into `ConversationStatus::
+  Cancelled`. The reason is not persisted (`AgentConversationData` has no field
+  for it), so it is hardcoded. Any turn interrupted by a crash or a quit reads
+  back after restart as "you cancelled this". Ruled out as the T7.2 cause: that
+  read was live, 41 seconds before the instance exited.
+* **`cancel_conversation_progress` can stamp `Cancelled` with no stream and no
+  log**, via the action model, when the conversation is not in
+  `TransientError`. Not reached here, but it is the other silent path.
 
 ## T6 — WSL integration
 
