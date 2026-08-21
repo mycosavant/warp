@@ -241,10 +241,25 @@ than an oversight.
 
 Deferred, dependent on T1 landing:
 
-- [ ] **T1.8** `input submit` action — upstream deliberately ships only
+- [x] **T1.8** `input submit` action — upstream deliberately ships only
       `insert`/`replace`, so a seeded command is never auto-executed. Adding
-      submit is a local patch. Decide whether we want it; it is the difference
-      between "assist" and "autonomous".
+      submit is a local patch, and it is the difference between "assist" and
+      "autonomous". **Decided yes, and shipped** — the box was simply never
+      ticked. `input.submit` has been `Implemented` in the catalog since T1.9,
+      which verified it end-to-end over MCP and found the `executed`/`queued`
+      bug in the process. Re-verified on Linux while closing this:
+      `input submit "echo … > file"` returned `executed: true, queued: false`
+      and the file was there.
+
+      The decision is worth stating rather than leaving implied, because it is
+      the one place the fork hands over something upstream withholds on
+      purpose. The reasoning: the fork's whole premise is an agent driving
+      Warp, and an agent that can open every surface but only *type* into one
+      is a demo. The guardrail is not withholding the verb — it is that
+      `input.submit` runs its text as a **shell command**, so it reaches
+      `bash` and not the agent (T6.5), and reaching the agent needs the
+      separate, later `agent.*` actions with their own depth and tool limits.
+      One `input.submit` runs exactly one command, by construction.
 - [x] **T1.9** MCP server — `warpctrl mcp`, done and verified. 85 tools
       generated from the catalog. No new dependencies: MCP over stdio is
       newline-delimited JSON-RPC 2.0 and the local-control client is blocking,
