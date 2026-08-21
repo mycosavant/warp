@@ -1723,9 +1723,10 @@ seamless across Windows and WSL2.
       The original framing (find a keystroke injection that carries modifiers)
       was abandoned for the better half of the same task: give the app an action
       rather than teach the harness to fake a keyboard.
-- [ ] **T6.6** Orchestration: one agent running several. Scoped from T6.5 —
-      see "T6.6 — scope" below. The machinery exists; what is missing is the
-      `warpctrl` surface onto it.
+- [x] **T6.6** Orchestration: one agent running several. Four more actions —
+      `agent.read`, `agent.spawn`, `agent.cancel`, `agent.reveal` — plus the
+      two guardrails and the local-agent tool mapping without which the first
+      of them would have been decorative. See "T6.6 — as built" below.
 - [ ] **T6.7** Local summarization, so `/compact` works without an account.
       Found by T6.5: `/compact` submits correctly and then fails with
       `missing authentication credentials`, because summarization is an
@@ -2638,6 +2639,179 @@ reading.
 where summarization runs, not about `warpctrl`. And dependency chains between
 handoffs, which is T7 and is not a `warpctrl` feature at all.
 
+### T6.6 — as built
+
+Four actions, two guardrails, and one mapping that had to ship with them.
+`warpctrl` now has 96 actions; `agent` has six.
+
+| | |
+|:--|:--|
+| `agent.read` | the transcript, or the last N exchanges |
+| `agent.spawn` | a child agent in a hidden pane |
+| `agent.cancel` | stop a turn |
+| `agent.reveal` | put a hidden child on screen |
+
+and `agent.list` now fills in `pane_id`, `tab_id` and `is_hidden`, which T6.5
+left as `None`.
+
+#### `agent.read` was the piece everything else needed
+
+`agent.list` reports *that* a conversation finished and never *what it
+produced*, so before this an orchestrator could dispatch work, watch it
+complete, and have no way to collect the result. That is why T7.1 was blocked
+on T6.6 rather than on T6.5: a graph without this can sequence work but cannot
+hand anything along it, which is half the point.
+
+Built on `AIConversation::root_task_exchanges` and the two formatters the
+copy-to-clipboard path already uses, so it reports the text a person would get
+from the overflow menu.
+
+Input and output are **separate fields**, not one `USER:`/`AGENT:` transcript.
+The caller is a program; the thing it wants is the last `output`, and making it
+parse a formatted transcript to find that would repeat the mistake
+`input.submit` makes with `/agent`.
+
+Tool results are **off by default**, and `included_tool_results` reports what
+actually happened rather than echoing the request — they need the action model
+of the surface that owns the conversation, and that surface can be closed while
+the conversation survives.
+
+#### Hidden panes: two questions, two answers
+
+`pane.list` reports `visible_pane_ids` and is right to — a hidden pane is not
+addressable as a pane. But "which pane holds this conversation" is a different
+question, and for a background child the answer is a real pane that happens to
+be hidden. So `agent.list` walks `pane_ids()` and reports visibility as a
+field. Verified: with six conversations in one tab, `agent.list` saw all six
+and `pane.list` saw the two that were visible.
+
+`is_hidden` is reported rather than inferred from a missing `pane_id`, because
+the two are different situations and only one of them can be revealed.
+
+#### `agent.spawn` skips the server, deliberately
+
+`/orchestrate` spawns the same thing through `StartAgentRequest` and
+`launch_local_no_harness_child`, which opens with `AIClient::create_agent_task`
+— an authenticated call that mints the server-side `ai_tasks` row a cloud run
+is *reported* against. Account-free that fails before a pane exists, and the
+row is for reporting, not for running. So `agent.spawn` calls
+`create_hidden_child_agent_conversation` directly.
+
+What that costs, recorded so it is not rediscovered: the child has no
+`task_id`, does not appear in Warp's cloud task list, cannot be cancelled as a
+cloud task, and a shared session it started would have no server-side run to
+attach to.
+
+#### The guardrails, and the trap that would have made one of them a lie
+
+The tool allowlist lives in `ChildAgentToolPolicy`, keyed by terminal surface —
+the same shape `apply_child_agent_model_override` uses for a child's model —
+and is read by `RequestInput::new_with_common_fields`, so every turn of that
+child carries it rather than only the turn that set it.
+
+**And it governed nothing that mattered until the local agent was taught it.**
+`generate_multi_agent_output` reads `supported_tools_override` *after* the
+local-agent intercept, so with the local agent on, the restriction applied to
+no request at all. `ai::local_agent::tools` maps the vocabulary onto
+`claude --allowedTools` / `--disallowedTools`. Both halves are emitted and the
+second is the one that forbids: `--allowedTools` alone leaves everything else
+*prompting*, and in `--print` mode a prompt cannot be answered, so the symptom
+would have been a child that hangs rather than one that refuses.
+
+The mapping is partial on purpose and fails closed. `SEARCH_CODEBASE` grants
+nothing — mapping Warp's semantic index to `Grep` because both are "searching"
+would hand out a tool nobody named — and `WebFetch`/`WebSearch`, which no
+`ToolType` names, can only ever be forbidden.
+
+The depth cap is `WARP_FORK_AGENT_SPAWN_DEPTH`, default 2. It is the weaker
+control and exists only because `warpctrl` is a second spawn path that no tool
+list can see. It bounds depth, not breadth.
+
+#### Verified on Linux, 2026-08-20
+
+**The first time this fork's `warpctrl` has been driven against the Linux
+build** — T6.5 was verified on Windows. `3ecf8d0bb`, debug build, WSLg,
+`WARP_FORK_LOCAL_AGENT=1`, every claim from the CLI with no keyboard involved.
+
+    agent prompt 'Reply with exactly: parent-ok'   -> conversation dcae3b26…
+    agent read dcae3b26… --last 1                  -> output "parent-ok"
+    agent list      pane_id "Pane Pane Terminal (4225)", tab_id 3851
+                    matching what `pane list` reports for the same pane
+
+    agent spawn 'Reply with exactly one word: child-ok'
+        --name reviewer --allow-tools read-only
+      -> depth 1, allowed_tools [READ_FILES, GREP, FILE_GLOB, …]
+      -> agent list: is_hidden true, same tab as its parent, absent from
+         `pane list`
+      -> agent read: output "child-ok"
+
+The guardrail, proved by contrast rather than by assertion — two children, the
+same prompt, one restricted:
+
+    'Run the shell command: echo GUARDRAIL_PROBE_OUTPUT — then reply with
+     exactly what it printed, or say you cannot.'
+
+    --allow-tools read-only:
+      "I can't run it. There's no shell/Bash tool in this session — the
+       available tools are Glob, Grep, Read, Skill, …"
+    no restriction:
+      ran it, and reported GUARDRAIL_PROBE_OUTPUT
+
+The rest:
+
+    agent spawn --parent <a depth-2 child>
+      -> insufficient_permissions: would sit at depth 3, limit is 2
+    agent spawn --allow-tools Bash
+      -> invalid_params: `Bash` is not a tool. Use `read-only`, or a
+         ToolType name such as READ_FILES or RUN_SHELL_COMMAND.
+    agent cancel <in_progress>   -> was_running true; status -> cancelled
+    agent cancel <same, again>   -> ok, was_running false
+    agent reveal <child>         -> was_hidden true; pane appears in
+                                    `pane list` beside its parent
+    agent reveal <child> --as tab -> moved to a new tab, is_hidden false
+    agent reveal <non-child>     -> target_state_conflict, naming `swap`
+    agent reveal <child> --pane <a pane in another tab>
+      -> target_state_conflict, naming the tab it does live in
+
+Nineteen tests. App `local_control::` 61, `pane_group::` 120, `local_agent` 25,
+`fork` 25; `local_control` 40, `warp_cli` 244. Full app suite 21 failures, all
+pre-existing flakes in the known families — the two AI ones fail identically on
+a stashed tree, and the leak test passes in isolation on both.
+
+#### Two things only running it found
+
+**`agent reveal <id>` failed whenever you had looked at another tab.** The pane
+selector resolves inside the *active* tab, so the default target was in the
+wrong pane group as soon as the person had moved. This action, unlike every
+other one, already knows where its subject is, so with no selector it now hosts
+the reveal from the tab that holds the conversation. The workaround otherwise —
+passing both `--tab` and `--pane` — is something a caller could only learn by
+hitting it.
+
+**The allowlist could fail open.** `ChildAgentToolPolicy::handle` panics when
+the singleton is not registered, so the first version guarded every call site
+with `has_singleton_model` — turning a panic into a child spawned
+*unrestricted*, which is exactly the failure the feature exists to prevent,
+reintroduced by the fix for a different one. The spawn now checks before it
+creates anything and refuses. The guard stays on the release path, where a
+missing singleton means there is nothing to release.
+
+That second one was found by `pane_group::tests::completed_shared_session_
+child_with_edit_access_uses_continuation_pane` — a test with nothing to do with
+any of this, which builds a narrow singleton set and started panicking in a
+code path the change had walked into.
+
+#### Not done, and why
+
+* **`--pane` / `--tab` / `--window` at spawn time.** All three already work as
+  compositions (`pane.split` / `tab.create` / `window.create` then
+  `agent.prompt`) and are verified. Doing them inside `agent.spawn` would mean
+  spawning hidden and then revealing, and reveal is event-driven — nothing
+  comes back from emitting an event, so the combined call could not honestly
+  report whether the second half worked.
+* **Hiding a revealed child again.** The toggle only goes one way. Nothing in
+  the reveal events reverses cleanly, and closing the pane kills the child.
+
 ## T7 — Work that outlives a turn
 
 Raised by the user, 2026-08-20, as three ideas that felt related and were hard
@@ -2748,7 +2922,7 @@ That keeps the run-scale graph small enough to be worth trusting, and keeps the
 project-scale record somewhere a human can argue with it.
 
 - [ ] **T7.1** A run-scale task graph: schema, and a runner over T6.5/T6.6.
-      Blocked on T6.6, which supplies `agent.spawn`, `agent.read` and
+      **Unblocked** by T6.6, which supplies `agent.spawn`, `agent.read` and
       `agent.cancel` — without `agent.read` a graph can sequence work but not
       hand anything along it, which is half the point.
 - [ ] **T7.2** Read a milestone from an issue tracker and emit a T7.1 graph.

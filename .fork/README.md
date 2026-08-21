@@ -550,7 +550,7 @@ definitions can be generated from it rather than hardcoded.
 | `surface`    | 20 | list, plus 19 panels and modals |
 | `file`       | 1  | open |
 | `drive`      | 3  | status export import — **fork-added**, see T4.4 |
-| `agent`      | 2  | list prompt — **fork-added**, see T6.5 |
+| `agent`      | 6  | list prompt read spawn cancel reveal — **fork-added**, see T6.5/T6.6 |
 | `slash`      | 2  | list run — **fork-added**, see T6.5 |
 
 `input insert` and `input replace` stage text without running it; **`input
@@ -619,12 +619,124 @@ summarization is a different request type from a user query, this fork's local
 agent handles only user queries, and so it goes to Warp's server — which needs
 an account. Tracked as `.fork/TASKS.md` T6.7.
 
-**Handing work to another agent** is composition, and all of this is verified:
+### Running a fleet: spawn, read, cancel, reveal
+
+T6.5 made one agent addressable. T6.6 makes several of them manageable, which
+is a different problem: an orchestrator has to be able to start work it is not
+looking at, collect the result, stop a child that has gone wrong, and put one
+on screen when a person wants to see it.
+
+**Three of the four handoff targets are composition** — the pane, the tab and
+the window each already work by combining T6.5 with a layout action:
 
 ```bash
-warpctrl tab create   && warpctrl agent prompt 'take the tests'   # own tab
-warpctrl pane split --direction right && warpctrl agent prompt '…'  # own pane
+warpctrl tab create   && warpctrl agent prompt 'take the tests'      # own tab
+warpctrl pane split --direction right && warpctrl agent prompt '…'   # own pane
+warpctrl window create && warpctrl agent prompt '…'                  # own window
 ```
+
+**The fourth needed an action**, because a background agent is not a sibling
+started somewhere else — it is a *child*, parented to a conversation and living
+in a hidden pane. Warp already had the concept (`HiddenPaneReason::ChildAgent`,
+used by `/orchestrate`); `agent spawn` is the way in from outside:
+
+```bash
+warpctrl agent spawn 'review the diff and report anything risky' \
+    --name reviewer --allow-tools read-only
+#   -> { "conversation_id": "68c2eb37-…", "depth": 1,
+#        "parent_conversation_id": "dcae3b26-…",
+#        "allowed_tools": ["READ_FILES", "GREP", …] }
+```
+
+Nothing appears on screen. The child works in a hidden pane, and `agent list`
+reports it with `is_hidden: true` — `pane list` does not, because a hidden pane
+is not addressable as a pane, and that difference is deliberate on both sides.
+
+**`agent read` is the one that makes the rest usable.** `agent list` says a
+conversation *finished*; this says what it produced, which is what handing work
+along a chain actually needs:
+
+```bash
+warpctrl agent read 68c2eb37-… --last 1
+#   -> exchanges[].input / .output / .is_complete, plus the list summary
+
+warpctrl agent read 68c2eb37-… --tools     # include tool-call results
+```
+
+Tool results are off by default, and the difference is an answer versus a
+session log — every file read and every command's stdout is in there, and a
+caller pasting the result into another agent's prompt pays for all of it. The
+response says `included_tool_results` rather than echoing the request, because
+they need the action model of the surface that owns the conversation and that
+surface can be closed while the conversation survives.
+
+**`agent cancel` is Stop, not Kill.** The conversation survives and `agent read`
+still works. Cancelling one that has already finished is not an error —
+`was_running: false` says which happened, because an orchestrator cancelling a
+child races the child finishing and both outcomes are the state it asked for.
+
+**`agent reveal` puts a hidden child on screen.** With no selector it hosts the
+reveal from the tab that already holds the conversation, not from your active
+pane — the pane selector resolves inside the active tab, so anything else would
+fail the moment you had looked somewhere else:
+
+```bash
+warpctrl agent reveal 68c2eb37-…            # split off beside its parent
+warpctrl agent reveal 68c2eb37-… --as tab   # in a new tab
+warpctrl agent reveal 68c2eb37-… --as swap  # into the targeted pane
+```
+
+`pane` is the default because it is the only one of the three that *adds* a
+surface rather than taking one over, and a caller over a socket cannot see what
+it is about to replace. `pane` and `tab` need a background child — they reuse
+its hidden pane, which is what preserves an in-flight turn — and say so;
+`swap` navigates to any conversation.
+
+### Guardrails: what a child agent may do
+
+Two of them, because there are two ways to spawn.
+
+**`--allow-tools` restricts the child.** The preset `read-only`, or `ToolType`
+names (`READ_FILES`, `RUN_SHELL_COMMAND`, …), case-insensitive and accepting
+dashes. Every token has to resolve — dropping an unknown one always errs toward
+*fewer* tools than intended, so the child would get a policy nobody wrote and
+the symptom would appear later and somewhere else. An empty list is a policy
+and means no tools, which is not the same as omitting the flag.
+
+**A spawn-depth cap**, default 2, set with `WARP_FORK_AGENT_SPAWN_DEPTH`. A
+conversation you started is depth 0, a child is 1, its child is 2. This exists
+because `warpctrl` is a second spawn path: a lead agent that can run
+`agent spawn` can run it in a loop whatever its own tool list says, since it is
+not using a tool to do it.
+
+```
+$ warpctrl agent spawn '…' --parent <a grandchild>
+error: insufficient_permissions: refused: this child would sit at depth 3 and
+the limit is 2. Set WARP_FORK_AGENT_SPAWN_DEPTH to change it.
+```
+
+It bounds depth, not breadth: ten siblings at depth 1 are within it. The
+stronger control is the unobvious one — **`SUBAGENT` and `RUN_AGENTS` are
+entries in the tool list**, so withholding them forbids fan-out where the
+request is built rather than by a counter.
+
+**In this fork the allowlist would have been decorative without a second
+piece.** `generate_multi_agent_output` reads the tool list *after* the
+local-agent intercept, so a restriction set on the Warp side governs nothing
+the local agent answers — which is every plain user query. `claude` takes
+`--allowedTools` and `--disallowedTools`, so the fork maps the vocabulary and
+passes both; the second is the half that forbids. Passing only the first leaves
+everything else merely *prompting*, and in `--print` mode nobody can answer a
+prompt, so it would look like a child that hangs rather than one that refuses.
+
+The mapping is deliberately partial and fails closed. A `ToolType` with no
+Claude counterpart grants nothing rather than being waved through, and a Claude
+tool no `ToolType` names — `WebFetch`, `WebSearch` — can only ever be forbidden.
+
+**It is a guardrail, not a sandbox.** It stops the model *calling* a tool. It
+does not stop a shell command a tool already started, and it is not a boundary
+against prompt injection: the child is a process on this machine with your
+credentials.
 
 ### Targets: the rule that decides whether a call works
 
