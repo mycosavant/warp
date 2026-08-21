@@ -7,6 +7,24 @@ Claude subscription, API keys, and local models.
 Licensing note: AGPL obligations attach on **distribution**, not personal use.
 If this fork is ever published as a binary, source must ship with it.
 
+### "No telemetry" is measured, not asserted
+
+Under real load on Linux — every panel, the drive, a shell command, a full
+agent turn, then ten minutes idle — **warp-oss held two loopback listeners and
+made no outbound connection at all.** Not a TCP connection, not a UDP packet,
+not a DNS lookup. Checked twice, by methods with different blind spots: 7918
+`ss` samples (which an app ignoring `HTTP_PROXY` could not evade) and a
+decrypting `mitmdump` (which no short-lived beacon could slip past). Both had
+a control proving they could see traffic when there was some.
+
+The only thing that left the machine during an agent turn was the `claude`
+child talking to `api.anthropic.com` on your own subscription — which is what
+an agent *is*. So the claim is "no telemetry", not "nothing leaves": your
+prompt goes to whoever your agent is, and Warp learns nothing about you.
+
+Full method, controls, and the two things deliberately left undone are under
+"Nothing escapes: measured, not argued" in `TASKS.md`.
+
 ## Branch topology
 
 | Branch          | Role                                                             |

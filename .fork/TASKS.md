@@ -3612,8 +3612,107 @@ what could run in parallel, which is the plan it would emit next.
       log-spam question, answered by counting" below.
 - [ ] Windows Developer Mode so `.claude/skills` resolves as a symlink on the
       Windows checkout.
-- [ ] Proxy-based verification that nothing escapes under real activity — only
-      idle runs observed so far.
+- [x] ~~Proxy-based verification that nothing escapes under real activity — only
+      idle runs observed so far.~~ **Done, two ways, with a control for each.**
+      See "Nothing escapes: measured, not argued" below.
+
+### Nothing escapes: measured, not argued
+
+The fork's headline claim, and until now the least verified thing in it — every
+previous observation was of an idle app. Done properly on Linux, under real
+load, by two methods that fail in different ways.
+
+**Method 1 — every socket the process opens.** `ss -tnp state all` plus
+`ss -unp`, polled five times a second for the life of the run. Proxy-independent:
+an app that ignored `HTTP_PROXY` could not evade it, and `state all` includes
+`SYN-SENT`, so even a connection that is *attempted and refused* would appear.
+
+    workload: every panel and modal toggled; theme and appearance;
+              setting list/get; tab create; pane split; a shell command
+              via input.submit; drive object create x3 (folder, workflow,
+              notebook); drive status; slash list; a full local-agent turn;
+              then ten minutes idle
+
+    7918 poll samples, ~25 minutes of uptime
+
+    every socket warp-oss held, for the entire run:
+      LISTEN 127.0.0.1:9282    local control
+      LISTEN 127.0.0.1:33711   local control
+
+**Two loopback listeners. Zero outbound TCP. Zero UDP** — so not even a DNS
+lookup: warp-oss never resolved a hostname, let alone contacted one.
+
+*The control that makes that negative mean something.* A poller that detects
+nothing is worthless unless it can detect something, so the same poll was run
+watching the `claude` child during a turn:
+
+    ESTAB 172.22.45.116:48878 160.79.104.10:443  users:(("claude",pid=383426,…))
+    ESTAB 172.22.45.116:48892 160.79.104.10:443  users:(("claude",pid=383426,…))
+    ESTAB 172.22.45.116:48908 160.79.104.10:443  users:(("claude",pid=383426,…))
+
+`160.79.104.10` is `api.anthropic.com`. The method catches real traffic; the
+traffic belongs to the child process, on the user's own subscription, which is
+exactly the design. **warp-oss appears nowhere in that list.**
+
+**Method 2 — a decrypting proxy, because polling samples.** Method 1's gap is
+real: a beacon that opens, POSTs and closes inside 200ms could fall between two
+samples. So the whole run again behind `mitmdump` on loopback, with its CA
+trusted so TLS succeeded and bodies were readable rather than merely counted.
+
+    every server connection the proxy saw, whole session:
+      example.com:443        <- the curl that proved the proxy captures at all
+      api.anthropic.com:443  <- GET  /v1/mcp_servers?limit=1000
+      api.anthropic.com:443  <- POST /v1/messages?beta=true
+
+    grep -icE 'warp\.dev|firebase|googleapis|segment|rudder|datadog|sentry|
+               amplitude|posthog|mixpanel|statsig|bugsnag|crashlytics'
+      -> 0
+
+Two requests in the entire session, both the agent turn, both the `claude`
+child. The proxy log is 105 lines.
+
+**Why two methods and not one.** Each covers the other's blind spot, and
+neither is sufficient alone:
+
+| | misses | covered by |
+|:--|:--|:--|
+| `ss` polling | a connection shorter than the poll interval | the proxy, which sees every request |
+| proxy | anything that ignores `HTTP_PROXY` | `ss`, which sees the socket regardless |
+
+`ss` says there were no sockets; the proxy says nothing was requested. Together
+they close both doors. The `claude` child routing through the proxy also proves
+the environment was honoured by the process tree, so "nothing in the proxy log
+from warp-oss" is not simply "warp-oss ignored the proxy".
+
+**Why there is nothing to send, from the log rather than the source.** The
+startup line names the channel config:
+
+    channel: Oss, … telemetry_config: None, autoupdate_config: None,
+    crash_reporting_config: None
+
+Structurally absent rather than flagged off. `server_root_url`, the RTC URL and
+a Firebase key are still *present* in that config — they are simply never
+contacted, which is what the two captures above establish and what reading the
+config alone could not.
+
+#### What was deliberately not done
+
+**The contrast run — fork policy off, to watch telemetry appear — was not
+done.** It is the most persuasive demonstration available and it would mean
+transmitting this user's data to a third party to make a rhetorical point.
+Not my call to make. The argument that fork policy is what silences this is
+covered by unit tests instead.
+
+**The claim is "no telemetry", not "nothing leaves".** The agent's prompt goes
+to Anthropic, in the clear in that `POST /v1/messages` body, because that is
+what an agent on your own subscription *is*. What does not happen is Warp
+learning anything about you.
+
+**Still unverified: T2.5, audio.** No proxy capture during a real recording;
+that needs a microphone and someone to speak into it. Unchanged by this.
+
+**Platform: Linux only.** Windows is unmeasured, and `tcpdump` was unavailable
+here (it needs root), so packet-level capture was not part of this.
 
 ### The log-spam question, answered by counting
 
