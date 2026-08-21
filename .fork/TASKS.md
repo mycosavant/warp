@@ -1727,11 +1727,12 @@ seamless across Windows and WSL2.
       `agent.read`, `agent.spawn`, `agent.cancel`, `agent.reveal` — plus the
       two guardrails and the local-agent tool mapping without which the first
       of them would have been decorative. See "T6.6 — as built" below.
-- [ ] **T6.7** Local summarization, so `/compact` works without an account.
+- [x] **T6.7** Local summarization, so `/compact` works without an account.
       Found by T6.5: `/compact` submits correctly and then fails with
       `missing authentication credentials`, because summarization is an
       `AIAgentInput::SummarizeConversation` and `local_agent::handles` takes
-      only `UserQuery`. A T3-shaped job, not a T6.5 one.
+      only `UserQuery`. Answered by running Claude's *own* `/compact` against
+      the session it already holds — see "T6.7 — as built" below.
 
 ### T6.1 — as built
 
@@ -2812,6 +2813,151 @@ code path the change had walked into.
 * **Hiding a revealed child again.** The toggle only goes one way. Nothing in
   the reveal events reverses cleanly, and closing the pane kills the child.
 
+### T6.7 — as built
+
+`/compact` works account-free. The whole change is in `ai::local_agent`; no
+action was added, no protocol touched, and `slash.run compact` is unchanged
+from what T6.5 left.
+
+#### The fix is not "summarize the conversation with Claude"
+
+That was the obvious reading and it is wrong. Upstream, `/compact` summarizes
+the message list the client uploads, because upstream that list *is* the
+model's context. Here it is not. This fork sends Claude a prompt and Claude
+keeps the transcript — that is the whole of T5's session design — so **the
+context under pressure is Claude's, and compacting Warp's copy would free
+nothing at all.**
+
+So the local agent runs Claude's own `/compact` against the session it is
+already holding. `Ask::Compact` is a second kind of turn beside `Ask::Query`,
+and its prompt is the literal string `/compact`.
+
+#### `/compact` works in `--print` mode, which had to be established first
+
+Not documented anywhere, so it was run:
+
+    echo "/compact" | claude --print --output-format stream-json --verbose \
+      --resume <session>
+
+It does, and it reports itself on events this fork had never seen:
+
+    system/status   status: "compacting"
+    system/status   compact_result: "success"
+    system/init                                    <- the *second* one
+    system/compact_boundary   pre_tokens: 22988, post_tokens: 2156,
+                              duration_ms: 18962
+    user            the summary
+    user            "<local-command-stdout>Compacted </local-command-stdout>"
+    result          result: ""                     <- empty
+
+Three of those changed the design:
+
+**The `init` is in the middle**, for the session Claude has just rewritten —
+and on a *refused* compaction there is none at all. A translator that opens its
+stream on `system/init`, as the query path does, would put the opening event two
+thirds of the way through, or emit none and have the client report a dropped
+connection. So a compaction opens on the session id `--resume` was given, which
+is known before Claude says anything. Safe because the session id does not move
+across a compaction — verified either side of one.
+
+**The result is empty.** The summary is not in it. It arrives as a `user`
+message, and the flag that identifies it on disk — `isCompactSummary` — is
+*not* on the stream. So the summary is identified by position: the first user
+message after `compact_boundary`. Everything after that is the CLI talking to
+itself.
+
+**"Not enough messages to compact" is an answer, not an error.** It comes back
+as a synthetic assistant message with `is_error: false`, and is shown as
+ordinary agent output.
+
+#### What Warp is told
+
+A `Summarization` message carrying a `ConversationSummary`, not agent output.
+The difference is not cosmetic: Warp renders it as a collapsible "Conversation
+summarized" block and leaves it out of a copied transcript, and only if it is
+told. `token_count` is `post_tokens` and `finished_duration` is `duration_ms`.
+
+The request is recorded as a `SystemQuery(SummarizeConversation)`, which is
+what upstream writes and which `convert_conversation` deliberately does not
+render as user input — without it, a restored conversation has a summary that
+nobody asked for.
+
+The summary's own preamble is stripped:
+
+> This session is being continued from a previous conversation that ran out of
+> context. …
+
+That paragraph is a prompt addressed to the next model, and it says "ran out of
+context" whether or not anything did. Under a heading that already reads
+"Conversation summarized" it is misleading noise. Both halves of it must be
+present before either is dropped, so a rewording upstream costs a stray line
+rather than a truncated summary.
+
+#### Verified on Linux, 2026-08-20
+
+Six turns in one conversation, then `slash run compact`, then a seventh turn:
+
+    agent read <id> --last 1
+      -> "What words did I ask you to remember? …"
+         ALPHA-7, BRAVO, CHARLIE, DELTA, ECHO, FOXTROT
+
+which is the whole feature in one line: the conversation survived compaction
+with its content intact, recalled from the summary, in the same session.
+
+Claude's session file shows the `compact_boundary` and the `isCompactSummary`
+message. Warp's own `agent_tasks` row — decoded from the protobuf — shows field
+16, `Summarization`, with the preamble stripped, `token_count: 2481` and
+`finished_duration: 28.809s`.
+
+Both other paths, in a second conversation:
+
+    slash run compact                      (one turn only)
+      -> status success, output "Not enough messages to compact."
+    slash run compact 'keep only the list of codewords'
+      -> SystemQuery prompt: "keep only the list of codewords"
+      -> summary: "Codewords to remember, in the order given: 1. ZULU …"
+
+The instructions reached Claude and the summary obeyed them. Note the second
+summary has no preamble at all — a directed compaction does not write one — and
+`readable_summary` correctly left it alone.
+
+`agent.read` shows the compaction exchange with **no input and no output**,
+which is right rather than a bug: the request is a system query and the answer
+is a `Summarization`, and both are excluded from the copy formatter that
+`agent.read` reports through.
+
+#### The half-hour this cost, so it costs nobody else that
+
+Every AI slash command reported `is_available: false`, including `/agent`, in a
+pane that was demonstrably running an agent. The cause is not in this fork's
+code: `agents.warp_agent.is_any_ai_enabled = false` in `~/.config/warp-oss/
+settings.toml`. `Availability::AI_ENABLED` is gated on it, so the entire slash
+menu goes dark — while `warpctrl agent prompt` keeps working, because it does
+not consult that setting.
+
+Worth knowing in both directions. The fork's account bypass
+(`fork::account_gate_bypassed`) covers the *account* half of
+`is_any_ai_enabled` and cannot cover the stored value, which is the user's own
+switch. And `agent.prompt` bypassing it is left alone deliberately: enforcing
+it there would remove function rather than add it, which is the wrong direction
+for this fork.
+
+Verified against a scratch profile — `XDG_CONFIG_HOME` pointed at a copy with
+the one flag flipped — so the user's own `settings.toml` was never edited.
+
+#### Not done, and why
+
+* **Reporting `context_window_usage`.** Claude gives the numbers on every turn
+  (`input + cache_read + cache_creation` against `modelUsage.contextWindow`),
+  and the agent input footer draws an icon from them, so compaction could be
+  made *visible* rather than merely effective. It is a separate feature from
+  "make `/compact` work", though, and doing it only on compaction would make
+  the meter appear once and then vanish — worse than not doing it.
+* **Warp-side message replacement.** `MoveMessagesToNewTask` is upstream's
+  mechanism for shrinking the client's own copy. Nothing here needs it: the
+  client's copy is not what feeds the model, and upstream's handler is explicit
+  that it leaves the UI unchanged.
+
 ## T7 — Work that outlives a turn
 
 Raised by the user, 2026-08-20, as three ideas that felt related and were hard
@@ -2921,13 +3067,142 @@ people already look. The join is one sentence of the lead agent's job:
 That keeps the run-scale graph small enough to be worth trusting, and keeps the
 project-scale record somewhere a human can argue with it.
 
-- [ ] **T7.1** A run-scale task graph: schema, and a runner over T6.5/T6.6.
-      **Unblocked** by T6.6, which supplies `agent.spawn`, `agent.read` and
+- [x] **T7.1** A run-scale task graph: schema, and a runner over T6.5/T6.6.
+      Unblocked by T6.6, which supplies `agent.spawn`, `agent.read` and
       `agent.cancel` — without `agent.read` a graph can sequence work but not
-      hand anything along it, which is half the point.
+      hand anything along it, which is half the point. Shipped as
+      `warpctrl graph`, adding no actions — see "T7.1 — as built" below.
 - [ ] **T7.2** Read a milestone from an issue tracker and emit a T7.1 graph.
       Deliberately last, and deliberately thin: the moment this grows a
       scheduler of its own it has become the thing this section argues against.
+      **Unblocked** by T7.1: the target format now exists, and `graph check`
+      is how a generated plan gets validated before anyone spends a token on
+      it.
+
+### T7.1 — as built
+
+`warpctrl graph check <plan.toml>` and `warpctrl graph run <plan.toml>`.
+
+**The catalog is 96 actions before and after.** That is the headline. T6.6
+built the verbs; a graph is a composition of them, so the runner is a `while`
+loop in the CLI over `agent.spawn` and `agent.read` and the app gained nothing.
+A feature that adds no surface is one that cannot break the surface.
+
+#### The format
+
+```toml
+[defaults]
+allow_tools = ["read-only"]
+
+[[node]]
+id = "survey"
+prompt = "List every file under src/ that still calls the old API."
+
+[[node]]
+id = "fix"
+prompt = "Migrate those files to the new API."
+allow_tools = ["read-only", "APPLY_FILE_DIFFS"]
+needs = [{ node = "survey", pass = "the list of files" }]
+```
+
+A node is the `agent.spawn` parameters — prompt, name, tool allowlist — and
+nothing else. `[defaults]` exists so a plan whose every node is read-only says
+so once: a plan that repeats the restriction on every line is a plan where one
+line will eventually be missing it.
+
+**One edge type**, as the T7 argument concluded. `needs = ["survey"]` is
+ordering; `needs = [{ node = "survey", pass = "…" }]` is ordering *and* a
+handoff. The `pass` phrase is a label rather than a filter — the whole of the
+upstream answer is appended either way, under `--- From \`survey\` (the list of
+files):`, because a wall of text under no heading is the kind of context an
+agent quietly ignores.
+
+Edges are written on the node that waits, because that is the direction a
+reader asks the question in: standing at `fix`, what does it need?
+
+#### What is refused before anything spawns
+
+Both of these are otherwise discovered halfway through a run, with children
+already running and a partial result to reason about.
+
+* **A cycle**, with its members named. At runtime a cycle is invisible — the
+  scheduler stops finding work, which reads exactly like a hang. Found by
+  Kahn's algorithm, where what *cannot* be drained is the answer.
+* **A misspelled field**, via `deny_unknown_fields`. This matters more here
+  than in most places, because the fields are the guardrails:
+  `allow_tool = ["read-only"]` silently accepted is a node that runs with no
+  restriction at all, discovered by reading what it did.
+
+Also refused: an unknown node in a `needs`, a duplicate id, a node that needs
+itself, an empty plan.
+
+`graph check` needs no running Warp and prints the plan in waves:
+
+    4 nodes, 3 in sequence
+      1. colours
+      2. count, shout
+      3. report
+
+Waves rather than a flat list because the parallelism is the interesting part —
+a plan whose every node is in its own wave will run one agent at a time, which
+is usually not what its author drew.
+
+#### Failed is not skipped
+
+A run that reports six failures when one node failed and five were waiting on
+it has buried the only fact worth acting on. So `Skipped { blocked_by }` is its
+own state, and it names the *nearest* blocker; the chain back to the root cause
+is readable from the other entries.
+
+A failed node stops its own dependents and nothing else. Branches with nothing
+wrong with them run to completion, and the process exits non-zero at the end.
+
+#### The race that would have made the whole thing silently useless
+
+A conversation polled in the instant after `agent.spawn` is not busy *yet*. Read
+as "finished", it hands the next node an empty string, and the graph runs to
+completion having done nothing — with every node reporting success. The test is
+therefore `!is_busy && last_exchange.is_complete == Some(true)`: an exchange
+that exists and has a finish time cannot be a turn that has not started.
+
+#### Verified on Linux, 2026-08-20
+
+A diamond, run against a lead conversation with `--parent`:
+
+    colours: done — Crimson, teal, amber
+    count:   done — 3                              <- these two started
+    shout:   done — CRIMSON, TEAL, AMBER              together
+    report:  done — COUNT=3 LIST=CRIMSON, TEAL, AMBER
+
+`report` joining two handoffs into one line is the proof that both edges
+delivered. `agent.list` afterwards showed all four as hidden children of the
+lead.
+
+Then the part that matters more, with a node given `allow_tools = ["Bash"]` —
+which is Claude's name for it, not Warp's, so `agent.spawn` refuses:
+
+    bad:       failed — `Bash` is not a tool. Use `read-only`, or a ToolType
+                        name such as READ_FILES or RUN_SHELL_COMMAND.
+    after-bad: skipped — `bad` did not finish
+    unrelated: done — still-here
+    exit=1
+
+#### Decisions worth recording
+
+* **`--max-parallel`, default 4.** Every node is a real agent with a real model
+  behind it. The graph decides what *may* run together; this decides how much
+  of that actually does.
+* **No timeout by default.** A node can legitimately sit for a long time —
+  `blocked` means it is waiting for a person to approve something — and killing
+  it throws the work away to no purpose. `--timeout` is there for unattended
+  runs, and the progress output carries the conversation's own status so a
+  stuck node reads as `blocked` rather than as nothing happening.
+* **No retries.** A node fails once and stays failed. Retrying an agent turn is
+  not idempotent — it may already have written files — so it is the plan
+  author's call, not the runner's.
+* **`agent.read --last 1`.** A node is one prompt and its answer. Reading the
+  whole transcript would hand the next node the handoff it already received,
+  wrapped in its own reply.
 
 ---
 

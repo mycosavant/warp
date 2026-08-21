@@ -527,8 +527,9 @@ function warpctrl { & 'C:\dev\warp\target\debug\warp-oss.exe' --warpctrl @args }
 
 ### What it can do
 
-**92 actions. Every one of them run against the live Windows build — this list
-is the verified surface, not the catalog's own claim about itself.** `warpctrl action list` emits the catalog as JSON with
+**96 actions. Every one of them run against a live build — the first 92 on
+Windows, the six `agent` verbs on both, so this list is the verified surface
+rather than the catalog's own claim about itself.** `warpctrl action list` emits the catalog as JSON with
 `parameter_spec`, `result_spec` and `target_scope` per action, so tool
 definitions can be generated from it rather than hardcoded.
 
@@ -552,6 +553,10 @@ definitions can be generated from it rather than hardcoded.
 | `drive`      | 3  | status export import — **fork-added**, see T4.4 |
 | `agent`      | 6  | list prompt read spawn cancel reveal — **fork-added**, see T6.5/T6.6 |
 | `slash`      | 2  | list run — **fork-added**, see T6.5 |
+
+`warpctrl graph` is not in the table because it is not an action: it is a loop
+over `agent spawn` and `agent read` that runs a plan from a file. See "A plan
+in a file" below.
 
 `input insert` and `input replace` stage text without running it; **`input
 submit` runs it** — that one is a fork addition, because without it an agent
@@ -737,6 +742,92 @@ tool no `ToolType` names — `WebFetch`, `WebSearch` — can only ever be forbid
 does not stop a shell command a tool already started, and it is not a boundary
 against prompt injection: the child is a process on this machine with your
 credentials.
+
+### A plan in a file: `warpctrl graph`
+
+Everything above is one agent at a time. A *graph* is several, in a declared
+order, with results handed along the edges — written down rather than decided
+in the moment.
+
+```toml
+# plan.toml — a diamond
+[defaults]
+allow_tools = ["read-only"]
+
+[[node]]
+id = "colours"
+prompt = "Reply with exactly three colour names, comma separated, nothing else."
+
+[[node]]
+id = "count"
+prompt = "How many items are in the list below? Reply with just the number."
+needs = [{ node = "colours", pass = "the list" }]
+
+[[node]]
+id = "shout"
+prompt = "Rewrite the list below in upper case. Reply with just the list."
+needs = [{ node = "colours", pass = "the list" }]
+
+[[node]]
+id = "report"
+prompt = "Write one line of the form COUNT=<n> LIST=<list>, using the values below."
+needs = [
+  { node = "count", pass = "the count" },
+  { node = "shout", pass = "the upper-case list" },
+]
+```
+
+```bash
+warpctrl graph check plan.toml     # parse, resolve edges, find cycles
+warpctrl graph run   plan.toml --parent <conversation-id>
+```
+
+```
+4 nodes, 3 in sequence
+  1. colours
+  2. count, shout
+  3. report
+```
+
+```
+colours: done — Crimson, teal, amber
+count:   done — 3
+shout:   done — CRIMSON, TEAL, AMBER
+report:  done — COUNT=3 LIST=CRIMSON, TEAL, AMBER
+```
+
+A node is the `agent spawn` parameters and nothing else; every node runs as a
+hidden child, so `agent reveal` works on any of them mid-run.
+
+**One kind of edge.** `needs = ["colours"]` is ordering. `needs = [{ node =
+"colours", pass = "the list" }]` is ordering *and* a handoff — the upstream
+node's answer is appended under a heading naming what it is. A dependency is an
+edge that carries a payload, so there is no separate `hands-to` to keep
+consistent with it.
+
+**Failed is not skipped.** A node that fails stops its own dependents, which
+are reported as skipped and told which node stopped them; other branches run to
+completion. The process exits non-zero if anything did not finish.
+
+```
+bad:       failed — `Bash` is not a tool. Use `read-only`, or a ToolType name …
+after-bad: skipped — `bad` did not finish
+unrelated: done — still-here
+```
+
+**Nothing spawns until the plan is valid.** Cycles, unknown node references,
+duplicate ids and misspelled fields are all refused up front — the last one
+because the fields are the guardrails, and `allow_tool` quietly ignored is a
+node with no restriction at all.
+
+`--max-parallel` (default 4) bounds how many agents run at once. There is no
+timeout unless you ask for one: a node showing `blocked` is waiting for you to
+approve something, and killing it would throw the work away. Use `--timeout`
+for an unattended run. Nothing is retried — an agent turn is not idempotent, so
+that is your call rather than the runner's.
+
+This adds no actions. `graph` is a loop over `agent spawn` and `agent read`,
+which is why the catalog is the same size with it as without.
 
 ### Targets: the rule that decides whether a call works
 
@@ -1116,8 +1207,52 @@ be fed back mid-turn. At that point `ToolCall` becomes correct rather than
 dangerous.
 
 Also absent: model selection (Claude Code picks its own), attachments, MCP
-context. Only a plain user query is claimed at all — passive suggestions,
-conversation resume, code review and project init still go upstream untouched.
+context. Only a plain user query and a `/compact` are claimed at all — passive
+suggestions, conversation resume, code review and project init still go
+upstream untouched.
+
+### `/compact` works, and compacts the context that is actually full
+
+`/compact` is the one slash command that is not a UI action: it is a prompt,
+and it used to come back
+
+    Request failed with error: Other(missing authentication credentials)
+
+because summarization is a different request type and went to Warp's server.
+
+The fix is worth understanding, because the obvious version is wrong. Upstream,
+`/compact` summarizes the message list the client uploads, because upstream
+that list *is* the model's context. Here it is not: this fork sends Claude a
+prompt and Claude keeps the transcript, so **the context under pressure is
+Claude's**, and summarizing Warp's copy would free nothing.
+
+So `/compact` in Warp runs Claude's own `/compact` against the session it is
+already holding, and Warp is shown the result as a collapsible "Conversation
+summarized" block. `/compact <instructions>` passes straight through — both
+ends spell it the same way.
+
+    /compact                            summarize and drop what it covers
+    /compact keep only the API decisions    same, with instructions
+
+Two things follow that are worth knowing:
+
+* **The session id does not change.** The conversation is the same conversation
+  afterwards, with the same history in Warp and a much smaller context in
+  Claude. Verified: six turns, `/compact`, then "what words did I ask you to
+  remember?" answered correctly from the summary alone.
+* **"Not enough messages to compact" is an answer, not an error.** Claude
+  declines on a conversation that has barely started, and Warp shows what it
+  said.
+
+A `/compact` on a conversation that has never run a turn is refused with the
+reason: there is no Claude session behind it yet.
+
+**If every AI slash command reports unavailable**, including `/agent`, the
+cause is almost certainly `agents.warp_agent.is_any_ai_enabled = false` in your
+`settings.toml`. That is Warp's master AI switch, it gates the whole slash menu,
+and the fork's account bypass cannot override a value you stored. Note that
+`warpctrl agent prompt` keeps working regardless, which makes the state
+confusing: agents run, but the UI that reaches them is dark.
 
 ### In a WSL session, Claude runs inside the distribution
 
