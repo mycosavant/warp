@@ -8857,10 +8857,16 @@ impl TerminalView {
     /// Windows users expect ctrl-c to copy if there is selected text. Otherwise,
     /// we perform the normal ctrl-c action.
     fn ctrl_c(&mut self, ctx: &mut ViewContext<Self>) {
-        let (has_block_list_selection, has_alt_screen_selection, active_block_state) = {
+        let (
+            has_block_list_selection,
+            has_rich_content_selection,
+            has_alt_screen_selection,
+            active_block_state,
+        ) = {
             let model = self.model.lock();
             let has_alt_screen_selection = model.alt_screen().selection().is_some();
             let has_block_list_selection = model.block_list().selection().is_some();
+            let has_rich_content_selection = model.block_list().has_rich_content_selection();
             let active_block = model.block_list().active_block();
             let is_long_running = active_block.is_active_and_long_running();
             let is_agent_in_control_of_command = active_block.is_agent_in_control();
@@ -8880,10 +8886,42 @@ impl TerminalView {
             };
             (
                 has_block_list_selection,
+                has_rich_content_selection,
                 has_alt_screen_selection,
                 active_block_state,
             )
         };
+
+        // Text selected inside an AI block is not the point-based selection that
+        // every "is anything selected?" test below reads — `set_rich_content_
+        // selection` clears that one when it records this one. So those tests
+        // answer "nothing is selected" *precisely* when the user has dragged
+        // across the agent's answer, and ctrl-c falls through to cancelling the
+        // turn instead of copying it.
+        //
+        // That is not hypothetical: it is how a turn came to be cancelled by
+        // someone who was trying to copy it, which is the whole of T5.6. The
+        // `#[cfg(windows)]` arm of `ctrl_c_internal` already states that users
+        // expect ctrl-c to copy a selection; it was simply never reachable for
+        // agent output, on any platform. This makes it so.
+        //
+        // Unconditional rather than `#[cfg(windows)]`, because the Linux reading
+        // of ctrl-c is "interrupt the foreground process" and in agent view there
+        // is no foreground process — the only thing ctrl-c can do to a streaming
+        // turn is destroy it.
+        //
+        // Clearing afterwards is load-bearing, not tidiness: a second ctrl-c has
+        // to still stop the agent, and `clear_selections_when_shell_mode_without_
+        // focusing_input` is a no-op while `AgentView` is enabled, so nothing else
+        // would drop the selection and the keyboard could never reach Stop again.
+        if has_rich_content_selection {
+            self.copy(ctx);
+            self.clear_selected_text(ctx);
+            self.redetermine_global_focus(ctx);
+            ctx.notify();
+            return;
+        }
+
         // We don't want to copy blocks in AI input mode because those are
         // context blocks.
         let has_copiable_block_selection = !self.selected_blocks.is_empty()

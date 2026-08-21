@@ -82,6 +82,16 @@ impl PendingResponseStreams {
                 return false;
             };
 
+            // The sibling below logs this, and this one did not — but this is the
+            // path ctrl-c and the Stop button take, so the one cancellation a user
+            // can actually cause was the one that left no trace. Chasing a turn
+            // that had stopped for no visible reason (T5.6) meant reconstructing
+            // it from `dispatching typed action` lines, which happen to record
+            // every keystroke and are not a cancellation log.
+            log::info!(
+                "Canceling stream {stream_id:?} for conversation_id={conversation_id:?}, \
+                 reason={reason}"
+            );
             stream.update(ctx, |stream, ctx| {
                 stream.cancel(reason, conversation_id, ctx)
             });

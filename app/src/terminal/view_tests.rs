@@ -8693,6 +8693,157 @@ fn copy_selected_text_from_ai_block() {
     })
 }
 
+/// Ctrl+C over selected agent output must copy it, not destroy the turn.
+///
+/// The trap: an AI block's text selection is not the point-based
+/// `block_list().selection()`, and recording one *clears* the other. So every
+/// "is anything selected?" test on the ctrl-c path answered `false` in exactly
+/// the case where a person had just dragged across an answer and reached for the
+/// copy shortcut — and ctrl-c fell through to cancelling the stream. That is a
+/// real turn that really died (T5.6); the log said the user cancelled it, which
+/// was true and useless.
+///
+/// The second press is half the test. Copying has to clear the selection, or
+/// ctrl-c could never reach Stop again while any agent text was selected —
+/// `clear_selections_when_shell_mode_without_focusing_input` is a no-op with
+/// `AgentView` enabled, so nothing else would drop it.
+///
+/// The agent-monitored long-running command is here to make cancellation
+/// *observable*: it is the one ctrl-c route this harness drives end to end
+/// (see `ctrl_c_after_stop_takeover_cancels_conversation`). Without it the
+/// first assertion would pass for want of anything to cancel, which is the
+/// failure mode a regression test exists to avoid.
+#[test]
+fn ctrl_c_over_selected_agent_output_copies_then_stops_on_the_second_press() {
+    App::test((), |mut app| async move {
+        initialize_app_for_terminal_view(&mut app);
+        FeatureFlag::AgentView.set_enabled(true);
+        let terminal = add_window_with_terminal(&mut app, None);
+
+        let pty_writes: Rc<RefCell<Vec<Vec<u8>>>> = Rc::new(RefCell::new(Vec::new()));
+        let writes = pty_writes.clone();
+        app.update(|ctx| {
+            ctx.subscribe_to_view(&terminal, move |_, event, _| {
+                if let Event::WriteBytesToPty { bytes } = event {
+                    writes.borrow_mut().push(bytes.to_vec());
+                }
+            });
+        });
+
+        let (conversation_id, task_id, _exchange_id, _stream_id) =
+            terminal.update(&mut app, |view, ctx| {
+                append_exchange_and_handle_event(
+                    view,
+                    AIAgentInput::UserQuery {
+                        query: "the quick brown fox".to_owned(),
+                        context: Default::default(),
+                        static_query_type: None,
+                        referenced_attachments: Default::default(),
+                        user_query_mode: UserQueryMode::Normal,
+                        running_command: None,
+                        intended_agent: None,
+                    },
+                    ctx,
+                )
+            });
+
+        // Put the agent in charge of a long-running command and hand control back
+        // to the user, which is the state in which ctrl-c cancels the conversation.
+        terminal.update(&mut app, |view, ctx| {
+            view.model
+                .lock()
+                .simulate_long_running_block("sleep 20", "running");
+            view.model
+                .lock()
+                .block_list_mut()
+                .active_block_mut()
+                .set_agent_interaction_mode_for_agent_monitored_command(&task_id, conversation_id)
+                .expect("command should become agent monitored");
+            view.cli_subagent_controller.update(ctx, |controller, ctx| {
+                controller.switch_control_to_user(
+                    UserTakeOverReason::Stop {
+                        should_auto_resume: true,
+                    },
+                    ctx,
+                );
+            });
+        });
+
+        let ai_block = terminal.read(&app, |view, _| {
+            view.rich_content_views
+                .iter()
+                .find_map(|rich_content| {
+                    rich_content
+                        .ai_block_metadata()
+                        .map(|metadata| metadata.ai_block_handle.clone())
+                })
+                .expect("an AI block should have been inserted")
+        });
+
+        // Select text inside the AI block, exactly as a drag would.
+        ai_block.update(&mut app, |block, ctx| {
+            block.set_block_level_selected_text_for_test(Some("quick brown".to_owned()));
+            block.handle_action(&AIBlockAction::SelectText, ctx);
+        });
+
+        // The trap itself, asserted rather than described: there *is* a selection,
+        // and the field ctrl-c used to consult says there is not.
+        terminal.read(&app, |view, _| {
+            let model = view.model.lock();
+            assert!(
+                model.block_list().selection().is_none(),
+                "an AI block selection is not the point-based selection"
+            );
+            assert!(
+                model.block_list().has_rich_content_selection(),
+                "but the model does know the AI block owns a selection"
+            );
+        });
+
+        terminal.update(&mut app, |view, ctx| {
+            view.handle_action(&TerminalAction::CtrlC, ctx);
+        });
+
+        terminal.read(&app, |view, ctx| {
+            assert_eq!(
+                BlocklistAIHistoryModel::as_ref(ctx)
+                    .conversation(&conversation_id)
+                    .map(|c| c.status().clone()),
+                Some(ConversationStatus::InProgress),
+                "ctrl-c over selected agent output must copy it, not cancel the turn"
+            );
+            assert!(
+                !view.model.lock().block_list().has_rich_content_selection(),
+                "copying must clear the selection, or the next ctrl-c would copy again"
+            );
+        });
+        assert!(
+            pty_writes.borrow().is_empty(),
+            "the first ctrl-c must not have reached the active block at all"
+        );
+
+        // With the selection gone, ctrl-c means what it always meant.
+        terminal.update(&mut app, |view, ctx| {
+            view.handle_action(&TerminalAction::CtrlC, ctx);
+        });
+
+        terminal.read(&app, |_, ctx| {
+            assert_eq!(
+                BlocklistAIHistoryModel::as_ref(ctx)
+                    .conversation(&conversation_id)
+                    .map(|c| c.status().clone()),
+                Some(ConversationStatus::Cancelled),
+                "a second ctrl-c must still stop the agent"
+            );
+        });
+        assert_eq!(
+            *pty_writes.borrow(),
+            vec![vec![C0::ETX]],
+            "and must interrupt the command, exactly as it would with nothing selected"
+        );
+    })
+}
+
 #[test]
 fn cmd_k_does_not_clear_buffer_when_agent_is_driving_command() {
     App::test((), |mut app| async move {

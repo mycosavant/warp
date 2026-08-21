@@ -896,6 +896,18 @@ impl BlockList {
             .send_terminal_event(TerminalEvent::TextSelectionChanged);
     }
 
+    /// Whether a rich content (AI) block currently owns the text selection.
+    ///
+    /// Not derivable from [`selection`](Self::selection), and not merely absent
+    /// from it: [`set_rich_content_selection`](Self::set_rich_content_selection)
+    /// *clears* the point-based selection when it records one of these. So
+    /// `selection().is_some()` answers `false` precisely when the user has
+    /// selected an agent's output, and any caller asking "is anything selected?"
+    /// through that field alone gets the wrong answer in exactly that case.
+    pub fn has_rich_content_selection(&self) -> bool {
+        !self.rich_content_selections.is_empty()
+    }
+
     /// Clears the tracked text selection for the given rich content (AI) block
     /// view, if present.
     pub fn clear_rich_content_selection(&mut self, view_id: EntityId) {
