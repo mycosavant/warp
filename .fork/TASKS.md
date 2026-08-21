@@ -283,6 +283,117 @@ Deferred, dependent on T1 landing:
           bootstrapped pane -> executed: true,  queued: false  (file present at once)
           fresh tab         -> executed: false, queued: true   (absent, then present)
 
+### T1.12 — as built
+
+Four actions, catalog 96 → **100**:
+
+    drive.object.list    every object in the personal drive
+    drive.object.get     one object, as the file an export would write
+    drive.object.create  a workflow, notebook or folder
+    drive.object.trash   trashed, not deleted
+
+**Most of this already existed and was not reachable.** `snapshot` reads the
+personal drive into a typed, app-independent form; `write_object` is the
+thirteen constructors that put one back. The missing piece was writing *one*:
+`apply` is reconciliation and reads absence as deletion, so handing it a single
+object would trash the rest of the drive. Hence `apply::put` and `apply::trash`
+beside it — the same machinery, with no opinion about what is not in front of
+it.
+
+#### The read side and the write side disagree about format, on purpose
+
+`get` returns the object's file exactly as `drive.sync.export` writes it.
+`create` does not accept one.
+
+The file's header opens with a `uid` and an `owner`, and neither is a caller's
+to choose — an identity supplied from outside is precisely how one object
+silently overwrites another. A `create` that took a file would have to ignore
+the first two lines of everything it was handed, which is a worse contract than
+asking for the three things that genuinely *are* the caller's: what kind, what
+it is called, what is in it. The action that writes a supplied identity on
+purpose is `drive.sync.import`, where the identity comes from a file the user
+has in git and can see.
+
+The file is still the documentation, which is the T7.2 lesson reapplied: the
+format explains itself by being the one already on disk. `drive object get` on
+any workflow prints its `data` block, and that block is exactly what
+`create --body` takes.
+
+#### `drive.object.create` was pinned as unparseable, and taking it back is a decision
+
+Upstream's `drive.*` group was twelve actions, **every one of them
+`status: Stub, authenticated_user: true`** — specified, never implemented, and
+gated on a sign-in. T4.4d removed them and pinned the names in
+`malformed_and_removed_action_names_are_not_deserialized` so a new action could
+not quietly inherit a retired contract. That test fired here, which is it
+working.
+
+The name is taken back deliberately, and now has its own test saying so, because
+the parameters are **not** upstream's:
+
+    upstream (stub)  { object_type, content, content_file }
+    this fork        { object_type, name, body, folder }
+
+An object needs a name and somewhere to live. A caller written against the old
+spec would send `content` and be told `invalid_params` — the right answer, and
+one that should be arrived at on purpose rather than by accident. The other
+nine names stay pinned; they are still names with nothing behind them.
+
+Worth noting what upstream's group *was*, because it is the fork's thesis in
+miniature: twelve account-gated stubs for the object store. This fork now
+implements four of them, account-free.
+
+#### Refused rather than reparented
+
+Creating into something that is not a folder is an error, not a quiet placement
+at the top level. `tree`'s exporter reparents orphans and *names them in the
+summary*; an action has no summary to hide in, so an object that landed
+somewhere other than where it was asked to go would be a silent wrong answer
+the user finds later, elsewhere.
+
+Folder paths are reported as display names rather than the mirror's slugged
+directory names, because the question is "where is it in the panel" and the
+panel shows names. The walk carries the same cycle guard `tree` does, for the
+same reason: `folder_id` is a plain string column with no referential integrity
+behind it, so a loop is representable and would recurse until the stack ran
+out. There is a test for it, and it has to close the loop *from underneath*
+since nothing in the action surface can create one.
+
+#### Verified by running it
+
+    drive object list                      -> {} on a fresh store
+    drive object create --type folder      -> Deploys
+    drive object create --type workflow
+      --folder <id> --body '{...}'         -> path: ["Deploys"]
+    drive object list                      -> both, nested
+    drive object get <workflow>            -> the file, data block and all
+    restart                                -> both still there (persist really
+                                              reaches SQLite)
+    drive export                           -> deploys-434ea074/.warp-folder.json
+                                              deploys-434ea074/ship-it-07470dec.json
+    drive object trash <workflow>          -> trashed: true
+    drive object list                      -> visible 1, trashed_hidden 1
+    drive export                           -> the trashed file is still written,
+                                              carrying "trashed": "2026-08-21T…"
+
+The last line is the one worth having. It is the invariant the whole local-sync
+design hangs off — a deletion travels as content, not as absence — and it now
+holds for a deletion made through the catalog, not just one made in the panel.
+
+The export also proves these are the *real* store rather than a parallel one,
+which a unit test could not: the mirror is written by `snapshot`, and `snapshot`
+found them.
+
+Twelve handler tests, plus a CLI example per action (the coverage test demanded
+them) and a positive parse test for the four names.
+
+**One gap left, unchanged:** `warp_drive.local_sync.path` is still not in
+`ALLOWLISTED_SETTING_KEYS`, so the live check above needed a scratch
+`XDG_CONFIG_HOME` to point the mirror somewhere. That is deliberate — T4.4d's
+argument is that an agent can ask for an export but must not decide where it
+lands — and it is worth knowing it makes the export half awkward to exercise
+from outside.
+
 ## T2 — Local voice transcription (replace Wispr Flow)
 
 Cleanest seam in the codebase: `Transcriber` is a one-method trait and
@@ -761,7 +872,7 @@ The store path is now known rather than guessed:
       `wf-test` alias intact. The alias lives outside `workflows.data`, which
       is why the payload column does not mention it.
 
-- [ ] **T1.12** Add Warp Drive object actions to the local-control catalog.
+- [x] **T1.12** Add Warp Drive object actions to the local-control catalog.
       Surfaced by T4.2 verification: the catalog can drive every part of the
       app *except* its object store, which makes exactly the fork's own
       headline feature the one thing an agent cannot exercise. 85 actions
@@ -770,6 +881,12 @@ The store path is now known rather than guessed:
       rule or folder. `input.*` writes to the terminal's input editor rather
       than to whatever UI has focus, so the `+` button is unreachable. Same
       shape as the `setting.get/set` allowlist gap recorded under T2.
+
+      Done as four actions — `drive.object.list`, `.get`, `.create`,
+      `.trash` — bringing the catalog to **100**. T4.4d's two `drive.sync.*`
+      actions were recorded as closing this, and they did close the half of it
+      that is "an agent can move the store"; they left the half that is "an
+      agent can make one thing". See "T1.12 — as built" below.
 
 ### The bug T4.6 caught, and why nothing else could have
 

@@ -527,9 +527,10 @@ function warpctrl { & 'C:\dev\warp\target\debug\warp-oss.exe' --warpctrl @args }
 
 ### What it can do
 
-**96 actions. Every one of them run against a live build — the first 92 on
-Windows, the six `agent` verbs on both, so this list is the verified surface
-rather than the catalog's own claim about itself.** `warpctrl action list` emits the catalog as JSON with
+**100 actions. Every one of them run against a live build — the first 92 on
+Windows, the six `agent` verbs and the four `drive object` verbs on both, so
+this list is the verified surface rather than the catalog's own claim about
+itself.** `warpctrl action list` emits the catalog as JSON with
 `parameter_spec`, `result_spec` and `target_scope` per action, so tool
 definitions can be generated from it rather than hardcoded.
 
@@ -550,7 +551,7 @@ definitions can be generated from it rather than hardcoded.
 | `action`     | 2  | list inspect |
 | `surface`    | 20 | list, plus 19 panels and modals |
 | `file`       | 1  | open |
-| `drive`      | 3  | status export import — **fork-added**, see T4.4 |
+| `drive`      | 7  | status export import, object list/get/create/trash — **fork-added**, see T4.4 and T1.12 |
 | `agent`      | 6  | list prompt read spawn cancel reveal — **fork-added**, see T6.5/T6.6 |
 | `slash`      | 2  | list run — **fork-added**, see T6.5 |
 
@@ -1582,6 +1583,63 @@ file and the object, both directions refused, the markers survived the refused
 export, and after resolving, `import` reported `trashed: 0` — the workflow was
 still there. A conflict in the repository's own `README.md` stopped neither
 direction and was reported as ignored, with the reason.
+
+### One object at a time: `warpctrl drive object`
+
+`drive status|export|import` move the whole store to and from a directory,
+which is the right shape for a git mirror and the wrong one for "make me a
+workflow that does X". Four more actions reach single objects:
+
+    warpctrl drive object list                      # everything in your drive
+    warpctrl drive object list --type workflow      # or one kind
+    warpctrl drive object list --include-trashed    # trash is excluded by default
+    warpctrl drive object get <id>                  # the file an export would write
+    warpctrl drive object create --type folder --name Deploys
+    warpctrl drive object create --type workflow --name "ship it" \
+        --folder <id> --body '{"name":"ship it","command":"echo shipping"}'
+    warpctrl drive object trash <id>                # recoverable from the panel
+
+`--body-file <path>` reads the body from a file, or from stdin with `-`. A
+workflow's JSON is usually the output of another `get` piped through `jq`, and
+a notebook is a markdown file that already exists; neither belongs on a command
+line.
+
+All four are MCP tools as well (`warp_drive_object_list` and friends), so this
+is the surface an agent uses.
+
+**To learn a body's shape, read one you already have.** `drive object get`
+prints the object exactly as the mirror would write it, and a workflow's `data`
+block is precisely what `create --body` takes:
+
+    $ warpctrl drive object get Client-ac43d9cb-… --output-format json | jq -r .contents
+    {
+      "warp_drive": 2,
+      "type": "WORKFLOW",
+      "uid": "Client-ac43d9cb-…",
+      "name": "ship it",
+      "owner": "user:local",
+      "data": {
+        "command": "echo shipping",
+        "name": "ship it",
+        "tags": ["deploy"],
+        …
+      }
+    }
+
+**`create` does not accept that whole file, and the reason is the first two
+lines.** `uid` and `owner` are not a caller's to choose — an identity supplied
+from outside is how one object silently overwrites another — so a `create`
+taking a file would have to ignore them. It asks instead for what is genuinely
+yours to decide: the kind, the name, the body, and the folder. Two creates with
+the same name are two objects, not one overwritten one.
+
+If you *do* want to write an object with an identity you control, that is what
+`drive import` is for: put the file in the mirror directory, where you can see
+it and git can diff it.
+
+Creating into something that is not a folder is refused rather than quietly
+placed at the top level, because an object that lands somewhere other than
+where you asked is a wrong answer you find out about later.
 
 ### Deleting things without an account
 
