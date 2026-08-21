@@ -885,15 +885,19 @@ fn run_action(
     run_action_with_params(args, action, EmptyParams {}, output_format)
 }
 
-fn run_action_with_params<T: Serialize>(
-    args: TargetArgs,
+/// Sends one action and hands back what it answered.
+///
+/// Split out of [`run_action_with_params`] for callers that act on the result
+/// rather than print it — `graph run` polls `agent.read` and decides what to
+/// spawn next from the answer.
+pub(super) fn send_action<T: Serialize>(
+    args: &TargetArgs,
     action: ActionKind,
     params: T,
-    output_format: OutputFormat,
-) -> Result<(), ControlError> {
-    let selector = instance_selector(&args);
+) -> Result<serde_json::Value, ControlError> {
+    let selector = instance_selector(args);
     let records = local_control::discovery::list_instances(&ChannelState::channel().to_string());
-    let target = target_selector(&args)?;
+    let target = target_selector(args)?;
     let instance = select_instance(&records, &selector)?;
     let mut request = RequestEnvelope::new(Action::with_params(action, params)?);
     request.target = target;
@@ -904,6 +908,16 @@ fn run_action_with_params<T: Serialize>(
             "local-control request failed without an error payload",
         ));
     };
+    Ok(data)
+}
+
+fn run_action_with_params<T: Serialize>(
+    args: TargetArgs,
+    action: ActionKind,
+    params: T,
+    output_format: OutputFormat,
+) -> Result<(), ControlError> {
+    let data = send_action(&args, action, params)?;
     match output_format {
         OutputFormat::Json => write_json(&data),
         OutputFormat::Ndjson => write_json_line(&data),

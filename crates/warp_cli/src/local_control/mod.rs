@@ -1,10 +1,12 @@
 //! Command-line interface for controlling a running local Warp app.
 mod commands;
 mod completions;
+mod graph;
 mod mcp;
 mod output;
 mod selectors;
 use std::ffi::OsString;
+use std::path::PathBuf;
 use std::process::ExitCode;
 
 use clap::{Args, CommandFactory, FromArgMatches, Parser, Subcommand, ValueEnum};
@@ -209,6 +211,10 @@ pub enum ControlCommand {
     /// Talk to Warp's agent: list conversations, send prompts, hand off work.
     #[command(subcommand)]
     Agent(AgentCommand),
+
+    /// Run a task graph: a plan of agents, in a file, with edges between them.
+    #[command(subcommand)]
+    Graph(GraphCommand),
 
     /// Run Warp's slash commands — `/compact`, `/plan`, `/fork-and-compact`.
     #[command(subcommand)]
@@ -703,6 +709,67 @@ pub struct AgentReadArgs {
     pub target: TargetArgs,
 }
 
+/// `warpctrl graph …` — run several agents in a declared order.
+///
+/// The plan is a TOML file of `[[node]]` entries, each one an `agent spawn`,
+/// with `needs` between them. A dependency is an edge that carries a payload:
+/// `needs = [{ node = "survey", pass = "the list of files" }]` both orders the
+/// two nodes *and* hands the first one's answer to the second.
+///
+/// A plan in a file rather than in an agent's head is the whole feature. The
+/// sequencing stops being a decision the model makes in the moment and becomes
+/// a declaration made before the run — and it survives `/compact`, which is
+/// exactly when a plan held in context is most at risk.
+#[derive(Debug, Clone, Subcommand)]
+pub enum GraphCommand {
+    /// Check a plan without running it: parse, resolve edges, find cycles.
+    ///
+    /// Needs no running Warp. Prints the order the nodes would run in.
+    Check(GraphCheckArgs),
+
+    /// Run a plan to completion.
+    ///
+    /// Blocks until every node has settled. Exits non-zero if any node failed
+    /// or was skipped, so this can be the last line of a script.
+    Run(GraphRunArgs),
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct GraphCheckArgs {
+    /// Path to the plan.
+    pub plan: PathBuf,
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct GraphRunArgs {
+    /// Path to the plan.
+    pub plan: PathBuf,
+
+    /// Parent every node to this conversation instead of the targeted pane's.
+    #[arg(long = "parent")]
+    pub parent: Option<String>,
+
+    /// How many nodes may run at once.
+    ///
+    /// Every node is a real agent with a real model behind it, so this is a
+    /// bound on load rather than on correctness: the graph decides what *may*
+    /// run together, and this decides how much of that actually does.
+    #[arg(long = "max-parallel", default_value_t = 4)]
+    pub max_parallel: usize,
+
+    /// Give up on a node still running after this many seconds.
+    ///
+    /// No timeout by default. A node can legitimately sit for a long time —
+    /// `blocked` means it is waiting for a person to approve something — and
+    /// killing it would throw the work away to no purpose. Set one for an
+    /// unattended run.
+    #[arg(long = "timeout")]
+    pub timeout: Option<u64>,
+
+    #[command(flatten)]
+    pub target: TargetArgs,
+}
+
 #[derive(Debug, Clone, Args)]
 pub struct AgentSpawnArgs {
     /// The child's prompt.
@@ -1186,6 +1253,7 @@ fn run_inner(args: ControlArgs) -> Result<(), local_control::protocol::ControlEr
         ControlCommand::File(command) => run_file_command(command, output_format),
         ControlCommand::Drive(command) => run_drive_command(command, output_format),
         ControlCommand::Agent(command) => run_agent_command(command, output_format),
+        ControlCommand::Graph(command) => graph::run_graph_command(command, output_format),
         ControlCommand::Slash(command) => run_slash_command(command, output_format),
         ControlCommand::Surface(command) => run_surface_command(command, output_format),
         ControlCommand::Completions { shell } => generate_completions_to_stdout(shell),

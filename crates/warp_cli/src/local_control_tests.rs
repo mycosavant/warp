@@ -825,5 +825,9 @@ fn parsed_action_kind(command: &ControlCommand) -> Option<ActionKind> {
         ControlCommand::Completions { .. } => None,
         // Not a single action: `mcp` serves the whole catalog over stdio.
         ControlCommand::Mcp => None,
+        // Also not a single action, and deliberately so — `graph` is a loop
+        // over `agent.spawn` and `agent.read`, which is why T7.1 added no
+        // actions to the catalog.
+        ControlCommand::Graph(_) => None,
     }
 }
