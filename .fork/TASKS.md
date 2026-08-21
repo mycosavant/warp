@@ -446,8 +446,30 @@ regardless of provider. Voice currently leaves the machine either way.
       (`fork_policy_installs_a_local_transcriber`), and `LocalTranscriber`
       contacts only the configured endpoint or spawns the configured binary.
       The default endpoint is asserted to be loopback. What is **not** done is
-      a proxy capture during a real recording: that needs a microphone and a
-      human to speak into it. Worth doing once by hand.
+      a proxy capture during a real recording.
+
+      **Still blocked, and now for a precise reason rather than a vague one.**
+      The general egress question was closed with a rig that would answer this
+      one too (see "Nothing escapes: measured, not argued"), so the only thing
+      missing is a way to *start a recording*. There is none from outside the
+      GUI: voice is behind the `voice_input` cargo feature, has no
+      local-control action, and is triggered by a keybinding — and keystroke
+      synthesis does not work under WSLg (T5.4: clicks land, keys do not). A
+      microphone does exist here, WSLg forwards one as PulseAudio `RDPSource`,
+      so the hardware is not the obstacle.
+
+      **Recipe for whoever is at the keyboard**, since the rig is now written
+      down and this is ten minutes of work:
+
+          mitmdump --listen-host 127.0.0.1 --listen-port 8899 \
+                   --set confdir=<dir> --flow-detail 2
+          # then launch with HTTPS_PROXY/HTTP_PROXY at 8899 and
+          # SSL_CERT_FILE=<dir>/mitmproxy-ca-cert.pem, hold the voice key,
+          # say anything, and read the flow list.
+
+      Expected: the configured loopback endpoint and nothing else. The words do
+      not matter — this is a question about destinations, so silence into the
+      mic would answer it just as well as speech.
 
 **Verified**
 
