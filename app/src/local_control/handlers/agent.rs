@@ -18,8 +18,9 @@
 use std::collections::HashMap;
 
 use ::local_control::protocol::{
-    AgentConversationSummary, AgentExchangeSummary, AgentListResult, AgentPromptParams,
-    AgentPromptResult, AgentReadParams, AgentReadResult, SlashCommandSummary, SlashListResult,
+    AgentCancelParams, AgentCancelResult, AgentConversationSummary, AgentExchangeSummary,
+    AgentListResult, AgentPromptParams, AgentPromptResult, AgentReadParams, AgentReadResult,
+    AgentRevealParams, AgentRevealResult, AgentRevealTarget, SlashCommandSummary, SlashListResult,
     SlashRunParams, TargetSelector,
 };
 use ::local_control::{ActionKind, ControlError, ErrorCode, InstanceId};
@@ -31,10 +32,11 @@ use crate::local_control::LocalControlBridge;
 use crate::local_control::handlers::ack;
 use crate::local_control::handlers::metadata::select_tab_entries;
 use crate::local_control::resolver::{input_target_pane_id, target_pane_group};
+use crate::pane_group::PaneGroup;
 use crate::search::slash_command_menu::static_commands::SlashCommandKind;
 use crate::search::slash_command_menu::static_commands::commands::COMMAND_REGISTRY;
 use crate::terminal::input::slash_commands::slash_command_is_submitted_as_prompt;
-use crate::terminal::view::TerminalView;
+use crate::terminal::view::{LocalControlRevealTarget, TerminalView};
 
 /// Whether a slash command is part of managing agents and conversations, and so
 /// runs from `warpctrl` without `--force`.
@@ -110,6 +112,7 @@ struct SurfaceLocation {
     tab_id: String,
     is_hidden: bool,
     terminal_view: ViewHandle<TerminalView>,
+    pane_group: ViewHandle<PaneGroup>,
 }
 
 /// Maps terminal-surface ids to the pane showing them, hidden panes included.
@@ -131,6 +134,7 @@ fn surface_locations(
         .unwrap_or_default();
     for tab in tabs {
         let tab_id = tab.pane_group.id().to_string();
+        let handle = tab.pane_group.clone();
         tab.pane_group.read(ctx, |pane_group, ctx| {
             let visible = pane_group.visible_pane_ids();
             for pane_id in pane_group.pane_ids() {
@@ -145,6 +149,7 @@ fn surface_locations(
                         tab_id: tab_id.clone(),
                         is_hidden: !visible.contains(&pane_id),
                         terminal_view,
+                        pane_group: handle.clone(),
                     },
                 );
             }
@@ -235,12 +240,9 @@ pub fn agent_read(
     let Some(conversation) = history.conversation(&conversation_id) else {
         return Err(unknown_conversation(&params.conversation_id));
     };
-    let terminal_surface_id = history
-        .all_live_conversations()
-        .into_iter()
-        .find(|(_, live)| live.id() == conversation_id)
-        .map(|(terminal_surface_id, _)| terminal_surface_id);
-    let location = terminal_surface_id.and_then(|id| locations.get(&id));
+    let location = history
+        .terminal_surface_id_for_conversation(&conversation_id)
+        .and_then(|id| locations.get(&id));
 
     // Tool results need the action model of the surface that owns the
     // conversation, and that surface can be closed while the conversation
@@ -426,6 +428,182 @@ pub fn agent_prompt(
         serde_json::to_value(AgentPromptResult {
             conversation_id: started.to_string(),
             created,
+        })
+        .map_err(|error| ControlError::new(ErrorCode::Internal, error.to_string()))?,
+    );
+    Ok(response)
+}
+
+/// `agent.cancel` — stop a turn.
+///
+/// An orchestrator that cannot stop a runaway child is not in charge of it.
+/// This is Stop and not Kill: the conversation survives, its transcript stays
+/// readable through `agent.read`, and the pane is not discarded. Killing a
+/// child is a heavier thing and stays where it is, behind a person and a menu.
+pub fn agent_cancel(
+    instance_id: &Option<InstanceId>,
+    params: &serde_json::Value,
+    ctx: &mut ModelContext<LocalControlBridge>,
+) -> Result<serde_json::Value, ControlError> {
+    let params: AgentCancelParams = serde_json::from_value(params.clone())
+        .map_err(|error| ControlError::new(ErrorCode::InvalidParams, error.to_string()))?;
+    let conversation_id = parse_conversation_id(&params.conversation_id)?;
+    let locations = surface_locations(ctx);
+
+    let history = BlocklistAIHistoryModel::as_ref(ctx);
+    let Some(conversation) = history.conversation(&conversation_id) else {
+        return Err(unknown_conversation(&params.conversation_id));
+    };
+    let status = status_name(conversation.status()).to_owned();
+    let was_running = matches!(conversation.status(), ConversationStatus::InProgress);
+    let terminal_view = history
+        .terminal_surface_id_for_conversation(&conversation_id)
+        .and_then(|id| locations.get(&id))
+        .map(|location| location.terminal_view.clone());
+
+    if was_running {
+        // Only required when there is something to stop. A finished
+        // conversation outlives the pane that showed it, and refusing to
+        // acknowledge a no-op cancel because the pane has gone would make the
+        // ordinary end of a child's life look like an error.
+        let terminal_view = terminal_view.ok_or_else(|| {
+            ControlError::new(
+                ErrorCode::MissingTarget,
+                format!(
+                    "conversation `{}` is running but the pane that owns it is gone; there is \
+                     nothing here to stop",
+                    params.conversation_id
+                ),
+            )
+        })?;
+        terminal_view.update(ctx, |terminal_view, ctx| {
+            terminal_view.stop_agent_conversation_from_local_control(conversation_id, ctx);
+        });
+    }
+
+    let mut response = ack(instance_id, ActionKind::AgentCancel);
+    merge(
+        &mut response,
+        serde_json::to_value(AgentCancelResult {
+            conversation_id: conversation_id.to_string(),
+            was_running,
+            status,
+        })
+        .map_err(|error| ControlError::new(ErrorCode::Internal, error.to_string()))?,
+    );
+    Ok(response)
+}
+
+/// Whether a reveal target needs the conversation to have a child-agent pane.
+///
+/// `pane` and `tab` both go through the child-agent machinery — they reuse the
+/// hidden pane rather than building a new one, which is what preserves an
+/// in-flight turn and its transcript. A conversation that was never spawned as
+/// a child has no such pane, and the events would find nothing and log. `swap`
+/// is the general one: it navigates to any conversation, falling back to
+/// workspace-level focus when the conversation is in another tab.
+fn reveal_target_requires_child_pane(target: AgentRevealTarget) -> bool {
+    match target {
+        AgentRevealTarget::Pane | AgentRevealTarget::Tab => true,
+        AgentRevealTarget::Swap => false,
+    }
+}
+
+/// `agent.reveal` — put a background child agent on screen.
+///
+/// The other half of spawning one hidden. Every failure the reveal events
+/// report by logging a warning is checked here first, because they are events:
+/// nothing comes back from emitting one, so a caller told "revealed" after a
+/// warning was logged would have no way to find out otherwise.
+pub fn agent_reveal(
+    instance_id: &Option<InstanceId>,
+    params: &serde_json::Value,
+    target: &TargetSelector,
+    ctx: &mut ModelContext<LocalControlBridge>,
+) -> Result<serde_json::Value, ControlError> {
+    let params: AgentRevealParams = serde_json::from_value(params.clone())
+        .map_err(|error| ControlError::new(ErrorCode::InvalidParams, error.to_string()))?;
+    let conversation_id = parse_conversation_id(&params.conversation_id)?;
+    let locations = surface_locations(ctx);
+
+    let surface_id = {
+        let history = BlocklistAIHistoryModel::as_ref(ctx);
+        if history.conversation(&conversation_id).is_none() {
+            return Err(unknown_conversation(&params.conversation_id));
+        }
+        history.terminal_surface_id_for_conversation(&conversation_id)
+    };
+    let location = surface_id
+        .and_then(|id| locations.get(&id))
+        .ok_or_else(|| {
+            ControlError::new(
+                ErrorCode::MissingTarget,
+                format!(
+                    "no pane hosts conversation `{}`; `agent.list` reports `pane_id` for the ones \
+                 that have one",
+                    params.conversation_id
+                ),
+            )
+        })?;
+    let was_hidden = location.is_hidden;
+    let conversation_tab_id = location.tab_id.clone();
+    let is_child_agent = location.pane_group.read(ctx, |pane_group, _| {
+        pane_group
+            .child_agent_pane_for_conversation(&conversation_id)
+            .is_some()
+    });
+
+    if !is_child_agent && reveal_target_requires_child_pane(params.target) {
+        return Err(ControlError::new(
+            ErrorCode::TargetStateConflict,
+            format!(
+                "conversation `{}` is not a background child agent, so there is no hidden pane \
+                 to move; `swap` navigates to a conversation that already has one",
+                params.conversation_id
+            ),
+        ));
+    }
+
+    let host = terminal_view_for(ActionKind::AgentReveal, target, ctx)?;
+    // The reveal events are scoped to one pane group: they ask *this* group
+    // for the child's hidden pane. Emitting from a pane in another tab finds
+    // nothing and logs, so the mismatch is refused here where it can be
+    // explained. For `swap` the targeted pane is also the pane being replaced,
+    // which is the other reason the caller gets to name it.
+    let host_tab_id = locations
+        .get(&host.id())
+        .map(|location| location.tab_id.clone());
+    if host_tab_id.as_deref() != Some(conversation_tab_id.as_str()) {
+        return Err(ControlError::new(
+            ErrorCode::TargetStateConflict,
+            format!(
+                "conversation `{}` lives in tab {conversation_tab_id} and the targeted pane is \
+                 not in it; target a pane in that tab",
+                params.conversation_id
+            ),
+        ));
+    }
+
+    let reveal_target = match params.target {
+        AgentRevealTarget::Pane => LocalControlRevealTarget::Split,
+        AgentRevealTarget::Tab => LocalControlRevealTarget::Tab,
+        AgentRevealTarget::Swap => LocalControlRevealTarget::Swap,
+    };
+    host.update(ctx, |terminal_view, ctx| {
+        terminal_view.reveal_agent_conversation_from_local_control(
+            conversation_id,
+            reveal_target,
+            ctx,
+        );
+    });
+
+    let mut response = ack(instance_id, ActionKind::AgentReveal);
+    merge(
+        &mut response,
+        serde_json::to_value(AgentRevealResult {
+            conversation_id: conversation_id.to_string(),
+            was_hidden,
+            target: params.target,
         })
         .map_err(|error| ControlError::new(ErrorCode::Internal, error.to_string()))?,
     );

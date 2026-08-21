@@ -141,6 +141,15 @@ impl LocalControlBridge {
             ActionKind::AgentRead => {
                 agent::agent_read(&self.instance_id, &request.action.params, ctx)
             }
+            ActionKind::AgentCancel => {
+                agent::agent_cancel(&self.instance_id, &request.action.params, ctx)
+            }
+            ActionKind::AgentReveal => agent::agent_reveal(
+                &self.instance_id,
+                &request.action.params,
+                &request.target,
+                ctx,
+            ),
             ActionKind::SlashList => agent::slash_list(&self.instance_id, &request.target, ctx),
             ActionKind::SlashRun => agent::slash_run(
                 &self.instance_id,

@@ -524,6 +524,30 @@ fn add_parameter_properties(
                 }),
             );
         }
+        ActionParameterSpec::AgentCancel => require(
+            "conversation_id",
+            json!({
+                "type": "string",
+                "description": "Conversation whose turn should be stopped, from warp_agent_list.",
+            }),
+        ),
+        ActionParameterSpec::AgentReveal => {
+            require(
+                "conversation_id",
+                json!({
+                    "type": "string",
+                    "description": "Background child agent conversation to put on screen, from warp_agent_list.",
+                }),
+            );
+            properties.insert(
+                "target".to_owned(),
+                json!({
+                    "type": "string",
+                    "enum": ["pane", "tab", "swap"],
+                    "description": "Where to put it: split off beside its parent (default), a new tab, or swapped into the targeted pane.",
+                }),
+            );
+        }
         ActionParameterSpec::SlashRun => {
             require(
                 "command",

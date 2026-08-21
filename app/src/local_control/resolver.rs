@@ -1,10 +1,11 @@
 //! Target resolution and parameter validation for retained local-control actions.
 use ::local_control::protocol::{
-    ActionNameParams, ActionParameterSpec, AgentPromptParams, AgentReadParams, BindingNameParams,
-    BooleanValueParams, ColorValueParams, DirectionParams, EmptyParams, FileOpenParams, KeyParams,
-    KeyValueParams, NamespaceParams, PageQueryParams, PaneTarget, QueryParams, RenameParams,
-    ResizeParams, SessionTarget, SlashRunParams, TabActivateParams, TabCloseParams,
-    TabCreateParams, TabTarget, TargetSelector, TextParams, ThemeNameParams, WindowTarget,
+    ActionNameParams, ActionParameterSpec, AgentCancelParams, AgentPromptParams, AgentReadParams,
+    AgentRevealParams, BindingNameParams, BooleanValueParams, ColorValueParams, DirectionParams,
+    EmptyParams, FileOpenParams, KeyParams, KeyValueParams, NamespaceParams, PageQueryParams,
+    PaneTarget, QueryParams, RenameParams, ResizeParams, SessionTarget, SlashRunParams,
+    TabActivateParams, TabCloseParams, TabCreateParams, TabTarget, TargetSelector, TextParams,
+    ThemeNameParams, WindowTarget,
 };
 use ::local_control::{ActionKind, ControlError, ErrorCode, TargetScope};
 use warpui::{AppContext, ModelContext, TypedActionView, ViewHandle, WindowId};
@@ -53,6 +54,8 @@ pub(crate) fn validate_action_params(action: &::local_control::Action) -> Result
         ActionParameterSpec::ThemeName => parse_params::<ThemeNameParams>(action),
         ActionParameterSpec::AgentPrompt => parse_params::<AgentPromptParams>(action),
         ActionParameterSpec::AgentRead => parse_params::<AgentReadParams>(action),
+        ActionParameterSpec::AgentCancel => parse_params::<AgentCancelParams>(action),
+        ActionParameterSpec::AgentReveal => parse_params::<AgentRevealParams>(action),
         ActionParameterSpec::SlashRun => parse_params::<SlashRunParams>(action),
     }
 }

@@ -225,6 +225,37 @@ pub struct AgentReadParams {
     pub include_tool_results: bool,
 }
 
+/// Parameters for `agent.cancel`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AgentCancelParams {
+    pub conversation_id: String,
+}
+
+/// Where `agent.reveal` should put a conversation.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentRevealTarget {
+    /// Split it off beside the pane it was spawned from. The default: the only
+    /// one of the three that adds a surface rather than taking one over, which
+    /// matters when the caller cannot see what it is about to replace.
+    #[default]
+    Pane,
+    /// Open it in a new tab.
+    Tab,
+    /// Swap it into the targeted pane, as clicking its pill does.
+    Swap,
+}
+
+/// Parameters for `agent.reveal`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AgentRevealParams {
+    pub conversation_id: String,
+    #[serde(default)]
+    pub target: AgentRevealTarget,
+}
+
 /// Parameters for `slash.run`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -372,6 +403,34 @@ pub struct AgentReadResult {
     /// be gone. Reported so a caller can tell "no tools were used" from "the
     /// tool results were not reachable".
     pub included_tool_results: bool,
+}
+
+/// The result of `agent.cancel`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AgentCancelResult {
+    pub conversation_id: String,
+    /// Whether there was a turn to stop.
+    ///
+    /// `false` is not an error and the call is not refused for it: an
+    /// orchestrator cancelling a child races the child finishing, and both
+    /// outcomes leave the conversation in the state the caller asked for. This
+    /// says which happened so a caller that cares can tell.
+    pub was_running: bool,
+    /// The status at the moment of the call, before the stop was dispatched.
+    pub status: String,
+}
+
+/// The result of `agent.reveal`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AgentRevealResult {
+    pub conversation_id: String,
+    /// Whether the pane was hidden before this call.
+    ///
+    /// `false` means the conversation was already on screen and this focused
+    /// it, which is a reveal that a person would recognise as one and a
+    /// program might not.
+    pub was_hidden: bool,
+    pub target: AgentRevealTarget,
 }
 
 /// One slash command, as `slash.list` reports it.

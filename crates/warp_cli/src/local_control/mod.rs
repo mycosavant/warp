@@ -642,6 +642,20 @@ pub enum AgentCommand {
     /// produced. `--last 1` is the usual call: the answer to the prompt that
     /// was just dispatched, without the transcript leading up to it.
     Read(AgentReadArgs),
+
+    /// Stop the turn a conversation is running.
+    ///
+    /// Stop, not kill: the conversation survives and `agent read` still works.
+    /// Cancelling one that has already finished is not an error — the response
+    /// says `was_running: false`.
+    Cancel(AgentCancelArgs),
+
+    /// Put a background child agent on screen.
+    ///
+    /// The other half of spawning one hidden. By default it splits off beside
+    /// the pane that spawned it, which is the only target that adds a surface
+    /// rather than taking one over.
+    Reveal(AgentRevealArgs),
 }
 
 #[derive(Debug, Clone, Args)]
@@ -677,6 +691,48 @@ pub struct AgentReadArgs {
 
     #[command(flatten)]
     pub target: TargetArgs,
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct AgentCancelArgs {
+    /// The conversation to stop, from `warpctrl agent list`.
+    pub conversation: String,
+
+    #[command(flatten)]
+    pub target: TargetArgs,
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct AgentRevealArgs {
+    /// The conversation to reveal, from `warpctrl agent list`.
+    ///
+    /// `is_hidden` there is the field that says which conversations this does
+    /// anything for.
+    pub conversation: String,
+
+    /// Where to put it.
+    ///
+    /// `pane` splits it off beside the pane that spawned it; `tab` opens it in
+    /// a new tab; `swap` puts it into the targeted pane, as clicking its pill
+    /// does. The swapped-out pane is not closed and the swap is reversible,
+    /// but the caller loses sight of what was there — which is why it is not
+    /// the default over a socket.
+    ///
+    /// Spelled `--as` rather than `--pane`/`--tab` because those names already
+    /// belong to the target selectors every command carries.
+    #[arg(long = "as", value_name = "TARGET", default_value = "pane")]
+    pub reveal_target: CliRevealTarget,
+
+    #[command(flatten)]
+    pub target: TargetArgs,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+#[value(rename_all = "kebab-case")]
+pub enum CliRevealTarget {
+    Pane,
+    Tab,
+    Swap,
 }
 
 #[derive(Debug, Clone, Subcommand)]

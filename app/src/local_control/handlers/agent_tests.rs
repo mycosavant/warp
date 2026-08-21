@@ -139,6 +139,21 @@ fn last_counts_back_from_the_newest_exchange() {
     assert_eq!(exchange_window_start(5, Some(0)), 5);
 }
 
+/// Only `swap` reveals a conversation that was never a background child.
+///
+/// The default is `pane`, which is the strict one, and that is the right way
+/// round: an orchestrator revealing its own child gets the non-destructive
+/// target without asking, and a caller pointing `reveal` at an ordinary
+/// conversation is told so instead of watching a warning get logged where it
+/// cannot see it.
+#[test]
+fn only_swap_reveals_a_conversation_that_is_not_a_child_agent() {
+    assert!(reveal_target_requires_child_pane(AgentRevealTarget::Pane));
+    assert!(reveal_target_requires_child_pane(AgentRevealTarget::Tab));
+    assert!(!reveal_target_requires_child_pane(AgentRevealTarget::Swap));
+    assert_eq!(AgentRevealTarget::default(), AgentRevealTarget::Pane);
+}
+
 /// A malformed id and an unknown one are different failures.
 ///
 /// An orchestrator polling a child it spawned needs to tell "I built this

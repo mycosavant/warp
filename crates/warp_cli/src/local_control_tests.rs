@@ -613,6 +613,26 @@ fn retained_action_examples() -> Vec<(ActionKind, Vec<&'static str>)> {
                 "1",
             ],
         ),
+        (
+            ActionKind::AgentCancel,
+            vec![
+                "warpctrl",
+                "agent",
+                "cancel",
+                "3f2f0e6a-0000-4000-8000-000000000000",
+            ],
+        ),
+        (
+            ActionKind::AgentReveal,
+            vec![
+                "warpctrl",
+                "agent",
+                "reveal",
+                "3f2f0e6a-0000-4000-8000-000000000000",
+                "--as",
+                "tab",
+            ],
+        ),
         (ActionKind::SlashList, vec!["warpctrl", "slash", "list"]),
         (
             ActionKind::SlashRun,
@@ -781,6 +801,8 @@ fn parsed_action_kind(command: &ControlCommand) -> Option<ActionKind> {
             AgentCommand::List(_) => Some(ActionKind::AgentList),
             AgentCommand::Prompt(_) => Some(ActionKind::AgentPrompt),
             AgentCommand::Read(_) => Some(ActionKind::AgentRead),
+            AgentCommand::Cancel(_) => Some(ActionKind::AgentCancel),
+            AgentCommand::Reveal(_) => Some(ActionKind::AgentReveal),
         },
         ControlCommand::Slash(command) => match command {
             SlashCommand::List(_) => Some(ActionKind::SlashList),

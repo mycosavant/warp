@@ -1,11 +1,12 @@
 //! Implementations for user-facing `warpctrl` command groups.
 use local_control::discovery::InstanceRecord;
 use local_control::protocol::{
-    Action, ActionKind, ActionNameParams, AgentPromptParams, AgentReadParams, BindingNameParams,
-    BooleanValueParams, ColorValueParams, ControlError, DirectionParams, EmptyParams, ErrorCode,
-    FileOpenParams, KeyParams, KeyValueParams, PageQueryParams, QueryParams, RenameParams,
-    RequestEnvelope, ResizeParams, SettingListParams, SlashRunParams, TabActivateParams,
-    TabActivationMode, TabCloseMode, TabCloseParams, TabCreateParams, TextParams, ThemeNameParams,
+    Action, ActionKind, ActionNameParams, AgentCancelParams, AgentPromptParams, AgentReadParams,
+    AgentRevealParams, AgentRevealTarget, BindingNameParams, BooleanValueParams, ColorValueParams,
+    ControlError, DirectionParams, EmptyParams, ErrorCode, FileOpenParams, KeyParams,
+    KeyValueParams, PageQueryParams, QueryParams, RenameParams, RequestEnvelope, ResizeParams,
+    SettingListParams, SlashRunParams, TabActivateParams, TabActivationMode, TabCloseMode,
+    TabCloseParams, TabCreateParams, TextParams, ThemeNameParams,
 };
 use local_control::selection::select_instance;
 use serde::Serialize;
@@ -16,8 +17,8 @@ use crate::local_control::output::{write_json, write_json_line};
 use crate::local_control::selectors::{instance_selector, target_selector};
 use crate::local_control::{
     ActionCatalogCommand, AgentCommand, AppCommand, AppearanceCommand, CapabilityCommand,
-    DriveCommand, FileCommand, InputCommand, InstanceCommand, KeybindingCommand, PaneCommand,
-    SessionCommand, SettingCommand, SlashCommand, SurfaceCommand, SurfaceOpenCommand,
+    CliRevealTarget, DriveCommand, FileCommand, InputCommand, InstanceCommand, KeybindingCommand,
+    PaneCommand, SessionCommand, SettingCommand, SlashCommand, SurfaceCommand, SurfaceOpenCommand,
     SurfaceOpenToggleCommand, SurfaceQueryCommand, SurfaceSettingsCommand, SurfaceToggleCommand,
     TabActivateArgs, TabCloseArgs, TabColorCommand, TabCommand, TargetArgs, ThemeCommand,
     WindowCommand,
@@ -728,6 +729,27 @@ pub(super) fn run_agent_command(
                 conversation_id: args.conversation,
                 last: args.last,
                 include_tool_results: args.include_tool_results,
+            },
+            output_format,
+        ),
+        AgentCommand::Cancel(args) => run_action_with_params(
+            args.target,
+            ActionKind::AgentCancel,
+            AgentCancelParams {
+                conversation_id: args.conversation,
+            },
+            output_format,
+        ),
+        AgentCommand::Reveal(args) => run_action_with_params(
+            args.target,
+            ActionKind::AgentReveal,
+            AgentRevealParams {
+                conversation_id: args.conversation,
+                target: match args.reveal_target {
+                    CliRevealTarget::Pane => AgentRevealTarget::Pane,
+                    CliRevealTarget::Tab => AgentRevealTarget::Tab,
+                    CliRevealTarget::Swap => AgentRevealTarget::Swap,
+                },
             },
             output_format,
         ),

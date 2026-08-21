@@ -4647,6 +4647,21 @@ impl PaneGroup {
         self.remove_from_pane_history(pane_id_to_remove);
     }
 
+    /// The pane tracked for a child agent conversation in this group, if there
+    /// is one.
+    ///
+    /// Exposed for `warpctrl agent reveal` (`.fork/TASKS.md`, T6.6), which has
+    /// to answer "would revealing this do anything" *before* emitting the
+    /// event that reveals it: the reveal path reports failure by logging a
+    /// warning, so a caller over a socket would otherwise be told a reveal
+    /// succeeded when the conversation was never a child agent at all.
+    pub fn child_agent_pane_for_conversation(
+        &self,
+        conversation_id: &AIConversationId,
+    ) -> Option<PaneId> {
+        self.child_agent_panes.get(conversation_id).copied()
+    }
+
     /// Returns true if the given pane is a child agent pane tracked in `child_agent_panes`.
     fn is_child_agent_pane(&self, pane_id: PaneId) -> bool {
         self.child_agent_panes.values().any(|&id| id == pane_id)

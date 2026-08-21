@@ -25,12 +25,31 @@ use crate::terminal::view::load_ai_conversation::{
     RestoreConversationEntryBehavior, RestoredAIConversation,
 };
 use crate::terminal::view::{
-    AgentViewEntryMetadata, RichContentInsertionPosition, RichContentMetadata,
+    AgentViewEntryMetadata, Event, RichContentInsertionPosition, RichContentMetadata,
 };
 use crate::view_components::DismissibleToast;
 use crate::workspace::ToastStack;
 
 pub const ENTER_AGAIN_TO_SEND_MESSAGE_ID: &str = "enter_again_to_send";
+
+/// Where `warpctrl agent reveal` should put a conversation.
+///
+/// Named here rather than taking the protocol enum so the terminal view does
+/// not have to know what a local-control request looks like; the handler maps
+/// one to the other.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum LocalControlRevealTarget {
+    /// Split it off next to the pane it was spawned from, keeping both on
+    /// screen. The default, because it is the only one of the three that adds
+    /// a surface rather than taking one over.
+    Split,
+    /// Open it in a new tab.
+    Tab,
+    /// Swap it into the targeted pane, which is what clicking the pill in the
+    /// orchestration bar does. The pane it replaces is not closed — the swap
+    /// is reversible — but the caller loses sight of what was there.
+    Swap,
+}
 
 impl TerminalView {
     /// Sends `prompt` to the agent, on behalf of `warpctrl agent prompt`.
@@ -126,6 +145,45 @@ impl TerminalView {
         self.input().update(ctx, |input, ctx| {
             input.run_slash_command_from_local_control(command, argument, ctx)
         })
+    }
+
+    /// Stops the turn a conversation is running, on behalf of
+    /// `warpctrl agent cancel`.
+    ///
+    /// Emits the same event the "Stop agent" item in a child pill's menu does,
+    /// rather than calling [`TerminalView::stop_local_agent_conversation`]
+    /// directly, because the pane group's handler is where the choice between
+    /// stopping a local turn and cancelling a cloud task is made — and where
+    /// the fallback lives for a conversation whose owning view is in another
+    /// tab. Reaching past it would work for the common case and quietly do
+    /// nothing for the rest.
+    pub(crate) fn stop_agent_conversation_from_local_control(
+        &mut self,
+        conversation_id: AIConversationId,
+        ctx: &mut ViewContext<Self>,
+    ) {
+        ctx.emit(Event::StopAgentConversation { conversation_id });
+    }
+
+    /// Puts a conversation on screen, on behalf of `warpctrl agent reveal`.
+    ///
+    /// All three targets already exist as events, because the 3-dot menu on a
+    /// child pill offers all three. The events are group-scoped, so the caller
+    /// is responsible for having found a view in the tab that holds the
+    /// conversation — see `agent::agent_reveal`, which refuses rather than
+    /// emitting into the wrong group and reporting a success that never
+    /// happened.
+    pub(crate) fn reveal_agent_conversation_from_local_control(
+        &mut self,
+        conversation_id: AIConversationId,
+        target: LocalControlRevealTarget,
+        ctx: &mut ViewContext<Self>,
+    ) {
+        ctx.emit(match target {
+            LocalControlRevealTarget::Split => Event::OpenChildAgentInNewPane { conversation_id },
+            LocalControlRevealTarget::Tab => Event::OpenChildAgentInNewTab { conversation_id },
+            LocalControlRevealTarget::Swap => Event::RevealChildAgent { conversation_id },
+        });
     }
 
     pub fn enter_agent_view(
