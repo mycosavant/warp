@@ -58,6 +58,7 @@ pub enum ActionParameterSpec {
     ThemeName,
     AgentPrompt,
     AgentRead,
+    AgentSpawn,
     AgentCancel,
     AgentReveal,
     SlashRun,
@@ -89,6 +90,7 @@ pub enum ActionResultSpec {
     AgentConversationList,
     AgentConversation,
     AgentTranscript,
+    AgentSpawnedChild,
     AgentCancellation,
     AgentRevelation,
     SlashCommandList,
@@ -334,6 +336,8 @@ define_action_catalog! {
         // `Instance` rather than `Agent`: a conversation id addresses this on
         // its own, and it outlives the pane that showed it.
         AgentRead => { name: "agent.read", status: Implemented, target: Instance, params: AgentRead, result: AgentTranscript },
+        // `Agent`: the targeted pane supplies the default parent conversation.
+        AgentSpawn => { name: "agent.spawn", status: Implemented, target: Agent, params: AgentSpawn, result: AgentSpawnedChild },
         AgentCancel => { name: "agent.cancel", status: Implemented, target: Instance, params: AgentCancel, result: AgentCancellation },
         // `Agent` rather than `Instance`: `swap` replaces the contents of a
         // pane, so which pane is part of the request.

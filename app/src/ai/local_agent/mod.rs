@@ -52,6 +52,7 @@
 //! MCP context, and every input type other than a user query — those fall
 //! through to upstream untouched.
 
+mod tools;
 mod translate;
 
 use std::collections::VecDeque;
@@ -132,6 +133,13 @@ pub(crate) struct Turn {
     /// The WSL distribution the session lives in, when it is a WSL session.
     /// See [`spawn_for`] for what that changes.
     distro: Option<String>,
+    /// The tools this turn's agent may use, when it has been restricted.
+    ///
+    /// `None` is "no policy", which is what a conversation a person is having
+    /// carries. `Some` is a child agent spawned with an allowlist — see
+    /// [`tools`] for why this has to be honoured here rather than upstream of
+    /// the intercept.
+    allowed_tools: Option<Vec<warp_multi_agent_api::ToolType>>,
 }
 
 impl Turn {
@@ -166,6 +174,7 @@ impl Turn {
                 Some(ShellLaunchData::WSL { distro }) => Some(distro.clone()),
                 _ => None,
             },
+            allowed_tools: params.supported_tools_override.clone(),
         })
     }
 }
@@ -246,6 +255,7 @@ async fn run(turn: Turn) -> anyhow::Result<impl Stream<Item = Event> + Send + us
         task_needs_announcing,
         working_directory,
         distro,
+        allowed_tools,
     } = turn;
     let request_id = Uuid::new_v4().to_string();
     let started_at = Utc::now();
@@ -260,6 +270,9 @@ async fn run(turn: Turn) -> anyhow::Result<impl Stream<Item = Event> + Send + us
     match session {
         Some(id) => arguments.extend(["--resume".to_owned(), id]),
         None => arguments.extend(["--session-id".to_owned(), Uuid::new_v4().to_string()]),
+    }
+    if let Some(allowed_tools) = allowed_tools.as_deref() {
+        arguments.extend(tools::permission_arguments(allowed_tools));
     }
 
     let spawn = spawn_for(distro.as_deref(), working_directory.as_deref(), arguments);

@@ -2,11 +2,11 @@
 use local_control::discovery::InstanceRecord;
 use local_control::protocol::{
     Action, ActionKind, ActionNameParams, AgentCancelParams, AgentPromptParams, AgentReadParams,
-    AgentRevealParams, AgentRevealTarget, BindingNameParams, BooleanValueParams, ColorValueParams,
-    ControlError, DirectionParams, EmptyParams, ErrorCode, FileOpenParams, KeyParams,
-    KeyValueParams, PageQueryParams, QueryParams, RenameParams, RequestEnvelope, ResizeParams,
-    SettingListParams, SlashRunParams, TabActivateParams, TabActivationMode, TabCloseMode,
-    TabCloseParams, TabCreateParams, TextParams, ThemeNameParams,
+    AgentRevealParams, AgentRevealTarget, AgentSpawnParams, BindingNameParams, BooleanValueParams,
+    ColorValueParams, ControlError, DirectionParams, EmptyParams, ErrorCode, FileOpenParams,
+    KeyParams, KeyValueParams, PageQueryParams, QueryParams, RenameParams, RequestEnvelope,
+    ResizeParams, SettingListParams, SlashRunParams, TabActivateParams, TabActivationMode,
+    TabCloseMode, TabCloseParams, TabCreateParams, TextParams, ThemeNameParams,
 };
 use local_control::selection::select_instance;
 use serde::Serialize;
@@ -729,6 +729,17 @@ pub(super) fn run_agent_command(
                 conversation_id: args.conversation,
                 last: args.last,
                 include_tool_results: args.include_tool_results,
+            },
+            output_format,
+        ),
+        AgentCommand::Spawn(args) => run_action_with_params(
+            args.target,
+            ActionKind::AgentSpawn,
+            AgentSpawnParams {
+                prompt: args.prompt,
+                name: args.name,
+                parent_conversation_id: args.parent,
+                allow_tools: args.allow_tools,
             },
             output_format,
         ),

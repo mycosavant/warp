@@ -20,13 +20,15 @@ use std::collections::HashMap;
 use ::local_control::protocol::{
     AgentCancelParams, AgentCancelResult, AgentConversationSummary, AgentExchangeSummary,
     AgentListResult, AgentPromptParams, AgentPromptResult, AgentReadParams, AgentReadResult,
-    AgentRevealParams, AgentRevealResult, AgentRevealTarget, SlashCommandSummary, SlashListResult,
-    SlashRunParams, TargetSelector,
+    AgentRevealParams, AgentRevealResult, AgentRevealTarget, AgentSpawnParams, AgentSpawnResult,
+    SlashCommandSummary, SlashListResult, SlashRunParams, TargetSelector,
 };
 use ::local_control::{ActionKind, ControlError, ErrorCode, InstanceId};
+use warp_multi_agent_api::ToolType;
 use warpui::{EntityId, ModelContext, SingletonEntity, ViewHandle};
 
 use crate::ai::agent::conversation::{AIConversation, AIConversationId, ConversationStatus};
+use crate::ai::blocklist::child_agent_tool_policy::{READ_ONLY_PRESET, resolve_tool_token};
 use crate::ai::blocklist::history_model::BlocklistAIHistoryModel;
 use crate::local_control::LocalControlBridge;
 use crate::local_control::handlers::ack;
@@ -428,6 +430,193 @@ pub fn agent_prompt(
         serde_json::to_value(AgentPromptResult {
             conversation_id: started.to_string(),
             created,
+        })
+        .map_err(|error| ControlError::new(ErrorCode::Internal, error.to_string()))?,
+    );
+    Ok(response)
+}
+
+/// How deep a conversation sits under the one a person started.
+///
+/// Walks parents rather than trusting a stored depth, because the chain is
+/// what a cap is about and a stored number is one more thing that can be wrong.
+/// Bounded so a parent cycle — which the data model does not forbid — costs a
+/// refusal rather than a hang.
+fn conversation_depth(
+    conversation_id: AIConversationId,
+    ctx: &ModelContext<LocalControlBridge>,
+) -> u32 {
+    const MAX_WALK: u32 = 64;
+    let history = BlocklistAIHistoryModel::as_ref(ctx);
+    let mut depth = 0;
+    let mut current = Some(conversation_id);
+    while let Some(id) = current {
+        if depth >= MAX_WALK {
+            break;
+        }
+        current = history
+            .conversation(&id)
+            .and_then(|conversation| conversation.parent_conversation_id());
+        if current.is_some() {
+            depth += 1;
+        }
+    }
+    depth
+}
+
+/// Resolves `allow_tools` into the list the policy is enforced in.
+///
+/// Every token has to resolve. A caller that misspells one and is answered
+/// with silence has been handed a policy it did not ask for, and in an
+/// allowlist the direction of that mistake is always *fewer* tools than
+/// intended — which shows up as a child that will not work, at some later
+/// point, for no visible reason.
+fn resolve_allowed_tools(tokens: &[String]) -> Result<Vec<ToolType>, ControlError> {
+    let mut resolved: Vec<ToolType> = Vec::new();
+    for token in tokens {
+        let tools = resolve_tool_token(token).ok_or_else(|| {
+            ControlError::new(
+                ErrorCode::InvalidParams,
+                format!(
+                    "`{token}` is not a tool. Use `{READ_ONLY_PRESET}`, or a ToolType name such \
+                     as READ_FILES or RUN_SHELL_COMMAND."
+                ),
+            )
+        })?;
+        for tool in tools {
+            if !resolved.contains(&tool) {
+                resolved.push(tool);
+            }
+        }
+    }
+    Ok(resolved)
+}
+
+/// `agent.spawn` — a child agent in a hidden pane.
+///
+/// The fourth handoff target, and the only one T6.5 could not compose:
+/// `pane.split` or `tab.create` followed by `agent.prompt` starts an agent
+/// that is visible and unrelated, while this starts a *child* — parented,
+/// hidden, and reachable afterwards through `agent.reveal`.
+pub fn agent_spawn(
+    instance_id: &Option<InstanceId>,
+    params: &serde_json::Value,
+    target: &TargetSelector,
+    ctx: &mut ModelContext<LocalControlBridge>,
+) -> Result<serde_json::Value, ControlError> {
+    let params: AgentSpawnParams = serde_json::from_value(params.clone())
+        .map_err(|error| ControlError::new(ErrorCode::InvalidParams, error.to_string()))?;
+    if params.prompt.trim().is_empty() {
+        return Err(ControlError::new(
+            ErrorCode::InvalidParams,
+            "agent.spawn requires a non-empty prompt; a child does not inherit its parent's \
+             transcript, so the prompt is everything it knows",
+        ));
+    }
+    let allowed_tools = params
+        .allow_tools
+        .as_deref()
+        .map(resolve_allowed_tools)
+        .transpose()?;
+
+    // The parent, either named or taken from the pane the caller targeted.
+    // Resolved to a conversation and then to *its* pane, rather than spawning
+    // beside the targeted pane: a child is inserted relative to its parent's
+    // pane and tracked in that pane group, so naming a parent in another tab
+    // has to move the spawn there too.
+    let parent_conversation_id = match params.parent_conversation_id.as_deref() {
+        Some(raw) => {
+            let id = parse_conversation_id(raw)?;
+            if BlocklistAIHistoryModel::as_ref(ctx)
+                .conversation(&id)
+                .is_none()
+            {
+                return Err(unknown_conversation(raw));
+            }
+            id
+        }
+        None => {
+            let host = terminal_view_for(ActionKind::AgentSpawn, target, ctx)?;
+            host.read(ctx, |terminal_view, ctx| {
+                terminal_view.selected_conversation_for_local_control(ctx)
+            })
+            .ok_or_else(|| {
+                ControlError::new(
+                    ErrorCode::TargetStateConflict,
+                    "the targeted pane has no agent conversation to parent a child to; start one \
+                     with `agent.prompt`, or name a parent",
+                )
+            })?
+        }
+    };
+
+    let depth = conversation_depth(parent_conversation_id, ctx) + 1;
+    let limit = crate::fork::agent_spawn_depth_limit();
+    if depth > limit {
+        return Err(ControlError::new(
+            ErrorCode::InsufficientPermissions,
+            format!(
+                "refused: this child would sit at depth {depth} and the limit is {limit}. Set \
+                 WARP_FORK_AGENT_SPAWN_DEPTH to change it."
+            ),
+        ));
+    }
+
+    let locations = surface_locations(ctx);
+    let parent = BlocklistAIHistoryModel::as_ref(ctx)
+        .terminal_surface_id_for_conversation(&parent_conversation_id)
+        .and_then(|id| locations.get(&id))
+        .ok_or_else(|| {
+            ControlError::new(
+                ErrorCode::MissingTarget,
+                "the parent conversation has no pane; a child is spawned beside its parent, so \
+                 there has to be one",
+            )
+        })?;
+    let pane_group = parent.pane_group.clone();
+    let parent_pane_id = parent.pane_id.clone();
+
+    let name = params
+        .name
+        .as_deref()
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+        .map(str::to_owned)
+        .unwrap_or_default();
+
+    let conversation_id = pane_group.update(ctx, |pane_group, ctx| {
+        let parent_pane_id = pane_group
+            .pane_ids()
+            .find(|pane_id| pane_id.to_string() == parent_pane_id)?;
+        pane_group.spawn_hidden_child_agent_for_local_control(
+            parent_pane_id,
+            parent_conversation_id,
+            name,
+            params.prompt.clone(),
+            allowed_tools.clone(),
+            ctx,
+        )
+    });
+    let conversation_id = conversation_id.ok_or_else(|| {
+        ControlError::new(
+            ErrorCode::Internal,
+            "could not create a hidden pane for the child agent",
+        )
+    })?;
+
+    let mut response = ack(instance_id, ActionKind::AgentSpawn);
+    merge(
+        &mut response,
+        serde_json::to_value(AgentSpawnResult {
+            conversation_id: conversation_id.to_string(),
+            parent_conversation_id: parent_conversation_id.to_string(),
+            depth,
+            allowed_tools: allowed_tools.map(|tools| {
+                tools
+                    .into_iter()
+                    .map(|tool| tool.as_str_name().to_owned())
+                    .collect()
+            }),
         })
         .map_err(|error| ControlError::new(ErrorCode::Internal, error.to_string()))?,
     );

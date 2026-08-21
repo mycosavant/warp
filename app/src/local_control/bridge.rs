@@ -141,6 +141,12 @@ impl LocalControlBridge {
             ActionKind::AgentRead => {
                 agent::agent_read(&self.instance_id, &request.action.params, ctx)
             }
+            ActionKind::AgentSpawn => agent::agent_spawn(
+                &self.instance_id,
+                &request.action.params,
+                &request.target,
+                ctx,
+            ),
             ActionKind::AgentCancel => {
                 agent::agent_cancel(&self.instance_id, &request.action.params, ctx)
             }

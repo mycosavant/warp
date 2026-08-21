@@ -687,3 +687,25 @@ fn the_local_owner_exists_only_under_fork_policy() {
         "the local drive owner must appear and disappear with fork policy"
     );
 }
+
+/// The spawn depth limit reads what it is given, and falls back rather than
+/// forbidding.
+///
+/// The fallback direction is the point. `0` is a meaningful setting — it stops
+/// `agent spawn` outright — so parsing a typo as zero would turn a fat-fingered
+/// variable into "spawning is broken", diagnosed anywhere but here.
+///
+/// Asserted against the parser rather than by setting the variable, for the
+/// same reason as [`the_local_owner_exists_only_under_fork_policy`]: env vars
+/// are process-wide and a test that sets one races every test beside it.
+#[test]
+fn the_spawn_depth_limit_falls_back_to_the_default() {
+    assert_eq!(spawn_depth_limit_from(None), DEFAULT_SPAWN_DEPTH);
+    assert_eq!(spawn_depth_limit_from(Some("")), DEFAULT_SPAWN_DEPTH);
+    assert_eq!(spawn_depth_limit_from(Some("   ")), DEFAULT_SPAWN_DEPTH);
+    assert_eq!(spawn_depth_limit_from(Some("deep")), DEFAULT_SPAWN_DEPTH);
+    assert_eq!(spawn_depth_limit_from(Some("-1")), DEFAULT_SPAWN_DEPTH);
+
+    assert_eq!(spawn_depth_limit_from(Some("0")), 0);
+    assert_eq!(spawn_depth_limit_from(Some(" 5 ")), 5);
+}

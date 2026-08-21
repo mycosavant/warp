@@ -225,6 +225,49 @@ pub struct AgentReadParams {
     pub include_tool_results: bool,
 }
 
+/// Parameters for `agent.spawn`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AgentSpawnParams {
+    /// The self-contained prompt the child starts from.
+    ///
+    /// Self-contained is the operative word: a child does not inherit its
+    /// parent's transcript, so anything it needs to know has to be here.
+    pub prompt: String,
+    /// A name for the child, shown on its pill and used as its title.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// The conversation to parent it to. Defaults to the one in front of the
+    /// targeted pane.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent_conversation_id: Option<String>,
+    /// The tools the child may use. Omit for no restriction.
+    ///
+    /// Each entry is either a preset — `read-only` — or a `ToolType` name such
+    /// as `READ_FILES` or `RUN_SHELL_COMMAND`, case-insensitive and accepting
+    /// dashes for underscores. An empty list is a policy and means no tools,
+    /// which is not the same as omitting the field.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub allow_tools: Option<Vec<String>>,
+}
+
+/// The result of `agent.spawn`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AgentSpawnResult {
+    pub conversation_id: String,
+    pub parent_conversation_id: String,
+    /// How deep the child sits: a conversation a person started is 0.
+    pub depth: u32,
+    /// The tools it may use, resolved from `allow_tools`.
+    ///
+    /// Echoed back because the request is written in presets and the policy is
+    /// enforced in `ToolType`s. A caller that asked for `read-only` should be
+    /// able to see exactly what that turned out to mean rather than trust a
+    /// name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub allowed_tools: Option<Vec<String>>,
+}
+
 /// Parameters for `agent.cancel`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]

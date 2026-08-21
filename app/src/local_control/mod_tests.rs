@@ -154,10 +154,10 @@ fn surface_list_rejects_target_selectors() {
 #[test]
 fn capabilities_advertises_the_complete_catalog() {
     // 84 upstream actions, plus the fork's `input.submit`, the three
-    // `drive.sync.*` actions, and the seven that let an agent drive an agent:
+    // `drive.sync.*` actions, and the eight that let an agent drive an agent:
     // `agent.list`, `agent.prompt`, `slash.list` and `slash.run` (T6.5), then
-    // `agent.read`, `agent.cancel` and `agent.reveal` (T6.6).
-    assert_eq!(capabilities().len(), 95);
+    // `agent.read`, `agent.spawn`, `agent.cancel` and `agent.reveal` (T6.6).
+    assert_eq!(capabilities().len(), 96);
 }
 
 #[test]

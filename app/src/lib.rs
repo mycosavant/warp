@@ -254,6 +254,7 @@ use crate::ai::agent::conversation::AIConversationId;
 use crate::ai::ambient_agents::AmbientAgentTaskId;
 use crate::ai::ambient_agents::github_auth_notifier::GitHubAuthNotifier;
 use crate::ai::blocklist::RecordingController;
+use crate::ai::blocklist::child_agent_tool_policy::ChildAgentToolPolicy;
 use crate::ai::connected_self_hosted_workers::ConnectedSelfHostedWorkersModel;
 use crate::ai::document::ai_document_model::AIDocumentModel;
 use crate::ai::facts::manager::AIFactManager;
@@ -2249,6 +2250,9 @@ pub(crate) fn initialize_app(
     // Conversations restore lazily from the local DB on demand; startup only
     // loads metadata.
     ctx.add_singleton_model(|_| RestoredAgentConversations::new());
+    // Fork-local: per-surface tool allowlists for spawned child agents
+    // (`.fork/TASKS.md`, T6.6).
+    ctx.add_singleton_model(|_| ChildAgentToolPolicy::new());
     ctx.add_singleton_model(|_| CLIAgentSessionsModel::new());
     // ActiveAgentViewsModel is used to track active agent conversations and notify listeners when they change.
     ctx.add_singleton_model(|_| ActiveAgentViewsModel::new());

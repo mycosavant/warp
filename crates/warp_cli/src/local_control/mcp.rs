@@ -524,6 +524,37 @@ fn add_parameter_properties(
                 }),
             );
         }
+        ActionParameterSpec::AgentSpawn => {
+            require(
+                "prompt",
+                json!({
+                    "type": "string",
+                    "description": "Self-contained prompt for the child agent. It does not inherit the parent's transcript, so include everything it needs.",
+                }),
+            );
+            properties.insert(
+                "name".to_owned(),
+                json!({
+                    "type": "string",
+                    "description": "Name for the child, shown on its pill.",
+                }),
+            );
+            properties.insert(
+                "parent_conversation_id".to_owned(),
+                json!({
+                    "type": "string",
+                    "description": "Conversation to parent it to. Defaults to the one in front of the targeted pane.",
+                }),
+            );
+            properties.insert(
+                "allow_tools".to_owned(),
+                json!({
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "description": "Tools the child may use: the preset read-only, or ToolType names such as READ_FILES or RUN_SHELL_COMMAND. Omit for no restriction; an empty list means no tools.",
+                }),
+            );
+        }
         ActionParameterSpec::AgentCancel => require(
             "conversation_id",
             json!({

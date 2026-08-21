@@ -169,6 +169,47 @@ pub fn local_agent_enabled() -> bool {
         )
 }
 
+/// Set to a number to change how deep `warpctrl agent spawn` may nest.
+const SPAWN_DEPTH_ENV_VAR: &str = "WARP_FORK_AGENT_SPAWN_DEPTH";
+
+/// The default cap on how deep spawned child agents may nest.
+///
+/// Two, so the shape the fork was asked for fits and one more does not: a lead
+/// agent scopes work and delegates it (depth 1), and a delegated agent may
+/// hand its result to a reviewer (depth 2). A conversation a person started is
+/// depth 0.
+const DEFAULT_SPAWN_DEPTH: u32 = 2;
+
+/// How deep spawned child agents may nest (T6.6).
+///
+/// **The weaker of the two guardrails, and it exists because there are two
+/// spawn paths.** A tool allowlist governs what the *model* may reach for, and
+/// withholding `SUBAGENT` and `RUN_AGENTS` forbids fan-out at the point the
+/// request is built — a harder guarantee than any counter. But `warpctrl` is a
+/// second path: a lead agent that can run `agent spawn` can run it in a loop
+/// whatever its own tool list says, because it is not using a tool to do it.
+/// This is the backstop for the path the allowlist cannot see.
+///
+/// It bounds depth and not breadth. Ten siblings at depth 1 are within it;
+/// that is the tool list's job, and the honest reading of this one is "a
+/// runaway cannot recurse", not "a runaway cannot happen".
+pub fn agent_spawn_depth_limit() -> u32 {
+    spawn_depth_limit_from(std::env::var(SPAWN_DEPTH_ENV_VAR).ok().as_deref())
+}
+
+/// Split from the environment so the decision can be asserted without setting
+/// a process-global variable from a test that runs beside others.
+fn spawn_depth_limit_from(value: Option<&str>) -> u32 {
+    // Unparseable falls back to the default rather than to zero: `0` is a
+    // meaningful setting — it forbids spawning outright — and reaching it by
+    // typo is the kind of failure that gets diagnosed as "spawn is broken".
+    value
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(DEFAULT_SPAWN_DEPTH)
+}
+
 /// The owner written into Warp Drive objects created without an account.
 ///
 /// Deliberately a fixed constant rather than a per-install UUID. `UserWorkspaces

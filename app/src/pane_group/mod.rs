@@ -56,6 +56,7 @@ use crate::ai::ambient_agents::AmbientAgentTaskId;
 #[cfg(not(target_family = "wasm"))]
 use crate::ai::blocklist::BlocklistAIHistoryEvent;
 use crate::ai::blocklist::agent_view::AgentViewEntryOrigin;
+use crate::ai::blocklist::child_agent_tool_policy::ChildAgentToolPolicy;
 use crate::ai::blocklist::history_model::CloudConversationData;
 use crate::ai::blocklist::inline_action::code_diff_view::CodeDiffView;
 use crate::ai::blocklist::suggested_agent_mode_workflow_modal::SuggestedAgentModeWorkflowAndId;
@@ -4660,6 +4661,82 @@ impl PaneGroup {
         conversation_id: &AIConversationId,
     ) -> Option<PaneId> {
         self.child_agent_panes.get(conversation_id).copied()
+    }
+
+    /// Spawns a child agent in a hidden pane, for `warpctrl agent spawn`
+    /// (`.fork/TASKS.md`, T6.6).
+    ///
+    /// The background target the user asked for, and the one that could not be
+    /// composed out of T6.5: `pane.split` or `tab.create` followed by
+    /// `agent.prompt` starts an agent that is visible and unrelated, while this
+    /// starts one that is a *child* — parented, hidden, and reachable through
+    /// `agent.reveal` and the orchestration status card.
+    ///
+    /// Deliberately not routed through `StartAgentRequest` and
+    /// `launch_local_no_harness_child`, which is how `/orchestrate` spawns the
+    /// same thing. That path opens with `AIClient::create_agent_task`, an
+    /// authenticated call to `api.warp.dev` that mints the server-side
+    /// `ai_tasks` row a cloud orchestration run is reported against. This fork
+    /// has no account, so it would fail before a pane was created — and the
+    /// row it creates is for reporting, not for running. Everything the child
+    /// needs to work is local.
+    ///
+    /// The cost of skipping it, stated so it is not discovered later: the
+    /// child has no `task_id`, so it does not appear in Warp's cloud task
+    /// list, cannot be cancelled as a cloud task, and its shared session — if
+    /// one is ever started — has no server-side run to attach to.
+    pub fn spawn_hidden_child_agent_for_local_control(
+        &mut self,
+        parent_pane_id: PaneId,
+        parent_conversation_id: AIConversationId,
+        name: String,
+        prompt: String,
+        allowed_tools: Option<Vec<warp_multi_agent_api::ToolType>>,
+        ctx: &mut ViewContext<Self>,
+    ) -> Option<AIConversationId> {
+        let child = child_agent::create_hidden_child_agent_conversation(
+            self,
+            child_agent::HiddenChildAgentConversationRequest {
+                parent_pane_id,
+                name,
+                parent_conversation_id,
+                // The seat the local agent sits in. The request goes through
+                // `generate_multi_agent_output` like any other, so this is not
+                // a third-party CLI harness running in a terminal.
+                orchestration_harness: Some(Harness::Oz),
+                env_vars: HashMap::new(),
+                task_context: None,
+                is_shared_session_creator: IsSharedSessionCreator::No,
+            },
+            ctx,
+        )?;
+
+        // Before the prompt, not after: the policy is read when the request is
+        // built, and the first turn is the one most likely to reach for a tool.
+        if let Some(allowed_tools) = allowed_tools {
+            ChildAgentToolPolicy::handle(ctx).update(ctx, |policy, _| {
+                policy.restrict(child.terminal_view_id, allowed_tools);
+            });
+        }
+
+        child.terminal_view.update(ctx, |terminal_view, ctx| {
+            terminal_view
+                .ai_controller()
+                .update(ctx, |controller, ctx| {
+                    controller.send_agent_query_in_conversation(prompt, child.conversation_id, ctx);
+                });
+            // The pane stays hidden; this makes the agent view the thing that
+            // is there when it is revealed, rather than a shell prompt with a
+            // conversation happening somewhere behind it.
+            terminal_view.enter_agent_view(
+                None,
+                Some(child.conversation_id),
+                AgentViewEntryOrigin::ChildAgent,
+                ctx,
+            );
+        });
+
+        Some(child.conversation_id)
     }
 
     /// Returns true if the given pane is a child agent pane tracked in `child_agent_panes`.

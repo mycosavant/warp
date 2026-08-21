@@ -643,6 +643,16 @@ pub enum AgentCommand {
     /// was just dispatched, without the transcript leading up to it.
     Read(AgentReadArgs),
 
+    /// Spawn a child agent in a hidden pane.
+    ///
+    /// The background handoff: the child is parented to a conversation,
+    /// starts work immediately, and stays off screen until `agent reveal`.
+    ///
+    /// The other three targets are compositions and need no action of their
+    /// own — `pane split` / `tab create` / `window create` followed by
+    /// `agent prompt` — but those start a *sibling*, not a child.
+    Spawn(AgentSpawnArgs),
+
     /// Stop the turn a conversation is running.
     ///
     /// Stop, not kill: the conversation survives and `agent read` still works.
@@ -688,6 +698,38 @@ pub struct AgentReadArgs {
     /// what a caller passing the result to another agent wants to pay for.
     #[arg(long = "tools")]
     pub include_tool_results: bool,
+
+    #[command(flatten)]
+    pub target: TargetArgs,
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct AgentSpawnArgs {
+    /// The child's prompt.
+    ///
+    /// Self-contained: a child does not inherit its parent's transcript, so
+    /// everything it needs to know goes here.
+    pub prompt: String,
+
+    /// A name for the child, shown on its pill.
+    #[arg(long = "name")]
+    pub name: Option<String>,
+
+    /// Parent it to this conversation instead of the targeted pane's.
+    #[arg(long = "parent")]
+    pub parent: Option<String>,
+
+    /// Restrict the child to these tools. Repeatable, or comma-separated.
+    ///
+    /// Each value is the preset `read-only`, or a ToolType name such as
+    /// `READ_FILES` or `RUN_SHELL_COMMAND`. Omit for no restriction;
+    /// `--allow-tools ''` is a policy of no tools at all.
+    ///
+    /// Withholding `SUBAGENT` and `RUN_AGENTS` is what stops a child spawning
+    /// children of its own — a harder guarantee than the depth cap, which only
+    /// bounds `warpctrl agent spawn` itself.
+    #[arg(long = "allow-tools", value_delimiter = ',', num_args = 0..)]
+    pub allow_tools: Option<Vec<String>>,
 
     #[command(flatten)]
     pub target: TargetArgs,

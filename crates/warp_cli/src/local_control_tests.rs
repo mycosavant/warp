@@ -614,6 +614,19 @@ fn retained_action_examples() -> Vec<(ActionKind, Vec<&'static str>)> {
             ],
         ),
         (
+            ActionKind::AgentSpawn,
+            vec![
+                "warpctrl",
+                "agent",
+                "spawn",
+                "review the diff",
+                "--name",
+                "reviewer",
+                "--allow-tools",
+                "read-only",
+            ],
+        ),
+        (
             ActionKind::AgentCancel,
             vec![
                 "warpctrl",
@@ -801,6 +814,7 @@ fn parsed_action_kind(command: &ControlCommand) -> Option<ActionKind> {
             AgentCommand::List(_) => Some(ActionKind::AgentList),
             AgentCommand::Prompt(_) => Some(ActionKind::AgentPrompt),
             AgentCommand::Read(_) => Some(ActionKind::AgentRead),
+            AgentCommand::Spawn(_) => Some(ActionKind::AgentSpawn),
             AgentCommand::Cancel(_) => Some(ActionKind::AgentCancel),
             AgentCommand::Reveal(_) => Some(ActionKind::AgentReveal),
         },

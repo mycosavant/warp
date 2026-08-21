@@ -23,6 +23,7 @@ fn turn(prompt: &str, session: Option<String>) -> Turn {
         task_needs_announcing: true,
         working_directory: None,
         distro: None,
+        allowed_tools: None,
     }
 }
 

@@ -56,6 +56,7 @@ use crate::ai::agent_events::AgentMessageEventMetadata;
 #[cfg(not(target_family = "wasm"))]
 use crate::ai::agent_sdk::ClaudeHarness;
 use crate::ai::ambient_agents::AmbientAgentTaskId;
+use crate::ai::blocklist::child_agent_tool_policy::ChildAgentToolPolicy;
 use crate::ai::document::ai_document_model::{
     AIDocumentId, AIDocumentModel, AIDocumentUserEditStatus,
 };
@@ -303,7 +304,24 @@ impl RequestInput {
             computer_use_model_id,
             shared_session_response_initiator,
             request_start_ts: Local::now(),
-            supported_tools_override: None,
+            // Fork-local: a child agent spawned with a tool allowlist carries
+            // it on every turn, not just the one that set it
+            // (`.fork/TASKS.md`, T6.6). Keyed by surface for the same reason
+            // the model override above is — a child agent has a surface to
+            // itself.
+            //
+            // Guarded rather than read outright: this is a singleton, and
+            // plenty of unit tests build a narrow set that does not include
+            // it. Absent, the answer is "no policy", which is what those tests
+            // were measuring before.
+            supported_tools_override: app
+                .has_singleton_model::<ChildAgentToolPolicy>()
+                .then(|| {
+                    ChildAgentToolPolicy::as_ref(app)
+                        .allowed_tools(terminal_surface_id)
+                        .map(<[ToolType]>::to_vec)
+                })
+                .flatten(),
         }
     }
 }

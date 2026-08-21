@@ -3,6 +3,7 @@ mod action_model;
 pub mod agent_view;
 pub mod block;
 mod child_agent_launch;
+pub(crate) mod child_agent_tool_policy;
 pub mod code_block;
 mod context_model;
 mod controller;

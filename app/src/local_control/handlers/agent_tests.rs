@@ -139,6 +139,51 @@ fn last_counts_back_from_the_newest_exchange() {
     assert_eq!(exchange_window_start(5, Some(0)), 5);
 }
 
+/// A misspelled tool name is refused rather than dropped.
+///
+/// In an allowlist, silently dropping a token always errs toward *fewer* tools
+/// than the caller meant — so the child gets a policy nobody wrote, and the
+/// symptom is a delegated agent that will not do the work, discovered later
+/// and somewhere else. The refusal names the vocabulary so the fix is in the
+/// error.
+#[test]
+fn an_unknown_tool_name_is_refused() {
+    let error = resolve_allowed_tools(&["READ_FILES".to_owned(), "Bash".to_owned()])
+        .expect_err("`Bash` is Claude's name for it, not Warp's");
+    assert_eq!(error.code, ErrorCode::InvalidParams);
+    assert!(
+        error.message.contains("RUN_SHELL_COMMAND"),
+        "the error should name the vocabulary: {}",
+        error.message
+    );
+}
+
+/// Presets expand, names resolve, and the two do not double up.
+///
+/// `read-only` overlapping an explicitly named read tool is the ordinary case
+/// — a caller adds one tool to a preset — and a duplicated entry would reach
+/// the policy and then the `--allowedTools` argument, where it is noise at
+/// best.
+#[test]
+fn presets_and_names_resolve_into_one_list() {
+    let resolved = resolve_allowed_tools(&["read-only".to_owned(), "READ_FILES".to_owned()])
+        .expect("both tokens resolve");
+    assert_eq!(
+        resolved
+            .iter()
+            .filter(|t| **t == ToolType::ReadFiles)
+            .count(),
+        1,
+        "a tool named twice should appear once"
+    );
+    assert!(resolved.contains(&ToolType::Grep));
+    assert!(!resolved.contains(&ToolType::RunShellCommand));
+
+    // The strictest policy a caller can express, and it has to survive being
+    // expressed: an empty list is "no tools", not "no policy".
+    assert_eq!(resolve_allowed_tools(&[]), Ok(Vec::new()));
+}
+
 /// Only `swap` reveals a conversation that was never a background child.
 ///
 /// The default is `pane`, which is the strict one, and that is the right way
