@@ -778,6 +778,7 @@ needs = [
 ```
 
 ```bash
+warpctrl graph schema              # the format, as a plan that runs
 warpctrl graph check plan.toml     # parse, resolve edges, find cycles
 warpctrl graph run   plan.toml --parent <conversation-id>
 ```
@@ -828,6 +829,37 @@ that is your call rather than the runner's.
 
 This adds no actions. `graph` is a loop over `agent spawn` and `agent read`,
 which is why the catalog is the same size with it as without.
+
+#### Letting an agent write the plan
+
+`warpctrl graph schema` prints the format as an annotated plan — and what it
+prints is itself valid, so `graph schema > plan.toml` is a starting point
+rather than an illustration. It exists so an agent can learn the format from
+the tool instead of from you pasting documentation into a prompt:
+
+> Read the `Emacs` milestone of `warpdotdev/warp`. Run `warpctrl graph schema`
+> to learn the plan format. Emit a task graph that triages that milestone: one
+> node per issue that summarises the bug and names the area of a terminal
+> emulator it touches, and a final node that proposes an order to fix them in.
+> Write it to `triage.toml` and validate it with `warpctrl graph check`.
+
+That is a real transcript. One turn — `gh`, `graph schema`, `Write`,
+`graph check` — produced a five-node plan that ran four triages in parallel
+and joined them into a fix order.
+
+**What the tracker gives you is the nodes, not the shape.** Real milestones
+have no dependency information in them: across 21 upstream issues in two
+milestones there was not one `blocked by #N`, task-list reference or sub-issue
+link. Milestones are buckets of related bugs, not plans. So the edges come from
+the work *you* are proposing to do — analyse each issue, then read the analyses
+— and deciding them is a judgment call an agent makes by reading prose, which
+is why there is no `graph from-issues` to parse them out.
+
+Whatever writes the plan needs to know one thing above all, and the schema says
+it first: **a child agent does not inherit the transcript of whatever wrote the
+plan**, so each prompt must contain everything that node needs. The failure
+mode is invisible otherwise — the run completes, and every answer is
+confidently context-free.
 
 ### Targets: the rule that decides whether a call works
 

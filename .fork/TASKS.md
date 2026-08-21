@@ -1448,6 +1448,15 @@ stream.
 - [x] **T5.2** Map the SSE agent-event protocol
 - [x] **T5.3** Decide: implement the trait, or shim at the transport layer
 - [x] **T5.4** Prototype behind a fork flag, default off
+- [ ] **T5.5** Find out what cancelled a turn nobody cancelled. Seen once
+      during T7.2: a local-agent turn ended `ConversationStatus::Cancelled`
+      after four tool calls, with an empty log and nothing cancelling it from
+      the `warpctrl` side. `Cancelled` requires a real `StreamCancellation`,
+      and the only `CancellationReason` that could fire unprompted is
+      `UserCommandExecuted` — the pane's shell is live while the agent
+      streams. A candidate, not a diagnosis: it did not recur and was not
+      reproduced. Matters because a turn that stops on its own reports to the
+      user that *they* stopped it.
 
 ### T5.1 — the premise was wrong, and that is the finding
 
@@ -3072,12 +3081,11 @@ project-scale record somewhere a human can argue with it.
       `agent.cancel` — without `agent.read` a graph can sequence work but not
       hand anything along it, which is half the point. Shipped as
       `warpctrl graph`, adding no actions — see "T7.1 — as built" below.
-- [ ] **T7.2** Read a milestone from an issue tracker and emit a T7.1 graph.
+- [x] **T7.2** Read a milestone from an issue tracker and emit a T7.1 graph.
       Deliberately last, and deliberately thin: the moment this grows a
       scheduler of its own it has become the thing this section argues against.
-      **Unblocked** by T7.1: the target format now exists, and `graph check`
-      is how a generated plan gets validated before anyone spends a token on
-      it.
+      It stayed thin — one command, `graph schema` — because running it showed
+      that the interesting half cannot be parsed. See "T7.2 — as built" below.
 
 ### T7.1 — as built
 
@@ -3203,6 +3211,119 @@ which is Claude's name for it, not Warp's, so `agent.spawn` refuses:
 * **`agent.read --last 1`.** A node is one prompt and its answer. Reading the
   whole transcript would hand the next node the handoff it already received,
   wrapped in its own reply.
+
+### T7.2 — as built
+
+One command, `warpctrl graph schema`, and a verified loop. The reason it is
+one command rather than a `graph from-issues` parser is the finding below,
+which is the whole of this task.
+
+#### A real milestone contains no edges. None.
+
+This was scoped by reading actual trackers rather than by imagining one.
+`mycosavant/warp` has issues disabled — the GitHub default for a fork — so the
+tracker read was upstream's, which is real and public. Two milestones, 21
+issues, checked for every convention a parser could key on:
+
+| Convention | Hits |
+|:--|:--|
+| `depends on #N` / `blocked by #N` / `requires #N` | 0 |
+| Task-list issue references (`- [ ] #N`) | 0 |
+| Sub-issue / dependency links | 0 |
+
+The only task-list checkboxes that matched at all were `- [x] Yes`, the "have
+you searched for existing issues?" box in the bug-report template.
+
+And the bodies are not task specifications. They are user-submitted prose in an
+issue template — `### Discord username (optional)`, `### Describe the bug`,
+`### To Reproduce`. A milestone named `SSH V2` is seventeen unrelated SSH bug
+reports; `Emacs` is four unrelated Emacs ones.
+
+**So a mechanical generator would emit N nodes and zero edges, every time.**
+It would be deterministic and it would be confidently wrong about the only
+part that matters, because the ordering information is not in the tracker to
+extract. That vindicates the T7 argument exactly: the tracker owns *what*, and
+it genuinely does not own *when* in any machine-readable form. Deciding what
+depends on what means reading prose and exercising judgment, which is an
+agent's job and not a parser's.
+
+Hence no `graph from-issues`. Fetching is already one `gh` command; wrapping it
+would add a dependency on a tracker's shape in exchange for the boring half.
+
+#### What was actually missing
+
+That the agent had no way to learn the plan format except a human pasting
+documentation into its prompt — which is the human this was supposed to
+remove. `warpctrl graph schema` prints the format as an annotated plan that is
+itself valid and runnable, asserted by a test rather than claimed in a comment.
+
+It leads with the thing a generating agent gets wrong: a child does not inherit
+the transcript of whatever wrote the plan, so every prompt has to stand alone.
+That mistake is invisible until the run produces confidently context-free
+answers.
+
+#### The loop, end to end, on a real milestone
+
+One sentence of the lead agent's job, exactly as the T7 argument predicted, with
+no format pasted into it — the agent was told to run `warpctrl graph schema`
+itself:
+
+> Read the `Emacs` milestone of `warpdotdev/warp`. Run `warpctrl graph schema`
+> to learn the plan format. Emit a task graph that triages that milestone: one
+> node per issue that summarises the bug and names the area of a terminal
+> emulator it touches, and a final node that proposes an order to fix them in.
+> Write it to `triage.toml`, validate it with `warpctrl graph check`.
+
+One turn, four tool calls — `gh`, `graph schema`, `Write`, `graph check` — and
+`OK`. The plan it wrote:
+
+    5 nodes, 2 in sequence
+      1. issue_1860, issue_2064, issue_402, issue_450
+      2. order
+
+with `allow_tools = ["read-only"]` inherited from the schema's default, each
+issue's full text embedded in its own prompt (the standalone rule, followed),
+a fixed reply format so the join could read them, and four labelled handoffs
+into `order`.
+
+Then `graph run`, which ran the four triages in parallel and joined them:
+
+    1. #1860 — M-backspace sends M-b "ackspace" — highest severity, contained
+       to the Option-as-Meta encoding path.
+    2. #2064 — Command key combo not going to Emacs — same keyboard layer, so
+       the person is already in the key-dispatch code.
+    3. #402 — split pane doesn't draw properly — equally severe but sits in
+       the grid/renderer, a separate area.
+    4. #450 — ctrl+z shown as an error — cosmetic, isolated, natural cleanup.
+
+    RATIONALE: … if two people are available, #402 should run in parallel with
+    the #1860/#2064 pair, since the code is disjoint.
+
+Worth noticing what the edges in that plan *are*. The milestone had none, and
+the agent did not invent dependencies between the bugs — it drew edges between
+the units of **work it proposed to do**: analyse each, then read the analyses.
+The tracker supplied the nodes; the agent supplied the shape. That is the
+division the T7 argument asked for, arrived at without being told.
+
+And the last line of the rationale is a graph: the join node reasoned about
+what could run in parallel, which is the plan it would emit next.
+
+#### Two things running it turned up
+
+* **`XDG_CONFIG_HOME` broke `gh`.** The scratch-profile trick from T6.7 —
+  used to get `is_any_ai_enabled = true` without editing the real
+  `settings.toml` — also relocates every other XDG-config tool, `gh` included,
+  so the agent found itself unauthenticated. A rig defect, not a product one,
+  and it did not need the rig at all: `agent.prompt` and `graph` never consult
+  `is_any_ai_enabled`, so only T6.7's slash-command path needed the override.
+* **One turn came back `cancelled`, and it is not explained.** The first
+  attempt — the one with `gh` broken — ended `ConversationStatus::Cancelled`
+  after four tool calls, with nothing in the log. Nothing cancelled it from
+  this side. `Cancelled` comes from a real `StreamCancellation`, and the only
+  `CancellationReason` that could plausibly fire unprompted is
+  `UserCommandExecuted`: the pane's shell is live while the agent streams. That
+  is a candidate, **not a diagnosis** — it did not recur, and it was not
+  reproduced. Recorded as T5.5 rather than guessed at.
 
 ---
 
