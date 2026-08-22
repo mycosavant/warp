@@ -3723,6 +3723,49 @@ T1, T4, T5 and T7, and by now should be the prior rather than the surprise.
       construction. `main` is also the natural answer to a question T6.6 and
       T7.1 both leave implicit — which pane is the lead agent.
 
+- [~] **T8.6** WSL as a remote target, the way Zed does it. (I16)
+      Promoted off the idea board because it is mostly built. Zed treats WSL as
+      a remote host — Windows client, headless server inside the distro — so
+      files, language servers and terminals live on the fast side of 9p while
+      themes, rendering and keymaps never leave Windows.
+
+      Built and verified:
+
+      - [x] `WslTransport`, all seven `RemoteTransport` methods
+            (`app/src/remote_server/wsl_transport.rs`) plus its command layer
+            (`crates/remote_server/src/wsl.rs`). **A credential-free
+            `Initialize` handshake has completed over `wsl.exe`** — daemon
+            spawned, stdio bridged, `InitializeResponse` with a real host id.
+      - [x] The account question, settled by running it: nothing on the path
+            needs one. `handle_initialize` stores the bearer token and replies
+            without validating it, the only credential check in the daemon is
+            scoped to remote codebase indexing, and the proto documents
+            `user_id` as "Empty when not logged in".
+      - [x] The gate: `RELEASE_FLAGS` behind `cfg!(feature = "release_bundle")`,
+            so the whole stack is compiled into every self-built binary and
+            switched off. Opened via `fork::FORCE_ENABLED`, which outranks the
+            `#[cfg(not(windows))]` on the same flag — see the note under "Look
+            for the gate first" in `../CLAUDE.md`.
+      - [x] `remote.wsl.list` and `remote.wsl.connect` (catalog 100 → 102), a
+            command-palette entry sharing one `start_wsl_remote_server` helper
+            with them, and the pane → session resolver that `connect` needed.
+      - [x] Server binary and install path: staged locally at the bare OSS
+            path, so `check_binary` short-circuits the CDN fetch this fork
+            deny-lists. **The absent install prompt is the success signal.**
+
+      Remaining: **run it on Windows.** The runbook is in `README.md` under
+      "Warp's remote server, in a WSL distribution". Everything above was
+      verified on Linux, where `wsl.exe` is reachable through interop — which
+      exercises the same code path a Windows client would, but is not the
+      arrangement the feature is for.
+
+      Then the ambient path. `wsl` is *already* a warpify subshell command on
+      Windows, so a WSL session gets warpified exactly as an `ssh` one does;
+      what it does not get is a remote server, because that attach is keyed on
+      `IsSSHWrapperSession::Yes`, whose payload is a ControlMaster socket path
+      a WSL session cannot have. A WSL arm beside the SSH one is the work, and
+      `Session::wsl_name()` already carries the distribution.
+
 ### Deliberately not selected, and why
 
 Recorded here because the arguments matter more than the verdicts; the full

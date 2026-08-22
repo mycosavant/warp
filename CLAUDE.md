@@ -43,10 +43,17 @@ anything.
 | T5 | the entire agent transport | one function — `generate_multi_agent_output` |
 | T7 | agent fan-out for a run-scale graph | nothing; the verbs existed, only the *plan* was missing |
 | I15 | screenshots, input, recording, window enumeration | `DOGFOOD_FLAGS` + a non-default cargo feature |
+| I16 | the whole remote-development server | `RELEASE_FLAGS` behind `cfg!(feature = "release_bundle")` — a *packaging* gate, so it is off in every build you make yourself |
 
 Gates come in pairs. `crates/warp_features/src/lib.rs` holds `DOGFOOD_FLAGS`
 (runtime); `app/Cargo.toml`'s `default` list holds the compile-time half.
 Opening one usually means touching both, plus `app/src/fork.rs`.
+
+**Prefer `fork::FORCE_ENABLED` to editing a flag list.** It sets a *user
+preference*, and `FeatureFlag::is_enabled` resolves override → user preference →
+channel state. So it outranks every `#[cfg]` and every channel list without
+touching an upstream file — which is why I16 needed no edit to
+`warp_features/src/lib.rs` despite the flag being `#[cfg(not(windows))]` there.
 
 ## Prefer the smallest thing that is still the idea
 
@@ -67,7 +74,8 @@ upstream and rebasable.
 | `crates/http_client/src/egress.rs` | the telemetry deny-list. The "nothing escapes" claim rests on this. |
 | `app/src/ai/local_agent/` | a local implementation of the one agent-transport function, answering from the `claude` CLI. |
 | `app/src/drive/local_sync/` | account-free Warp Drive: snapshot, apply, git-backed sync. |
-| `app/src/local_control/`, `crates/local_control/`, `crates/warp_cli/src/local_control/` | the `warpctrl` control plane, 100 actions. |
+| `app/src/local_control/`, `crates/local_control/`, `crates/warp_cli/src/local_control/` | the `warpctrl` control plane, 102 actions. The count is pinned by a test — when it fires, update it rather than loosening it. |
+| `app/src/remote_server/wsl_transport.rs`, `crates/remote_server/src/wsl.rs` | the second `RemoteTransport`: Warp's remote-development server, in a WSL distro instead of over SSH. |
 
 Environment variables the fork adds: `WARP_FORK_POLICY` (set `0`/`off`/`false`
 to run stock upstream behaviour without rebuilding — use this to A/B a suspected
