@@ -228,6 +228,42 @@ fn spawn_depth_limit_from(value: Option<&str>) -> u32 {
         .unwrap_or(DEFAULT_SPAWN_DEPTH)
 }
 
+/// Set to `0`, `off` or `false` to make the hotkey window open a plain
+/// terminal, the way upstream does.
+const QUAKE_VISOR_ENV_VAR: &str = "WARP_FORK_QUAKE_VISOR";
+
+/// Whether the dedicated hotkey window opens in agent view (T8.1).
+///
+/// Upstream's "quake mode" window is a finished feature — global shortcut,
+/// `WindowStyle::Pin`, per-edge geometry, hide-on-blur — pointed at a shell.
+/// The only thing the fork changes is what is in it: a drop-down prompt is far
+/// more useful as an agent you can ask something than as a fifth terminal.
+///
+/// **Default on, but it never overrides an explicit choice.** The window is
+/// built by `configure_empty_workspace`, which already enters agent view when
+/// the global *default session mode* is `Agent`; forcing it a second time
+/// would start a second conversation in the same pane. So this only decides
+/// the case the setting leaves as a terminal, and a user who wants the stock
+/// behaviour turns it off here without giving up the hotkey window.
+///
+/// It is deliberately *not* gated on [`local_agent_enabled`]. The visor is a
+/// surface, not a transport — it is equally the right window whether the reply
+/// comes from the `claude` CLI or from a signed-in account.
+///
+/// Consumed by `root_view::toggle_quake_mode_window`.
+pub fn quake_visor_opens_agent() -> bool {
+    is_active() && quake_visor_from(std::env::var(QUAKE_VISOR_ENV_VAR).ok().as_deref())
+}
+
+/// Split from the environment so the decision can be asserted without setting
+/// a process-global variable from a test that runs beside others.
+fn quake_visor_from(value: Option<&str>) -> bool {
+    !matches!(
+        value.map(str::trim),
+        Some("0") | Some("off") | Some("false")
+    )
+}
+
 /// The owner written into Warp Drive objects created without an account.
 ///
 /// Deliberately a fixed constant rather than a per-install UUID. `UserWorkspaces

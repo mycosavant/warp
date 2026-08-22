@@ -709,3 +709,29 @@ fn the_spawn_depth_limit_falls_back_to_the_default() {
     assert_eq!(spawn_depth_limit_from(Some("0")), 0);
     assert_eq!(spawn_depth_limit_from(Some(" 5 ")), 5);
 }
+
+/// The visor's default is the opposite of every other env-gated predicate in
+/// this module: on unless switched off. That asymmetry is deliberate — the
+/// hotkey window is a fork surface, not a substitution for something that
+/// works — and it means the *absence* of the variable is the case most likely
+/// to regress, since nothing in a normal run ever exercises the parse.
+///
+/// Asserted against the parser rather than by setting the variable, for the
+/// same reason as [`the_spawn_depth_limit_falls_back_to_the_default`]: env
+/// vars are process-wide and a test that sets one races every test beside it.
+#[test]
+fn the_visor_opens_an_agent_unless_it_is_switched_off() {
+    assert!(quake_visor_from(None));
+    assert!(quake_visor_from(Some("")));
+    assert!(quake_visor_from(Some("1")));
+    assert!(quake_visor_from(Some("on")));
+
+    assert!(!quake_visor_from(Some("0")));
+    assert!(!quake_visor_from(Some("off")));
+    assert!(!quake_visor_from(Some("false")));
+    assert!(!quake_visor_from(Some("  off  ")));
+
+    // Not a recognised negative. Anything unrecognised keeps the default
+    // rather than guessing, which is the same call `WARP_FORK_POLICY` makes.
+    assert!(quake_visor_from(Some("no")));
+}

@@ -74,13 +74,14 @@ upstream and rebasable.
 | `crates/http_client/src/egress.rs` | the telemetry deny-list. The "nothing escapes" claim rests on this. |
 | `app/src/ai/local_agent/` | a local implementation of the one agent-transport function, answering from the `claude` CLI. |
 | `app/src/drive/local_sync/` | account-free Warp Drive: snapshot, apply, git-backed sync. |
-| `app/src/local_control/`, `crates/local_control/`, `crates/warp_cli/src/local_control/` | the `warpctrl` control plane, 105 actions. The count is pinned by **two** tests in different crates — update both, and never loosen either. |
+| `app/src/local_control/`, `crates/local_control/`, `crates/warp_cli/src/local_control/` | the `warpctrl` control plane, 107 actions. The count is pinned by **two** tests in different crates — update both, and never loosen either. |
 | `app/src/remote_server/wsl_transport.rs`, `crates/remote_server/src/wsl.rs` | the second `RemoteTransport`: Warp's remote-development server, in a WSL distro instead of over SSH. |
 
 Environment variables the fork adds: `WARP_FORK_POLICY` (set `0`/`off`/`false`
 to run stock upstream behaviour without rebuilding — use this to A/B a suspected
 fork regression), `WARP_FORK_LOCAL_AGENT`, `WARP_FORK_AGENT_SPAWN_DEPTH`,
-`WARP_FORK_ALLOW_TELEMETRY_EGRESS`.
+`WARP_FORK_ALLOW_TELEMETRY_EGRESS`, `WARP_FORK_QUAKE_VISOR` (the one that
+defaults **on** — set it off to get upstream's terminal in the hotkey window).
 
 ---
 

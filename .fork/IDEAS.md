@@ -27,6 +27,12 @@ produced a confident wrong answer here.
 So: read these as *"the code says"*, and note that the first step of every
 scoped item is to run the thing and find out what the code left out.
 
+**Three times now.** I8 said, twice, that the visor was `PanesLayout::
+AmbientAgent` plus a match arm. `AmbientAgent` is the *cloud* agent setup tab —
+following it would have wired the fork's hotkey to the account-gated path.
+Retracted inline where it appears. The variant *name* was read; the arm it
+resolves to was not.
+
 ## How these were graded
 
 1. **Does the mechanism already exist?** The fork's most repeated finding is
@@ -535,6 +541,15 @@ pub enum PanesLayout {
 match arm — plausibly no new app surface at all, which is the `graph.rs`
 standard this board is graded against.
 
+> **Retracted 2026-08-22, on building it. `AmbientAgent` is the wrong
+> variant** — it is the *Cloud Agent setup tab*
+> (`initial_ambient_agent_pane` → `create_cloud_mode_terminal` →
+> `enter_ambient_agent_setup`). "Ambient" is upstream's word for the **cloud**
+> agent. Pointing the visor at it would have wired the hotkey to the
+> account-gated path. The conclusion — "a setting, no new app surface" — was
+> right; the mechanism named twice on this page was not. See T8.1 in
+> `TASKS.md` for what it actually took.
+
 Still worth checking on **Windows**, where `global_hotkey` uses Win32
 `RegisterHotKey`, but that is now a portability check rather than the question
 the feature hangs on.
@@ -549,6 +564,14 @@ That is a `PanesLayout` choice at `add_window` time —
 `PanesLayout::{SingleTerminal, Snapshot, Template, AmbientAgent}`
 (`app/src/pane_group/mod.rs:869`). Note `AmbientAgent` is already a variant.
 There may be nothing to build but a setting and a match arm.
+
+> **Also retracted — see above.** What it took instead: the quake window is
+> already built from `NewWorkspaceSource::Empty`, whose path
+> (`configure_empty_workspace` → `add_new_session_tab_with_default_mode`)
+> *already* enters agent view when the global default session mode is `Agent`.
+> The only missing piece was making the visor's mode independent of that
+> setting. One predicate, one call, no new layout variant. **Built 2026-08-22
+> — T8.1.**
 
 ## Why this one is worth doing first
 

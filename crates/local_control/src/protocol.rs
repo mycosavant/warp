@@ -1057,6 +1057,61 @@ pub struct MainPaneResult {
     pub anchors_working_directory: bool,
 }
 
+/// Lifecycle of the dedicated hotkey window, as `window.visor.status` reports it.
+///
+/// Deliberately four states rather than an `open: bool`. The window is created
+/// once and thereafter shown and hidden, so "never created" and "created, then
+/// hidden" behave differently on the next toggle — the first builds a window
+/// and the second only reveals one — and a caller waiting for a visor to
+/// appear needs to tell them apart.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum VisorState {
+    /// No hotkey window has been created in this process.
+    Absent,
+    /// Created and on screen.
+    Open,
+    /// Created and shown, but not yet the key window. Warp passes through this
+    /// state when it was not the focused app at the time.
+    PendingOpen,
+    /// Created and hidden off screen. The next toggle reveals this window
+    /// rather than building another.
+    Hidden,
+}
+
+/// What `window.visor.status` reports.
+///
+/// `window.visor.toggle` deliberately does *not* answer with this, unlike the
+/// `pane.main.*` family: toggling is a queued global action that runs after
+/// the control-plane request returns, so any state read alongside it would be
+/// the state from before the toggle. Poll `window.visor.status` instead.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VisorStatusResult {
+    pub state: VisorState,
+    /// The hotkey window's id, in the form `window list` reports, so the two
+    /// can be joined. `None` exactly when `state` is `absent`.
+    pub window_id: Option<String>,
+    /// Whether a hotkey window created *now* would open in agent view.
+    ///
+    /// The effective answer, not the fork's setting: it is `false` with no AI
+    /// enabled however the setting is set, and `true` when the default session
+    /// mode is already `Agent` whatever the setting says. Reporting the
+    /// setting alone would promise an agent and produce a terminal.
+    ///
+    /// Says nothing about a window that is already open — that one keeps
+    /// whatever it was built with, and toggling only hides and reveals it.
+    pub opens_agent: bool,
+    /// Whether the global shortcut is switched on. `window.visor.toggle` works
+    /// regardless: it is a direct dispatch and does not go through the
+    /// shortcut, which is the only reason the visor is testable on a platform
+    /// whose global grabs do not work.
+    pub hotkey_enabled: bool,
+    /// The configured shortcut in settings-file form (`"ctrl-shift-Q"`), or
+    /// `None` if unbound. Unbound with `hotkey_enabled` true is a real and
+    /// common state — the toggle is on and no key was ever chosen.
+    pub hotkey: Option<String>,
+}
+
 #[cfg(test)]
 #[path = "protocol_tests.rs"]
 mod tests;

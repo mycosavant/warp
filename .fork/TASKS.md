@@ -3664,7 +3664,7 @@ T1, T4, T5 and T7, and by now should be the prior rather than the surprise.
       stops carrying what you typed (see "Your development build's log contains
       what you typed" in `README.md`).
 
-- [ ] **T8.1** Quake visor for the lead agent. (`IDEAS.md` I8)
+- [x] **T8.1** Quake visor for the lead agent. (`IDEAS.md` I8)
       Quake mode is a finished, cross-platform feature nobody has pointed at an
       agent: `GlobalHotkeyMode::QuakeMode`, `toggle_quake_mode_window`
       (`root_view.rs:1479`), `WindowStyle::Pin` handled in the winit backend.
@@ -3683,6 +3683,84 @@ T1, T4, T5 and T7, and by now should be the prior rather than the surprise.
       should open an *agent*. `PanesLayout` already has an `AmbientAgent`
       variant and `toggle_quake_mode_window` picks the layout at `add_window`
       time, so this is a setting plus a match arm.
+
+      **As built (2026-08-22).** Smaller than the plan, and the plan named the
+      wrong mechanism.
+
+      *Retraction: `PanesLayout::AmbientAgent` is not the variant to reach
+      for.* It is the **Cloud Agent setup tab** —
+      `initial_ambient_agent_pane` builds a cloud-mode terminal and calls
+      `enter_ambient_agent_setup`. "Ambient" is upstream's word for the cloud
+      agent, not for a local one, so pointing the visor at it would have wired
+      the hotkey to the account-gated path this fork exists to avoid. Reading
+      the enum's variant names gave a confident wrong answer; reading the arm
+      they resolve to gave the right one.
+
+      What it actually took: the quake window is built from
+      `NewWorkspaceSource::Empty`, which lands in `configure_empty_workspace`
+      → `add_new_session_tab_with_default_mode` — and *that* already enters
+      agent view when the global default session mode is `Agent`. So the
+      machinery existed; the only thing missing was making the visor's mode
+      independent of the setting that governs every other new tab. One
+      predicate and one call, both in `root_view.rs`:
+
+      * `fork::quake_visor_opens_agent()` — env `WARP_FORK_QUAKE_VISOR`,
+        **default on**, the only predicate in `fork.rs` that defaults that way.
+      * `root_view::open_agent_visor`, called inside `add_window`'s builder
+        after `RootView::new` — the one point where the window's first session
+        exists and nothing has been painted, so there is no visible flash of a
+        terminal becoming an agent.
+      * `root_view::visor_opens_agent(ctx)` is the *effective* answer, shared
+        by the behaviour and by `window.visor.status` so the two cannot drift.
+
+      **Two things outrank fork policy, in opposite directions**, and both were
+      found by running it rather than by reading:
+
+      * *Default mode already `Agent`* → the workspace has entered agent view
+        on the way here, and forcing it again starts a **second conversation in
+        the same pane**. Guarded; measured as exactly one conversation, not
+        two.
+      * *No AI enabled* → agent view has nothing behind it, so the visor stays
+        a terminal. `default_session_mode()` already collapses to `Terminal`
+        in that case, which is what made this one line rather than a special
+        case.
+
+      **`opens_agent` reports the effective answer, not the policy** — the
+      first version reported `fork::quake_visor_opens_agent()` directly and so
+      answered `true` while opening a terminal, because AI was off. Same shape
+      of bug as T8.5's `pane_contents` vs `visible_pane_ids`: two notions of
+      the same question, one in the report and one in the behaviour. Fixed by
+      giving both a single function.
+
+      **Two new `warpctrl` actions, 105 → 107**: `window.visor.toggle` and
+      `window.visor.status`. Not decoration — synthetic keystrokes reach no
+      X11 client under WSLg (see "it is not Warp, and X11 is exhausted"), so
+      without a second entry point this feature could not be exercised here at
+      all. `toggle` dispatches the same global action the shortcut does, so it
+      works with nothing bound.
+
+      *`toggle` deliberately does not report post-call state*, unlike
+      `pane.main.*`. `ModelContext::dispatch_global_action` **queues an
+      effect** that runs after the request returns, so any state read beside it
+      is the state from before the toggle. Reporting it would be a confident
+      wrong answer; `status` is a separate call for that reason.
+
+      **Nothing was needed for the command palette.** Upstream already
+      registers "Show Dedicated Hotkey Window" and its hide twin as
+      `FixedBinding`s, gated on `QUAKE_MODE_ENABLED_CONTEXT_FLAG`. The gate,
+      again, was a setting.
+
+      Verified 2026-08-22 across four fresh launches on WSLg, each checked two
+      independent ways — the X11 window title and `warpctrl agent list`. Full
+      table under "The visor: a drop-down agent on a hotkey" in `README.md`.
+      `state` reads `pending_open` rather than `open` from a script, because
+      Warp is not the focused app; that is documented upstream behaviour and
+      not a failure.
+
+      **Left undone**: the visor is a *window*, and T8.5's main pane is
+      per-tab, so "point the visor at the lead agent" is still only half true —
+      it opens an agent, but not one that knows about another window's
+      designated pane. That is cross-window agent context and a separate idea.
 
 - [ ] **T8.2** Tab → pane drag, with a drop target you can see. (I3)
       Quadrant split-on-drop is *implemented*

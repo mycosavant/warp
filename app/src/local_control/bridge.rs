@@ -11,7 +11,7 @@ use warpui::{Entity, ModelContext, SingletonEntity};
 
 use crate::local_control::handlers::{
     agent, app_state, close, drive_objects, drive_sync, main_pane, metadata, metadata_config,
-    remote_wsl, settings_surfaces,
+    remote_wsl, settings_surfaces, visor,
 };
 use crate::local_control::permissions::{
     ensure_action_allowed, ensure_feature_enabled, ensure_protocol_version,
@@ -93,6 +93,8 @@ impl LocalControlBridge {
             ActionKind::RemoteWslConnect => {
                 remote_wsl::connect(&request.action.params, &request.target, ctx)
             }
+            ActionKind::WindowVisorToggle => visor::toggle(&self.instance_id, &request.target, ctx),
+            ActionKind::WindowVisorStatus => visor::status(&request.target, ctx),
             ActionKind::WindowList => metadata::window_list(&request.target, ctx),
             ActionKind::WindowInspect => metadata::window_inspect(&request.target, ctx),
             ActionKind::TabList => metadata::tab_list(&request.target, ctx),

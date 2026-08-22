@@ -86,8 +86,8 @@ use crate::settings::cloud_preferences_syncer::{
     CloudPreferencesSyncer, CloudPreferencesSyncerEvent,
 };
 use crate::settings::{
-    AISettings, QuakeModeSettings, ThemeSettings, apply_account_first_onboarding_settings,
-    apply_onboarding_settings,
+    AISettings, DefaultSessionMode, QuakeModeSettings, ThemeSettings,
+    apply_account_first_onboarding_settings, apply_onboarding_settings,
 };
 use crate::settings_view::mcp_servers_page::MCPServersSettingsPage;
 use crate::settings_view::{OpenTeamsSettingsModalArgs, SettingsSection, flags};
@@ -204,8 +204,8 @@ fn refresh_onboarding_account_state(ctx: &mut ViewContext<RootView>) {
     });
 }
 
-#[derive(Debug, Clone)]
-enum WindowState {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WindowState {
     /// Quake mode window is open and visible on the screen.
     Open,
     /// Quake mode window is opening but has not become the key window yet.
@@ -1375,6 +1375,19 @@ pub fn quake_mode_window_is_open() -> bool {
         .unwrap_or_default()
 }
 
+/// The hotkey window's lifecycle state, or `None` when this process has never
+/// created one.
+///
+/// [`quake_mode_window_is_open`] flattens `Hidden` and "never created" into the
+/// same `false`, which is right for its callers and wrong for a caller that
+/// wants to know whether the next toggle will build a window or reveal one.
+/// `warpctrl window.visor.status` reports this (`.fork/TASKS.md` T8.1).
+pub fn quake_mode_window_state() -> Option<WindowState> {
+    let quake_mode_state = QUAKE_STATE.lock();
+
+    quake_mode_state.as_ref().map(|state| state.window_state)
+}
+
 pub fn quake_mode_window_id() -> Option<WindowId> {
     let quake_mode_state = QUAKE_STATE.lock();
 
@@ -1518,6 +1531,7 @@ fn toggle_quake_mode_window(global_resource_handles: &GlobalResourceHandles, ctx
                         ctx,
                     );
                     view.focus(ctx);
+                    open_agent_visor(&view, ctx);
                     view
                 },
             );
@@ -1568,6 +1582,61 @@ fn toggle_quake_mode_window(global_resource_handles: &GlobalResourceHandles, ctx
             }
         }
     };
+}
+
+/// Whether a hotkey window created *now* would open in agent view — the
+/// "visor" (`.fork/TASKS.md` T8.1).
+///
+/// The effective answer, not fork policy. Two things outrank the policy in
+/// opposite directions, and reporting the policy alone would be wrong about
+/// both:
+///
+/// * with no AI enabled there is nothing for an agent view to talk to, and the
+///   window stays a terminal however the policy is set;
+/// * with the *default session mode* already `Agent` the window is an agent
+///   whatever the policy says, because the workspace gets there on its own.
+///
+/// [`open_agent_visor`] is the half of this the fork has to implement, and
+/// `warpctrl window.visor.status` reports it. Sharing one function is what
+/// stops the report and the behaviour drifting apart.
+///
+/// Says nothing about a window that is already open: that one keeps whatever
+/// it was built with, and toggling only hides and reveals it.
+pub fn visor_opens_agent(ctx: &AppContext) -> bool {
+    let ai_settings = AISettings::as_ref(ctx);
+    ai_settings.is_any_ai_enabled(ctx)
+        && (ai_settings.default_session_mode(ctx) == DefaultSessionMode::Agent
+            || crate::fork::quake_visor_opens_agent())
+}
+
+/// Puts the freshly-created hotkey window into agent view.
+///
+/// This runs inside `add_window`'s builder, after `RootView::new` has already
+/// laid the workspace out, because that is the only point where the window's
+/// first session exists and nothing has been shown yet. Entering agent view
+/// later would be visible as a terminal that turns into an agent.
+///
+/// Silent when there is nothing to convert. `configure_empty_workspace` does
+/// not always produce a session — onboarding and the Warp Home placeholder both
+/// take the window instead — and `enter_agent_view_on_active_tab` no-ops in
+/// exactly those cases.
+fn open_agent_visor(view: &RootView, ctx: &mut ViewContext<RootView>) {
+    // `configure_empty_workspace` has already entered agent view when the
+    // default session mode is `Agent`, so doing it again would start a second
+    // conversation in the same pane. The fork only converts the case that
+    // setting leaves as a terminal.
+    let already_entered =
+        AISettings::as_ref(ctx).default_session_mode(ctx) == DefaultSessionMode::Agent;
+    if already_entered || !visor_opens_agent(ctx) {
+        return;
+    }
+
+    let Some(workspace) = view.workspace_view().cloned() else {
+        return;
+    };
+    workspace.update(ctx, |workspace, ctx| {
+        workspace.enter_agent_view_on_active_tab(ctx);
+    });
 }
 
 /// This action will show or hide all of Warp's windows except the quake window

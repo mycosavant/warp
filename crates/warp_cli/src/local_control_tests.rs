@@ -693,6 +693,14 @@ fn retained_action_examples() -> Vec<(ActionKind, Vec<&'static str>)> {
             ActionKind::PaneMainClear,
             vec!["warpctrl", "pane", "main", "clear"],
         ),
+        (
+            ActionKind::WindowVisorToggle,
+            vec!["warpctrl", "window", "visor", "toggle"],
+        ),
+        (
+            ActionKind::WindowVisorStatus,
+            vec!["warpctrl", "window", "visor", "status"],
+        ),
         (ActionKind::SlashList, vec!["warpctrl", "slash", "list"]),
         (
             ActionKind::SlashRun,
@@ -727,6 +735,10 @@ fn parsed_action_kind(command: &ControlCommand) -> Option<ActionKind> {
             WindowCommand::Create(_) => Some(ActionKind::WindowCreate),
             WindowCommand::Focus(_) => Some(ActionKind::WindowFocus),
             WindowCommand::Close(_) => Some(ActionKind::WindowClose),
+            WindowCommand::Visor(command) => match command {
+                WindowVisorCommand::Toggle(_) => Some(ActionKind::WindowVisorToggle),
+                WindowVisorCommand::Status(_) => Some(ActionKind::WindowVisorStatus),
+            },
         },
         ControlCommand::Tab(command) => match command {
             TabCommand::List(_) => Some(ActionKind::TabList),

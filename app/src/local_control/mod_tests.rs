@@ -160,16 +160,17 @@ fn capabilities_advertises_the_complete_catalog() {
     // T6.6), the four that reach the object store one object at a time
     // (`drive.object.list`, `.get`, `.create` and `.trash`, T1.12), the two
     // that reach a WSL distribution (`remote.wsl.list` and `.connect`, I16),
-    // and the three that read and set a tab's main pane (`pane.main.get`,
-    // `.set` and `.clear`, T8.5).
+    // the three that read and set a tab's main pane (`pane.main.get`, `.set`
+    // and `.clear`, T8.5), and the two that drive the dedicated hotkey window
+    // (`window.visor.toggle` and `.status`, T8.1).
     //
     // **This is the second count pin, and it is easy to miss.** Its twin is
-    // `catalog_has_exactly_105_retained_actions` in
+    // `catalog_has_exactly_107_retained_actions` in
     // `crates/local_control/src/protocol_tests.rs`, which asserts the same
     // number about `ActionKind::ALL`. T8.6 updated that one and left this one
     // red, because `cargo test -p local_control` is quick and this lives in the
     // app crate. Change both together, and run `-p warp --lib local_control`.
-    assert_eq!(capabilities().len(), 105);
+    assert_eq!(capabilities().len(), 107);
 }
 
 #[test]

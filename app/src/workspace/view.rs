@@ -12744,7 +12744,11 @@ impl Workspace {
     /// Enters agent view with a new conversation on the active tab's terminal.
     ///
     /// Used after adding a new tab when the session mode should default to agent view.
-    fn enter_agent_view_on_active_tab(&self, ctx: &mut ViewContext<Self>) {
+    ///
+    /// Also the fork's hotkey-window visor (`root_view::open_agent_visor`),
+    /// which needs the same conversion for a window the default-session-mode
+    /// setting deliberately does not cover.
+    pub(crate) fn enter_agent_view_on_active_tab(&self, ctx: &mut ViewContext<Self>) {
         self.active_tab_pane_group().update(ctx, |pane_group, ctx| {
             if let Some(terminal_view) = pane_group.active_session_view(ctx) {
                 terminal_view.update(ctx, |view, ctx| {

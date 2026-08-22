@@ -200,7 +200,7 @@ fn the_drive_object_actions_this_fork_implements_do_parse() {
 }
 
 #[test]
-fn catalog_has_exactly_105_retained_actions() {
+fn catalog_has_exactly_107_retained_actions() {
     // 84 upstream actions, plus the fork's `input.submit`, the three
     // `drive.sync.*` actions, the eight that let an agent drive an agent
     // (`agent.list`, `agent.prompt`, `slash.list` and `slash.run` from T6.5,
@@ -212,8 +212,11 @@ fn catalog_has_exactly_105_retained_actions() {
     // server to a pane's session because Warp's second remote transport has no
     // ambient trigger the way an `ssh` command is one (I16), and the three that
     // read and set a tab's main pane — the one its ambient surfaces follow
-    // instead of following focus (`pane.main.get`, `.set` and `.clear`, T8.5).
-    assert_eq!(ActionKind::ALL.len(), 105);
+    // instead of following focus (`pane.main.get`, `.set` and `.clear`, T8.5),
+    // and the two that drive the dedicated hotkey window, which upstream can
+    // only be reached by a global keyboard shortcut (`window.visor.toggle`
+    // and `.status`, T8.1).
+    assert_eq!(ActionKind::ALL.len(), 107);
 }
 
 #[test]

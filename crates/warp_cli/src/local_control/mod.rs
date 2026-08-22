@@ -306,6 +306,29 @@ pub enum WindowCommand {
 
     /// Close a window.
     Close(TargetArgs),
+
+    /// The dedicated hotkey window — a drop-down agent prompt.
+    #[command(subcommand)]
+    Visor(WindowVisorCommand),
+}
+
+/// Commands that drive the dedicated hotkey window ("quake mode").
+///
+/// Upstream reaches this window only through a global keyboard shortcut. These
+/// dispatch the same action the shortcut does, so they work whether or not one
+/// is bound — which is what makes the window testable on a platform whose
+/// global grabs do not work, and what lets an agent ask for a scratch window
+/// by name.
+#[derive(Debug, Clone, Subcommand)]
+pub enum WindowVisorCommand {
+    /// Show the hotkey window, or hide it if it is already showing.
+    ///
+    /// Acknowledges immediately and does not report the resulting state: the
+    /// toggle runs after this call returns. Follow with `status`.
+    Toggle(TargetArgs),
+
+    /// Report whether the hotkey window exists, is showing, and opens as an agent.
+    Status(TargetArgs),
 }
 
 /// Commands that control tabs in the selected Warp app instance.

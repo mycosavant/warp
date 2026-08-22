@@ -106,6 +106,7 @@ pub enum ActionResultSpec {
     RemoteWslDistroList,
     RemoteWslConnectStarted,
     MainPane,
+    VisorStatus,
 }
 
 /// Discoverable metadata describing one local-control action.
@@ -219,6 +220,8 @@ define_action_catalog! {
         WindowCreate => { name: "window.create", status: Implemented, target: Window, params: TabCreate, result: Acknowledgement },
         WindowFocus => { name: "window.focus", status: Implemented, target: Window, params: None, result: Acknowledgement },
         WindowClose => { name: "window.close", status: Implemented, target: Window, params: None, result: Acknowledgement },
+        WindowVisorToggle => { name: "window.visor.toggle", status: Implemented, target: Window, params: None, result: Acknowledgement },
+        WindowVisorStatus => { name: "window.visor.status", status: Implemented, target: Window, params: None, result: VisorStatus },
     }
 
     tab {

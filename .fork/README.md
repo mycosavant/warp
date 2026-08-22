@@ -28,7 +28,7 @@ then each capability the fork opened.
 * [**Warp's remote server, in a WSL distribution**](#warps-remote-server-in-a-wsl-distribution) — the Zed-style split, and how to run it
 
 **What the fork opened**
-* [Driving Warp from an agent (`warpctrl`)](#driving-warp-from-an-agent-warpctrl) — 100 actions, the orchestration surface. The largest section; has its own sub-index.
+* [Driving Warp from an agent (`warpctrl`)](#driving-warp-from-an-agent-warpctrl) — 107 actions, the orchestration surface. The largest section; has its own sub-index.
 * [Warp Drive without an account](#warp-drive-without-an-account) · [Your drive as a git repository](#your-drive-as-a-git-repository)
 * [The agent, answered by your own Claude](#the-agent-answered-by-your-own-claude-experimental)
 * [Voice input, transcribed on this machine](#voice-input-transcribed-on-this-machine)
@@ -699,10 +699,12 @@ In this section: [what it can do](#what-it-can-do) ·
 
 ### What it can do
 
-**100 actions. Every one of them run against a live build — the first 92 on
+**107 actions. Every one of them run against a live build — the first 92 on
 Windows, then T6.6's four `agent` verbs and T1.12's four `drive object` verbs
-on Linux, so this list is the verified surface rather than the catalog's own
-claim about itself.** `warpctrl action list` emits the catalog as JSON with
+on Linux, I16's two `remote wsl` verbs back on Windows, and T8.5's three
+`pane main` and T8.1's two `window visor` verbs on Linux again. So this list is
+the verified surface rather than the catalog's own claim about itself.**
+`warpctrl action list` emits the catalog as JSON with
 `parameter_spec`, `result_spec` and `target_scope` per action, so tool
 definitions can be generated from it rather than hardcoded.
 
@@ -711,9 +713,9 @@ definitions can be generated from it rather than hardcoded.
 | `instance`   | 2  | list inspect |
 | `app`        | 4  | ping version active focus |
 | `capability` | 2  | list inspect |
-| `window`     | 5  | list inspect create focus close |
+| `window`     | 7  | list inspect create focus close, visor toggle/status — the last two **fork-added**, see T8.1 |
 | `tab`        | 10 | list inspect create activate move close rename reset-name color set/clear |
-| `pane`       | 11 | list inspect split focus navigate resize maximize unmaximize close rename reset-name |
+| `pane`       | 14 | list inspect split focus navigate resize maximize unmaximize close rename reset-name, main get/set/clear — the last three **fork-added**, see T8.5 |
 | `session`    | 6  | list inspect activate previous next reopen-closed |
 | `input`      | 3  | insert replace submit |
 | `theme`      | 6  | list get set system-set light-set dark-set |
@@ -726,6 +728,7 @@ definitions can be generated from it rather than hardcoded.
 | `drive`      | 7  | status export import, object list/get/create/trash — **fork-added**, see T4.4 and T1.12 |
 | `agent`      | 6  | list prompt read spawn cancel reveal — **fork-added**, see T6.5/T6.6 |
 | `slash`      | 2  | list run — **fork-added**, see T6.5 |
+| `remote`     | 2  | wsl list, wsl connect — **fork-added**, see I16 |
 
 `warpctrl graph` is not in the table because it is not an action: it is a loop
 over `agent spawn` and `agent read` that runs a plan from a file. See "A plan
@@ -1229,6 +1232,112 @@ rather than at the ten pane-removal sites, and the check is `visible_pane_ids`,
 **not** `pane_contents` — the latter deliberately outlives a close so the pane
 can be restored, so a pane absent from `pane list` can still be in it. The first
 version of this got that wrong and reported a closed pane as still main.
+
+## The visor: a drop-down agent on a hotkey
+
+Warp already ships a "quake mode" window — a pinned, screen-edge panel on a
+global shortcut, with its own geometry per edge and hide-on-blur. Upstream puts
+a **shell** in it. The fork puts an **agent** in it, on the argument that a
+window you drop down for fifteen seconds is far more useful as something you
+can ask than as a fifth terminal.
+
+That is the whole change. Everything else — the window style, the shortcut
+registration, the per-edge sizing, the show/hide state machine — was already
+finished and cross-platform.
+
+### Switching it on
+
+Two settings, both upstream's, under **Settings → Features → Global hotkey**:
+
+```toml
+[global_hotkey.dedicated_window]
+enabled = true
+
+[global_hotkey.dedicated_window.settings]
+keybinding = "ctrl-shift-Q"
+active_pin_position = "top"
+```
+
+**And AI must be enabled** (`agents.warp_agent.is_any_ai_enabled`). With it off
+the visor opens a plain terminal — deliberately, since an agent view with
+nothing behind it is worse than a shell. `window visor status` reports the
+effective answer, so you never have to guess which of the two you will get.
+
+The command palette already has **"Show Dedicated Hotkey Window"** and its
+hide twin, gated on the `enabled` setting above. No fork entry was needed.
+
+### Driving it from `warpctrl`
+
+```powershell
+warpctrl window visor status
+warpctrl window visor toggle
+```
+
+```json
+{ "state": "pending_open", "window_id": "1", "opens_agent": true,
+  "hotkey_enabled": true, "hotkey": "ctrl-shift-Q" }
+```
+
+`window_id` is the same string `window list` uses, so the two answers join.
+
+Four states, not a boolean, because "never created" and "created then hidden"
+behave differently on the next toggle — the first builds a window, the second
+reveals the existing one:
+
+| `state` | meaning |
+|---|---|
+| `absent` | no hotkey window in this process |
+| `open` | on screen and the key window |
+| `pending_open` | shown, not yet key — **what you see from a script**, because Warp was not the focused app |
+| `hidden` | created, off screen |
+
+**`toggle` does not report the resulting state, and that is not an oversight.**
+Dispatching a global action from the control plane queues an effect that runs
+*after* the request returns, so anything read alongside it would be the state
+from before the toggle. Call `status` after. (`pane.main.*` answers with
+post-call state because it mutates directly; this one cannot.)
+
+### Why the control plane owns a hotkey at all
+
+Because otherwise this feature could not be tested here. Synthetic keystrokes
+reach no X11 client under WSLg — XTEST and XSendEvent both, `xev` included, see
+"it is not Warp, and X11 is exhausted" in `TASKS.md`. `window visor toggle`
+dispatches the same action the shortcut does, without going through the
+shortcut, so it works with no key bound and on a platform whose global grabs do
+not work. It is also the better door for an agent: a shortcut is for a person's
+hands.
+
+### Turning it off
+
+`WARP_FORK_QUAKE_VISOR=0` (or `off`/`false`) restores upstream's terminal
+without giving up the hotkey window. Unlike every other env-gated predicate in
+`fork.rs`, this one defaults **on**: the others substitute for something that
+works, and this one only decides what goes in a window the fork's user opted
+into.
+
+### Verified 2026-08-22, by running it
+
+Four configurations, each launched fresh on WSLg, each checked two independent
+ways — the X11 window title and `warpctrl agent list`:
+
+| config | X11 title | conversations |
+|---|---|---|
+| AI on, default mode `terminal` | `New agent conversation` | 1, in the visor's pane |
+| `WARP_FORK_QUAKE_VISOR=0` | `Warp` | 0 |
+| AI **off** | `Warp` | 0 |
+| default mode already `agent` | `New agent conversation` | **1**, not 2 |
+
+That last row is the one worth keeping. When the default session mode is
+already `Agent` the workspace enters agent view on its own on the way to the
+window, so forcing it a second time would start a second conversation in the
+same pane. The fork only converts the case the setting leaves as a terminal.
+
+Hide and re-show also stays at one window and one conversation: revealing takes
+a different branch that never rebuilds the workspace.
+
+Both windows carry the quake geometry — `1387x260+32+32`, top-anchored — and
+the app id is `dev.warp.WarpOss-hotkey`, which is how you tell the visor from a
+normal window in `xwininfo -root -tree` without matching on the title.
 
 ## Voice input, transcribed on this machine
 

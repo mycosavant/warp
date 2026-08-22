@@ -25,7 +25,7 @@ use crate::local_control::{
     SessionCommand, SettingCommand, SlashCommand, SurfaceCommand, SurfaceOpenCommand,
     SurfaceOpenToggleCommand, SurfaceQueryCommand, SurfaceSettingsCommand, SurfaceToggleCommand,
     TabActivateArgs, TabCloseArgs, TabColorCommand, TabCommand, TargetArgs, ThemeCommand,
-    WindowCommand,
+    WindowCommand, WindowVisorCommand,
 };
 
 pub(super) fn run_surface_command(
@@ -355,6 +355,14 @@ pub(super) fn run_window_command(
         WindowCommand::Close(args) => {
             run_action_with_params(args, ActionKind::WindowClose, EmptyParams {}, output_format)
         }
+        WindowCommand::Visor(command) => match command {
+            WindowVisorCommand::Toggle(args) => {
+                run_action(args, ActionKind::WindowVisorToggle, output_format)
+            }
+            WindowVisorCommand::Status(args) => {
+                run_action(args, ActionKind::WindowVisorStatus, output_format)
+            }
+        },
     }
 }
 
