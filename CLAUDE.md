@@ -115,6 +115,17 @@ edges, so `rustfmt some_mod.rs` silently rewrites `some_mod_tests.rs` too.
 Whichever you run, check `git status` afterwards and revert files you did not
 mean to touch.
 
+**Screenshotting the Windows build: `shot.ps1 -Process warp-oss`.** It
+captures one window via `PrintWindow(hwnd, hdc, PW_RENDERFULLCONTENT)` —
+*without* raising or focusing it, and regardless of what is on top. Omit
+`-Process` and it silently falls back to a grab of the entire virtual screen,
+which on a working desktop is unreadable. `CopyFromScreen` cannot substitute
+(it only sees what is displayed), raising the window first cannot substitute
+(the foreground lock refuses it from a background process), and the `2` flag is
+not optional (GPU-composited windows capture blank without it). Full reasoning
+under "The scripts" in `.fork/README.md` — **this recipe has been lost to a
+cleared session twice.**
+
 **Running on WSLg:** `env -u WAYLAND_DISPLAY LIBGL_ALWAYS_SOFTWARE=1
 ./target/release/warp-oss`. Unsetting `WAYLAND_DISPLAY` puts winit on X11, which
 is what screenshots and global hotkeys need. Synthetic clicks land there;

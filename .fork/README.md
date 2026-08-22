@@ -1938,8 +1938,15 @@ An agent running in WSL can drive the Windows build end to end, because WSL
 interop makes `powershell.exe` an ordinary executable:
 
 ```bash
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File 'C:\dev\shot.ps1' -Out 'C:\dev\shots\x.png'
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File 'C:\dev\shot.ps1' \
+    -Process warp-oss -Out 'C:\dev\shots\x.png' -Scale 0.5
 ```
+
+**Pass `-Process`.** Without it the script falls back to grabbing the whole
+virtual screen, which on a populated desktop is a 3640x1920 image of every
+window you have open and is close to useless for reading anything. With it you
+get Warp's window alone, cropped to its own bounds. See below for why that
+works even when the window is buried.
 
 Anything under `/mnt/c` is visible to both sides, so scripts, screenshots and
 proof files pass between them as plain files. No SSH, no agent, no daemon.
@@ -1949,7 +1956,7 @@ proof files pass between them as plain files. No SSH, no agent, no daemon.
 | Script | What it does |
 |---|---|
 | `C:\dev\build.ps1` | Builds `warp-oss.exe` with the env that winget's PATH changes never reach. |
-| `C:\dev\shot.ps1`  | Screenshots a window (or the whole virtual screen) to PNG. |
+| `C:\dev\shot.ps1`  | Screenshots **one window by process name**, even when buried or unfocused (`PrintWindow`). Falls back to the whole virtual screen without `-Process`. |
 | `C:\dev\click.ps1` | Clicks inside a window, without touching the physical mouse. |
 | `C:\dev\keys.ps1`  | Posts keystrokes to one window, without taking focus. |
 | `C:\dev\sweep.ps1` | Runs every `warpctrl` action and records what each one did. |
@@ -1990,12 +1997,58 @@ like a successful incremental build that had nothing to do. Check
 `$LASTEXITCODE` and the binary's timestamp, not the exit status of the script.
 This cost a full cycle before it was spotted.
 
-`shot.ps1` takes `-Process warp-oss` to capture just Warp's window after
-raising it, `-Scale` to shrink the output, and `-DelaySeconds` to wait for the
-UI to settle. It calls `SetProcessDPIAware` first — without that, the window
-rect and the captured pixels disagree on a scaled display and the grab lands
-in the wrong place. It falls back to the whole virtual screen when the process
-has no `MainWindowHandle` yet, which is the normal state during early startup.
+#### `shot.ps1 -Process`: capture a window that is not on screen
+
+This is the single most useful thing in this directory and the recipe worth
+memorising, because it has now been lost to a cleared session **twice** — the
+script's own header records the first rebuild.
+
+`-Process warp-oss` captures Warp's window **without raising it, without
+focusing it, and regardless of what is on top of it.** An earlier version of
+this paragraph said "after raising it"; that was wrong and undersold the point.
+Nothing is raised. The window can be fully buried under a dozen others and the
+capture is still clean.
+
+The mechanism is `PrintWindow(hwnd, hdc, PW_RENDERFULLCONTENT)` — you ask the
+window to *draw itself* into a bitmap you own, rather than reading pixels off
+the display:
+
+```csharp
+[DllImport("user32.dll")] static extern bool PrintWindow(IntPtr h, IntPtr hdc, uint flags);
+
+// PW_RENDERFULLCONTENT = 2
+Bitmap bmp = new Bitmap(w, h, PixelFormat.Format32bppArgb);
+using (Graphics g = Graphics.FromImage(bmp)) {
+    IntPtr hdc = g.GetHdc();
+    PrintWindow(hwnd, hdc, 2);   // <- the 2 is the whole trick
+    g.ReleaseHdc(hdc);
+}
+```
+
+Three things make this the right tool, and each is a wall the obvious approach
+hits:
+
+* **`CopyFromScreen` only returns what is physically displayed.** Any
+  overlapping window lands in your shot. On a working desktop that is most of
+  the shot.
+* **You cannot just raise the window first.** Windows refuses
+  `SetForegroundWindow` from a background process — the foreground lock — so
+  the obvious fix does not work, and where it *does* work it reorders the
+  user's windows underneath them, which is its own problem.
+* **`PW_RENDERFULLCONTENT` (2) is not optional.** Warp is
+  DirectComposition/GPU-rendered, and `PrintWindow(hwnd, hdc, 0)` returns a
+  blank frame for such windows. Passing `0` looks like a broken screenshot
+  rather than a wrong flag, which is exactly the sort of thing that eats an
+  afternoon.
+
+`SetProcessDPIAware()` has to be called before any of it — without it the
+window rect and the captured pixels disagree on a scaled display and the grab
+lands in the wrong place.
+
+Also: `-Scale` to shrink the output, `-DelaySeconds` to let the UI settle. It
+falls back to the whole virtual screen when the process has no
+`MainWindowHandle` yet, which is the normal state during early startup — and
+which is also what you get if you forget `-Process`.
 
 A full-screen grab at this display's 2560x1440 is around 4 MB; `-Scale 0.5`
 brings it to roughly 800 KB, which is still legible for checking whether a
