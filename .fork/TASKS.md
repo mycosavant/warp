@@ -3608,6 +3608,114 @@ what could run in parallel, which is the plan it would emit next.
 
 ---
 
+## T8 — The app you actually use  ← NEXT
+
+Phases 0–7 made the fork *correct*: no telemetry, no account, your agents on
+your keys, all of it measured rather than asserted. T8 is the first phase aimed
+at making it **pleasant**, and it starts from a release build that exists to be
+lived in rather than tested.
+
+The full brain dump, all fourteen ideas, with what already exists under each
+and an argument for or against, is in **`.fork/IDEAS.md`**. That file is the
+holding pen; this section is only what has been selected out of it.
+
+Selection rule, unchanged from the rest of this board: value per line of code.
+The five below were picked because in every case **the mechanism already exists
+and is wired to the wrong thing** — which is the same finding that has driven
+T1, T4, T5 and T7, and by now should be the prior rather than the surprise.
+
+- [x] **T8.0** Linux release build, for daily use rather than for tests.
+      `cargo build --bin warp-oss --features gui,warp_control_cli --release`.
+      Verified 2026-08-21 by running: `--warpctrl` dispatches out of the
+      release binary, the GUI window opens, discovery registers, and
+      `window list` / `tab list` / `action list` all answer. `--release` means
+      `debug_assertions` is off, so `UserInput`'s redaction is live and the log
+      stops carrying what you typed (see "Your development build's log contains
+      what you typed" in `README.md`).
+
+- [ ] **T8.1** Quake visor for the lead agent. (`IDEAS.md` I8)
+      Quake mode is a finished, cross-platform feature nobody has pointed at an
+      agent: `GlobalHotkeyMode::QuakeMode`, `toggle_quake_mode_window`
+      (`root_view.rs:1479`), `WindowStyle::Pin` handled in the winit backend.
+      `PanesLayout` already has an `AmbientAgent` variant.
+      **First step is not code:** enable
+      `global_hotkey.dedicated_window.enabled`, bind a key, and press it. The
+      Linux global-hotkey path is X11-only, so which display server Warp is on
+      decides whether it can fire — and the README's own WSLg recipe
+      (`env -u WAYLAND_DISPLAY …`) already puts it on X11. Verified today by
+      running the same release binary both ways and diffing the mapped
+      files: plain launch is Wayland, documented launch is not. Whether the
+      key *fires* is still untested, because WSLg takes synthetic clicks but
+      not synthetic keystrokes — the same wall as T2.5. Thirty seconds for
+      whoever is at the keyboard; try Windows too, where `RegisterHotKey` has
+      the fewest ways to fail.
+
+- [ ] **T8.2** Tab → pane drag, with a drop target you can see. (I3)
+      Quadrant split-on-drop is *implemented*
+      (`pane_group/pane/view/header/mod.rs:853`, with an ASCII diagram) and the
+      tree surgery exists (`tree.rs:260`). Two things make it feel unintuitive,
+      and both are precise: the drag source is the **pane header** rather than
+      the tab, and the split is emitted from `PaneHeaderDragged` rather than
+      `PaneHeaderDropped`, so the layout reflows live under the cursor and
+      there is no preview distinct from the result. Split preview from commit,
+      add the tab as a drag source, and add right-click → Split.
+
+- [ ] **T8.3** The thread inbox, and `settled`. (I1)
+      `ToolPanelView::ConversationListView` already exists with 2,198 lines
+      behind it, and `AgentConversationEntry` already carries every field an
+      inbox row wants. `settled: bool` mirrors the existing
+      `AgentConversationData.pinned` — a JSON blob column, so **no migration**.
+      **The trap:** `MAX_PERSISTED_CONVERSATION_COUNT = 200` with tree-wise
+      eviction (`persistence/agent.rs:41`). An archive that evicts is not an
+      archive; exempt settled rows or the feature silently loses work at
+      conversation 201.
+
+- [ ] **T8.4** Pin what a tool claims to be. (I11)
+      Hash each MCP tool's `(name, description, input_schema)` at connect,
+      store it, and say so when a digest changes under an existing name. This
+      is the tool rug-pull defence: a server can rewrite the prompt the model
+      reads, after you approved it, and nothing currently notices. `sha2` is
+      already a workspace dependency — **no new dep**, and no blake3. Warn in
+      v1; do not auto-block until the noise level is known.
+
+- [ ] **T8.5** Panes that follow the CWD. (I6)
+      A setting plus a subscription. `working_directories.rs`,
+      `startup_directory.rs` and `ActiveFileModel` all exist. Follow the
+      *focused pane* rather than the active tab, debounce it, and default it
+      off.
+
+### Deliberately not selected, and why
+
+Recorded here because the arguments matter more than the verdicts; the full
+version of each is in `IDEAS.md`.
+
+* **Context pruning / relevance scoring** (I9) is the most interesting idea on
+  the list and the one most likely to be built wrong. T5.2 already established
+  that the client holds the entire transcript and re-sends it every turn
+  through one function, so this is a *filter*, not a port of
+  `vscode-prompt-tsx`. The caching answer is concrete: pruning invalidates the
+  cache from the first pruned message onward, so **prune rarely and in large
+  chunks** — sixty small prunes cost sixty uncached turns for the same tokens
+  removed. But nobody here has measured what a long conversation actually
+  contains, and pruning the wrong thing does not throw, it silently degrades.
+  **First task is an inspector, not a pruner.**
+
+* **Integrated browser** (I10) is argued against on this fork's own terms.
+  There is no web engine anywhere in the tree, and adding one introduces a
+  second network stack outside `crates/http_client/src/egress.rs` — which is
+  the thing the "nothing escapes" measurement rests on. The claim would become
+  conditional the day a webview lands. The `monitor` third of the idea already
+  exists as `network_log_pane.rs`.
+
+* **Per-pane zoom / font size** (I4) needs a count before a scope: the running
+  build reports exactly one `appearance.text.font_size` and one
+  `appearance.window.zoom_level` for the whole app.
+
+* **Composer** (I2), **`view-as`** (I7) and **main pane** (I13) are waiting on
+  specifics — the first from a week of use, the other two from a sentence.
+
+---
+
 ## Decisions on record
 
 - **Claude subscription auth: do not reimplement Anthropic's OAuth.**
