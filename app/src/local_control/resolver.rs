@@ -4,9 +4,9 @@ use ::local_control::protocol::{
     AgentRevealParams, AgentSpawnParams, BindingNameParams, BooleanValueParams, ColorValueParams,
     DirectionParams, DriveObjectCreateParams, DriveObjectGetParams, DriveObjectListParams,
     DriveObjectTrashParams, EmptyParams, FileOpenParams, KeyParams, KeyValueParams,
-    NamespaceParams, PageQueryParams, PaneTarget, QueryParams, RenameParams, ResizeParams,
-    SessionTarget, SlashRunParams, TabActivateParams, TabCloseParams, TabCreateParams, TabTarget,
-    TargetSelector, TextParams, ThemeNameParams, WindowTarget,
+    NamespaceParams, PageQueryParams, PaneTarget, QueryParams, RemoteWslConnectParams,
+    RenameParams, ResizeParams, SessionTarget, SlashRunParams, TabActivateParams, TabCloseParams,
+    TabCreateParams, TabTarget, TargetSelector, TextParams, ThemeNameParams, WindowTarget,
 };
 use ::local_control::{ActionKind, ControlError, ErrorCode, TargetScope};
 use warpui::{AppContext, ModelContext, TypedActionView, ViewHandle, WindowId};
@@ -60,6 +60,7 @@ pub(crate) fn validate_action_params(action: &::local_control::Action) -> Result
         ActionParameterSpec::AgentReveal => parse_params::<AgentRevealParams>(action),
         ActionParameterSpec::SlashRun => parse_params::<SlashRunParams>(action),
         ActionParameterSpec::DriveObjectList => parse_params::<DriveObjectListParams>(action),
+        ActionParameterSpec::RemoteWslConnect => parse_params::<RemoteWslConnectParams>(action),
         ActionParameterSpec::DriveObjectGet => parse_params::<DriveObjectGetParams>(action),
         ActionParameterSpec::DriveObjectCreate => parse_params::<DriveObjectCreateParams>(action),
         ActionParameterSpec::DriveObjectTrash => parse_params::<DriveObjectTrashParams>(action),

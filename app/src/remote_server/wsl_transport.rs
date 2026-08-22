@@ -346,3 +346,59 @@ impl RemoteTransport for WslTransport {
 #[cfg(test)]
 #[path = "wsl_transport_tests.rs"]
 mod tests;
+
+/// Starts a remote server for `session_id` inside `distro`.
+///
+/// Shared by `warpctrl remote wsl connect` and the command-palette action, so
+/// the two cannot drift. Both arrive here having already resolved a session and
+/// a distribution; everything after that — the auth context, the transport, the
+/// manager call — is the same work, and duplicating it is how the two entry
+/// points would end up connecting to subtly different daemons.
+///
+/// Generic over the calling model because every dependency it reaches for is a
+/// singleton: the local-control bridge and `TerminalView` both satisfy it.
+///
+/// Returns once the setup pipeline has *started*.
+/// [`RemoteServerManager::connect_session`] spawns the binary check, install
+/// and handshake onto the background executor, so success is not knowable here
+/// and is reported later as `RemoteServerManagerEvent`s.
+pub fn start_wsl_remote_server<C>(
+    session_id: warp_core::session_id::SessionId,
+    distro: String,
+    ctx: &mut C,
+) where
+    C: warpui::UpdateModel + warpui::ReadModel + warpui::GetSingletonModelHandle,
+{
+    use warpui::SingletonEntity as _;
+
+    use crate::remote_server::auth_context::server_api_auth_context;
+
+    let auth_state = crate::auth::AuthStateProvider::handle(ctx)
+        .as_ref(ctx)
+        .get()
+        .clone();
+    let auth_client = crate::server::server_api::ServerApiProvider::handle(ctx)
+        .as_ref(ctx)
+        .get_auth_client();
+    let crash_reporting_enabled = crate::settings::PrivacySettings::handle(ctx)
+        .as_ref(ctx)
+        .is_crash_reporting_enabled;
+
+    // Tolerates being logged out by design: `server_api_auth_context` yields no
+    // bearer token when there is no account, and falls back to the anonymous id
+    // for the identity key that partitions the daemon's socket. Nothing on this
+    // path needs an account — verified by completing a credential-free
+    // `Initialize` handshake against a daemon this binary spawned.
+    let auth_context = Arc::new(server_api_auth_context(
+        auth_state,
+        auth_client,
+        crash_reporting_enabled,
+    ));
+
+    let transport = WslTransport::new(distro.clone(), auth_context.clone());
+    let label = format!("WSL: {distro}");
+    log::info!("Connecting remote server to WSL distro {distro} for session {session_id:?}");
+    remote_server::manager::RemoteServerManager::handle(ctx).update(ctx, |manager, ctx| {
+        manager.connect_session(session_id, transport, auth_context, Some(label), ctx);
+    });
+}

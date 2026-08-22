@@ -87,6 +87,9 @@ impl LocalControlBridge {
             ActionKind::DriveObjectCreate => drive_objects::create(&request.action.params, ctx),
             ActionKind::DriveObjectTrash => drive_objects::trash(&request.action.params, ctx),
             ActionKind::RemoteWslList => remote_wsl::list(ctx),
+            ActionKind::RemoteWslConnect => {
+                remote_wsl::connect(&request.action.params, &request.target, ctx)
+            }
             ActionKind::WindowList => metadata::window_list(&request.target, ctx),
             ActionKind::WindowInspect => metadata::window_inspect(&request.target, ctx),
             ActionKind::TabList => metadata::tab_list(&request.target, ctx),

@@ -1,7 +1,7 @@
-//! `remote.wsl.list` — which WSL distributions this machine has
-//! (`.fork/IDEAS.md`, I16).
+//! `remote.wsl.list` and `remote.wsl.connect` — reaching a WSL distribution
+//! with Warp's remote-development server (`.fork/IDEAS.md`, I16).
 //!
-//! # Why this action exists before any UI
+//! # Why these actions exist before any UI
 //!
 //! Warp's remote-development stack shipped with one transport, SSH, and it is
 //! only ever reached ambiently: warpify notices a submitted `ssh` command and
@@ -29,12 +29,18 @@
 
 use std::time::Duration;
 
+use ::local_control::ActionKind;
+use ::local_control::protocol::{
+    ControlError, ErrorCode, RemoteWslConnectParams, RemoteWslConnectStartedResult,
+    RemoteWslDistroListResult, TargetSelector,
+};
 use futures::executor::block_on;
-use local_control::protocol::{ControlError, ErrorCode, RemoteWslDistroListResult};
 use serde::Serialize;
 use warpui::ModelContext;
 
 use crate::local_control::bridge::LocalControlBridge;
+use crate::local_control::resolver::{input_target_pane_id, target_pane_group};
+use crate::remote_server::wsl_transport::start_wsl_remote_server;
 
 /// Upper bound on how long the main thread will wait for `wsl.exe -l -q`.
 ///
@@ -56,6 +62,94 @@ pub(crate) fn list(
     to_control_data(RemoteWslDistroListResult {
         available: !distros.is_empty(),
         distros,
+    })
+}
+
+/// Attaches a remote server to the targeted pane's terminal session, running
+/// inside a WSL distribution.
+///
+/// # Why a session and not a window
+///
+/// The SSH transport attaches to the pane running `ssh`, because that pane's
+/// shell *is* the remote one. WSL is the same relationship: the useful thing is
+/// a remote server serving the distro your shell is already in, so file
+/// browsing, code review and command generation happen on the Linux side of the
+/// 9p boundary rather than across it. So this is session-scoped, and the
+/// default distribution is the pane's own.
+///
+/// # Why this returns "started"
+///
+/// [`RemoteServerManager::connect_session`] advances the setup pipeline and
+/// spawns the rest onto the background executor. It cannot report success,
+/// because success has not happened yet — binary check, install and handshake
+/// all follow. A reply here means the pipeline began; the outcome arrives as
+/// `RemoteServerManagerEvent`s, and the observable proof is a
+/// `remote-server-daemon` process and a socket under `remote_server_dir()`.
+pub(crate) fn connect(
+    params: &serde_json::Value,
+    target: &TargetSelector,
+    ctx: &mut ModelContext<LocalControlBridge>,
+) -> Result<serde_json::Value, ControlError> {
+    let action = ActionKind::RemoteWslConnect;
+    let params: RemoteWslConnectParams = serde_json::from_value(params.clone()).map_err(|err| {
+        ControlError::with_details(
+            ErrorCode::InvalidParams,
+            "invalid parameters",
+            err.to_string(),
+        )
+    })?;
+
+    let pane_group = target_pane_group(action, target, ctx)?;
+    let pane_id = input_target_pane_id(action, target, &pane_group, ctx)?;
+    let terminal_view = pane_group
+        .read(ctx, |pane_group, ctx| {
+            pane_group.terminal_view_from_pane_id(pane_id, ctx)
+        })
+        .ok_or_else(|| {
+            ControlError::new(
+                ErrorCode::MissingTarget,
+                format!("{} requires a terminal session target", action.as_str()),
+            )
+        })?;
+
+    // `active_block_session_id` is the session the pane's most recent block
+    // belongs to, which is the same session a command typed there would join.
+    // `None` means the pane has not bootstrapped a shell yet.
+    let (session_id, pane_distro) = terminal_view.read(ctx, |view, ctx| {
+        (
+            view.active_block_session_id(),
+            view.active_session_wsl_distro(ctx),
+        )
+    });
+    let session_id = session_id.ok_or_else(|| {
+        ControlError::new(
+            ErrorCode::StaleTarget,
+            format!(
+                "{} found no bootstrapped terminal session in the target pane",
+                action.as_str()
+            ),
+        )
+    })?;
+
+    let distro_from_pane = params.distro.is_none();
+    let distro = params.distro.or(pane_distro).ok_or_else(|| {
+        ControlError::with_details(
+            ErrorCode::InvalidParams,
+            "no WSL distribution to connect to",
+            "the target pane is not running a WSL shell, so --distro is required; \
+             `remote wsl list` reports what is installed"
+                .to_owned(),
+        )
+    })?;
+
+    // Shared with the command-palette action so the two entry points cannot
+    // connect to subtly different daemons.
+    start_wsl_remote_server(session_id, distro.clone(), ctx);
+
+    to_control_data(RemoteWslConnectStartedResult {
+        session_id: session_id.as_u64(),
+        distro,
+        distro_from_pane,
     })
 }
 

@@ -7,9 +7,9 @@ use local_control::protocol::{
     AgentRevealParams, AgentRevealTarget, AgentSpawnParams, BindingNameParams, BooleanValueParams,
     ColorValueParams, ControlError, DirectionParams, DriveObjectCreateParams, DriveObjectGetParams,
     DriveObjectListParams, DriveObjectTrashParams, EmptyParams, ErrorCode, FileOpenParams,
-    KeyParams, KeyValueParams, PageQueryParams, QueryParams, RenameParams, RequestEnvelope,
-    ResizeParams, SettingListParams, SlashRunParams, TabActivateParams, TabActivationMode,
-    TabCloseMode, TabCloseParams, TabCreateParams, TextParams, ThemeNameParams,
+    KeyParams, KeyValueParams, PageQueryParams, QueryParams, RemoteWslConnectParams, RenameParams,
+    RequestEnvelope, ResizeParams, SettingListParams, SlashRunParams, TabActivateParams,
+    TabActivationMode, TabCloseMode, TabCloseParams, TabCreateParams, TextParams, ThemeNameParams,
 };
 use local_control::selection::select_instance;
 use serde::Serialize;
@@ -782,6 +782,14 @@ pub(super) fn run_remote_command(
             args,
             ActionKind::RemoteWslList,
             EmptyParams {},
+            output_format,
+        ),
+        RemoteCommand::Wsl(RemoteWslCommand::Connect(args)) => run_action_with_params(
+            args.target,
+            ActionKind::RemoteWslConnect,
+            RemoteWslConnectParams {
+                distro: args.distro,
+            },
             output_format,
         ),
     }

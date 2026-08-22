@@ -318,6 +318,15 @@ pub enum TerminalAction {
     /// it if possible.
     SelectAIAttachedBlock(BlockIndex),
     DragAndDropFiles(Vec<String>),
+    /// Attaches Warp's remote-development server to this pane's WSL
+    /// distribution (`.fork/IDEAS.md`, I16).
+    ///
+    /// Takes no argument on purpose: the distribution is the one the pane's
+    /// shell is already in, which is the only one that makes sense for a
+    /// palette entry with nowhere to ask a question. Choosing a *different*
+    /// distribution is what `warpctrl remote wsl connect --distro` is for,
+    /// until there is a picker.
+    ConnectWslRemoteServer,
     /// Sets the input mode to Agent Mode
     SetInputModeAgent,
     /// Sets the input mode to Terminal Mode
@@ -655,6 +664,7 @@ impl fmt::Debug for TerminalAction {
             ExecuteRewindFromInlineMenu { .. } => write!(f, "ExecuteRewindFromInlineMenu"),
             SelectAIAttachedBlock(_) => write!(f, "SelectAIAttachedBlock"),
             DragAndDropFiles(_) => write!(f, "DragAndDropFiles"),
+            ConnectWslRemoteServer => write!(f, "ConnectWslRemoteServer"),
             SetInputModeAgent => write!(f, "SetInputModeAgent"),
             SetInputModeTerminal => write!(f, "SetInputModeTerminal"),
             #[cfg(feature = "voice_input")]

@@ -992,6 +992,35 @@ impl std::fmt::Display for ErrorCode {
     }
 }
 
+/// Parameters for `remote.wsl.connect`.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RemoteWslConnectParams {
+    /// Which distribution to run the remote server in.
+    ///
+    /// Optional, and the fallback is the point: when the targeted pane is
+    /// already running a WSL shell, its own distribution is the obvious answer
+    /// and asking for it again would be asking the caller to repeat something
+    /// Warp already knows. Required only when the pane is not in WSL.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub distro: Option<String>,
+}
+
+/// What `remote.wsl.connect` reports.
+///
+/// Deliberately named for *starting*: `RemoteServerManager::connect_session`
+/// spawns onto the background executor and returns immediately, so a reply
+/// here means the setup pipeline began, not that a server is serving. The
+/// session's real state arrives later as `RemoteServerManagerEvent`s.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteWslConnectStartedResult {
+    /// The terminal session the remote server is being attached to.
+    pub session_id: u64,
+    pub distro: String,
+    /// Whether `distro` came from the pane's own shell rather than the request.
+    pub distro_from_pane: bool,
+}
+
 /// What `remote.wsl.list` reports.
 ///
 /// `available` is deliberately separate from an empty `distros`. "This machine

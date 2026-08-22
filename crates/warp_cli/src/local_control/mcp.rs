@@ -393,6 +393,15 @@ fn add_parameter_properties(
                 }),
             );
         }
+        ActionParameterSpec::RemoteWslConnect => {
+            properties.insert(
+                "distro".to_owned(),
+                json!({
+                    "type": "string",
+                    "description": "WSL distribution name, from remote.wsl.list. Defaults to the target pane's own distribution when it is already running a WSL shell.",
+                }),
+            );
+        }
         ActionParameterSpec::DriveObjectGet => require(
             "id",
             json!({ "type": "string", "description": "Object id, from drive.object.list." }),

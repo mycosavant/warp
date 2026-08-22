@@ -677,6 +677,10 @@ fn retained_action_examples() -> Vec<(ActionKind, Vec<&'static str>)> {
             ActionKind::RemoteWslList,
             vec!["warpctrl", "remote", "wsl", "list"],
         ),
+        (
+            ActionKind::RemoteWslConnect,
+            vec!["warpctrl", "remote", "wsl", "connect", "--distro", "Ubuntu"],
+        ),
         (ActionKind::SlashList, vec!["warpctrl", "slash", "list"]),
         (
             ActionKind::SlashRun,
@@ -861,6 +865,7 @@ fn parsed_action_kind(command: &ControlCommand) -> Option<ActionKind> {
         },
         ControlCommand::Remote(command) => match command {
             RemoteCommand::Wsl(RemoteWslCommand::List(_)) => Some(ActionKind::RemoteWslList),
+            RemoteCommand::Wsl(RemoteWslCommand::Connect(_)) => Some(ActionKind::RemoteWslConnect),
         },
         ControlCommand::Completions { .. } => None,
         // Not a single action: `mcp` serves the whole catalog over stdio.

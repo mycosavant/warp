@@ -26515,6 +26515,7 @@ impl TypedActionView for TerminalView {
             BlockHover(_)
             | BlockSnackbarHover { .. }
             | BlockNearSnackbarHover { .. }
+            | ConnectWslRemoteServer
             | MaybeLinkHover { .. } => Empty,
             BlockTextSelect(_) => {
                 let semantic_selection = SemanticSelection::as_ref(ctx);
@@ -27276,6 +27277,29 @@ impl TypedActionView for TerminalView {
             }
             DragAndDropFiles(paths) => {
                 self.drag_and_drop_files(paths, ctx);
+            }
+            ConnectWslRemoteServer => {
+                // Everything this needs is already on the view: the session the
+                // pane's latest block belongs to, and the distribution that
+                // session's shell was launched into. When the pane is not a WSL
+                // shell there is nothing sensible to connect to and nowhere to
+                // ask, so this reports and stops — `warpctrl remote wsl connect
+                // --distro` is the surface that can take an answer.
+                let session_id = self.active_block_session_id();
+                let distro = self.active_session_wsl_distro(ctx);
+                match (session_id, distro) {
+                    (Some(session_id), Some(distro)) => {
+                        crate::remote_server::wsl_transport::start_wsl_remote_server(
+                            session_id, distro, ctx,
+                        );
+                    }
+                    (None, _) => {
+                        log::info!("ConnectWslRemoteServer: no bootstrapped session in this pane");
+                    }
+                    (_, None) => {
+                        log::info!("ConnectWslRemoteServer: this pane is not running a WSL shell");
+                    }
+                }
             }
             SetInputModeAgent => {
                 // Guard: when a CLI agent session is active, block mode

@@ -967,6 +967,26 @@ pub enum RemoteWslCommand {
     /// different answer from an empty list on a machine that has WSL with
     /// nothing installed.
     List(TargetArgs),
+
+    /// Attach Warp's remote-development server to a WSL distribution.
+    ///
+    /// Targets a terminal session, the way the SSH transport attaches to the
+    /// pane running `ssh`. Returns once the setup pipeline has started, not
+    /// once the server is serving.
+    Connect(RemoteWslConnectArgs),
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct RemoteWslConnectArgs {
+    #[command(flatten)]
+    pub target: TargetArgs,
+
+    /// Distribution to run the remote server in.
+    ///
+    /// Defaults to the target pane's own distribution when it is already
+    /// running a WSL shell. Required otherwise.
+    #[arg(long)]
+    pub distro: Option<String>,
 }
 
 #[derive(Debug, Clone, Subcommand)]

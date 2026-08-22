@@ -66,6 +66,7 @@ pub enum ActionParameterSpec {
     DriveObjectGet,
     DriveObjectCreate,
     DriveObjectTrash,
+    RemoteWslConnect,
 }
 
 /// Typed result contract for a catalog action.
@@ -103,6 +104,7 @@ pub enum ActionResultSpec {
     DriveObjectWritten,
     DriveObjectTrashed,
     RemoteWslDistroList,
+    RemoteWslConnectStarted,
 }
 
 /// Discoverable metadata describing one local-control action.
@@ -385,5 +387,11 @@ define_action_catalog! {
     // `Instance` scope: a distribution belongs to the machine, not to a pane.
     remote {
         RemoteWslList => { name: "remote.wsl.list", status: Implemented, target: Instance, params: None, result: RemoteWslDistroList },
+
+        // `Session` scope: a remote server attaches to one terminal session,
+        // the same way the SSH transport attaches to the pane running `ssh`.
+        // The difference is that `ssh` announces itself and a WSL pane does
+        // not, which is why this is an action rather than a hook.
+        RemoteWslConnect => { name: "remote.wsl.connect", status: Implemented, target: Session, params: RemoteWslConnect, result: RemoteWslConnectStarted },
     }
 }

@@ -1187,6 +1187,19 @@ fn register_input_mode_bindings(app: &mut AppContext) {
         .with_context_predicate(agent_mode_predicate)
         .with_mac_key_binding("cmd-i")
         .with_linux_or_windows_key_binding("ctrl-i"),
+        // No default keystroke. Registering it makes it reachable from the
+        // command palette, which materialises a `CommandBinding` from every
+        // registered `EditableBinding` — and the palette is the whole point:
+        // Warp's second remote transport has no ambient trigger the way an
+        // `ssh` command is one, so until there is a distro picker this is the
+        // only way to reach it from the UI. Users can bind a key if they want
+        // one. (`.fork/IDEAS.md`, I16.)
+        EditableBinding::new(
+            "terminal:connect_wsl_remote_server",
+            "Connect Warp Remote Server to this pane's WSL distribution",
+            TerminalAction::ConnectWslRemoteServer,
+        )
+        .with_group(bindings::BindingGroup::Terminal.as_str()),
         EditableBinding::new(
             SET_INPUT_MODE_TERMINAL_ACTION_NAME,
             "Set Input Mode to Terminal Mode",
