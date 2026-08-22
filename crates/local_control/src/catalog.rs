@@ -102,6 +102,7 @@ pub enum ActionResultSpec {
     DriveObject,
     DriveObjectWritten,
     DriveObjectTrashed,
+    RemoteWslDistroList,
 }
 
 /// Discoverable metadata describing one local-control action.
@@ -372,5 +373,17 @@ define_action_catalog! {
     slash {
         SlashList => { name: "slash.list", status: Implemented, target: Slash, params: None, result: SlashCommandList },
         SlashRun => { name: "slash.run", status: Implemented, target: Slash, params: SlashRun, result: Acknowledgement },
+    }
+
+    // Fork-local (`.fork/IDEAS.md`, I16). Warp's remote-development stack has
+    // one transport, SSH, reached only when warpify notices a submitted `ssh`
+    // command. `WslTransport` is the second, and a WSL connection has no
+    // equivalent ambient trigger — Zed's is an explicit "Add WSL Distro" menu
+    // entry. This is the data source that entry needs, and the answer to
+    // "is this machine even a candidate" before any UI is built.
+    //
+    // `Instance` scope: a distribution belongs to the machine, not to a pane.
+    remote {
+        RemoteWslList => { name: "remote.wsl.list", status: Implemented, target: Instance, params: None, result: RemoteWslDistroList },
     }
 }

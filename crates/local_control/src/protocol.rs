@@ -992,6 +992,21 @@ impl std::fmt::Display for ErrorCode {
     }
 }
 
+/// What `remote.wsl.list` reports.
+///
+/// `available` is deliberately separate from an empty `distros`. "This machine
+/// has no WSL" and "this machine has WSL with nothing installed" are different
+/// answers to a caller deciding whether to offer a WSL option at all, and a
+/// bare empty list cannot distinguish them.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteWslDistroListResult {
+    /// Whether `wsl.exe` could be run at all.
+    pub available: bool,
+    /// Distribution names as `wsl.exe -l -q` reports them, in its order —
+    /// which puts the default first.
+    pub distros: Vec<String>,
+}
+
 #[cfg(test)]
 #[path = "protocol_tests.rs"]
 mod tests;

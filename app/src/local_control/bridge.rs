@@ -10,7 +10,7 @@ use ::local_control::{
 use warpui::{Entity, ModelContext, SingletonEntity};
 
 use crate::local_control::handlers::{
-    agent, app_state, close, drive_objects, drive_sync, metadata, metadata_config,
+    agent, app_state, close, drive_objects, drive_sync, metadata, metadata_config, remote_wsl,
     settings_surfaces,
 };
 use crate::local_control::permissions::{
@@ -86,6 +86,7 @@ impl LocalControlBridge {
             ActionKind::DriveObjectGet => drive_objects::get(&request.action.params, ctx),
             ActionKind::DriveObjectCreate => drive_objects::create(&request.action.params, ctx),
             ActionKind::DriveObjectTrash => drive_objects::trash(&request.action.params, ctx),
+            ActionKind::RemoteWslList => remote_wsl::list(ctx),
             ActionKind::WindowList => metadata::window_list(&request.target, ctx),
             ActionKind::WindowInspect => metadata::window_inspect(&request.target, ctx),
             ActionKind::TabList => metadata::tab_list(&request.target, ctx),

@@ -200,14 +200,17 @@ fn the_drive_object_actions_this_fork_implements_do_parse() {
 }
 
 #[test]
-fn catalog_has_exactly_100_retained_actions() {
+fn catalog_has_exactly_101_retained_actions() {
     // 84 upstream actions, plus the fork's `input.submit`, the three
     // `drive.sync.*` actions, the eight that let an agent drive an agent
     // (`agent.list`, `agent.prompt`, `slash.list` and `slash.run` from T6.5,
     // then `agent.read`, `agent.spawn`, `agent.cancel` and `agent.reveal` from
-    // T6.6), and the four that reach the object store one object at a time:
-    // `drive.object.list`, `.get`, `.create` and `.trash` (T1.12).
-    assert_eq!(ActionKind::ALL.len(), 100);
+    // T6.6), the four that reach the object store one object at a time
+    // (`drive.object.list`, `.get`, `.create` and `.trash`, T1.12), and
+    // `remote.wsl.list` — the data source for a WSL picker that does not exist
+    // yet, because Warp's second remote transport has no ambient trigger the
+    // way an `ssh` command is one (I16).
+    assert_eq!(ActionKind::ALL.len(), 101);
 }
 
 #[test]

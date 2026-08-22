@@ -21,10 +21,10 @@ use crate::local_control::selectors::{instance_selector, target_selector};
 use crate::local_control::{
     ActionCatalogCommand, AgentCommand, AppCommand, AppearanceCommand, CapabilityCommand,
     CliRevealTarget, DriveCommand, DriveObjectCommand, FileCommand, InputCommand, InstanceCommand,
-    KeybindingCommand, PaneCommand, SessionCommand, SettingCommand, SlashCommand, SurfaceCommand,
-    SurfaceOpenCommand, SurfaceOpenToggleCommand, SurfaceQueryCommand, SurfaceSettingsCommand,
-    SurfaceToggleCommand, TabActivateArgs, TabCloseArgs, TabColorCommand, TabCommand, TargetArgs,
-    ThemeCommand, WindowCommand,
+    KeybindingCommand, PaneCommand, RemoteCommand, RemoteWslCommand, SessionCommand,
+    SettingCommand, SlashCommand, SurfaceCommand, SurfaceOpenCommand, SurfaceOpenToggleCommand,
+    SurfaceQueryCommand, SurfaceSettingsCommand, SurfaceToggleCommand, TabActivateArgs,
+    TabCloseArgs, TabColorCommand, TabCommand, TargetArgs, ThemeCommand, WindowCommand,
 };
 
 pub(super) fn run_surface_command(
@@ -771,6 +771,22 @@ pub(super) fn run_agent_command(
 }
 
 /// `warpctrl slash …` — Warp's slash-command registry, behind the allowlist.
+/// `remote wsl list` — the data source a WSL picker needs, and the answer to
+/// "is this machine even a candidate" before one is built.
+pub(super) fn run_remote_command(
+    command: RemoteCommand,
+    output_format: OutputFormat,
+) -> Result<(), ControlError> {
+    match command {
+        RemoteCommand::Wsl(RemoteWslCommand::List(args)) => run_action_with_params(
+            args,
+            ActionKind::RemoteWslList,
+            EmptyParams {},
+            output_format,
+        ),
+    }
+}
+
 pub(super) fn run_slash_command(
     command: SlashCommand,
     output_format: OutputFormat,

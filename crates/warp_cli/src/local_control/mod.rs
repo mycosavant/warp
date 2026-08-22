@@ -14,9 +14,9 @@ use clap_complete::aot::Shell;
 use commands::{
     run_action_catalog_command, run_agent_command, run_app_command, run_appearance_command,
     run_capability_command, run_drive_command, run_file_command, run_input_command,
-    run_instance_command, run_keybinding_command, run_pane_command, run_session_command,
-    run_setting_command, run_slash_command, run_surface_command, run_tab_command,
-    run_theme_command, run_window_command,
+    run_instance_command, run_keybinding_command, run_pane_command, run_remote_command,
+    run_session_command, run_setting_command, run_slash_command, run_surface_command,
+    run_tab_command, run_theme_command, run_window_command,
 };
 use completions::generate_completions_to_stdout;
 use output::write_control_error;
@@ -219,6 +219,10 @@ pub enum ControlCommand {
     /// Run Warp's slash commands — `/compact`, `/plan`, `/fork-and-compact`.
     #[command(subcommand)]
     Slash(SlashCommand),
+
+    /// Inspect remote-development targets on this machine.
+    #[command(subcommand)]
+    Remote(RemoteCommand),
 
     /// Open or toggle local Warp surfaces.
     #[command(subcommand)]
@@ -949,6 +953,23 @@ pub enum CliRevealTarget {
 }
 
 #[derive(Debug, Clone, Subcommand)]
+pub enum RemoteCommand {
+    /// Windows Subsystem for Linux.
+    #[command(subcommand)]
+    Wsl(RemoteWslCommand),
+}
+
+#[derive(Debug, Clone, Subcommand)]
+pub enum RemoteWslCommand {
+    /// List the WSL distributions installed on this machine.
+    ///
+    /// `available` is false when `wsl.exe` could not be run at all, which is a
+    /// different answer from an empty list on a machine that has WSL with
+    /// nothing installed.
+    List(TargetArgs),
+}
+
+#[derive(Debug, Clone, Subcommand)]
 pub enum SlashCommand {
     /// List Warp's slash commands.
     ///
@@ -1359,6 +1380,7 @@ fn run_inner(args: ControlArgs) -> Result<(), local_control::protocol::ControlEr
         ControlCommand::Agent(command) => run_agent_command(command, output_format),
         ControlCommand::Graph(command) => graph::run_graph_command(command, output_format),
         ControlCommand::Slash(command) => run_slash_command(command, output_format),
+        ControlCommand::Remote(command) => run_remote_command(command, output_format),
         ControlCommand::Surface(command) => run_surface_command(command, output_format),
         ControlCommand::Completions { shell } => generate_completions_to_stdout(shell),
     }
