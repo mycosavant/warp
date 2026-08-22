@@ -51,6 +51,12 @@ below and includes the ones I am arguing *against*.
 | **4** | [Pin what a tool claims to be](#i11--pin-what-a-tool-claims-to-be) | Small, on-thesis, and defends against an attack that is live right now | Two days |
 | **5** | [A main pane, and the CWD following it](#i13--main-pane-in-a-group) | One `Option<PaneId>` with three consumers; fixes the thrash that made plain CWD-follow wrong | A day, plus I6 |
 
+And one added 2026-08-22 that outranks all five on impact, at a larger size:
+
+| | Idea | Why | Rough size |
+|---|---|---|---|
+| **★** | [WSL as a remote target, the way Zed does it](#i16--wsl-as-a-remote-target-the-way-zed-does-it) | The seven-method transport trait exists with one implementation, the server binary builds here, and **the handshake is not account-gated — verified by completing one, logged out** | Weeks, not months |
+
 Two that are **deliberately not on the list yet**, both for stated reasons
 rather than by omission:
 
@@ -989,7 +995,157 @@ came out of a question about browsers.
 
 ---
 
-# Answered, 2026-08-21
+# I16 — WSL as a remote target, the way Zed does it
+
+> *"This level of WSL integration would be almost game-changing and gets me
+> closer to how I want things to feel and work, and I just haven't found it
+> elsewhere."* — 2026-08-22
+
+**Selected. This is the largest thing on the board that is mostly already
+built, and unlike every other entry here the account question has been settled
+by running it rather than reading it.**
+
+## What Zed actually does
+
+Zed for Windows treats WSL as a **remote target**, not a place to install the
+editor — you are explicitly told not to install Zed inside the distro, where it
+fails for want of GPU packages. Instead the Windows client spawns a headless
+`remote_server` process **under `wsl.exe`** and proxies all I/O to it. Remote
+entities like `Worktree` implement the same interfaces as their local
+counterparts and delegate over RPC.
+
+| stays on Windows | runs in WSL |
+|---|---|
+| UI, GPU rendering, themes, keymaps | source files |
+| Tree-sitter parsing and highlighting | language servers |
+| language-model integration | terminals, tasks, debuggers, git |
+| unsaved buffers, recent projects, extensions | |
+
+That table is the whole reason it feels native: **nothing that shapes the feel
+of the app ever left Windows.** And file I/O never crosses the 9p boundary,
+which is why ext4 is fast — this fork measured the same thing from the other
+side, where the Windows build pointed at a WSL checkout left the file tree
+loading, because 9p is a cost paid *per file* across 209,644 of them
+(`README.md`, "Why you might actually want this build").
+
+It is not a container. WSL2 is a lightweight VM with a real Linux kernel; Zed
+adds no containerisation and runs a native Linux binary in your existing
+distro. (Zed has a separate Docker transport — that one *is* containers.)
+
+## Warp has the same architecture already
+
+`crates/remote_server/src/transport.rs:209` defines `RemoteTransport`: a
+seven-method, object-safe trait, documented as boxed "so implementations can be
+stored as `Arc<dyn RemoteTransport>`". `detect_platform` works *"by running
+`uname -sm`"* — the identical probe Zed's WSL connection uses. Two teams, same
+seam.
+
+**There is exactly one implementation: `SshTransport`**
+(`app/src/remote_server/ssh_transport.rs:118`). Fifth instance of this fork's
+recurring finding.
+
+The tiers, which matter for how small this is:
+
+    client  ──(ssh/wsl stdio pipe)──►  remote-server-proxy  ──(unix socket)──►  remote-server-daemon
+
+* **`SSH is just a pipe.`** `connect` spawns `Command::new("ssh")` with piped
+  stdin/stdout/stderr and hands the three pipes to
+  `RemoteServerClient::from_child_streams`. Nothing downstream knows what
+  spawned it.
+* The remote command is `{binary} remote-server-proxy --identity-key {key}` —
+  a `#[clap(hide = true)]` subcommand of the same binary.
+* The proxy is "a thin byte bridge"; the daemon is long-lived, per-identity-key,
+  on a 0600 unix socket.
+
+The server binary is **buildable here**: `script/deploy_remote_server` runs
+`cargo build -p warp --bin warp --features standalone,… --target
+x86_64-unknown-linux-musl`. The CDN download in `install_remote_server.sh` is
+the convenience path, not the only one — which is the part that matters for a
+fork with no account.
+
+## Verified by running, 2026-08-22
+
+The decisive question was whether any of this is account-gated. It is not.
+
+* `warp-oss remote-server-proxy --identity-key fork-probe`, **logged out, no
+  API key**: proxy started, found no daemon, spawned one, socket ready in
+  1.10s, bridged stdio, exited cleanly. Daemon persisted afterwards.
+* Then, speaking the protocol straight to the daemon's unix socket by hand —
+  framing is `[4-byte LE length][protobuf]` — a **credential-free `Initialize`,
+  which is a zero-byte message in proto3**: no token, no user id, no email.
+
+  The daemon answered twice: a `RemoteAgentContextSnapshot` carrying
+  `/home/effatha`, then an `InitializeResponse` echoing the request id and
+  returning `host_id` `503cfc29-…`. **The handshake completed.**
+
+This matches the code — `handle_initialize` *stores* the token and replies;
+there is no validation branch in it. The only auth check in the daemon is
+`validate_remote_codebase_index_auth`, scoped to remote codebase indexing, the
+one genuinely cloud-dependent sub-feature. Upstream's proto says so directly:
+
+```protobuf
+// Optional bearer token used by the daemon for Warp-server requests.
+string auth_token = 1;
+// User identity for Sentry crash reports. Empty when not logged in.
+string user_id = 2;
+```
+
+The token is a pass-through credential for optional cloud calls. **The protocol
+was designed to tolerate a logged-out client.**
+
+## What is actually missing
+
+1. **A `WslTransport`.** Seven trait methods, and simpler than the SSH case:
+   `Command::new("wsl.exe").args(["-d", distro, "--", …])` replaces
+   `Command::new("ssh")`, and there is no ControlMaster, no socket lifecycle
+   and no auth to manage. `ControlPath` and `warp_owns_control_master` are
+   SSH-only concerns a WSL transport simply does not have.
+2. **The Windows gate.** `FeatureFlag::SshRemoteServer` is in `RELEASE_FLAGS` —
+   on by default — wrapped in `#[cfg(not(windows))]`, commented *"Remote server
+   binary is not yet supported on Windows."* That is exactly the client side
+   WSL needs. The flag name will want widening too; "Ssh" is no longer the only
+   transport.
+3. **Distro enumeration and a picker.** `wsl.exe -l -q`. Zed's equivalent is
+   "Add WSL Distro" under Open Remote.
+4. **An OSS server binary and an install path that is not the CDN.** Native
+   Linux build rather than musl cross-compile, since the target is the same
+   machine.
+
+## Two rough edges found while probing
+
+* **`server_version` came back empty.** The OSS build reports no version
+  (`--dump-debug-info` → `Warp version: None`), and `RemoteServerManager`
+  compares client and server versions after the handshake — disagreement means
+  *remove the binary and reinstall*. With `None` on both sides this may be
+  benign or may loop; it needs checking before anything ships.
+* **Upstream already noticed the OSS gap** and left it, in
+  `remote_server_dir()`:
+
+  ```rust
+  Channel::Oss => {
+      // TODO(alokedesai): need to figure out how remote server works with warp-oss
+      // For now, return what Dev returns.
+      ".warp-dev"
+  }
+  ```
+
+  Which is why the daemon's state landed in `~/.warp-dev/`. Nobody wired this
+  for OSS; it works anyway.
+
+## Why this is worth the size
+
+Every other selected item makes Warp nicer. This one changes what it *is* on
+Windows: a native-feeling client whose files, terminals, language servers and
+agents all live on the fast side of the 9p boundary. It is also unusually
+well-matched to this fork — the remote server is the one large Warp subsystem
+that turns out to need no account, and `warpctrl` plus the run-scale graph
+already assume an agent driving panes and sessions that could just as easily be
+remote ones.
+
+The honest caveat: everything above the "Verified" section is read, and the
+verification covered the **server** side end to end but never a real
+client→server round trip (no `sshd` on this machine, and `sudo` is denied). The
+client half — `RemoteServerManager`, install, reconnect — has not been run.
 
 Three of the five questions came back the same day, and two of the answers
 changed the work rather than confirming it.
