@@ -492,27 +492,52 @@ So the Wayland objection does not apply to the way this build is run, and the
 X11 quirk the delegate's comment describes is the arrangement it was written
 for. Quake mode on WSLg is plausible after all.
 
-## What is still untested, and it is the only thing that matters
+## It works. On Linux, under WSLg. Verified 2026-08-22
 
-Whether the hotkey *fires*. I cannot press it: WSLg accepts synthetic mouse
-events but not synthetic keystrokes, which is a limitation this fork has hit
-before (`README.md`, "Driving the Linux GUI from an agent") and the same one
-that blocks T2.5.
+The one thing that mattered was whether the hotkey *fires*, and I could not
+press it — WSLg takes synthetic clicks but not synthetic keystrokes. The user
+pressed it.
 
-Everything above this line is reading and process inspection. **The test is
-thirty seconds for a person at a keyboard:**
+**Settings → Features → Global hotkey → "Dedicated hotkey window", bound to
+`ctrl-shift-Q`. It opens.** Confirmed three ways after the fact:
 
-1. Settings → Features → Global hotkey → "Dedicated hotkey window", bind a key.
-   (Or set `global_hotkey.dedicated_window.enabled = true` plus
-   `global_hotkey.dedicated_window.settings.keybinding` in `settings.toml`.)
-2. Launch with the documented WSLg recipe above.
-3. Press it. Something either drops down or it does not.
+* `warpctrl window list` reports **two** windows where there was one.
+* The X11 geometry is unmistakably quake: `(-32,-32) 1451x324` — full width,
+  324px tall, anchored to the top edge, against the main window's
+  `(2013,630) 1246x802`.
+* A screenshot of that window id shows a complete, correctly rendered Warp
+  workspace with its own tab list and its own terminal session.
 
-Do it on **Windows** as well, where `global_hotkey` uses Win32 `RegisterHotKey`
-and has the fewest ways to fail — that is this fork's primary GUI platform
-anyway, and if the visor only ever works there it is still worth building.
+So the doc comment's "thanks to it using an AppKit NSPanel" is misleading about
+platform support, the `WindowStyle::Pin → WindowLevel::AlwaysOnTop` winit path
+is real, and the X11 global grab works under XWayland when Warp is launched
+with the `env -u WAYLAND_DISPLAY` recipe.
 
-That one press decides whether this is a one-day feature or a two-week one.
+**This is a one-day feature, not a two-week one.**
+
+## What is left
+
+The quake window opens a *terminal*. The visor should open an *agent*.
+
+`PanesLayout` (`app/src/pane_group/mod.rs:869`) already has the variant:
+
+```rust
+pub enum PanesLayout {
+    SingleTerminal(Box<NewTerminalOptions>),
+    Snapshot(Box<PaneNodeSnapshot>),
+    Template(PaneTemplateType),
+    AmbientAgent,
+}
+```
+
+`toggle_quake_mode_window` (`root_view.rs:1479`) builds its window with
+`add_window`; the layout choice is made there. So the work is a setting plus a
+match arm — plausibly no new app surface at all, which is the `graph.rs`
+standard this board is graded against.
+
+Still worth checking on **Windows**, where `global_hotkey` uses Win32
+`RegisterHotKey`, but that is now a portability check rather than the question
+the feature hangs on.
 
 ## The feature, assuming it passes
 
@@ -1165,11 +1190,9 @@ for word. **It is the remote-server install choice block.** So:
   does, but it bypasses whatever rewrites `ssh` on the normal submission path.
   Anything an agent drives through `input.submit` gets a plain SSH session.
 
-Remaining: the install itself. `install_remote_server.sh` fetches from
-`app.warp.dev/download/cli`, which this fork's egress deny-list blocks — and
-for `Channel::Oss` there is no CDN artifact to fetch anyway, which upstream
-already says in `remote_server_binary()`. Stage the binary at the bare path
-first and `check_binary` should short-circuit the download:
+### And then it connected — the whole stack, live, with no account
+
+Staging the binary at the bare path was the last missing piece:
 
 ```bash
 mkdir -p ~/.warp-dev/remote-server
@@ -1178,6 +1201,44 @@ ln -sf ~/git/warp/target/release/warp-oss ~/.warp-dev/remote-server/warp-oss
 
 (`~/.warp-dev` rather than `~/.warp-oss` is upstream's own OSS fallback, and
 `warp-oss` is `Channel::Oss.cli_command_name()`.)
+
+With that in place, `ssh localhost` prompted for nothing and dropped straight
+into a session — which *looks* like the wrapper-only fallback and is the
+opposite. `check_binary` succeeded, so the manager skipped the install pipeline
+entirely and went to connect. **The absent prompt is the success signal.**
+
+The process tree during that session:
+
+```
+remote-server-daemon --identity-key 4216d34b-5771-4b55-8f98-700f4c98af37
+  └─ terminal-server --parent-pid=<daemon>
+ssh -q -o PasswordAuthentication=no -o ForwardX11=no \
+    -o ControlPath=~/.ssh/14848256040867250719 placeholder@placeholder \
+    ~/.warp-dev/remote-server/warp-oss remote-server-proxy --identity-key 4216d34b-…
+  └─ warp-oss remote-server-proxy --identity-key 4216d34b-…
+```
+
+Every layer of the design, running: the long-lived per-identity daemon with its
+own `terminal-server` child, the `ssh` child Warp spawned with a ControlMaster
+path (`placeholder@placeholder` because the real host is multiplexed through
+the existing master), and the proxy bridging its stdio to the daemon's unix
+socket. Matching identity keys throughout. `~/.warp-dev/remote-server/` holds
+the daemon's `server.pid`, its 0600 `server.sock`, and a per-identity `data/`
+directory.
+
+Note the daemon outlived the GUI that spawned it and was reused by the next
+one — daemon at 14:32:56, a later GUI at 14:33:37, its ssh+proxy pair at
+14:34:03 attaching to the *existing* daemon. That is the intended lifecycle,
+observed rather than read.
+
+**So Warp's remote-development stack runs end to end on a fork with no account,
+no API key and no CDN.** The claim is no longer "the handshake is not gated" —
+it is that the product works.
+
+What that leaves for [I16's shopping list](#what-is-actually-missing) is item
+1 alone: a `WslTransport`. Items 2–4 are still true but are now the difference
+between "works over SSH" and "works over `wsl.exe`", which is one `Command`
+and a distro picker.
 
 ## What is actually missing
 

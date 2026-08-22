@@ -3669,17 +3669,20 @@ T1, T4, T5 and T7, and by now should be the prior rather than the surprise.
       agent: `GlobalHotkeyMode::QuakeMode`, `toggle_quake_mode_window`
       (`root_view.rs:1479`), `WindowStyle::Pin` handled in the winit backend.
       `PanesLayout` already has an `AmbientAgent` variant.
-      **First step is not code:** enable
-      `global_hotkey.dedicated_window.enabled`, bind a key, and press it. The
-      Linux global-hotkey path is X11-only, so which display server Warp is on
-      decides whether it can fire — and the README's own WSLg recipe
-      (`env -u WAYLAND_DISPLAY …`) already puts it on X11. Verified today by
-      running the same release binary both ways and diffing the mapped
-      files: plain launch is Wayland, documented launch is not. Whether the
-      key *fires* is still untested, because WSLg takes synthetic clicks but
-      not synthetic keystrokes — the same wall as T2.5. Thirty seconds for
-      whoever is at the keyboard; try Windows too, where `RegisterHotKey` has
-      the fewest ways to fail.
+      **The blocking question is answered: quake mode works on Linux under
+      WSLg.** Bound to `ctrl-shift-Q` via Settings → Features → Global hotkey →
+      "Dedicated hotkey window", it opens — confirmed by `warpctrl window list`
+      going from one window to two, by X11 geometry that is unmistakably quake
+      (`(-32,-32) 1451x324`, full width and top-anchored), and by a screenshot
+      of that window showing a complete workspace. The X11 global grab works
+      under XWayland when Warp is launched with the `env -u WAYLAND_DISPLAY`
+      recipe, so the doc comment's "thanks to it using an AppKit NSPanel" is
+      misleading about platform support.
+
+      What remains is small: the quake window opens a *terminal*, and the visor
+      should open an *agent*. `PanesLayout` already has an `AmbientAgent`
+      variant and `toggle_quake_mode_window` picks the layout at `add_window`
+      time, so this is a setting plus a match arm.
 
 - [ ] **T8.2** Tab → pane drag, with a drop target you can see. (I3)
       Quadrant split-on-drop is *implemented*
