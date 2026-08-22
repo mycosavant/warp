@@ -1240,10 +1240,54 @@ What that leaves for [I16's shopping list](#what-is-actually-missing) is item
 between "works over SSH" and "works over `wsl.exe`", which is one `Command`
 and a distro picker.
 
+## Correction: WSL does have an ambient trigger
+
+Written twice in this entry and in two source files: that WSL "has no
+equivalent trigger and cannot have one". **Wrong.** `wsl` and `wsl.exe` are
+already warpify subshell commands on Windows — `WSL_SUBSHELL_REGEX` in
+`terminal/warpify/settings.rs`, paired with a `WSL_IGNORE_REGEX` that filters
+out `--list`, `--shutdown` and the rest so only interactive launches count.
+Typing `wsl` warpifies the session exactly as `ssh` does.
+
+What a warpified WSL session does *not* get is a remote server, and the reason
+is structural rather than missing: the attach is keyed on
+`IsSSHWrapperSession::Yes`, whose payload is a **ControlMaster socket path**. A
+WSL session has no such socket and cannot have one — the same fact that lets
+`WslTransport` report `ControlPath::None`.
+
+So the ambient path is a WSL arm beside the SSH one, not a new hook, and
+`Session::wsl_name()` already carries the distribution. The explicit action
+stays useful regardless: it is repeatable, agent-drivable, and testable from
+outside the GUI.
+
+## The flag needs no further opening
+
+`FeatureFlag::SshRemoteServer` sits in both `DOGFOOD_FLAGS` and `RELEASE_FLAGS`
+behind `#[cfg(not(windows))]`, commented "Remote server binary is not yet
+supported on Windows". **That cfg is already bypassed for this fork**, because
+`fork::FORCE_ENABLED` sets a *user preference* and `FeatureFlag::is_enabled`
+resolves in this order:
+
+```rust
+overrides::get_override(*self)
+    .or(USER_PREFERENCE_MAP[*self as usize].get())    // fork::FORCE_ENABLED
+    .or(Some(FLAG_STATES[*self as usize].load(..)))   // RELEASE_FLAGS, cfg'd
+    .unwrap_or(false)
+```
+
+User preference is consulted first, and the enum variant itself is not
+cfg-gated. So there is nothing to remove, and removing it would be an upstream
+edit for no behavioural gain — against this fork's rebasability rule.
+
+Worth knowing what that turns on, though: the flag gates *both* transports, so
+a Windows client also gets the SSH remote-server path, which upstream disabled
+there. The WSL path is unaffected by whatever motivated that — it touches no
+ControlMaster.
+
 ## What is actually missing
 
-0. **Confirm the warpify trigger fires**, per the section above. Everything
-   below is downstream of it.
+0. **Run it on Windows.** The runbook is in `README.md` under "Warp's remote
+   server, in a WSL distribution". Everything below is downstream of it.
 1. **A `WslTransport`.** Seven trait methods, and simpler than the SSH case:
    `Command::new("wsl.exe").args(["-d", distro, "--", …])` replaces
    `Command::new("ssh")`, and there is no ControlMaster, no socket lifecycle

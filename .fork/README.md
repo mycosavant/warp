@@ -25,6 +25,7 @@ then each capability the fork opened.
 * [**The release build**](#the-release-build-what-to-use-day-to-day) — what to use day to day
 * [Running under WSL2 (WSLg)](#running-under-wsl2-wslg) — and why the launch flags matter
 * [Driving the Windows build from WSL](#driving-the-windows-build-from-wsl)
+* [**Warp's remote server, in a WSL distribution**](#warps-remote-server-in-a-wsl-distribution) — the Zed-style split, and how to run it
 
 **What the fork opened**
 * [Driving Warp from an agent (`warpctrl`)](#driving-warp-from-an-agent-warpctrl) — 100 actions, the orchestration surface. The largest section; has its own sub-index.
@@ -1789,6 +1790,119 @@ Two behaviours worth knowing:
 Deleting is still not synced to anything. It changes this machine's store, and
 travels to another machine only through the git mirror, where a deleted object
 shows up as an absent file. See `.fork/TASKS.md` T4.7.
+
+## Warp's remote server, in a WSL distribution
+
+**Status: built, and unrun on the platform it is for.** Everything below has
+been verified on Linux except the last two steps, which need a Windows client.
+`.fork/IDEAS.md` I16 has the reasoning; this is the runbook.
+
+The idea is Zed's: do not run the editor inside the distro. Run the client on
+Windows, run a headless server inside WSL, and let files, language servers,
+terminals and git happen on the Linux side of the 9p boundary instead of across
+it.
+
+### What is already true
+
+* `WslTransport` implements Warp's `RemoteTransport` and has completed a real
+  protocol handshake over `wsl.exe`.
+* Nothing on the path needs an account. The daemon's `Initialize` handler
+  stores the bearer token and replies without validating it; a credential-free
+  handshake has been completed against a daemon this binary spawned.
+* The feature flag is **already on for this fork on every platform**, including
+  Windows. `FeatureFlag::SshRemoteServer` sits in `RELEASE_FLAGS` behind
+  `#[cfg(not(windows))]`, but `fork::FORCE_ENABLED` sets a *user preference*,
+  and `FeatureFlag::is_enabled` checks user preference **before** the
+  channel-derived state. So there is no cfg to remove — removing it would be an
+  upstream edit for no behavioural gain.
+
+### Step 1 — stage a **Linux** server binary inside the distro
+
+The client is a Windows `.exe`; the server is a Linux binary running in the
+distro. They are not the same file. Build the Linux one in WSL and put it where
+`remote_server_binary()` looks:
+
+```bash
+# inside the distro
+cargo build --bin warp-oss --features gui,warp_control_cli --release
+mkdir -p ~/.warp-dev/remote-server
+ln -sf ~/git/warp/target/release/warp-oss ~/.warp-dev/remote-server/warp-oss
+~/.warp-dev/remote-server/warp-oss --version   # must exit 0
+```
+
+`~/.warp-dev` rather than `~/.warp-oss` is upstream's own OSS fallback, and
+`warp-oss` is `Channel::Oss.cli_command_name()`. Staging it matters: the
+install path fetches from `app.warp.dev/download/cli`, which this fork's egress
+deny-list blocks and which has no OSS artifact behind it anyway. With the
+binary present, `check_binary` short-circuits the download entirely — **and the
+absence of an install prompt is the success signal, not a fallback.**
+
+### Step 2 — build and launch the Windows client
+
+Per "Building on Windows" above. The `warp_control_cli` feature is not a
+default and without it there is no `--warpctrl`.
+
+### Step 3 — confirm the machine is a candidate
+
+```powershell
+warpctrl remote wsl list
+# { "available": true, "distros": ["Ubuntu", ...] }
+```
+
+`available: false` means `wsl.exe` could not be run at all, which is a
+different answer from an empty list on a machine that has WSL with nothing
+installed.
+
+### Step 4 — get a WSL session in a pane
+
+Type `wsl` (or `wsl -d Ubuntu`) into a Warp pane and accept the subshell
+prompt. `wsl` is already a warpify subshell command on Windows, so the session
+gets bootstrapped the way an `ssh` session does.
+
+### Step 5 — attach the remote server
+
+Either the command palette — **"Connect Warp Remote Server to this pane's WSL
+distribution"**, no default keystroke — or:
+
+```powershell
+warpctrl remote wsl connect
+```
+
+No `--distro` needed once the pane is a WSL session: the distribution defaults
+to the pane's own. Pass `--distro Ubuntu` when the pane is not in WSL.
+
+The reply says **started**, not connected — the binary check, install and
+handshake all run afterwards on a background executor.
+
+### Step 6 — verify, from inside the distro
+
+```bash
+pgrep -af remote-server-daemon      # a daemon with an --identity-key
+ls -la ~/.warp-dev/remote-server/   # server.pid and a 0600 server.sock
+```
+
+A daemon plus a `terminal-server` child, and an `wsl.exe … remote-server-proxy`
+pair on the Windows side, is the whole stack running. That is exactly what the
+SSH path produces, and what was observed on Linux.
+
+### Expected failure modes
+
+| symptom | cause |
+|---|---|
+| `available: false` | `wsl.exe` not on `PATH` for the Warp process |
+| an install prompt appears | the binary is not staged where step 1 puts it |
+| install then fails | it reached for the CDN; deny-listed, and no OSS artifact exists. Stage the binary |
+| `no WSL distribution to connect to` | the pane is not a WSL session; pass `--distro` |
+| `found no bootstrapped terminal session` | the pane has not run a shell yet |
+
+### The part that is still a design decision
+
+Attaching is explicit today. The ambient version — a warpified WSL session
+getting a remote server automatically, the way an SSH one does — is blocked on
+one structural fact rather than a missing hook: the attach is keyed on
+`IsSSHWrapperSession::Yes`, whose payload is a ControlMaster socket path that a
+WSL session cannot have. Adding a WSL arm beside it is the work, and
+`Session::wsl_name()` already carries the distribution.
 
 ## Driving the Windows build from WSL
 

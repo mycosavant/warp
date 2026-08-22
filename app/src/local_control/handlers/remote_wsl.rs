@@ -3,19 +3,30 @@
 //!
 //! # Why these actions exist before any UI
 //!
-//! Warp's remote-development stack shipped with one transport, SSH, and it is
-//! only ever reached ambiently: warpify notices a submitted `ssh` command and
-//! drives `RemoteServerController` from the resulting `InitSubshell` hook. A
-//! WSL connection has no equivalent trigger and cannot have one — there is no
-//! command a user types that means "attach a remote server to my distro". Zed
-//! solves this with an explicit "Add WSL Distro" entry under Open Remote.
+//! Warp's remote-development stack shipped with one transport, SSH, reached
+//! ambiently: warpify notices a submitted `ssh` command and drives
+//! `RemoteServerController` from the resulting `InitSubshell` hook.
 //!
-//! Whatever that entry eventually looks like here, it needs a list to show,
-//! and something has to answer "is this machine even a candidate" before the
-//! entry is worth rendering. That is this action. Exposing it through local
-//! control rather than only through a picker also keeps it drivable by an
-//! agent, which is the fork's orchestration story, and testable from outside
-//! the GUI, which is how most of this fork's findings arrived.
+//! An earlier version of this comment said WSL "has no equivalent trigger and
+//! cannot have one". **That was wrong.** `wsl` and `wsl.exe` are already
+//! recognised warpify subshell commands on Windows — `WSL_SUBSHELL_REGEX` in
+//! `terminal/warpify/settings.rs`, with `WSL_IGNORE_REGEX` filtering out the
+//! management subcommands so only interactive launches count. Typing `wsl`
+//! warpifies the session exactly as `ssh` does.
+//!
+//! What a warpified WSL session does *not* get is a remote server, and the
+//! reason is structural: the attach is keyed on `IsSSHWrapperSession::Yes`,
+//! whose payload is a **ControlMaster socket path**. A WSL session has no such
+//! socket and never will, which is the same fact that lets `WslTransport` use
+//! `ControlPath::None`. So the ambient path needs a WSL arm beside the SSH one
+//! rather than a new hook — and the session already knows its distribution
+//! (`Session::wsl_name()`).
+//!
+//! These actions remain worth having either way: they make the connection
+//! explicit and repeatable, drivable by an agent, and testable from outside
+//! the GUI, which is how most of this fork's findings arrived. `list` is also
+//! what any picker needs, and answers "is this machine a candidate" before one
+//! is worth rendering.
 //!
 //! # Blocking, deliberately
 //!

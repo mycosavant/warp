@@ -28,14 +28,22 @@
 //! So the fields reduce to "which distribution", and reconnect is always worth
 //! attempting because there is no connection state to have gone stale.
 //!
-//! # What is not wired yet
+//! # How this is reached
 //!
-//! Nothing constructs this. The SSH transport is reached because warpify
-//! detects an `ssh` command being submitted and drives
-//! `RemoteServerController` from the resulting `InitSubshell` hook; WSL has no
-//! equivalent trigger, and Zed's is an explicit "Add WSL Distro" entry under
-//! Open Remote. Choosing that entry point is the next piece of work, and
-//! [`remote_server::wsl::list_distros`] exists to populate it.
+//! Explicitly, for now: `warpctrl remote wsl connect`, or the command-palette
+//! entry that shares [`start_wsl_remote_server`] with it.
+//!
+//! The *ambient* path is closer than it looks. `wsl` and `wsl.exe` are already
+//! warpify subshell commands on Windows (`WSL_SUBSHELL_REGEX`), so typing `wsl`
+//! warpifies the session the way `ssh` does. What it does not do is attach a
+//! remote server, because that attach is keyed on `IsSSHWrapperSession::Yes` —
+//! whose payload is a ControlMaster socket path, which a WSL session
+//! structurally cannot have. That is the same fact that lets this transport
+//! report [`ControlPath::None`].
+//!
+//! So finishing the ambient path means adding a WSL arm beside the SSH one,
+//! not inventing a hook: `Session::wsl_name()` already carries the
+//! distribution.
 
 use std::fmt;
 use std::future::Future;
