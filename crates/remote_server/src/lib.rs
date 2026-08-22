@@ -10,6 +10,8 @@ pub mod setup;
 #[cfg(not(target_family = "wasm"))]
 pub mod ssh;
 pub mod transport;
+#[cfg(not(target_family = "wasm"))]
+pub mod wsl;
 
 pub use host_id::HostId;
 

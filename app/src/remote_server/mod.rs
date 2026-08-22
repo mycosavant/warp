@@ -35,6 +35,8 @@ pub mod server_model;
 pub mod ssh_transport;
 #[cfg(unix)]
 pub mod unix;
+#[cfg(not(target_family = "wasm"))]
+pub mod wsl_transport;
 
 #[cfg(not(target_family = "wasm"))]
 fn current_codebase_index_limits(
