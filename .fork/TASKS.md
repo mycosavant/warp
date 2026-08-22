@@ -3840,13 +3840,37 @@ package ships `/usr/bin/ydotool` and **no `ydotoold`**, and `/dev/uinput` is
 Reaching it would mean building the daemon from source and granting uinput
 access — for a mechanism that still might not be picked up by Weston.
 
-So the decision, and it is the user's framing: **borrow Zed's imperative
-instead.** Zed tells you not to install the editor inside WSL, and that single
-choice deletes this entire class of problem — hotkeys, cursor, input synthesis
-and rendering are all native Win32 concerns the moment the GUI stops living in
-the distro. This fork has independently confirmed both halves: keystrokes reach
-nothing under WSLg, and the Windows build's `C:\dev\keys.ps1` already posts
-keystrokes to a window without stealing focus.
+#### First, a correction: three input paths, and only one is broken
+
+An earlier version of this section said Zed's imperative removes "hotkeys,
+cursor, input synthesis and rendering" as problems, which reads as though
+keyboard shortcuts are broken under WSLg. **They are not**, and conflating
+these three cost a wrong claim:
+
+| path | what it is | under WSLg |
+|---|---|---|
+| **App keybindings** | a person presses `ctrl-shift-c`; the compositor routes it to the focused window | **works** — always has |
+| **Global hotkeys** | a system-wide grab that fires when Warp is *not* focused (`GlobalHotKeyManager`, X11-only) | **untested** — see T8.1 |
+| **Synthetic injection** | an agent fabricating key events via XTEST or XSendEvent | **broken**, per the measurements above |
+
+Everything in this file about "keystrokes not working" means the third row.
+T5.4 was about driving the GUI *from an agent*, and that framing should be
+preserved whenever it is quoted.
+
+The second row is the interesting one and nobody here has ever tested it,
+because testing it requires a person to press the key — the exact thing the
+third row rules out. Settings → Features → Global hotkey exposes it
+(`Disabled` by default, then `Dedicated hotkey window` = quake, or
+`Show/hide all windows`).
+
+#### The decision itself
+
+**Borrow Zed's imperative** — do not run the GUI inside the distro. This is not
+because shortcuts break; it is because file I/O crosses 9p per file, and
+because agent-driven verification of anything with pixels needs synthetic input
+that WSLg will not deliver. This fork has confirmed both halves of the second
+point: synthetic keys reach nothing under WSLg, and the Windows build's
+`C:\dev\keys.ps1` already posts keystrokes to a window without stealing focus.
 
 Consequences, all of them simplifications:
 

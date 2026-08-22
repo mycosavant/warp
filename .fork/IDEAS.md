@@ -1140,12 +1140,44 @@ run: 16 `InitShell`, 32 `Precmd`, 1 `PreInteractiveSSHSession`, and **zero
 trigger never fired.
 
 `EnableSshWarpification` defaults to `true`, so the setting is not the cause.
-**Hypothesis, not a finding:** warpification rewrites the ssh command as it is
+The hypothesis was that warpification rewrites the ssh command as it is
 submitted, and `input.submit` — which replaces the buffer and runs it (T1.8) —
-may take a path that skips that rewrite. If so it is a real limit of
-`input.submit` worth recording in its own right. Testing it needs the command
-typed by hand, which on Linux means a person, and on Windows means
-`C:\dev\keys.ps1`.
+takes a path that skips that rewrite.
+
+### Confirmed the same day, by typing it by hand
+
+The user ran `ssh localhost` in the rebuilt build from the keyboard, and got
+the host-key prompt, a password prompt, and then a bottom-sheet modal:
+
+> **Install Warp's SSH extension** *(recommended)* — "Install Warp's extension
+> to enable features like file browsing, code review, intelligent command
+> completions in this session" / **Continue without installing**
+
+That is `app/src/terminal/view/ssh_remote_server_choice_view.rs:78-81`, word
+for word. **It is the remote-server install choice block.** So:
+
+* **The `FORCE_ENABLED` change works.** That modal cannot render with
+  `SshRemoteServer` disabled.
+* **The trigger fires** when the command is typed. The path from warpify →
+  `InitSubshell` → `SshInitShell` → `RemoteServerController` is live.
+* **`input.submit` does not warpify an `ssh` command.** Confirmed, and a real
+  limit of the action worth knowing: T1.8 verified it *runs* a command, and it
+  does, but it bypasses whatever rewrites `ssh` on the normal submission path.
+  Anything an agent drives through `input.submit` gets a plain SSH session.
+
+Remaining: the install itself. `install_remote_server.sh` fetches from
+`app.warp.dev/download/cli`, which this fork's egress deny-list blocks — and
+for `Channel::Oss` there is no CDN artifact to fetch anyway, which upstream
+already says in `remote_server_binary()`. Stage the binary at the bare path
+first and `check_binary` should short-circuit the download:
+
+```bash
+mkdir -p ~/.warp-dev/remote-server
+ln -sf ~/git/warp/target/release/warp-oss ~/.warp-dev/remote-server/warp-oss
+```
+
+(`~/.warp-dev` rather than `~/.warp-oss` is upstream's own OSS fallback, and
+`warp-oss` is `Channel::Oss.cli_command_name()`.)
 
 ## What is actually missing
 
