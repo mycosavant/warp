@@ -3795,6 +3795,43 @@ Worth an afternoon, because **two blocked items sit behind it**: T2.5's audio
 egress test and T8.1's quake-mode press. Neither needs a person if this comes
 loose.
 
+#### Follow-up 2026-08-22: it is not Warp, and X11 is exhausted
+
+The afternoon above was spent, with a control that removes Warp from the
+picture entirely — `xev`, a trivial X11 client that prints every event it
+receives.
+
+Setup: `xev` running and logging, `XSetInputFocus` pointed at its inner window,
+focus confirmed two ways (`XGetInputFocus` reads it back, **and `xev` itself
+logs `FocusIn`** — so events demonstrably flow to this client).
+
+Then both synthetic-input mechanisms X11 offers:
+
+| mechanism | server accepted it | `xev` saw it |
+|---|---|---|
+| **XTEST** (`xtest_fake_input`, what `computer_use` uses) | yes | **no** |
+| **XSendEvent** (synthetic event straight to the window queue) | `rc=1` | **no** |
+
+**So synthetic keystrokes reach no X11 client at all under WSLg** — not Warp,
+not a 200-line event printer. This was never a winit or Warp problem; it is
+XWayland/Weston, one layer below every application.
+
+Two consequences:
+
+* **`xdotool` cannot help**, and neither can `wmctrl`. `xdotool key` is XTEST
+  and `xdotool key --window` is XSendEvent — precisely the two rows above. Do
+  not install them expecting this to move.
+* **X11 is exhausted as an approach.** What remains is either below the display
+  server (`ydotool`, which writes to `/dev/uinput` as a kernel-level input
+  device, so Weston would see it as real hardware) or beside it (drive the
+  **Windows** build with `C:\dev\keys.ps1`, which already works — see
+  "Driving the Windows build from WSL" in `README.md`).
+
+The narrower claim from the section above still stands and is worth keeping:
+`XSetInputFocus` does stick, and `XGetInputFocus` returns the root window
+rather than `None`. Both of T5.4's stated facts are wrong; its conclusion was
+right for a reason nobody had identified.
+
 ---
 
 ## Decisions on record
