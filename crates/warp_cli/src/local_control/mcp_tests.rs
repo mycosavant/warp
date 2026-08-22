@@ -40,7 +40,9 @@ fn every_implemented_action_is_published_as_a_tool() {
     let tools = tool_definitions();
     assert_eq!(tools.len(), ActionKind::implemented_metadata().len());
     assert!(tools.iter().all(|tool| {
-        tool["name"].as_str().is_some_and(|name| name.starts_with("warp_"))
+        tool["name"]
+            .as_str()
+            .is_some_and(|name| name.starts_with("warp_"))
             && tool["description"].as_str().is_some_and(|d| !d.is_empty())
             && tool["inputSchema"]["type"] == "object"
     }));
@@ -56,8 +58,7 @@ fn tool_names_round_trip_and_are_unique() {
         let name = tool_name(entry.kind);
         assert!(names.insert(name.clone()), "duplicate tool name {name}");
         assert!(
-            name.chars()
-                .all(|c| c.is_ascii_alphanumeric() || c == '_'),
+            name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_'),
             "{name} must be an identifier-safe MCP tool name"
         );
         assert_eq!(action_for_tool_name(&name), Some(entry.kind));

@@ -35,6 +35,7 @@
 
 use std::collections::{HashMap, HashSet};
 
+use ai::document::AIDocumentId;
 use anyhow::{Result, anyhow, bail};
 use warpui::{GetSingletonModelHandle, ModelContext, ReadModel, SingletonEntity, UpdateModel};
 
@@ -64,7 +65,6 @@ use crate::workflows::aliases::{WorkflowAlias, WorkflowAliases};
 use crate::workflows::workflow::Workflow;
 use crate::workflows::workflow_enum::CloudWorkflowEnumModel;
 use crate::workflows::{CloudWorkflowModel, WorkflowId};
-use ai::document::AIDocumentId;
 
 /// What an apply did.
 #[derive(Debug, Default, PartialEq)]

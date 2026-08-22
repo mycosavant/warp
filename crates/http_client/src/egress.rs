@@ -78,9 +78,9 @@ pub(crate) fn is_active() -> bool {
 /// Returns true if `host` is, or is a subdomain of, a blocked host.
 pub(crate) fn is_blocked_host(host: &str) -> bool {
     let host = host.trim_end_matches('.').to_ascii_lowercase();
-    BLOCKED_HOST_SUFFIXES.iter().any(|blocked| {
-        host == *blocked || host.ends_with(&format!(".{blocked}"))
-    })
+    BLOCKED_HOST_SUFFIXES
+        .iter()
+        .any(|blocked| host == *blocked || host.ends_with(&format!(".{blocked}")))
 }
 
 /// Returns true if the request to `url` must be blocked.

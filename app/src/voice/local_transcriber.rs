@@ -33,7 +33,6 @@ use anyhow::{Context as _, anyhow};
 use async_trait::async_trait;
 use base64::Engine as _;
 use parking_lot::RwLock;
-
 use warpui::{ModelContext, SingletonEntity as _};
 
 use crate::server::server_api::TranscribeError;

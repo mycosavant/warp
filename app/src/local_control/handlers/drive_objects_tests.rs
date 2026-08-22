@@ -1,4 +1,5 @@
 use serde_json::json;
+use settings::{Setting as _, SettingsManager};
 use warpui::App;
 
 use super::*;
@@ -13,8 +14,6 @@ use crate::workflows::aliases::WorkflowAliases;
 use crate::workflows::workflow::Workflow;
 use crate::workflows::{CloudWorkflow, CloudWorkflowModel};
 use crate::workspaces::team_tester::TeamTesterStatus;
-use settings::Setting as _;
-use settings::SettingsManager;
 
 /// The gap T1.12 was opened for, closed: the store is legible from outside the
 /// GUI.

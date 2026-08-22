@@ -494,7 +494,10 @@ impl SpanExporter for CloudAgentSpanExporter {
         let batch: Vec<_> = if self.export_all_spans {
             batch.into_iter().map(strip_cloud_agent_marker).collect()
         } else {
-            batch.into_iter().filter_map(filter_cloud_agent_span).collect()
+            batch
+                .into_iter()
+                .filter_map(filter_cloud_agent_span)
+                .collect()
         };
 
         async move {

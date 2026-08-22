@@ -1,3 +1,4 @@
+use settings::Setting as _;
 use tempfile::TempDir;
 use warpui::App;
 
@@ -14,7 +15,6 @@ use crate::workflows::aliases::{Aliases, WorkflowAlias, WorkflowAliases};
 use crate::workflows::workflow::Workflow;
 use crate::workflows::{CloudWorkflow, CloudWorkflowModel};
 use crate::workspaces::user_workspaces::UserWorkspaces;
-use settings::Setting as _;
 
 /// The end-to-end shape of T4.4: a real store, through the bridge, onto a
 /// disk, and back — with the object graph intact.

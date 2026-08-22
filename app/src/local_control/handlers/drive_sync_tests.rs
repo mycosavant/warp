@@ -1,3 +1,4 @@
+use settings::SettingsManager;
 use tempfile::TempDir;
 use warpui::App;
 
@@ -16,7 +17,6 @@ use crate::workflows::workflow::Workflow;
 use crate::workflows::{CloudWorkflow, CloudWorkflowModel};
 use crate::workspaces::team_tester::TeamTesterStatus;
 use crate::workspaces::user_workspaces::UserWorkspaces;
-use settings::SettingsManager;
 
 /// The trigger, end to end: a store, an action, files on a disk.
 #[test]

@@ -1,3 +1,4 @@
+use settings::{Setting as _, SettingsManager};
 use tempfile::TempDir;
 use warpui::App;
 
@@ -11,7 +12,6 @@ use crate::server::sync_queue::SyncQueue;
 use crate::workflows::aliases::{Aliases, WorkflowAlias, WorkflowAliases};
 use crate::workspaces::team_tester::TeamTesterStatus;
 use crate::workspaces::user_workspaces::UserWorkspaces;
-use settings::{Setting as _, SettingsManager};
 
 /// The round trip T4.4c could only half-assert, now closed: a real store, out
 /// to a directory, **edited on disk**, and back into the store.

@@ -34,7 +34,10 @@ use windows::core::{PCWSTR, PWSTR};
 
 use crate::{ControlError, ErrorCode};
 
-fn security_error(operation: impl std::fmt::Display, error: impl std::fmt::Display) -> ControlError {
+fn security_error(
+    operation: impl std::fmt::Display,
+    error: impl std::fmt::Display,
+) -> ControlError {
     ControlError::with_details(
         ErrorCode::Internal,
         format!("failed to {operation}"),

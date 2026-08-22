@@ -3,7 +3,11 @@ use super::*;
 #[test]
 fn blackhole_url_is_parseable() {
     let url = blackhole_url();
-    assert_eq!(url.port(), Some(0), "port 0 is what makes this unconnectable");
+    assert_eq!(
+        url.port(),
+        Some(0),
+        "port 0 is what makes this unconnectable"
+    );
 }
 
 #[test]
