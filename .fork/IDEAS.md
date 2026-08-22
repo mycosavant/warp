@@ -49,12 +49,19 @@ below and includes the ones I am arguing *against*.
 | **2** | [Tab → pane drag, with a drop target you can see](#i3--the-panes-are-flexible-and-illegible) | Quadrant splitting is *implemented*; it is driven from the wrong handle and shows you nothing | Two or three days |
 | **3** | [The thread inbox, and `settled`](#i1--the-inbox) | The list, the model and a persisted per-conversation flag all exist | A week |
 | **4** | [Pin what a tool claims to be](#i11--pin-what-a-tool-claims-to-be) | Small, on-thesis, and defends against an attack that is live right now | Two days |
-| **5** | [Panes that follow the CWD](#i6--follow-the-cwd) | Genuinely small, and irritating every single day | A day |
+| **5** | [A main pane, and the CWD following it](#i13--main-pane-in-a-group) | One `Option<PaneId>` with three consumers; fixes the thrash that made plain CWD-follow wrong | A day, plus I6 |
 
-And one that is **deliberately not on the list yet**, because the honest first
-step is measurement rather than construction: [context
-pruning](#i9--the-context-is-already-yours). See that entry — the reason is
-interesting and it answers your caching question.
+Two that are **deliberately not on the list yet**, both for stated reasons
+rather than by omission:
+
+* [Context pruning](#i9--the-context-is-already-yours) — because the honest
+  first step is measurement, not construction. That entry also answers your
+  caching question.
+* [Computer use](#i15--computer-use-is-already-here-and-gated) — found while
+  answering the browser question, and the strongest unselected item here. A
+  complete screenshot/input/recording stack sitting behind the same dogfood
+  flag `WarpControlCli` was behind. Wants its own scope and one keyboard
+  question answered first.
 
 ---
 
@@ -152,18 +159,18 @@ Explicitly **not** in the first version: a new panel, a new pane type, a second
 sidebar implementation, or anything that makes "inbox" and "vertical tabs"
 different code paths. It is a sort mode on a list that already renders.
 
-## Open
+## Settled: beside, not instead of
 
-* **Does the inbox replace the tab bar, or sit beside it?** Your phrasing
-  ("instead of vertical tabs/panes") suggests replace. That is a much larger
-  change, because tabs are how panes are addressed everywhere in the app
-  (`warpctrl tab list`, launch configs, `cross_window_tab_drag`). Sitting beside
-  it — inbox as the fourth tool-panel view, which is where it already is — gets
-  you 90% of the feel for 10% of the work. **Recommend starting there and
-  seeing whether you still want the other thing.**
-* A thread and a tab are not the same object today. A conversation can exist
-  with no tab open. The inbox surfaces that; the tab bar cannot. That is
-  actually the argument *for* the inbox, and worth saying out loud.
+Asked and answered 2026-08-21 — **beside**. So the inbox is the fourth
+tool-panel view, which is where the code already is, and the tab bar is
+untouched. That removes the only large unknown in this entry: tabs remain how
+panes are addressed everywhere (`warpctrl tab list`, launch configs,
+`cross_window_tab_drag`), and none of that has to move.
+
+Worth saying out loud, because it is an argument *for* the inbox rather than a
+consolation: a thread and a tab are not the same object today. A conversation
+can exist with no tab open. The tab bar structurally cannot show you that; the
+inbox can. Beside is not a compromise — the two are showing different things.
 
 ---
 
@@ -351,15 +358,27 @@ The plumbing exists: `app/src/pane_group/working_directories.rs`,
 `PaneGroup`, and `AgentConversationDisplayData.working_directory`. The terminal
 already knows its CWD (it has to, for the prompt and for `cd` tracking).
 
-The work is a setting plus a subscription: when the focused terminal pane's CWD
-changes and the setting is on, re-root the project explorer / file viewer. The
-design questions are small but worth deciding once rather than twice:
+The work is a setting plus a subscription: when the tracked pane's CWD changes
+and the setting is on, re-root the project explorer / file viewer.
 
-* **Focused pane, or active tab?** Focused pane, or it will thrash while you
-  glance around a split.
+**Which pane, though — and my first answer was wrong.** I originally wrote
+"follow the focused pane, or it will thrash while you glance around a split."
+That is still thrash; it just needs a slower glance. From the 2026-08-21
+answers:
+
+> *"We don't want each active pane to steal the file explorer."*
+
+Exactly right. Follow the **main pane** — see [I13](#i13--main-pane-in-a-group),
+which this is now coupled to. A pane you named is stable; a pane that merely has
+focus is not. So I13 is a prerequisite rather than a separate feature, and
+together they are still small: one `Option<PaneId>`, one setting, one
+subscription.
+
+Remaining decisions, both minor:
+
 * **Debounce.** A `cd` inside a shell loop should not re-index a tree eighty
-  times. Whatever the project explorer's existing re-root cost is, measure it
-  before choosing a delay.
+  times. Measure the project explorer's existing re-root cost before choosing a
+  delay.
 * **Default off**, at least at first. A file tree that moves on its own is
   disorienting until you have asked for it.
 
@@ -649,11 +668,39 @@ surface.
   one where the answer "use your browser, on the other monitor" is hardest to
   argue with.
 
-**What I need from you:** the actual moment. What were you doing when you wanted
-this? If the answer is "watching a dev server", that is cheap. If it is "I want
-the agent to read a doc page", MCP already does that with no pixels involved. If
-it is "I want to browse inside Warp", that is the expensive one, and worth
-saying so plainly.
+## Answered, and it is not a browser
+
+Asked 2026-08-21, and the answer moved this entry somewhere much better:
+
+> *"dev server and, in another project specifically in Claude Desktop, Claude
+> can instrument the build and monitor the user actions for agent-assisted smoke
+> testing. Also great for previewing designs. You're also right about the other
+> monitor bit."*
+
+So **`web` is off the table** — browsing stays on the other monitor, agreed on
+both sides. What is left is two things, and neither needs a web engine:
+
+* **preview a design / a dev server** — an image on a refresh.
+* **an agent that instruments a build and watches what you do** — a
+  screenshot-and-input channel, not a document renderer. The thing being
+  observed does not have to be a web page at all. It could be Warp itself.
+
+That second one is the valuable half, and searching for it turned up something
+that belongs in its own entry.
+
+**See [I15](#i15--computer-use-is-already-here-and-gated).** The screenshot,
+input, window-enumeration and recording stack for exactly this already exists
+in `crates/computer_use`, behind a dogfood flag — the third time this fork has
+found a finished feature gated off. And a *window-targeted screenshot works
+today*, verified by taking one.
+
+Which leaves I10 itself as: **a pane that renders an image and refreshes it.**
+That is the whole feature. Point it at a screenshot the agent just took, or at
+a file a build wrote, and re-render on change. Warp already renders images
+(`kitty_images`), already has file panes, and already has a pane kind for
+"watches something rather than hosts a shell" (`network_log_pane.rs`).
+
+No webview, no second network stack, no re-opening the egress question.
 
 ---
 
@@ -756,21 +803,52 @@ waiting for a long build".
 
 > *"Set pane as MAIN within a group."*
 
-My reading: one pane holds the primary work at a larger size, the rest arrange
-around it — a master/stack layout, as tiling window managers have it.
+**Promoted, and it is better than I read it.** I had this as a layout feature —
+one pane bigger, the rest arranged around it, master/stack as tiling window
+managers have it. Your answer 2026-08-21:
 
-Possibly much cheaper than it sounds: `PaneTemplateType`
+> *"Also the CWD follow. We don't want each active pane to steal the file
+> explorer. And also could be useful for orchestration, so `main` could also
+> represent the lead agent."*
+
+That is not a layout feature. **`main` is an anchor** — a designated pane that
+other things point at instead of chasing focus — and it fixes a real defect in
+my own scoping of [I6](#i6--follow-the-cwd), where I had written "follow the
+focused pane" and called the question small. It is not small and "focused" is
+the wrong answer: glancing at a split would re-root your file tree. Following a
+pane you *named* is stable by construction.
+
+So `main` has at least three consumers, and they are the same one bit:
+
+| consumer | what it reads `main` for |
+|---|---|
+| CWD follow (I6) | which pane's directory the explorer tracks |
+| layout | which pane gets the large flex |
+| orchestration | which pane holds the lead agent |
+
+The third is the one that makes this a fork feature rather than a nicety. T6.6
+and T7.1 built agent fan-out and a run-scale graph, and both have the same
+unspoken question: *which pane is the one I am talking to?* Today that is
+implicit. `main` makes it a thing you can name, and therefore a thing
+`warpctrl` can name.
+
+## The smallest version that is still the idea
+
+One `Option<PaneId>` on `PaneGroup`, alongside the `pane_history` and
+`focus_state` that already live there. Set from the pane's overflow menu.
+`None` means today's behaviour, so nothing changes for anyone who never uses
+it.
+
+Then add consumers **one at a time**, starting with CWD follow, because a bit
+with one consumer is easy to delete if the idea is wrong and a bit with three
+is not. Layout second. Orchestration third, at which point it probably wants a
+`warpctrl pane main --set/--get` to go with it.
+
+Explicitly not in v1: a new layout algorithm. `PaneTemplateType`
 (`app/src/launch_configs/launch_config.rs:95`) is already a recursive,
-serializable pane tree with `PaneBranchTemplate { split_direction, panes }`,
-and `PanesLayout::Template(PaneTemplateType)` is already a way to instantiate
-one. A "main pane" layout may be expressible as a template plus a rule about
-which pane gets the large flex, with no new tree machinery at all.
-
-Wants a sentence from you on what "main" *does*, though — is it just bigger, or
-does it also receive new panes, keep focus, or survive when others close? Those
-are different features wearing the same name.
-
-Not selected. Cheap to promote once defined.
+serializable pane tree and `PanesLayout::Template` already instantiates one, so
+if a master/stack layout is wanted later it is expressible without new tree
+machinery. But that is the *third* thing `main` does, not the first.
 
 ---
 
@@ -796,13 +874,148 @@ Which is one more reason the first task in I9 is measurement.
 
 ---
 
-# What I need from you
+# I15 — Computer use is already here, and gated
 
-Not blocking anything — the five selected items are all actionable without these.
+Not from the brain dump. Found 2026-08-21 while chasing what
+["instrument the build and monitor the user actions"](#i10--the-browser)
+would actually cost, and it turns out to cost much less than a browser because
+it is written.
 
-1. **I1** — inbox *beside* the tab bar (cheap, recommended) or *instead of* it
-   (much larger)?
-2. **I10** — what were you actually doing when you wanted a browser?
-3. **I13** — what does "main" do besides being bigger?
-4. **I7** — `view-as`, when it comes back to you.
-5. **I2** — a few days of using the release build, then specifics.
+## What is in the tree
+
+`crates/computer_use` — a complete screen-control stack:
+
+* An **`Actor`** trait with `Action::{Click, Type, KeyPress, Scroll, …}`,
+  `Key`, `MouseButton`, `ScrollDirection`.
+* **Screenshots**, whole-screen or `ScreenshotRegion`, plus `thumbnail.rs`.
+* A **`Recorder`** with `RecordingConfig`, `RecordingHandle`,
+  `post_process_recording`, `finalized_video_duration`,
+  `generate_video_thumbnail`. Warp can record a session to video.
+* **Window enumeration** — `enumerate_windows() -> Vec<WindowInfo>` and
+  `Target::Window { window_id, pid }`, so actions address one window rather
+  than the screen.
+* Per-platform implementations: `mac/`, `windows/`, and `linux/` with
+  **both** `x11/` and `wayland/` (the latter through XDG portals).
+* An **XInput2 MPX "agent seat"** on X11 (`linux/x11/seat.rs`) — a private
+  master pointer/keyboard pair with its own cursor, so an agent can drive a
+  window *without stealing the real cursor or focus*. That is a considered
+  answer to the hardest problem in this space and somebody built it properly.
+* A **manual CLI**: `cargo build -p computer_use --bin use_computer`, with
+  `windows`, `click`, `text`, `keypress`, `screenshot` subcommands.
+
+And it is already an agent tool, not just a library:
+`app/src/ai/blocklist/action_model/execute/use_computer.rs`,
+`request_computer_use.rs`, `start_recording.rs`.
+
+## The gate, and it is a familiar one
+
+```rust
+// crates/warp_features/src/lib.rs — DOGFOOD_FLAGS
+FeatureFlag::LocalComputerUse,
+FeatureFlag::VideoRecording,
+```
+
+`DOGFOOD_FLAGS` is **the same list `WarpControlCli` was in** before T1.1 opened
+it. Third time: T1 found the control plane there, T4 found local Drive sync
+gated on an account, and here is computer use.
+
+And the flag's name is the point. From
+`crates/cloud_object_models/src/ai_execution_profile.rs:475`:
+
+```rust
+if is_sandboxed || FeatureFlag::LocalComputerUse.is_enabled() {
+```
+
+Without it, computer use is available only when the agent runs **sandboxed in
+someone's cloud**. `LocalComputerUse` is the flag that says *run it on this
+machine instead* — which is this fork's entire thesis, sitting behind a
+dogfood gate.
+
+Two gates, as with T1: the runtime flag above, and the cargo feature
+`local_computer_use`, which is **not** in `app/Cargo.toml`'s default list
+(unlike `agent_mode_computer_use` and `background_computer_use`, which are). So
+opening it means both `fork::FORCE_ENABLED` and the feature list — T1.1 and
+T1.2 again, with the same shape.
+
+## What was verified by running, today
+
+Against the release build under WSLg X11:
+
+* **`use_computer windows` lists the Warp toplevel** — id, bounds. `pid`,
+  `class` and `title` come back empty, which matches the known Weston
+  reparenting quirk rather than being a defect in the crate.
+* **Window-targeted screenshots work.** A 1400×693 PNG of the Warp window,
+  fully rendered, not the black frame the Wayland path produces. **This alone
+  is the whole substrate for I10's "preview a design" and for any agent that
+  needs to see what it just changed.**
+* **Keystrokes still do not land.** Tried four ways — window-targeted,
+  screen-targeted, after a click, and after explicitly setting X input focus.
+  Nothing typed appeared.
+
+## One recorded claim corrected
+
+`TASKS.md` (T5.4) says of WSLg:
+
+> `XGetInputFocus` returns `None` and `XSetInputFocus` does not stick
+
+**Half of that is wrong.** `XSetInputFocus` on the Warp toplevel *does* stick —
+`XGetInputFocus` reports the window back immediately afterwards. And the
+default it returns is not `None`; it is `0x438`, which is the **root window**.
+"Focus is nowhere" is true in effect, but it is a different fact with a
+different fix, and the fix that was assumed impossible turns out to work.
+
+So the wall is narrower than recorded. Pointer motion arrives (hover states
+appear under a synthetic cursor). X focus can be set and holds. What still
+does not happen is activation and key delivery — which points at winit's own
+focus tracking or XWayland's activation model, one layer above X focus, and
+**not** at "WSLg cannot do input".
+
+That is worth someone's afternoon, because two blocked items sit behind it:
+T2.5's audio egress test and T8.1's quake-mode press. Neither needs a person
+if this comes loose.
+
+## Why this matters beyond smoke testing
+
+Agent-assisted smoke testing was the ask, and this covers it. But the same
+stack is how an agent verifies GUI work at all — which is the one thing this
+fork's method has never been able to do on its own. Every GUI claim in
+`TASKS.md` was verified by a person clicking, by SQLite, or by logs. A local,
+account-free screenshot-and-input channel is the missing half of "verify by
+running the thing" for anything with pixels.
+
+Not selected yet — it wants a scope of its own and the keyboard question
+answered first. But it is the strongest unselected item on this page and it
+came out of a question about browsers.
+
+---
+
+# Answered, 2026-08-21
+
+Three of the five questions came back the same day, and two of the answers
+changed the work rather than confirming it.
+
+| | answer | what it changed |
+|---|---|---|
+| **I1** | Beside, not instead of | Removed the only large unknown. The inbox stays where the code already is. |
+| **I10** | Dev-server preview, and an agent that instruments a build and watches you use it | Killed the browser and surfaced [I15](#i15--computer-use-is-already-here-and-gated). What is left of I10 is *a pane that renders an image and refreshes*. |
+| **I13** | `main` is the CWD-follow anchor, and possibly the lead agent | Turned a layout nicety into an **anchor with three consumers**, and **corrected I6**, where "follow the focused pane" was my answer and the wrong one. |
+
+Still open, neither blocking:
+
+* **I7** — `view-as`. Will surface again during use; most of these did in the
+  first two days.
+* **I2** — composer. Running notes in progress.
+
+## A note on how two of those went
+
+I1 and I7 confirmed what was here. I10 and I13 did not — and both times the
+correction came from *one sentence about what you were actually doing*, not
+from more analysis on my side. I10 I had scoped as an expensive thing to argue
+against; the real ask was two cheap things and a capability that already
+exists. I13 I had scoped as cosmetic; it is structural, and it caught a defect
+in a neighbouring entry I had already called settled.
+
+Worth writing down because it generalises: the ideas in this file are graded on
+what the code can do, and that grading is only as good as knowing what the
+moment was. Where an entry still says "needs a sentence from you", that is not
+politeness.

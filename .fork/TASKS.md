@@ -458,6 +458,14 @@ regardless of provider. Voice currently leaves the machine either way.
       microphone does exist here, WSLg forwards one as PulseAudio `RDPSource`,
       so the hardware is not the obstacle.
 
+      **Update 2026-08-21: the keystroke half of that blocker is narrower than
+      it looked.** T5.4's claim that `XSetInputFocus` does not stick is wrong —
+      it does. See "The WSLg input wall is narrower than T5.4 recorded" under
+      T8. Keys still do not arrive, but the remaining gap is activation rather
+      than X focus, and `crates/computer_use` ships a real input stack that
+      nobody here has tried against it. If that comes loose, this task
+      unblocks itself with no person at the keyboard.
+
       **Recipe for whoever is at the keyboard**, since the rig is now written
       down and this is ten minutes of work:
 
@@ -1789,6 +1797,13 @@ stick, because the RAIL window is not foreground on the Windows desktop and
 Xwayland has no keyboard focus to give. Clicks work there, keys do not. That
 is the WSLg counterpart of the Windows foreground lock, and it is why this was
 verified on Windows.
+
+> **Corrected 2026-08-21.** The conclusion holds — keys still do not arrive —
+> but two of the three facts above do not. `XGetInputFocus` returns the **root
+> window** (`0x438`), not `None`; and `XSetInputFocus` on the Warp toplevel
+> **does** stick, confirmed by reading it back. The remaining gap is one layer
+> higher than X focus. See "The WSLg input wall is narrower than T5.4 recorded"
+> under T8, which also records that window-targeted screenshots work.
 
 ### T5.5 — the sign-in gate over a history that was already here
 
@@ -3678,11 +3693,16 @@ T1, T4, T5 and T7, and by now should be the prior rather than the surprise.
       already a workspace dependency — **no new dep**, and no blake3. Warn in
       v1; do not auto-block until the noise level is known.
 
-- [ ] **T8.5** Panes that follow the CWD. (I6)
-      A setting plus a subscription. `working_directories.rs`,
-      `startup_directory.rs` and `ActiveFileModel` all exist. Follow the
-      *focused pane* rather than the active tab, debounce it, and default it
-      off.
+- [ ] **T8.5** A main pane, and the CWD following it. (I13 + I6)
+      One `Option<PaneId>` on `PaneGroup`, set from the pane's overflow menu,
+      `None` meaning today's behaviour. Then consumers one at a time: CWD
+      follow first (`working_directories.rs`, `startup_directory.rs`,
+      `ActiveFileModel` all exist), layout second, orchestration third.
+      **This supersedes the "follow the focused pane" scoping**, which was
+      wrong: a pane that merely has focus makes the file tree thrash every
+      time you glance at a split. A pane you *named* is stable by
+      construction. `main` is also the natural answer to a question T6.6 and
+      T7.1 both leave implicit — which pane is the lead agent.
 
 ### Deliberately not selected, and why
 
@@ -3711,8 +3731,53 @@ version of each is in `IDEAS.md`.
   build reports exactly one `appearance.text.font_size` and one
   `appearance.window.zoom_level` for the whole app.
 
-* **Composer** (I2), **`view-as`** (I7) and **main pane** (I13) are waiting on
-  specifics — the first from a week of use, the other two from a sentence.
+* **Computer use** (I15) is the strongest unselected item and was not in the
+  brain dump at all — it turned up while costing the browser question.
+  `crates/computer_use` is a complete screenshot / input / window-enumeration /
+  video-recording stack with mac, windows, X11 and Wayland implementations, an
+  XInput2 MPX "agent seat" that drives a window without stealing the cursor,
+  agent tools (`use_computer.rs`, `request_computer_use.rs`,
+  `start_recording.rs`) and a manual CLI. `FeatureFlag::LocalComputerUse` is in
+  **`DOGFOOD_FLAGS`** — the same list `WarpControlCli` was in before T1.1 — and
+  its meaning is exactly this fork's thesis: without it, computer use runs only
+  when the agent is sandboxed in someone's cloud. Two gates again, runtime flag
+  and cargo feature, the T1.1/T1.2 shape. Wants its own scope.
+
+* **Composer** (I2) and **`view-as`** (I7) are waiting on specifics — the first
+  from a week of use, the second until the gripe resurfaces.
+
+### The WSLg input wall is narrower than T5.4 recorded
+
+Tested 2026-08-21 against the release build on X11, using
+`cargo build -p computer_use --bin use_computer`. Two findings, one of which
+corrects the record.
+
+**Window-targeted screenshots work.** A 1400×693 PNG of the Warp toplevel,
+fully rendered — not the black frame the Wayland path gives. `use_computer
+windows` finds the toplevel and its bounds; `pid`, `class` and `title` come
+back empty, which is the known Weston reparenting quirk rather than a defect.
+
+**Keystrokes still do not land** — tried window-targeted, screen-targeted,
+after a click, and after explicitly setting X input focus.
+
+But T5.4 says:
+
+> `XGetInputFocus` returns `None` and `XSetInputFocus` does not stick
+
+and **half of that is wrong**. `XSetInputFocus` on the Warp toplevel *does*
+stick; `XGetInputFocus` reports the window back immediately after. And its
+default return is not `None`, it is `0x438` — the **root window**. "Focus is
+nowhere" is true in effect, but it is a different fact, and the operation
+assumed impossible works.
+
+So the wall is: pointer motion arrives (hover states appear under a synthetic
+cursor), X focus can be set and holds, and **activation and key delivery still
+do not happen** — which points one layer above X focus, at winit's own focus
+tracking or XWayland's activation model, rather than at "WSLg cannot do input".
+
+Worth an afternoon, because **two blocked items sit behind it**: T2.5's audio
+egress test and T8.1's quake-mode press. Neither needs a person if this comes
+loose.
 
 ---
 
