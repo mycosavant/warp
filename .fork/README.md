@@ -235,23 +235,57 @@ distributions.
 
 ### Build and run
 
+Use `C:\dev\build.ps1`, which pins the env and the feature list and then proves
+`warpctrl` made it in:
+
+```powershell
+powershell.exe -NoProfile -File C:\dev\build.ps1            # debug
+powershell.exe -NoProfile -File C:\dev\build.ps1 -Release   # a build to live in
+```
+
+By hand, if you must — note the feature list, which is **not** just `gui`:
+
 ```powershell
 $env:PROTOC = "$env:LOCALAPPDATA\Microsoft\WinGet\Packages\Google.Protobuf_Microsoft.Winget.Source_8wekyb3d8bbwe\bin\protoc.exe"
 $env:PATH = "C:\Program Files\CMake\bin;" + (Split-Path $env:PROTOC) + ";$env:PATH"
 $env:LIBCLANG_PATH = 'C:\Program Files\LLVM\bin'
-cargo build --bin warp-oss --features gui
+cargo build --bin warp-oss --features gui,warp_control_cli
 .\target\debug\warp-oss.exe
 ```
+
+Omitting `warp_control_cli` produces a binary that looks fine and then answers
+"unexpected argument" to every `--warpctrl` command — which reads like a broken
+feature rather than a missing flag. `build.ps1` runs `--warpctrl instance list`
+afterwards and prints `warpctrl: present` or `MISSING` so you find out in the
+same minute rather than mid-test.
 
 ~8 GB of build artifacts. Verified: fork markers present in the binary, zero
 Sentry symbols, real `MainWindowHandle`, onboarding renders.
 
 ## A WSL session in the Windows build
 
-Settings → Features → **Default shell for new sessions** → your distribution.
-Warp reads the list from `HKCU\…\Lxss`, so anything `wsl -l` shows is offered
-(minus `docker-desktop` and `rancher-desktop`). Restored sessions keep the
-shell they were saved with, so the change only shows up on a *new* tab.
+Settings → Features → **the `Session` group** → *Default shell for new
+sessions* → your distribution.
+
+**The section matters.** `Features` also has *Default mode for new sessions* up
+in `General`, whose dropdown offers Terminal / Agent / Cloud agent. The names
+differ by one word and that is the one you will land on first. The shell
+dropdown is further down, under `Session`, below *Maximum rows in a block*, and
+reads `Default` until you change it.
+
+Warp reads the list from `HKCU\Software\Microsoft\Windows\CurrentVersion\Lxss`
+— not from `wsl.exe` — so what is offered is whatever that key holds, minus
+`docker-desktop` and `rancher-desktop`, which are filtered by name prefix
+(`terminal/wsl/model.rs`). To see the dropdown's actual input:
+
+```powershell
+Get-ChildItem 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Lxss' |
+  ForEach-Object { (Get-ItemProperty $_.PSPath).DistributionName }
+```
+
+An empty result is not an error state — it is just "WSL not installed", and
+Warp logs it at `info` and moves on. Restored sessions keep the shell they were
+saved with, so the change only shows up on a *new* tab.
 
 What you get, scoped by running it (`.fork/TASKS.md` T6.1):
 
