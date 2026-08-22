@@ -9,6 +9,22 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocke
 Phases 0–4 in `SPEC.md` are the original de-telemetry/de-account track. This
 board supersedes it from Phase 5 on, and renumbers nothing.
 
+> **Most of this file is history, and that is the point.** T1–T7 are done.
+> Read a section when you are about to touch that area; do not read it front to
+> back.
+>
+> Three kinds of content live here, and they age differently:
+>
+> * **Checklists** (`- [x] T1.4 …`) — a record of what shipped. Historic.
+> * **"as built" sections** — what was actually found when the thing was run,
+>   including where the plan was wrong. **These stay live**, because they are
+>   the only place several findings are written down.
+> * **"Decisions on record"** and **"Open questions"**, near the bottom — live,
+>   and the first place to look before re-opening something.
+>
+> **T8 is the current phase.** `IDEAS.md` is the queue in front of it.
+> `../CLAUDE.md` is the cold-start summary of the method and the invariants.
+
 ---
 
 ## Done (carried over from SPEC Phases 0–2)

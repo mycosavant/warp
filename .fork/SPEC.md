@@ -1,5 +1,25 @@
 # Fork spec — de-telemetry, de-account, own-agent Warp
 
+> **Read this for the reasoning, not for the status.** Every phase below has
+> shipped. The plan was superseded by `TASKS.md` from Phase 5 on, and the
+> per-phase status markers here were never maintained — the board is the source
+> of truth for what is done.
+>
+> What is still worth reading, and is not written down anywhere else: the
+> **survey findings** (what the request path actually looked like before any of
+> this), the **kill-switch seam** analysis, and the **status correction** — the
+> moment an earlier draft's "Tier 1 already works, zero code" turned out to be
+> wrong when someone finally ran the built app. That correction is why this fork
+> verifies by running.
+>
+> | phase here | shipped as | note |
+> |---|---|---|
+> | 0 — repo hygiene, branches | `P0` | |
+> | 1 — kill switch | `P1a`–`P1e` | Behavioural, not textual. No deletions. |
+> | 2 — reroute the `claude_code` harness | `P2a`, then **T5** | The real answer was smaller than this plan: one function, not a harness reroute. See T5.3. |
+> | 3 — extend the provider layer | **T3** | The open question below was answered — BYO keys are direct client→provider, so there is no transport to rewrite. |
+> | 4 — local OpenTelemetry | `P4a` | |
+
 Phased plan. Each phase is independently shippable and independently
 revertible. Ordering is chosen so the highest-value thing (Claude as my agent)
 lands before the largest-surface thing (full provider abstraction).

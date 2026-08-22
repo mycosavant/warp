@@ -3,7 +3,7 @@
 Captured 2026-08-21 from a spoken-shape brain dump. **Nothing here is a
 commitment.** `TASKS.md` is the board of work that has been agreed; this is the
 holding pen in front of it, and the point of the pen is that an idea has to earn
-its way out.
+its way out. `../CLAUDE.md` has the method these entries are graded by.
 
 The bar for leaving: someone has found the *smallest version of the idea that is
 still the idea*. Not a cut-down version — the same idea, built out of parts that

@@ -7,12 +7,32 @@ Claude subscription, API keys, and local models.
 Licensing note: AGPL obligations attach on **distribution**, not personal use.
 If this fork is ever published as a binary, source must ship with it.
 
-**The four files.** `README.md` (this one) is how to *use* what exists.
-`TASKS.md` is the board of agreed work and the record of how each item was
-actually built. `SPEC.md` is the original de-telemetry/de-account reasoning.
-`IDEAS.md` is the holding pen in front of the board — ideas that have not
-earned a task yet, each with what already exists underneath it and an argument
-for or against building it.
+**The five files.** `../CLAUDE.md` is the cold start: the method, the
+invariants, and where fork behaviour lives. `README.md` (this one) is how to
+*use* what exists. `TASKS.md` is the board and the "as built" record of how
+each item actually went. `SPEC.md` is the original de-telemetry/de-account
+reasoning. `IDEAS.md` is the holding pen in front of the board.
+
+## What is in this file
+
+Long, and meant to be navigated rather than read. Roughly: platform first,
+then each capability the fork opened.
+
+**Getting it running**
+* [Branch topology](#branch-topology) · [Repo hygiene](#repo-hygiene--resolved-2026-08-17) — LFS, CRLF, symlinks; all resolved
+* [Building on Windows](#building-on-windows-the-working-gui-path) — the primary GUI platform
+* [A WSL session in the Windows build](#a-wsl-session-in-the-windows-build)
+* [**The release build**](#the-release-build-what-to-use-day-to-day) — what to use day to day
+* [Running under WSL2 (WSLg)](#running-under-wsl2-wslg) — and why the launch flags matter
+* [Driving the Windows build from WSL](#driving-the-windows-build-from-wsl)
+
+**What the fork opened**
+* [Driving Warp from an agent (`warpctrl`)](#driving-warp-from-an-agent-warpctrl) — 100 actions, the orchestration surface. The largest section; has its own sub-index.
+* [Warp Drive without an account](#warp-drive-without-an-account) · [Your drive as a git repository](#your-drive-as-a-git-repository)
+* [The agent, answered by your own Claude](#the-agent-answered-by-your-own-claude-experimental)
+* [Voice input, transcribed on this machine](#voice-input-transcribed-on-this-machine)
+* [The four small AI features](#the-four-small-ai-features-without-warp-in-the-middle) — without Warp in the middle
+* [Local telemetry (OpenTelemetry)](#local-telemetry-opentelemetry) — loopback only
 
 ### "No telemetry" is measured, not asserted
 
@@ -605,12 +625,28 @@ For day-to-day use, wrap it:
 function warpctrl { & 'C:\dev\warp\target\debug\warp-oss.exe' --warpctrl @args }
 ```
 
+**The `debug` in these paths is not load-bearing.** Examples throughout this
+file were written against the Windows debug build; substitute whichever profile
+you have. On Linux the daily driver is `target/release/warp-oss` — and note
+that a release build only carries `--warpctrl` if it was built with
+`--features gui,warp_control_cli`, which is not the default. See
+[the release build](#the-release-build-what-to-use-day-to-day).
+
+In this section: [what it can do](#what-it-can-do) ·
+[running a fleet](#running-a-fleet-spawn-read-cancel-reveal) ·
+[guardrails](#guardrails-what-a-child-agent-may-do) ·
+[a plan in a file](#a-plan-in-a-file-warpctrl-graph) ·
+[targets](#targets-the-rule-that-decides-whether-a-call-works) ·
+[enablement](#enablement) · [security model](#security-model) ·
+[driving it from Claude Code (MCP)](#driving-it-from-claude-code-mcp) ·
+[platform status](#platform-status) · [setting it up](#setting-it-up)
+
 ### What it can do
 
 **100 actions. Every one of them run against a live build — the first 92 on
-Windows, the six `agent` verbs and the four `drive object` verbs on both, so
-this list is the verified surface rather than the catalog's own claim about
-itself.** `warpctrl action list` emits the catalog as JSON with
+Windows, then T6.6's four `agent` verbs and T1.12's four `drive object` verbs
+on Linux, so this list is the verified surface rather than the catalog's own
+claim about itself.** `warpctrl action list` emits the catalog as JSON with
 `parameter_spec`, `result_spec` and `target_scope` per action, so tool
 definitions can be generated from it rather than hardcoded.
 
@@ -1243,7 +1279,7 @@ request is worth more than that whole test file.
 **Off by default.** Everything else in this fork enlarges what works; this
 substitutes for something that already does, and it is a spike. Turn it on with
 
-    WARP_FORK_LOCAL_AGENT=1 ./target/debug/warp-oss
+    WARP_FORK_LOCAL_AGENT=1 ./target/release/warp-oss
 
 You need the `claude` CLI on `PATH`. It uses whatever authentication Claude Code
 already has — subscription, API key, whatever `claude` itself is set up with.
