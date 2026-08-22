@@ -7,6 +7,13 @@ Claude subscription, API keys, and local models.
 Licensing note: AGPL obligations attach on **distribution**, not personal use.
 If this fork is ever published as a binary, source must ship with it.
 
+**The four files.** `README.md` (this one) is how to *use* what exists.
+`TASKS.md` is the board of agreed work and the record of how each item was
+actually built. `SPEC.md` is the original de-telemetry/de-account reasoning.
+`IDEAS.md` is the holding pen in front of the board — ideas that have not
+earned a task yet, each with what already exists underneath it and an argument
+for or against building it.
+
 ### "No telemetry" is measured, not asserted
 
 Under real load on Linux — every panel, the drive, a shell command, a full
@@ -299,13 +306,54 @@ is a path, and the project explorer indexes the directory.
 If your code lives in WSL rather than on `C:`, the Linux build below avoids all
 of this — see "Why you might actually want this build".
 
+## The release build (what to use day to day)
+
+```bash
+cargo build --bin warp-oss --features gui,warp_control_cli --release
+```
+
+Two things about that command are deliberate.
+
+**`warp_control_cli` is not a default feature.** Without it there is no
+`--warpctrl`, and the entire control plane this fork exists to open is
+unreachable from a release binary. Check `app/Cargo.toml`'s `default` list
+before assuming any other feature you rely on is on.
+
+**`--release` turns `debug_assertions` off, and that is a privacy change, not
+just a speed one.** `UserInput`'s `Debug` impl is gated on it, so a release
+build's log no longer contains what you typed. See "Your development build's
+log contains what you typed" below — the debug build genuinely does.
+
+Verified 2026-08-21 on Linux by running it: `--warpctrl` dispatches out of the
+release binary, the window opens, discovery registers, and `window list`,
+`tab list` and `action list` all answer. 9 minutes to build with warm deps;
+729 MB, unstripped (the `release` profile keeps line tables so panics
+symbolicate).
+
+**Disk.** `target/debug` was 107 GB on this machine, 77 GB of it
+`target/debug/incremental`. Deleting that directory is safe — it only costs the
+next incremental debug rebuild — and it is the first thing to do if a release
+build runs out of room.
+
 ## Running under WSL2 (WSLg)
 
 **Use this:**
 
 ```bash
-env -u WAYLAND_DISPLAY LIBGL_ALWAYS_SOFTWARE=1 ./target/debug/warp-oss
+env -u WAYLAND_DISPLAY LIBGL_ALWAYS_SOFTWARE=1 ./target/release/warp-oss
 ```
+
+**`env -u WAYLAND_DISPLAY` is doing real work**, and it is worth knowing what.
+Unsetting it makes winit take the X11 path instead of the Wayland one — same
+binary, different backend. Confirmed 2026-08-21 by launching the release build
+both ways and diffing the mapped files: the plain launch maps
+`/memfd:wayland-cursor-rs` and the documented one does not.
+
+That matters beyond rendering. Anything that needs a display-server capability
+X11 has and Wayland does not — synthetic input, screenshots, and **global
+hotkeys**, which are X11-only in this codebase
+(`crates/warpui/src/windowing/winit/delegate/global_hotkey.rs`) — depends on
+which of these two commands you typed.
 
 **The Linux build is usable.** Verified 2026-08-19 end to end: the full UI
 renders, a workspace opens, `warpctrl` mutations land, and a submitted command
