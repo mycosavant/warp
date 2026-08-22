@@ -201,7 +201,11 @@ explicitly for the build.
    fails with `smudge filter lfs failed`. Point LFS at GitHub instead:
    `git config lfs.url https://github.com/warpdotdev/warp.git/info/lfs`.
 
-Working sequence:
+Working sequence. **PowerShell**, not `cmd`, and note the trailing `` ` `` on
+the first line — that is PowerShell's line-continuation character, the
+equivalent of `\` in bash. It has no closing partner. It is also unforgiving:
+**a single space after it stops it being a continuation**, and the command
+breaks in a way that reads like a syntax error in the URL.
 
 ```powershell
 git clone -c core.autocrlf=false -c core.eol=lf -c core.symlinks=false `
@@ -211,6 +215,23 @@ git config lfs.url https://github.com/warpdotdev/warp.git/info/lfs
 git lfs pull
 git reset --hard HEAD          # expect: 0 modified files afterwards
 ```
+
+If the paste mangles it, the same clone on one line, which cannot break:
+
+```powershell
+git clone -c core.autocrlf=false -c core.eol=lf -c core.symlinks=false --branch dev \\wsl.localhost\Ubuntu\home\effatha\git\warp C:\dev\warp
+```
+
+Two checks worth running immediately afterwards, because traps 1 and 2 both
+fail *quietly* — you get a repo, just not a usable one:
+
+```powershell
+git ls-files | Measure-Object -Line   # non-zero: the index survived (trap 2)
+git status --short                    # empty: no CRLF renormalization (trap 1)
+```
+
+Substitute your own distro and username in the UNC path; `wsl -l -q` lists the
+distributions.
 
 ### Build and run
 
