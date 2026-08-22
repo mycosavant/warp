@@ -3832,6 +3832,35 @@ The narrower claim from the section above still stands and is worth keeping:
 rather than `None`. Both of T5.4's stated facts are wrong; its conclusion was
 right for a reason nobody had identified.
 
+#### Decided: stop trying to fix WSLg input
+
+`ydotool` was installed and does not close the gap either. Ubuntu 24.04's
+package ships `/usr/bin/ydotool` and **no `ydotoold`**, and `/dev/uinput` is
+`crw------- root root`, so it aborts with `failed to open uinput device`.
+Reaching it would mean building the daemon from source and granting uinput
+access — for a mechanism that still might not be picked up by Weston.
+
+So the decision, and it is the user's framing: **borrow Zed's imperative
+instead.** Zed tells you not to install the editor inside WSL, and that single
+choice deletes this entire class of problem — hotkeys, cursor, input synthesis
+and rendering are all native Win32 concerns the moment the GUI stops living in
+the distro. This fork has independently confirmed both halves: keystrokes reach
+nothing under WSLg, and the Windows build's `C:\dev\keys.ps1` already posts
+keystrokes to a window without stealing focus.
+
+Consequences, all of them simplifications:
+
+* **T2.5** (audio egress) moves to Windows. The rig is already written down.
+* **T8.1** (quake mode) moves to Windows, where `RegisterHotKey` has the fewest
+  ways to fail — which was already the recommendation.
+* **I16 stops being one feature among fifteen.** It is the architectural answer
+  to the whole category: run the client on Windows, keep the code in WSL, and
+  the input problem is not solved so much as never encountered.
+
+**Synthetic clicks still work**, and remain useful — two quit-confirmation
+dialogs were dismissed with `use_computer click` during the T8 remote-server
+run, which is how those sessions were closed without killing the process.
+
 ---
 
 ## Decisions on record

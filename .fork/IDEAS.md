@@ -1093,8 +1093,64 @@ string user_id = 2;
 The token is a pass-through credential for optional cloud calls. **The protocol
 was designed to tolerate a logged-out client.**
 
+## The gate, found 2026-08-22 — and it is not an account
+
+With `sshd` installed and keys in place, the next step was to trigger a real
+connection. `warpctrl input submit 'ssh localhost'` runs the command in a pane,
+which is exactly what upstream's own integration test does
+(`enter_remote_server_ssh_command` types the command and presses enter) — so
+the WSLg keystroke wall is irrelevant to this test.
+
+It fired the `PreInteractiveSSHSession` warpify hook and then stopped.
+
+The reason is one line in `app/src/features.rs:25`:
+
+```rust
+if ChannelState::is_release_bundle() {
+    flags.extend(RELEASE_FLAGS);
+}
+```
+
+`is_release_bundle()` is `cfg!(feature = "release_bundle")`, and
+`release_bundle` is **not** in `app/Cargo.toml`'s default list. So the whole of
+`RELEASE_FLAGS` — including `SshRemoteServer` — is compiled in and switched off
+in **every build you make yourself**, `--release` included. `script/deploy_remote_server`
+passes the feature explicitly (`FEATURES="release_bundle,…"`); nothing else does.
+
+Sixth instance of this fork's recurring finding, and a gate shape not seen
+before: not `DOGFOOD_FLAGS`, not an account, but a *packaging* feature.
+`FeatureFlag::SshRemoteServer` is now in `fork::FORCE_ENABLED`.
+
+## What is still not proven, and what blocks it
+
+With the flag on, the same submit still produced only
+`PreInteractiveSSHSession`. Reading the event handlers explains why: that hook's
+handler is an **empty block** (`view.rs:12674`). The trigger is a different
+event —
+
+```rust
+// Handled by RemoteServerController via model subscription.
+ModelEvent::SshInitShell { .. } => {}
+```
+
+— which comes from the `InitSubshell` shell hook, emitted when **Warp's
+bootstrap runs inside the remote shell**. Counting hooks in the log for that
+run: 16 `InitShell`, 32 `Precmd`, 1 `PreInteractiveSSHSession`, and **zero
+`InitSubshell`**. The ssh session was never warpified on the far side, so the
+trigger never fired.
+
+`EnableSshWarpification` defaults to `true`, so the setting is not the cause.
+**Hypothesis, not a finding:** warpification rewrites the ssh command as it is
+submitted, and `input.submit` — which replaces the buffer and runs it (T1.8) —
+may take a path that skips that rewrite. If so it is a real limit of
+`input.submit` worth recording in its own right. Testing it needs the command
+typed by hand, which on Linux means a person, and on Windows means
+`C:\dev\keys.ps1`.
+
 ## What is actually missing
 
+0. **Confirm the warpify trigger fires**, per the section above. Everything
+   below is downstream of it.
 1. **A `WslTransport`.** Seven trait methods, and simpler than the SSH case:
    `Command::new("wsl.exe").args(["-d", distro, "--", …])` replaces
    `Command::new("ssh")`, and there is no ControlMaster, no socket lifecycle

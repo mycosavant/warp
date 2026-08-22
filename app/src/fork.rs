@@ -60,6 +60,23 @@ const FORCE_DISABLED: &[FeatureFlag] = &[
 /// harness. The local *Claude* harness is already ungated upstream — see
 /// `ai::local_harness_setup::local_harness_product_disabled_message`, which
 /// returns `None` for `Harness::Claude`.
+///
+/// `SshRemoteServer` is gated differently from the rest, and the difference is
+/// the whole reason it is listed here. It lives in `RELEASE_FLAGS`, which
+/// `features::enabled_features` only extends when
+/// `ChannelState::is_release_bundle()` — and that is `cfg!(feature =
+/// "release_bundle")`, a Cargo feature absent from `app/Cargo.toml`'s default
+/// list. So the entire remote-development stack is compiled in and switched
+/// off in every build you make yourself, including `--release`. Measured
+/// 2026-08-22: submitting `ssh localhost` into a pane fired the
+/// `PreInteractiveSSHSession` warpify hook and then stopped, because this flag
+/// was false.
+///
+/// Nothing about it needs an account. The daemon's `Initialize` handler stores
+/// the bearer token and replies without validating it, the only credential
+/// check in the daemon is scoped to remote codebase indexing, and the protocol
+/// documents `user_id` as "Empty when not logged in". Verified by completing a
+/// credential-free handshake against a daemon this binary spawned.
 const FORCE_ENABLED: &[FeatureFlag] = &[
     FeatureFlag::AgentHarness,
     FeatureFlag::APIKeyManagement,
@@ -67,6 +84,7 @@ const FORCE_ENABLED: &[FeatureFlag] = &[
     FeatureFlag::SoloUserByok,
     FeatureFlag::SkipFirebaseAnonymousUser,
     FeatureFlag::WarpControlCli,
+    FeatureFlag::SshRemoteServer,
 ];
 
 /// Whether local control (`warpctrl`) should default to enabled.
