@@ -1175,6 +1175,61 @@ things are easy to confuse here:
   verified on, and remains the default. Its window is never *focused* from WSL,
   but it has a workspace, so everything works given an explicit selector.
 
+## The main pane, and what follows it
+
+Warp picks one repository per tab — the one the file tree, the diff badge and
+code review resolve to — and picks it from whichever pane is **active**. In a
+split that means glancing at the other pane moves your file tree. Designating a
+main pane pins it.
+
+```powershell
+warpctrl pane main set  --window 0 --pane-index 0   # this pane, from now on
+warpctrl pane main get  --window 0
+warpctrl pane main clear --window 0                 # back to following focus
+```
+
+All three answer with the state *after* the call, so a mutation never needs a
+follow-up read:
+
+```json
+{ "main_pane_id": "Pane Pane Terminal (2206)", "main_pane_index": 0,
+  "anchors_working_directory": true }
+```
+
+There is also a command-palette entry — **"Toggle this pane as the main pane"**,
+no default keystroke. It is a toggle because that is the right shape for a
+keystroke; the CLI has separate verbs because a script that wants "make it this
+one" should not have to read the state first and lose a race.
+
+`main_pane_index` lines up with `pane list`. `anchors_working_directory` is
+false when the designated pane is not a terminal — which is a legal designation
+that simply stops the ambient surfaces moving. It does **not** fall back to the
+active pane, because falling back would restore the thrash the designation
+exists to stop.
+
+Verified 2026-08-22 by running it, with two panes in different repositories
+(`~/git/warp` and `~/git/NeuralAudio`) and focus deliberately on the *other*
+one. Designating pane 0 moved the anchor:
+
+```
+old_focused_repo=Some(Local("…/NeuralAudio"))  new_focused_repo=Some(Local("…/warp"))
+```
+
+### What it does not move yet
+
+**The code review panel keeps its own sticky selection.** Once opened, its repo
+dropdown stays where it was, across a close and reopen. That is pre-existing and
+not about the main pane at all — measured in the same session, it does not
+follow *focus* either: focusing a pane in a different repo updated the toolbar's
+diff badge and left the dropdown alone. The designation moves the underlying
+anchor; making that panel honour it is separate work.
+
+Closing the designated pane clears the designation. That is checked on read
+rather than at the ten pane-removal sites, and the check is `visible_pane_ids`,
+**not** `pane_contents` — the latter deliberately outlives a close so the pane
+can be restored, so a pane absent from `pane list` can still be in it. The first
+version of this got that wrong and reported a closed pane as still main.
+
 ## Voice input, transcribed on this machine
 
 Upstream sends your voice to `api.warp.dev`. The provider setting

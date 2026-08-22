@@ -8,6 +8,7 @@ pub(super) mod close;
 pub(super) mod drive_objects;
 pub(super) mod drive_sync;
 pub(super) mod layout;
+pub(super) mod main_pane;
 pub(super) mod metadata;
 pub(super) mod metadata_config;
 pub(super) mod remote_wsl;

@@ -681,6 +681,18 @@ fn retained_action_examples() -> Vec<(ActionKind, Vec<&'static str>)> {
             ActionKind::RemoteWslConnect,
             vec!["warpctrl", "remote", "wsl", "connect", "--distro", "Ubuntu"],
         ),
+        (
+            ActionKind::PaneMainGet,
+            vec!["warpctrl", "pane", "main", "get"],
+        ),
+        (
+            ActionKind::PaneMainSet,
+            vec!["warpctrl", "pane", "main", "set"],
+        ),
+        (
+            ActionKind::PaneMainClear,
+            vec!["warpctrl", "pane", "main", "clear"],
+        ),
         (ActionKind::SlashList, vec!["warpctrl", "slash", "list"]),
         (
             ActionKind::SlashRun,
@@ -742,6 +754,11 @@ fn parsed_action_kind(command: &ControlCommand) -> Option<ActionKind> {
             PaneCommand::Close(_) => Some(ActionKind::PaneClose),
             PaneCommand::Rename(_) => Some(ActionKind::PaneRename),
             PaneCommand::ResetName(_) => Some(ActionKind::PaneResetName),
+            PaneCommand::Main(command) => match command {
+                PaneMainCommand::Get(_) => Some(ActionKind::PaneMainGet),
+                PaneMainCommand::Set(_) => Some(ActionKind::PaneMainSet),
+                PaneMainCommand::Clear(_) => Some(ActionKind::PaneMainClear),
+            },
         },
         ControlCommand::Session(command) => match command {
             SessionCommand::List(_) => Some(ActionKind::SessionList),

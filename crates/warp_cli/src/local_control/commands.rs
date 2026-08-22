@@ -21,10 +21,11 @@ use crate::local_control::selectors::{instance_selector, target_selector};
 use crate::local_control::{
     ActionCatalogCommand, AgentCommand, AppCommand, AppearanceCommand, CapabilityCommand,
     CliRevealTarget, DriveCommand, DriveObjectCommand, FileCommand, InputCommand, InstanceCommand,
-    KeybindingCommand, PaneCommand, RemoteCommand, RemoteWslCommand, SessionCommand,
-    SettingCommand, SlashCommand, SurfaceCommand, SurfaceOpenCommand, SurfaceOpenToggleCommand,
-    SurfaceQueryCommand, SurfaceSettingsCommand, SurfaceToggleCommand, TabActivateArgs,
-    TabCloseArgs, TabColorCommand, TabCommand, TargetArgs, ThemeCommand, WindowCommand,
+    KeybindingCommand, PaneCommand, PaneMainCommand, RemoteCommand, RemoteWslCommand,
+    SessionCommand, SettingCommand, SlashCommand, SurfaceCommand, SurfaceOpenCommand,
+    SurfaceOpenToggleCommand, SurfaceQueryCommand, SurfaceSettingsCommand, SurfaceToggleCommand,
+    TabActivateArgs, TabCloseArgs, TabColorCommand, TabCommand, TargetArgs, ThemeCommand,
+    WindowCommand,
 };
 
 pub(super) fn run_surface_command(
@@ -484,6 +485,13 @@ pub(super) fn run_pane_command(
             output_format,
         ),
         PaneCommand::ResetName(args) => run_action(args, ActionKind::PaneResetName, output_format),
+        PaneCommand::Main(command) => match command {
+            PaneMainCommand::Get(args) => run_action(args, ActionKind::PaneMainGet, output_format),
+            PaneMainCommand::Set(args) => run_action(args, ActionKind::PaneMainSet, output_format),
+            PaneMainCommand::Clear(args) => {
+                run_action(args, ActionKind::PaneMainClear, output_format)
+            }
+        },
     }
 }
 

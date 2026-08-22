@@ -324,6 +324,9 @@ pub enum PaneGroupAction {
     ToggleMaximizePane,
     HandleFocusChange,
     FocusTerminalView(EntityId),
+    /// Make the active pane this group's main pane, or clear the designation
+    /// if it already is. See [`PaneGroup::main_pane`].
+    ToggleMainPane,
 }
 #[derive(PartialEq)]
 enum PaneRemovalReason {
@@ -424,6 +427,17 @@ pub fn init(app: &mut AppContext) {
             id!("PaneGroup") & !id!("PaneGroup_PaneMaximized") & !id!("PaneGroup_PaneDragging"),
         )
         .with_key_binding("cmdorctrl-alt-down"),
+        // No default keystroke: this lands in the command palette, which is
+        // the intermediate surface until more than one thing needs real UI.
+        // The pane header's overflow menu is the eventual home, but its action
+        // type is generic per pane type (`P::PaneHeaderOverflowMenuAction`), so
+        // a shared entry there is a wider change than the feature warrants yet.
+        EditableBinding::new(
+            "pane_group:toggle_main_pane",
+            "Toggle this pane as the main pane",
+            PaneGroupAction::ToggleMainPane,
+        )
+        .with_context_predicate(id!("PaneGroup")),
     ]);
 
     // Register bindings to resize a pane. We only set bindings on Mac because there isn't an
@@ -534,6 +548,9 @@ pub enum Event {
     /// Event used to propagate a state change for one of the terminal views
     /// inside this pane group.
     TerminalViewStateChanged,
+    /// The group's designated main pane changed. The workspace re-resolves the
+    /// surfaces that follow it; nothing else in the app reads it yet.
+    MainPaneChanged,
     /// Event used to propagate guided onboarding tutorial completion to the workspace.
     OnboardingTutorialCompleted,
     // Tell the workspace to open the workflow modal.
@@ -898,6 +915,24 @@ pub struct PaneGroup {
     pane_history: Vec<PaneId>,
     /// Mapping from pane IDs to their contents.
     pane_contents: HashMap<PaneId, Box<dyn AnyPaneContent>>,
+
+    /// The pane this group's ambient surfaces follow — today the repository
+    /// the file tree and code review resolve to, later the layout anchor and
+    /// the lead agent. `None` means the pre-existing behaviour: follow
+    /// whichever pane is active.
+    ///
+    /// **Why a named pane rather than the focused one.** Following focus makes
+    /// the file tree thrash every time you glance at a split, which is the
+    /// reason "follow the focused pane" was rejected in `.fork/TASKS.md` T8.5.
+    /// A pane you designated is stable by construction.
+    ///
+    /// **Dangling ids are harmless.** This is never cleaned up on pane removal
+    /// — there are ten `pane_contents.remove` sites and hooking each is how
+    /// you get a stale one anyway. Instead every read goes through
+    /// [`Self::main_pane`], which validates and answers `None` for a pane that
+    /// is gone. Re-splitting cannot resurrect a designation either, because
+    /// `PaneId`s are not reused.
+    main_pane: Option<PaneId>,
 
     server_api: Arc<ServerApi>,
 
@@ -3195,6 +3230,7 @@ impl PaneGroup {
             focus_state,
             pane_history,
             pane_contents,
+            main_pane: None,
             server_api,
             terminal_with_open_share_block_modal: None,
             share_block_modal: share_modal,
@@ -7205,6 +7241,66 @@ impl PaneGroup {
         self.terminal_view_from_pane_id(self.focused_pane_id(ctx), ctx)
     }
 
+    /// This group's designated main pane, or `None` when it has none or the
+    /// pane it named has since been closed.
+    ///
+    /// Validating on read is what lets the backing field skip cleanup at the
+    /// ten different pane-removal sites.
+    ///
+    /// **The check is `visible_pane_ids`, not `pane_contents`.** Measured
+    /// 2026-08-22: after `pane.close`, the closed pane is gone from
+    /// `visible_pane_ids` — and so from `pane list` — but is *still present in
+    /// `pane_contents`*, which outlives the close so the pane can be restored.
+    /// An earlier version of this checked `pane_contents` and consequently
+    /// reported a closed pane as still being main, with a null index, because
+    /// only the index lookup used the visible list.
+    pub fn main_pane(&self) -> Option<PaneId> {
+        self.main_pane
+            .filter(|pane_id| self.visible_pane_ids().contains(pane_id))
+    }
+
+    /// Designates `pane_id` as this group's main pane, or clears the
+    /// designation when passed `None`.
+    ///
+    /// Emits [`Event::MainPaneChanged`] so the workspace can re-resolve the
+    /// surfaces that follow it — otherwise nothing moves until the next event
+    /// that happens to trigger a refresh.
+    pub fn set_main_pane(&mut self, pane_id: Option<PaneId>, ctx: &mut ViewContext<Self>) {
+        if self.main_pane() == pane_id {
+            return;
+        }
+        self.main_pane = pane_id;
+        ctx.emit(Event::MainPaneChanged);
+        ctx.notify();
+    }
+
+    /// Makes the active pane this group's main pane, or clears the designation
+    /// when it already is. One action rather than a set/clear pair, because
+    /// there is no keystroke to spend and "do it again to undo it" needs no
+    /// explaining.
+    fn toggle_main_pane(&mut self, ctx: &mut ViewContext<Self>) {
+        let active = self.focused_pane_id(ctx);
+        let next = (self.main_pane() != Some(active)).then_some(active);
+        self.set_main_pane(next, ctx);
+    }
+
+    /// The terminal view whose working directory the group's ambient surfaces
+    /// should follow — the repository the file tree and code review resolve
+    /// to.
+    ///
+    /// With no main pane this is the active session, which is the behaviour
+    /// that shipped. With one, it is that pane's terminal *and nothing else*:
+    /// a main pane holding an editor deliberately answers `None` rather than
+    /// falling back to the active pane, because falling back would restore
+    /// exactly the focus-thrash the designation exists to stop. `None` here
+    /// means "leave the current selection alone", not "clear it".
+    pub fn cwd_anchor_session_view(&self, ctx: &AppContext) -> Option<ViewHandle<TerminalView>> {
+        match self.main_pane() {
+            Some(main) => self.terminal_view_from_pane_id(main, ctx),
+            None => self.active_session_view(ctx),
+        }
+    }
+
     /// If the active session slot holds a swapped-in replacement (e.g. a
     /// child agent pane), returns the displaced original's pane ID and
     /// terminal view. Returns `None` when no swap is active.
@@ -8338,6 +8434,7 @@ impl TypedActionView for PaneGroup {
             } => self.move_pane(*id, *target_pane_id, *direction, ctx),
             HandleFocusChange => self.handle_focus_change(ctx),
             FocusTerminalView(terminal_view_id) => self.focus_terminal_view(*terminal_view_id, ctx),
+            ToggleMainPane => self.toggle_main_pane(ctx),
         }
     }
 }

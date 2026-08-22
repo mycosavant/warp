@@ -760,6 +760,98 @@ fn test_pane_focus_on_close() {
     });
 }
 
+/// Regression test: a designated main pane must stop being main the moment it
+/// is closed (`.fork/TASKS.md` T8.5).
+///
+/// `main_pane` is never cleared at the ten `pane_contents.remove` sites; it is
+/// validated on read instead. The first version of that validation checked
+/// `pane_contents`, which was wrong — measured 2026-08-22 against a running
+/// build, `pane.main.get` kept reporting a closed pane as main, because
+/// `pane_contents` deliberately outlives a close so the pane can be restored.
+/// `visible_pane_ids` is the notion of "still here" that matches what a person
+/// sees and what `pane list` reports.
+#[test]
+fn test_main_pane_designation_does_not_survive_closing_that_pane() {
+    App::test((), |mut app| async move {
+        initialize_app(&mut app);
+        let pane_group = mock_pane_group(&mut app, Default::default());
+
+        pane_group.update(&mut app, |panes, ctx| {
+            let first_pane_id = get_newly_created_pane_id(panes, &[]);
+            panes.add_terminal_pane(Direction::Right, None, ctx);
+            let second_pane_id = get_newly_created_pane_id(panes, &[first_pane_id]);
+
+            panes.set_main_pane(Some(second_pane_id), ctx);
+            assert_eq!(panes.main_pane(), Some(second_pane_id));
+
+            panes.close_pane(second_pane_id, ctx);
+
+            // The pane is gone from the layout but may well still be in
+            // `pane_contents` — that is exactly the case this pins.
+            assert!(
+                !panes.visible_pane_ids().contains(&second_pane_id),
+                "the closed pane should have left the visible layout",
+            );
+            assert_eq!(
+                panes.main_pane(),
+                None,
+                "a closed pane must not still be reported as the main pane",
+            );
+        })
+    });
+}
+
+/// Designating a pane must not move focus, and must not require the pane to be
+/// focused. Following the *active* pane is the behaviour T8.5 exists to
+/// replace, so a designation that only ever lands on the active pane would be
+/// the same feature with extra steps.
+#[test]
+fn test_main_pane_can_be_a_pane_that_is_not_focused() {
+    App::test((), |mut app| async move {
+        initialize_app(&mut app);
+        let pane_group = mock_pane_group(&mut app, Default::default());
+
+        pane_group.update(&mut app, |panes, ctx| {
+            let first_pane_id = get_newly_created_pane_id(panes, &[]);
+            panes.add_terminal_pane(Direction::Right, None, ctx);
+            let second_pane_id = get_newly_created_pane_id(panes, &[first_pane_id]);
+
+            // The freshly split pane takes focus.
+            assert_eq!(panes.focused_pane_id(ctx), second_pane_id);
+
+            panes.set_main_pane(Some(first_pane_id), ctx);
+
+            assert_eq!(panes.main_pane(), Some(first_pane_id));
+            assert_eq!(
+                panes.focused_pane_id(ctx),
+                second_pane_id,
+                "designating a pane should not steal focus",
+            );
+        })
+    });
+}
+
+/// The palette entry is a toggle, so pressing it on the pane that is already
+/// main has to clear rather than re-set. Otherwise there is no way to undo a
+/// designation from the keyboard.
+#[test]
+fn test_toggling_main_pane_on_the_current_main_pane_clears_it() {
+    App::test((), |mut app| async move {
+        initialize_app(&mut app);
+        let pane_group = mock_pane_group(&mut app, Default::default());
+
+        pane_group.update(&mut app, |panes, ctx| {
+            let focused = panes.focused_pane_id(ctx);
+
+            panes.handle_action(&PaneGroupAction::ToggleMainPane, ctx);
+            assert_eq!(panes.main_pane(), Some(focused));
+
+            panes.handle_action(&PaneGroupAction::ToggleMainPane, ctx);
+            assert_eq!(panes.main_pane(), None);
+        })
+    });
+}
+
 #[test]
 fn test_insert_hidden_child_agent_pane_keeps_focus_and_active_session() {
     App::test((), |mut app| async move {

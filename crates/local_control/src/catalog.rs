@@ -105,6 +105,7 @@ pub enum ActionResultSpec {
     DriveObjectTrashed,
     RemoteWslDistroList,
     RemoteWslConnectStarted,
+    MainPane,
 }
 
 /// Discoverable metadata describing one local-control action.
@@ -245,6 +246,9 @@ define_action_catalog! {
         PaneClose => { name: "pane.close", status: Implemented, target: Pane, params: None, result: Acknowledgement },
         PaneRename => { name: "pane.rename", status: Implemented, target: Pane, params: Rename, result: Acknowledgement },
         PaneResetName => { name: "pane.reset_name", status: Implemented, target: Pane, params: None, result: Acknowledgement },
+        PaneMainGet => { name: "pane.main.get", status: Implemented, target: Pane, params: None, result: MainPane },
+        PaneMainSet => { name: "pane.main.set", status: Implemented, target: Pane, params: None, result: MainPane },
+        PaneMainClear => { name: "pane.main.clear", status: Implemented, target: Pane, params: None, result: MainPane },
     }
 
     session {

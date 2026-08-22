@@ -385,6 +385,38 @@ pub enum PaneCommand {
 
     /// Reset a pane name.
     ResetName(TargetArgs),
+
+    /// The tab's main pane — the one its ambient surfaces follow.
+    #[command(subcommand)]
+    Main(PaneMainCommand),
+}
+
+/// Commands that read and change a tab's designated main pane.
+///
+/// Warp picks one repository per tab for the file tree and code review, and
+/// picks it from whichever pane is active — so glancing at a split moves the
+/// file tree. Designating a pane pins that choice.
+///
+/// The command palette has a single toggle for this. These are separate verbs
+/// because a toggle cannot express "make it this one" without first reading the
+/// current state, which is a race a script should not have to run.
+#[derive(Debug, Clone, Subcommand)]
+pub enum PaneMainCommand {
+    /// Report the tab's main pane without changing it.
+    Get(TargetArgs),
+
+    /// Designate the targeted pane as its tab's main pane.
+    ///
+    /// Defaults to the tab's focused pane. The pane does not have to be a
+    /// terminal: a non-terminal main pane simply stops the ambient surfaces
+    /// moving rather than anchoring them somewhere new, which `get` reports as
+    /// `anchors_working_directory: false`.
+    Set(TargetArgs),
+
+    /// Clear the designation, restoring follow-the-active-pane.
+    ///
+    /// Succeeds when there was nothing designated.
+    Clear(TargetArgs),
 }
 
 /// Commands that inspect local Warp sessions.

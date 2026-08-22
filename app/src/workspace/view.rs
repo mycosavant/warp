@@ -15225,10 +15225,12 @@ impl Workspace {
             .chain(code_diff_paths)
             .collect();
 
-        // Get the focused terminal ID to prioritize it in the repo_to_terminal map
+        // The terminal whose repo wins in the repo_to_terminal map. Defaults to
+        // the active session, but a designated main pane overrides it — see
+        // `PaneGroup::cwd_anchor_session_view`.
         let focused_terminal_id = pane_group
             .as_ref(ctx)
-            .active_session_view(ctx)
+            .cwd_anchor_session_view(ctx)
             .map(|terminal_view| terminal_view.id());
 
         self.working_directories_model.update(ctx, |model, ctx| {
@@ -16112,6 +16114,14 @@ impl Workspace {
             }
             pane_group::Event::TerminalViewStateChanged => {
                 self.update_active_session(ctx);
+                ctx.notify();
+            }
+            pane_group::Event::MainPaneChanged => {
+                // Re-resolve immediately. The refresh is otherwise driven by
+                // CWD and focus changes, so without this the designation would
+                // appear to do nothing until the next `cd`.
+                let pane_group = pane_group.clone();
+                self.refresh_working_directories_for_pane_group(&pane_group, ctx);
                 ctx.notify();
             }
             pane_group::Event::OnboardingTutorialCompleted => {

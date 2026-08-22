@@ -3712,16 +3712,52 @@ T1, T4, T5 and T7, and by now should be the prior rather than the surprise.
       already a workspace dependency — **no new dep**, and no blake3. Warn in
       v1; do not auto-block until the noise level is known.
 
-- [ ] **T8.5** A main pane, and the CWD following it. (I13 + I6)
-      One `Option<PaneId>` on `PaneGroup`, set from the pane's overflow menu,
-      `None` meaning today's behaviour. Then consumers one at a time: CWD
-      follow first (`working_directories.rs`, `startup_directory.rs`,
-      `ActiveFileModel` all exist), layout second, orchestration third.
-      **This supersedes the "follow the focused pane" scoping**, which was
-      wrong: a pane that merely has focus makes the file tree thrash every
-      time you glance at a split. A pane you *named* is stable by
-      construction. `main` is also the natural answer to a question T6.6 and
-      T7.1 both leave implicit — which pane is the lead agent.
+- [~] **T8.5** A main pane, and the CWD following it. (I13 + I6)
+      One `Option<PaneId>` on `PaneGroup`, `None` meaning today's behaviour.
+      Then consumers one at a time: CWD follow first, layout second,
+      orchestration third. **This supersedes the "follow the focused pane"
+      scoping**, which was wrong: a pane that merely has focus makes the file
+      tree thrash every time you glance at a split. A pane you *named* is
+      stable by construction. `main` is also the natural answer to a question
+      T6.6 and T7.1 both leave implicit — which pane is the lead agent.
+
+      Built and verified:
+
+      - [x] `PaneGroup::main_pane` / `set_main_pane`, `Event::MainPaneChanged`,
+            and `PaneGroupAction::ToggleMainPane` behind a command-palette
+            entry with no default keystroke.
+      - [x] First consumer: `cwd_anchor_session_view` replaces
+            `active_session_view` at the one call site that decides a tab's
+            repository (`workspace/view.rs`,
+            `refresh_working_directories_for_pane_group`).
+      - [x] `pane.main.get`, `.set` and `.clear` (catalog 102 → 105), so the
+            effect is drivable and observable without a screenshot.
+      - [x] **Run it**, two panes in different repos with focus deliberately on
+            the *other* one. Designating pane 0 moved the anchor:
+            `old_focused_repo=…/NeuralAudio new_focused_repo=…/warp`.
+
+      **The overflow menu was dropped from scope, deliberately.** Its action
+      type is generic per pane type (`P::PaneHeaderOverflowMenuAction`, built
+      per child view by `pane_header_overflow_menu_items`), so one shared entry
+      means touching every pane type. The palette entry is the intermediate
+      surface, exactly as for T8.6 — real UI when more than one thing needs it.
+
+      Two findings from running it:
+
+      - **`pane_contents` is not "the panes that exist".** It outlives a close
+        so a pane can be restored, so a pane gone from `pane list` is still in
+        it. Validating the designation against `pane_contents` reported a
+        closed pane as still main; `visible_pane_ids` is the right notion.
+        Pinned by
+        `test_main_pane_designation_does_not_survive_closing_that_pane`.
+      - **The code review panel will not visibly follow it**, because its repo
+        dropdown is a sticky per-pane-group selection that survives close and
+        reopen. Pre-existing and not about the main pane: measured in the same
+        session, it does not follow *focus* either. The anchor underneath does
+        move — the toolbar diff badge tracks it.
+
+      Remaining: the layout and orchestration consumers, and making the code
+      review panel honour the anchor if that turns out to be wanted.
 
 - [x] **T8.6** WSL as a remote target, the way Zed does it. (I16)
       Promoted off the idea board because it is mostly built. Zed treats WSL as

@@ -74,7 +74,7 @@ upstream and rebasable.
 | `crates/http_client/src/egress.rs` | the telemetry deny-list. The "nothing escapes" claim rests on this. |
 | `app/src/ai/local_agent/` | a local implementation of the one agent-transport function, answering from the `claude` CLI. |
 | `app/src/drive/local_sync/` | account-free Warp Drive: snapshot, apply, git-backed sync. |
-| `app/src/local_control/`, `crates/local_control/`, `crates/warp_cli/src/local_control/` | the `warpctrl` control plane, 102 actions. The count is pinned by a test — when it fires, update it rather than loosening it. |
+| `app/src/local_control/`, `crates/local_control/`, `crates/warp_cli/src/local_control/` | the `warpctrl` control plane, 105 actions. The count is pinned by **two** tests in different crates — update both, and never loosen either. |
 | `app/src/remote_server/wsl_transport.rs`, `crates/remote_server/src/wsl.rs` | the second `RemoteTransport`: Warp's remote-development server, in a WSL distro instead of over SSH. |
 
 Environment variables the fork adds: `WARP_FORK_POLICY` (set `0`/`off`/`false`
@@ -104,6 +104,17 @@ a stashed tree and compare *which* tests failed. There is a known pre-existing
 failure set (`gh`-dependent git tests, flaky secret-redaction globals, terminal
 view) whose members vary run to run — a count that matches can still hide a
 regression, and a count that differs by one is usually the flaky set.
+
+**Adding a `warpctrl` action? Run `-p warp --lib` too, not just `-p
+local_control`.** The catalog count is pinned in *two* places: the fast one is
+`catalog_has_exactly_N_retained_actions` in
+`crates/local_control/src/protocol_tests.rs`, and its twin is
+`capabilities_advertises_the_complete_catalog` in
+`app/src/local_control/mod_tests.rs`. T8.6 updated the first, left the second
+red, and shipped — because `cargo test -p local_control` takes a second and the
+app crate does not. `crates/warp_cli` holds two more guardrails: an
+exhaustive `match` over the CLI enum and a list requiring every action to have a
+parseable example.
 
 **Formatting: run `./script/format`, and disregard `AGENTS.md` on this point.**
 Measured 2026-08-21: `cargo fmt` with the project's config wants to change **11

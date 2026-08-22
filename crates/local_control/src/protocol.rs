@@ -1036,6 +1036,27 @@ pub struct RemoteWslDistroListResult {
     pub distros: Vec<String>,
 }
 
+/// What `pane.main.get`, `pane.main.set` and `pane.main.clear` report.
+///
+/// All three answer with the state *after* the call, so a caller never has to
+/// follow a mutation with a read to know where it ended up.
+///
+/// `main_pane_id` is `None` both when no pane was ever designated and when the
+/// designated one has since been closed — `PaneGroup::main_pane` validates on
+/// read, so a dangling designation is indistinguishable from none, by design.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MainPaneResult {
+    /// The group's main pane, or `None` if it has none.
+    pub main_pane_id: Option<String>,
+    /// Its index within the group, for a caller that wants to name it the way
+    /// `pane list` does. `None` whenever `main_pane_id` is.
+    pub main_pane_index: Option<usize>,
+    /// Whether that pane is a terminal, and so can actually anchor the working
+    /// directory. A main pane holding an editor is legal and does *not* fall
+    /// back to the active pane — it simply stops the ambient surfaces moving.
+    pub anchors_working_directory: bool,
+}
+
 #[cfg(test)]
 #[path = "protocol_tests.rs"]
 mod tests;
