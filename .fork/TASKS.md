@@ -3723,7 +3723,7 @@ T1, T4, T5 and T7, and by now should be the prior rather than the surprise.
       construction. `main` is also the natural answer to a question T6.6 and
       T7.1 both leave implicit — which pane is the lead agent.
 
-- [~] **T8.6** WSL as a remote target, the way Zed does it. (I16)
+- [x] **T8.6** WSL as a remote target, the way Zed does it. (I16)
       Promoted off the idea board because it is mostly built. Zed treats WSL as
       a remote host — Windows client, headless server inside the distro — so
       files, language servers and terminals live on the fast side of 9p while
@@ -3753,18 +3753,39 @@ T1, T4, T5 and T7, and by now should be the prior rather than the surprise.
             path, so `check_binary` short-circuits the CDN fetch this fork
             deny-lists. **The absent install prompt is the success signal.**
 
-      Remaining: **run it on Windows.** The runbook is in `README.md` under
-      "Warp's remote server, in a WSL distribution". Everything above was
-      verified on Linux, where `wsl.exe` is reachable through interop — which
-      exercises the same code path a Windows client would, but is not the
-      arrangement the feature is for.
+      - [x] **Run on Windows, end to end** (2026-08-22). A Windows
+            `warp-oss.exe` client, `warpctrl tab create`, then
+            `remote wsl connect --tab <id>` → `{"distro": "Ubuntu",
+            "distro_from_pane": true}`. Twenty seconds later, inside Ubuntu:
+            proxy, `remote-server-daemon` and its `terminal-server` child, all
+            sharing identity key `2dea4f26…`, with a state directory of that
+            name freshly created. No SSH, no account, no install prompt.
 
-      Then the ambient path. `wsl` is *already* a warpify subshell command on
-      Windows, so a WSL session gets warpified exactly as an `ssh` one does;
-      what it does not get is a remote server, because that attach is keyed on
-      `IsSSHWrapperSession::Yes`, whose payload is a ControlMaster socket path
-      a WSL session cannot have. A WSL arm beside the SSH one is the work, and
-      `Session::wsl_name()` already carries the distribution.
+      **The warpify step turned out to be unnecessary.** The runbook said to
+      type `wsl` into a pane and accept the subshell prompt. That works, but
+      setting *Default shell for new sessions* to the distribution is simpler
+      and makes every new tab a WSL session: `SessionInfo::wsl_name()` falls
+      back to `ShellLaunchData::WSL { distro }`, so launch data alone satisfies
+      `connect`. Confirmed by `"distro_from_pane": true` on a tab created with
+      `warpctrl tab create` and nothing else. README step 4 now leads with it.
+
+      Two traps worth carrying forward, both found by running it:
+
+      - **A daemon being present proves nothing on its own.** They outlive the
+        GUI that spawned them, so a stale one is indistinguishable from a fresh
+        success in `pgrep` output. Check `ps -o etimes`.
+      - **The proxy and daemon report different paths for the same binary** —
+        `~/.warp-dev/remote-server/warp-oss` is a symlink, and the daemon is
+        spawned via `current_exe()`, which resolves it.
+
+      Remaining, and now the only part left: **the ambient path.** `wsl` is
+      *already* a warpify subshell command on Windows, so a WSL session gets
+      warpified exactly as an `ssh` one does; what it does not get is a remote
+      server, because that attach is keyed on `IsSSHWrapperSession::Yes`, whose
+      payload is a ControlMaster socket path a WSL session cannot have. A WSL
+      arm beside the SSH one is the work, and `Session::wsl_name()` already
+      carries the distribution — as the default-shell finding above confirms,
+      including for sessions that were never warpified at all.
 
 ### Deliberately not selected, and why
 

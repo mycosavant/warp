@@ -1910,9 +1910,36 @@ installed.
 
 ### Step 4 — get a WSL session in a pane
 
-Type `wsl` (or `wsl -d Ubuntu`) into a Warp pane and accept the subshell
-prompt. `wsl` is already a warpify subshell command on Windows, so the session
-gets bootstrapped the way an `ssh` session does.
+**The short way — set the default shell, then open a tab.** Settings →
+Features → `Session` → *Default shell for new sessions* → your distribution
+(see "A WSL session in the Windows build" above, including which section it is
+in). Then any new tab is a WSL session:
+
+```powershell
+warpctrl tab create
+```
+
+No `wsl` command, no warpify, no subshell prompt. `SessionInfo::wsl_name()`
+falls back to the session's launch data, so `ShellLaunchData::WSL { distro }`
+alone is enough for step 5 to find the distribution:
+
+```rust
+fn wsl_name(&self) -> Option<&str> {
+    self.wsl_name.as_deref()
+        .or(self.launch_data.as_ref().and_then(|d| match d {
+            ShellLaunchData::WSL { distro } => Some(distro.as_str()),
+            _ => None,
+        }))
+}
+```
+
+Measured 2026-08-22: a tab created this way answered `remote wsl connect` with
+`"distro_from_pane": true`.
+
+**The other way — type `wsl` into a pane** and accept the subshell prompt.
+`wsl` is already a warpify subshell command on Windows, so the session gets
+bootstrapped the way an `ssh` session does, and `wsl_name` is set directly.
+Use this for a one-off distribution without changing your default shell.
 
 ### Step 5 — attach the remote server
 
@@ -1939,6 +1966,27 @@ ls -la ~/.warp-dev/remote-server/   # server.pid and a 0600 server.sock
 A daemon plus a `terminal-server` child, and an `wsl.exe … remote-server-proxy`
 pair on the Windows side, is the whole stack running. That is exactly what the
 SSH path produces, and what was observed on Linux.
+
+Measured 2026-08-22, ~20s after a `remote wsl connect --tab <id>`:
+
+```
+307853 sh -c ~/.warp-dev/remote-server/warp-oss remote-server-proxy --identity-key 2dea4f26…
+307854 /home/…/.warp-dev/remote-server/warp-oss remote-server-proxy      --identity-key 2dea4f26…
+307855 /home/…/git/warp/target/release/warp-oss  remote-server-daemon    --identity-key 2dea4f26…
+307857 /home/…/git/warp/target/release/warp-oss  terminal-server         --parent-pid=307855
+```
+
+Two things worth knowing when reading that output:
+
+- **Check `etimes`, not just presence.** These daemons outlive the GUI that
+  spawned them — by design, that is what makes reconnects cheap — so a stale
+  one from an earlier attempt looks identical to a fresh success. `ps -o
+  pid,etimes,args -p <pids>` settles it, as does a state directory named for
+  the identity key with a current mtime.
+- **The proxy and the daemon report different paths for the same binary.**
+  `~/.warp-dev/remote-server/warp-oss` is a symlink; the proxy is launched
+  through it, then spawns the daemon via `current_exe()`, which resolves. Not
+  two binaries, and not a misconfiguration.
 
 ### Expected failure modes
 
