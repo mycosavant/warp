@@ -1647,6 +1647,103 @@ on **every** Claude session on the machine — including whichever one is being
 used to do the installing. That is not a reason not to do it; it is a reason
 not to do it absent-mindedly mid-session.
 
+## Reviewing the plugin against the fork's thesis, 2026-08-23
+
+Read before installing, from a clone of `warpdotdev/claude-code-warp`. **The
+repo ships two plugins, and only one of them belongs on this fork.**
+
+### `warp` — clean, and it would work here
+
+Seven hooks: `SessionStart`, `UserPromptSubmit`, `PostToolUse`,
+`PermissionRequest`, `Notification` (matcher `idle_prompt`), `Stop`,
+`StopFailure`. All of it is bash and `jq`.
+
+**No network calls anywhere in it.** The only `https://` strings are the
+`author.url` and `homepage` fields in `plugin.json`. The output path is a
+single OSC 777 sequence — `\033]777;notify;warp://cli-agent;<json>\007` —
+written to `/dev/tty`, or on Claude Code ≥ 2.1.141 returned as
+`{terminalSequence: …}` for Claude to write. It reaches Warp through the PTY
+and goes nowhere else. For a fork whose central claim rests on an egress
+deny-list, this is about as good as a third-party integration gets.
+
+**What each hook actually sends** — and this corrects what this page said
+after reading only the Rust side:
+
+| event | payload beyond `v/agent/session_id/cwd/project` |
+|---|---|
+| `session_start` | — |
+| `prompt_submit` | `query`, **truncated to 200 chars** |
+| `tool_complete` | **`tool_name` only** |
+| `permission_request` | `tool_name`, **full `tool_input` JSON**, `summary` (preview ≤120) |
+| `stop` | `query` + `response` (each ≤200), **`transcript_path`** |
+| `stop_failure` | `error_type` |
+
+> **Correction.** This page said "the protocol carries `tool_input`, a full
+> `serde_json::Value`", and treated `event/v1.rs` narrowing it to a preview as
+> the loss. The protocol does carry it — but **the plugin only ever populates
+> it on `permission_request`**. `PostToolUse` sends the tool's name and
+> nothing else. So on an auto-approving setup, which is the interesting case
+> for this fork, the notification stream contains **no tool arguments at all**.
+> Which is another argument that the transcript, not the event stream, is the
+> substrate: the events are a *status* feed by design, and the truncation
+> limits say so out loud.
+
+**And it is not gated out of our builds — measured.** `should_use_structured`
+requires both `WARP_CLI_AGENT_PROTOCOL_VERSION` and `WARP_CLIENT_VERSION`, and
+skips builds at or below a known-broken release per channel. A live shell
+under our own release binary reports:
+
+```
+WARP_CLIENT_VERSION=local
+WARP_CLI_AGENT_PROTOCOL_VERSION=1
+TERM_PROGRAM=WarpTerminal
+```
+
+`local` matches none of the `*dev*`/`*stable*`/`*preview*` patterns, so no
+threshold applies. The protocol version comes from `FeatureFlag::HOANotifications`,
+whose cargo feature is in `default` and which is added unconditionally rather
+than by channel — so it is on here. **The plugin would function on this fork
+as-is.**
+
+### `oz-harness-support` — do not install this one
+
+`DEFAULT_SERVER_ROOT = "https://app.warp.dev"` in
+`skills/factory-files/scripts/validate_factory_files.py`, plus
+`oz-parent-listener.sh`, `drain-mailbox.sh`, and skills named `oz-report-pr`,
+`oz-upload-file`, `oz-notify-user`, `oz-finish-task`. This is the cloud harness
+integration — precisely the surface this fork exists to remove.
+
+It installs through a **separate** method (`install_platform_plugin`, distinct
+from `install`), called from exactly one place:
+`ensure_local_claude_child_plugins` in `pane_group/pane/local_harness_launch.rs`,
+on the path that spawns a child running a *third-party CLI harness in a
+terminal* — `StartAgentExecutionMode::Local { harness_type: Some(_) }`.
+
+**The fork does not currently reach it**, because `warpctrl agent spawn` goes
+through `spawn_hidden_child_agent_for_local_control` with
+`orchestration_harness: Some(Harness::Oz)` — the transport seat, not a
+terminal harness. So a spawned child never triggers the install.
+
+**But that is off by accident, not by policy**, which is the distinction this
+fork usually insists on. Nothing stops an in-app agent requesting a harness
+child and quietly installing a cloud integration into the user's Claude Code
+at user scope. A `fork::` predicate refusing `install_platform_plugin` is one
+line and turns an architectural accident into a guarantee — the same move
+`FORCE_DISABLED` makes for the telemetry flags.
+
+### What is worth changing, and what is not
+
+**Worth doing:** the refusal above. And keeping `tool_input` in `event/v1.rs`
+instead of flattening it to a preview string, on the principle that the fork
+should not discard its own data — while remembering it only arrives on
+permission requests.
+
+**Not worth doing:** forking the plugin to lift the 200-character truncation.
+The truncation is correct for what the events *are* — a status feed for a
+sidebar — and the full content is in the transcript the `stop` event already
+points at. Forking it would take on maintenance of a moving target to
+duplicate something we can already read.
+
 ## What is still missing after all that
 
 **1. The transcript is the right substrate, and there are two of them.**
