@@ -172,6 +172,11 @@ impl CliAgentPluginManager for ClaudeCodePluginManager {
     }
 
     async fn install_platform_plugin(&self) -> Result<(), PluginInstallError> {
+        // Fork policy: `oz-harness-support` is the cloud harness integration
+        // and this fork does not install it. See `fork::cloud_harness_plugin_allowed`.
+        if !crate::fork::cloud_harness_plugin_allowed() {
+            return Ok(());
+        }
         let mut log = String::new();
         self.run_logged(
             &["plugin", "marketplace", "add", MARKETPLACE_REPO],
@@ -184,6 +189,13 @@ impl CliAgentPluginManager for ClaudeCodePluginManager {
     }
 
     async fn update_platform_plugin(&self) -> Result<(), PluginInstallError> {
+        // Fork policy: refused here as well as in `install_platform_plugin`,
+        // because `update` re-adds the marketplace and reinstalls — it is an
+        // install by another name, and guarding only the one named "install"
+        // would be a gap that reads as covered.
+        if !crate::fork::cloud_harness_plugin_allowed() {
+            return Ok(());
+        }
         let mut log = String::new();
         self.run_logged(
             &["plugin", "marketplace", "add", MARKETPLACE_REPO],

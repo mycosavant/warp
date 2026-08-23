@@ -230,6 +230,31 @@ fn spawn_depth_limit_from(value: Option<&str>) -> u32 {
         .unwrap_or(DEFAULT_SPAWN_DEPTH)
 }
 
+/// Whether the `oz-harness-support` Claude Code plugin may be installed (I17).
+///
+/// **This is the one plugin in `warpdotdev/claude-code-warp` that does not
+/// belong here.** Reviewed 2026-08-23: the sibling `warp` plugin is seven bash
+/// hooks with no network calls at all, emitting an OSC 777 sequence to the
+/// TTY, and is welcome. `oz-harness-support` is the cloud harness integration
+/// — `DEFAULT_SERVER_ROOT = "https://app.warp.dev"`, an `oz-parent-listener`,
+/// a mailbox drain, and skills that upload files and report PRs.
+///
+/// It is refused at the *manager*, not at the caller. Today the only path that
+/// asks for it is `ensure_local_claude_child_plugins`, reached when an in-app
+/// agent spawns a child running a third-party CLI harness in a terminal — and
+/// the fork's own `agent spawn` does not go that way, because it uses
+/// `Harness::Oz` through the transport rather than a terminal harness. So the
+/// hole is currently closed *by accident of architecture*, which is exactly
+/// the kind of thing this file exists to convert into a guarantee. Guarding
+/// the manager means a future call site cannot reopen it by not knowing.
+///
+/// The refusal is silent and returns `Ok(())` rather than an error: nothing
+/// downstream depends on the platform plugin existing, and reporting a failure
+/// would surface a warning about a thing the user did not ask for.
+pub fn cloud_harness_plugin_allowed() -> bool {
+    !is_active()
+}
+
 const FRAME_LOG_ENV_VAR: &str = "WARP_FORK_FRAME_LOG";
 
 /// Two frames' worth of budget at 60Hz. One frame's would report the ordinary

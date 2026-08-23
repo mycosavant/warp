@@ -1733,10 +1733,26 @@ line and turns an architectural accident into a guarantee — the same move
 
 ### What is worth changing, and what is not
 
-**Worth doing:** the refusal above. And keeping `tool_input` in `event/v1.rs`
-instead of flattening it to a preview string, on the principle that the fork
-should not discard its own data — while remembering it only arrives on
-permission requests.
+**Done 2026-08-23:** the refusal. `fork::cloud_harness_plugin_allowed()` is
+`!is_active()`, and it is checked **inside the manager** —
+`install_platform_plugin` *and* `update_platform_plugin` in
+`plugin_manager/claude.rs` — rather than at the caller. Guarding the call site
+would have closed today's single path; guarding the manager means a future
+call site cannot reopen it by not knowing. `update` needed its own guard
+because it re-adds the marketplace and reinstalls: it is an install by another
+name, and covering only the one spelled "install" would read as covered while
+leaving a gap.
+
+The refusal returns `Ok(())` rather than an error — nothing downstream needs
+the platform plugin, and reporting a failure would warn about a thing the user
+never asked for. Pinned by a test that asserts the predicate *tracks*
+`is_active()` rather than asserting a constant, so `WARP_FORK_POLICY=0` still
+gives back upstream behaviour; run both ways.
+
+**Still worth doing:** keeping `tool_input` in `event/v1.rs` instead of
+flattening it to a preview string, on the principle that the fork should not
+discard its own data — while remembering it only arrives on permission
+requests.
 
 **Not worth doing:** forking the plugin to lift the 200-character truncation.
 The truncation is correct for what the events *are* — a status feed for a

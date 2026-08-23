@@ -644,9 +644,40 @@ terminal-server IPC (`read_socket`, `write_commands`, `authenticate`).
 > never runs here.
 
 So this pipe is real and useful for app and IPC timing, and it is **not** an
-agent-trajectory feed today. See `.fork/IDEAS.md` I17 for what capture would
-take — the short version is that Claude's `stream-json` hands us
-`tool_use.input` and `translate.rs` drops it.
+agent-trajectory feed today. See `.fork/IDEAS.md` I17 for where the trajectory
+actually lives — the short version is that Claude writes a complete transcript
+per session and Warp already stores the key that names it.
+
+## The Claude Code plugin, and the one we refuse
+
+Warp installs a plugin into Claude Code so a CLI-agent session can report what
+it is doing: `warp@claude-code-warp`, from the marketplace repo
+`warpdotdev/claude-code-warp`. **It is welcome here.** Seven bash hooks, no
+network calls anywhere in it, and its whole output is an OSC 777 escape
+sequence written to the TTY — it reaches Warp through the PTY and goes nowhere
+else. Reviewed in full on 2026-08-23; the only `https://` strings in it are the
+`author.url` and `homepage` fields of its manifest.
+
+Note what it does and does not carry. `prompt_submit` sends the prompt
+truncated to 200 characters, `stop` sends query and response truncated the
+same way plus a **`transcript_path`**, and `tool_complete` sends the tool's
+*name only*. Full `tool_input` appears on `permission_request` and nowhere
+else — so on an auto-approving setup the event stream has no tool arguments in
+it at all. These are status notifications by design; the transcript is the
+record.
+
+**The same repo ships a second plugin, and fork policy refuses it.**
+`oz-harness-support` is the cloud harness integration — `app.warp.dev` as a
+server root, a parent listener, a mailbox drain, and skills that upload files
+and report PRs. `fork::cloud_harness_plugin_allowed()` returns false whenever
+fork policy is on, and it is checked inside `install_platform_plugin` and
+`update_platform_plugin` rather than at the caller, so a future call site
+cannot reopen it by not knowing about it.
+
+Nothing today asks for it — the fork's `agent spawn` runs children through the
+transport (`Harness::Oz`) rather than as terminal harnesses, so it never
+reaches the install. That is the point of the guard: the hole was closed by
+accident of architecture, and this closes it on purpose.
 
 **Safety properties, both covered by tests in `app/src/tracing/native_tests.rs`:**
 

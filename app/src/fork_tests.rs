@@ -779,3 +779,21 @@ fn the_frame_log_is_off_until_it_is_asked_for() {
         Some(DEFAULT_SLOW_FRAME_THRESHOLD)
     );
 }
+
+/// The cloud harness plugin is refused exactly when fork policy is active.
+///
+/// Asserted against `is_active()` rather than by setting `WARP_FORK_POLICY`,
+/// for the reason given on [`the_local_owner_exists_only_under_fork_policy`].
+/// Tracking the policy rather than asserting a constant is the point: this
+/// catches both an inverted condition and a well-meaning "just hardcode it",
+/// and it keeps `WARP_FORK_POLICY=0` honest — A/B-ing a regression has to give
+/// back upstream behaviour here too, or the switch does not mean what the
+/// README says it means.
+#[test]
+fn the_cloud_harness_plugin_is_refused_under_fork_policy() {
+    assert_eq!(
+        cloud_harness_plugin_allowed(),
+        !is_active(),
+        "oz-harness-support must be installable only when fork policy is off"
+    );
+}
