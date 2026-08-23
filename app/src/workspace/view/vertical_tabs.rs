@@ -18,14 +18,14 @@ use warp_core::ui::color::coloru_with_opacity;
 use warp_core::ui::theme::color::internal_colors;
 use warp_core::ui::theme::{AnsiColorIdentifier, Fill as WarpThemeFill, WarpTheme};
 use warpui::elements::{
-    Border, ChildAnchor, Clipped, ClippedScrollStateHandle, ClippedScrollable, ConstrainedBox,
-    Container, CornerRadius, CrossAxisAlignment, DispatchEventResult, DragAxis, DragBarSide,
-    Draggable, DropShadow, DropTarget, Element, Empty, EventHandler, Expanded, Fill as ElementFill,
-    Flex, Hoverable, MainAxisAlignment, MainAxisSize, MouseStateHandle, OffsetPositioning, Padding,
-    ParentAnchor, ParentElement, ParentOffsetBounds, PositionedElementAnchor,
-    PositionedElementOffsetBounds, Radius, Resizable, ResizableStateHandle, SavePosition,
-    ScrollTarget, ScrollToPositionMode, ScrollbarWidth, Shrinkable, Stack, Text,
-    resizable_state_handle,
+    AcceptedByDropTarget, Border, ChildAnchor, Clipped, ClippedScrollStateHandle,
+    ClippedScrollable, ConstrainedBox, Container, CornerRadius, CrossAxisAlignment,
+    DispatchEventResult, DragAxis, DragBarSide, Draggable, DropShadow, DropTarget, Element, Empty,
+    EventHandler, Expanded, Fill as ElementFill, Flex, Hoverable, MainAxisAlignment, MainAxisSize,
+    MouseStateHandle, OffsetPositioning, Padding, ParentAnchor, ParentElement, ParentOffsetBounds,
+    PositionedElementAnchor, PositionedElementOffsetBounds, Radius, Resizable,
+    ResizableStateHandle, SavePosition, ScrollTarget, ScrollToPositionMode, ScrollbarWidth,
+    Shrinkable, Stack, Text, resizable_state_handle,
 };
 use warpui::fonts::{Properties, Weight};
 use warpui::platform::Cursor;
@@ -51,6 +51,7 @@ use crate::drive::DriveObjectType;
 use crate::drive::cloud_object_styling::warp_drive_icon_color;
 use crate::editor::EditorView;
 use crate::pane_group::pane::IPaneType;
+use crate::pane_group::pane::view::PaneDropTargetData;
 use crate::pane_group::{
     CodePane, NotebookPane, PaneGroup, PaneId, TabBarHoverIndex, TerminalPane, WorkflowPane,
 };
@@ -2535,17 +2536,51 @@ fn render_tab_group_internal(
     let draggable: Box<dyn Element> = if is_parent_group_dragging || is_sole_group_member {
         group_element
     } else {
+        // Fork: the same three additions T8.2 made to the horizontal strip
+        // (`tab.rs`), which is where they stopped. Without them a tab dragged
+        // out of this panel and released over a pane is resolved by cursor
+        // geometry alone — it lands outside the tab bar, so the cross-window
+        // path detaches it into a new window instead of splitting the pane.
+        // Observed by driving the gesture, 2026-08-23 (`.fork/TASKS.md` T9.1).
         let draggable = Draggable::new(tab.draggable_state.clone(), group_element)
+            .with_accepted_by_drop_target_fn(|drop_target_data, _| {
+                if crate::fork::tab_pane_drag_enabled()
+                    && drop_target_data.as_any().is::<PaneDropTargetData>()
+                {
+                    AcceptedByDropTarget::Yes
+                } else {
+                    AcceptedByDropTarget::No
+                }
+            })
             .on_drag_start(|ctx, _, _| {
                 ctx.dispatch_typed_action(WorkspaceAction::StartTabDrag);
             })
-            .on_drag(move |ctx, _, rect, _| {
+            .on_drag(move |ctx, _, rect, data| {
+                if let Some(pane) =
+                    data.and_then(|data| data.as_any().downcast_ref::<PaneDropTargetData>())
+                {
+                    ctx.dispatch_typed_action(WorkspaceAction::DragTabOverPane {
+                        tab_index,
+                        target_pane_id: pane.id(),
+                        drag_position: rect,
+                    });
+                    return;
+                }
                 ctx.dispatch_typed_action(WorkspaceAction::DragTab {
                     tab_index,
                     tab_position: rect,
                 });
             })
-            .on_drop(|ctx, _, _, _| {
+            .on_drop(move |ctx, _, _, data| {
+                if let Some(pane) =
+                    data.and_then(|data| data.as_any().downcast_ref::<PaneDropTargetData>())
+                {
+                    ctx.dispatch_typed_action(WorkspaceAction::DropTabOnPane {
+                        tab_index,
+                        target_pane_id: pane.id(),
+                    });
+                    return;
+                }
                 ctx.dispatch_typed_action(WorkspaceAction::DropTab);
             });
         // Only lock the drag to the vertical axis when cross-window tab drag is
