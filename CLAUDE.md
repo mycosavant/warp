@@ -33,10 +33,19 @@ unverified claims at the top of the file; keep that habit.
 **GUI gestures are runnable now, so "needs a person" needs an argument.**
 `use_computer drag` (T9.1) performs press-move-release against one window and
 photographs the frame *before* the release, which is the only moment a drop
-preview or a drag ghost exists. Recipe under "Driving a gesture" in
-`.fork/README.md`. It found a real bug on its first run. What still needs a
-person is anything about how something *feels* — latency, smoothness — because
-no capture answers that.
+preview or a drag ghost exists. It works on Windows too, without taking the
+user's cursor, as long as you pass `--pid`/`--window-id` and the window is
+foreground (T9.2). Recipe under "Driving a gesture" in `.fork/README.md`. It
+found a real bug on each of its first two runs. What still needs a person is
+anything about how something *feels* — latency, smoothness — because no
+capture answers that.
+
+**If Warp crashes, copy the log before touching anything.** A crash is usually
+Warp's deliberate `Failed to render a frame 3 times in a row; exiting...`, and
+the recovery sibling takes over and *renames* the dead parent's log — to
+`warp-oss.log.old.0` when it works, and over the top of it when it does not,
+because the rename is `let _ = fs::rename(...)`. One user crash has already
+been lost this way.
 
 ## Look for the gate first
 

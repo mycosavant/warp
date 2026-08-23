@@ -4712,7 +4712,9 @@ run, which is how those sessions were closed without killing the process.
 > the half this fork actually wants.
 
 - [x] **T9.1** A drag an agent can perform. (`IDEAS.md` I15)
-- [ ] **T9.2** The same on Windows, where the user runs the build.
+- [x] **T9.2** The same on Windows, without taking the user's mouse.
+- [ ] **T9.3** The ghost a cross-window drag leaves behind. Reproduced and
+      traced below; not fixed.
 
 ### T9.1 — as built
 
@@ -4806,6 +4808,151 @@ command was issued at all — recorded exactly one `StartTabDrag` and nothing
 after it. The cause is not established; the most likely remaining explanation
 is the physical mouse over the windows the detach had just put on the desktop.
 Recorded because it looked exactly like a tool bug and was not one.
+
+### T9.2 — as built
+
+**`background_supported()` answered `false` on Windows, and its own comment
+gave the reason: "The Windows input stack drives the screen / foreground
+window."** That is true of `SetCursorPos` + `SendInput`, which is what the
+backend was. It is not true of Windows.
+
+`PostMessage` to one `HWND` was already the fork's answer for *clicks* and
+*keys* — `click.ps1` and `keys.ps1` have used it for months, and README
+already records which of the four obvious variants work. T9.2 is that same
+mechanism extended to press-move-release and moved into the crate, so
+`use_computer drag --pid --window-id` means the same thing on both platforms.
+
+Three parts, and the first was blocking the other two.
+
+**`use_computer windows` did not work on Windows**, so there was no way to
+*obtain* an id to pass to `--window-id`. It answered "only supported on macOS
+and Linux (X11)" on the one platform this fork's GUI is used on.
+
+`EnumWindows`, deliberately **not** `Process::MainWindowHandle`. Warp puts
+every window in one process and Windows nominates exactly one of them as
+"main", so a tab torn out into a second window is invisible to that API — and
+the nomination *moves*, which is worse than it being wrong, because the same
+call answers a different window before and after a tear-out. That cost one
+confusing run before it was noticed.
+
+**Window-targeted input.** Mouse and keyboard as posted messages, with the
+held-button state carried in every `wParam`, because a move mid-drag with an
+empty `wParam` reads to the receiving application as "the button came up
+somewhere I did not see". Two details earned their comments: the wheel
+messages carry **screen** coordinates while every other mouse message carries
+client ones, and posted `WM_CHAR` never reaches Warp's editor while posted
+virtual-key messages do.
+
+**Window-targeted screenshots, via `PrintWindow(hwnd, hdc,
+PW_RENDERFULLCONTENT)`** — `shot.ps1`'s recipe, which README says has been lost
+to a cleared session twice, now in the crate. `PrintWindow` needs the
+`Win32_Storage_Xps` cargo feature, because the Win32 metadata files it with
+the printing APIs rather than the windowing ones.
+
+#### Verified by running, 2026-08-23 (Windows release build)
+
+```
+cursor before   (998, 480)
+drag            750,16 -> 250,16, window-targeted
+cursor after    (998, 480)        <- unchanged
+result          the "Settings" tab moved from the sixth slot to the second
+```
+
+And `use_computer windows` lists both Warp windows plus every other toplevel
+on the desktop, with bounds, class and title.
+
+#### Two limits, both measured
+
+* **The target window must be the foreground window.** A/B'd both ways: focus
+  window 0 and drag it, the tabs reorder; focus window 1 and repeat the
+  identical drag on window 0, nothing moves. A posted *click* on an inactive
+  window does work — it selects the tab under it — so this is specific to
+  drags. The cursor is still never touched, which is the part that matters,
+  but this is not a way to drive a window nobody is looking at.
+  `warpctrl window focus` supplies the activation without a mouse.
+* **Modifiers are not expressible.** Posted messages do not set the thread's
+  key state, so `ctrl-shift-<key>` arrives as a bare `<key>` — the same wall
+  `keys.ps1` documents. `Target::Screen` keeps the `SendInput` path for the
+  cases that need it.
+
+### T9.3 — the ghost, reproduced and traced
+
+**The user's report, 2026-08-23:** "a tab torn out of the strip to create a new
+window, then dragged back got hung on the seam of the pane and the strip, in
+the ghost state. resizing the window fixed it."
+
+Reproduced on the first attempt with `use_computer drag`, and the log says
+exactly what happens:
+
+```
+tab_drag: begin_single_tab_drag source_wid=2 (source window IS preview)
+tab_drag: on_drag_while_floating -> GhostInTarget target_wid=0 insertion_index=4 caller_wid=2
+                                    ... and then nothing.
+```
+
+**There is no `on_drop`.** The drag reaches `GhostInTarget` — the tab is being
+rendered inside the *target* window's strip — and the release never arrives, so
+the ghost stays. The strip draws two tabs on top of each other at one slot and
+leaves a gap at the next; `warpctrl tab list` still shows the tab in its own
+window, so nothing merged.
+
+Three things worth having:
+
+* **It is not a stuck state forever, it is a deferred one.** The drop fires on
+  the next pointer motion that leaves the target window — measured at seven
+  seconds later, when the following round's drag moved the cursor out:
+  `on_drag_while_ghost: cursor left target_wid=0 (GhostInTarget->Floating)`
+  immediately followed by `on_drop`. And the branch it then takes is
+  `Floating+single_tab -> FocusSelf`, so **the tab never merges back** — it
+  goes back to being its own window. Dragging a torn-out tab home does not
+  work at all; the ghost is the visible half of that.
+* **Escape does not rescue it, by construction.** T8.2's cancel excludes
+  cross-window drags on purpose (`fork.rs`, `drag_cancel_key_enabled`), and
+  pressing it here changes nothing — confirmed. That exclusion was the right
+  call when written; this is the first evidence against it.
+* **Resizing did not fix it for us.** The user's workaround did not clear the
+  ghost in this reproduction, which suggests their case and this one differ in
+  some way not yet identified. Not resolved.
+
+Not fixed. The honest options are an escape hatch (let Escape resolve a
+cross-window drag that has no live `Draggable` behind it) or the real repair
+(work out why the release does not reach the source window's `Draggable` once
+its tab has been rendered into another window). The second is upstream's state
+machine and wants its own sitting.
+
+### The crash, and what is and is not known
+
+The user crashed the release build while stress-testing cross-window tab
+drags. **The crashed process's log is gone**, so the cause is not known.
+
+What was established:
+
+* **Warp's "crash" here is a deliberate exit.** Reproduced one — a window
+  resized to an absurd height, which clamps the surface to 65535, fails to
+  configure, and trips the existing policy: `Failed to render a frame 3 times
+  in a row; exiting...`. The crash-recovery sibling then takes over, which is
+  the "child spawned immediately" the user saw. That sibling is spawned at
+  *startup* and blocks in `WaitForSingleObject` on the parent, so its
+  appearance is not evidence of anything beyond "the parent went away".
+* **The log preservation is best-effort and it did not hold.**
+  `warp_logging::on_parent_process_crash` renames the crashed parent's log to
+  `.old.temp` and moves the recovery process's log into its place — and both
+  renames are `let _ = fs::rename(...)`, so a failure is discarded and the
+  second rename overwrites what the first failed to move. In the crash we
+  caused deliberately it worked (the parent's log landed in `.old.0`, ending
+  with the three frame errors). In the user's, the chain shows no log for the
+  crashed parent at all. Observed once each way; the mechanism for the failure
+  is not established.
+* **Not reproduced by dragging.** Six rounds of tear-out-and-drag-back, eight
+  windows created in a burst, and twelve create/close cycles, all on the
+  release build: no crash. The one lead that remains is Warp's own startup
+  warning on this machine — "Newer NVIDIA drivers can crash if multiple
+  windows are created if the `Vulkan / OpenGL Present Method` NVIDIA setting is
+  set to `Auto` or `Prefer layered on DXGI Swapchain`" — which fires on every
+  window creation here, and which the user's stress test was doing a lot of.
+  Untested; it points at a driver control panel, not at this code.
+
+**Next time it crashes, copy `warp-oss.log.old.0` before doing anything else.**
 
 ### Corrections to T8, from this pass
 

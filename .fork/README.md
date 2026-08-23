@@ -1691,18 +1691,47 @@ Four things about this that are easy to get wrong:
 * **The steps in the middle are load-bearing.** A `Draggable` needs to cross a
   threshold, and drop previews recompute per move. A single jump exercises
   neither. On a debug build use `--step-ms 40`; 16 is fine on release.
-* **The real cursor does not move.** On X11 this runs on a private XInput2 MPX
-  master pointer, so the user's mouse and focus are untouched. On Windows it
-  will *not* be — that backend is `SetCursorPos` + `SendInput` and drives the
-  real desktop (`background_supported()` returns `false` there).
+* **The real cursor does not move** — on either platform, as long as you pass
+  `--pid` and `--window-id`. On X11 that runs on a private XInput2 MPX master
+  pointer. On Windows it posts messages to one `HWND`, the same way `click.ps1`
+  and `keys.ps1` do. **Omit the window flags and Windows drives the real
+  desktop**, cursor and all, because `Target::Screen` is still `SetCursorPos` +
+  `SendInput`.
 
 `use_computer` checks no feature flag. `FeatureFlag::LocalComputerUse` gates
 whether *Warp's own agent* is offered computer-use tools, which is a different
 question this fork does not need answered — its agent is Claude Code, and
 Claude Code has Bash.
 
+### On Windows
+
+Same verbs, one extra step and one extra limit.
+
+```bash
+# Window ids and bounds. EnumWindows, so *every* Warp window shows up — the
+# process's "main window" is only ever one of them, and which one changes.
+powershell.exe -NoProfile -Command "C:\dev\warp\target\release\use_computer.exe windows"
+
+# The window must be the foreground one. This does that without a mouse.
+warp-oss.exe --warpctrl window focus --window-index 0
+
+powershell.exe -NoProfile -Command "C:\dev\warp\target\release\use_computer.exe \
+    drag 750 16 250 16 --steps 25 --step-ms 25 \
+    --screenshot C:\dev\shots\mid.png --pid <pid> --window-id <hwnd>"
+```
+
+* **The target window must be active.** A posted *click* on an inactive window
+  works — it selects the tab under it — but a posted *drag* on one does
+  nothing at all. A/B'd both ways. `warpctrl window focus` is the cursor-free
+  way to satisfy it.
+* **Modifiers are not expressible**, for the same reason `keys.ps1` cannot send
+  them: posted messages do not set the thread's key state. Drop `--pid`/
+  `--window-id` and use the screen path if you need `ctrl-shift-<key>`.
+* **`--screenshot` on a window target uses `PrintWindow`**, so it captures the
+  window even when it is buried — the `shot.ps1` trick, now in the crate.
+
 A worked example, and the one that found a real bug on its first run, is in
-`.fork/TASKS.md` under T9.1.
+`.fork/TASKS.md` under T9.1; the Windows half is T9.2.
 
 ## The inbox, and settling a thread
 
@@ -2633,6 +2662,9 @@ proof files pass between them as plain files. No SSH, no agent, no daemon.
 | `C:\dev\shot.ps1`  | Screenshots **one window by process name**, even when buried or unfocused (`PrintWindow`). Falls back to the whole virtual screen without `-Process`. |
 | `C:\dev\click.ps1` | Clicks inside a window, without touching the physical mouse. |
 | `C:\dev\keys.ps1`  | Posts keystrokes to one window, without taking focus. |
+| `C:\dev\drag.ps1`  | Press-move-release inside one window, same mechanism as `click.ps1`. Superseded by `use_computer drag --window-id`; kept because it needs no build. |
+| `C:\dev\rect.ps1`  | Where each window *is*. `EnumWindows`, so it sees every Warp window, not just the one Windows calls "main". |
+| `C:\dev\movewin.ps1` | Moves/resizes a window by handle, without activating it. Useful for putting a window somewhere predictable before driving it. |
 | `C:\dev\sweep.ps1` | Runs every `warpctrl` action and records what each one did. |
 | `C:\dev\mcp_win*.ps1` | Drives a running instance over MCP, batched. |
 
