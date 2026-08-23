@@ -112,6 +112,13 @@ this is not established** — `WarpControlCli` is a `FORCE_ENABLED` entry that
 policy-off stops applying, but that does not by itself explain a bound port.
 Plan the shutdown before you start a policy-off run.
 
+**…and often you do not need one.** `--warpctrl` runs `init_feature_flags`
+before it dispatches, so `WARP_FORK_POLICY=0 warp-oss --warpctrl instance list`
+resolves the whole flag set in a process that opens no window and binds no
+port. That is enough to A/B any *flag*, which is most of what policy-off gets
+used for. Save the GUI run for A/B-ing behaviour. (Put any probe **after**
+`mark_initialized()` — `FeatureFlag::is_enabled` panics before it.)
+
 **Leave the user's `settings.toml` alone.** For any run that needs different
 settings, point `XDG_CONFIG_HOME`/`XDG_STATE_HOME` at a scratch directory —
 noting that this relocates every other XDG-config tool too, `gh` included.

@@ -456,6 +456,28 @@ pub(crate) fn tab_index_from_target(
     }
 }
 
+/// Which pane an action that addresses "a terminal" means.
+///
+/// An explicit `session` or `pane` selector wins, as always. What changed in
+/// T8.5 is the *unqualified* case: it now means the group's main pane when one
+/// has been designated, and the active session only when none has.
+///
+/// **This is the second consumer of `main`, and the one it was promoted for.**
+/// T6.6 and T7.1 both built agent fan-out and both left the same question
+/// implicit — which pane is the one you are talking to. The answer was "whichever
+/// has focus", which is fine for a person with a mouse and wrong for a script:
+/// a graph that runs for twenty minutes addressed a pane that moved every time
+/// somebody clicked. A designated pane does not move.
+///
+/// Deliberately not scoped to agent actions. Splitting the rule so that
+/// `agent prompt` follows `main` while `input submit` follows focus would put
+/// two panes in play for one script, which is worse than either rule alone.
+///
+/// A main pane that holds no terminal — an editor, say — is an error from the
+/// caller further up rather than a silent fallback to the active pane, for the
+/// same reason `cwd_anchor_session_view` answers `None` there: falling back
+/// re-introduces exactly the focus-following the designation exists to stop,
+/// and does it invisibly.
 pub(crate) fn input_target_pane_id(
     action: ActionKind,
     target: &TargetSelector,
@@ -470,7 +492,9 @@ pub(crate) fn input_target_pane_id(
     }
     pane_group
         .read(ctx, |pane_group, ctx| {
-            pane_group.active_session_id(ctx).map(PaneId::from)
+            pane_group
+                .main_pane()
+                .or_else(|| pane_group.active_session_id(ctx).map(PaneId::from))
         })
         .ok_or_else(|| {
             ControlError::new(

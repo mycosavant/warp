@@ -396,6 +396,9 @@ pub enum WorkspaceAction {
         tab_position: RectF,
     },
     DropTab,
+    /// End a drag without dropping it (`.fork/TASKS.md` T8.2): reset the state
+    /// the tab strip built up on the way, without committing anything.
+    CancelDrag,
     StartGroupDrag(TabGroupId),
     DragGroup {
         group_id: TabGroupId,
@@ -1112,6 +1115,8 @@ impl WorkspaceAction {
             | DragTab { .. }
             | DragTabOverPane { .. }
             | StartTabDrag
+            // Cancelling commits nothing, so there is nothing to persist.
+            | CancelDrag
             | DragGroup { .. }
             | StartGroupDrag(_)
             | ToggleLeftPanel

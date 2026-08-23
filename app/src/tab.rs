@@ -2274,12 +2274,13 @@ impl UiComponent for TabComponent<'_> {
                     }
                     ctx.dispatch_typed_action(WorkspaceAction::DropTab)
                 });
-            // The axis is the gate, and it is the only thing this opens.
-            // `DragTabsToWindows` also gates cross-window detach at four other
-            // sites; those stay exactly as upstream left them.
-            let draggable = if FeatureFlag::DragTabsToWindows.is_enabled()
-                || crate::fork::tab_pane_drag_enabled()
-            {
+            // Upstream, untouched. T8.2 briefly relaxed this axis directly;
+            // the fork now forces `DragTabsToWindows` on instead
+            // (`fork::FORCE_ENABLED`), which opens this lock, the vertical
+            // panel's, and the detach they both feed — so the relax became a
+            // second way of saying the same thing, and a worse one, because it
+            // opened the axis without opening the detach.
+            let draggable = if FeatureFlag::DragTabsToWindows.is_enabled() {
                 draggable
             } else {
                 draggable.with_drag_axis(DragAxis::HorizontalOnly)

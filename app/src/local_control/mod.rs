@@ -60,7 +60,7 @@
 mod bridge;
 mod handlers;
 mod permissions;
-mod resolver;
+pub(crate) mod resolver;
 
 use std::collections::HashMap;
 #[cfg(unix)]

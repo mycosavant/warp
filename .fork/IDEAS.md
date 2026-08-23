@@ -356,6 +356,27 @@ semantics, which nobody has defined yet.
 > the mistake is the same one this page keeps making — reasoning about a gate
 > from one of its two call sites. See `.fork/TASKS.md` T8.2 "REVISIT SOON",
 > which also collects the missing drag-cancel key and a Windows-only lag report.
+>
+> **Closed 2026-08-23.** The one-line `FORCE_ENABLED` entry above was right,
+> and measured true in the same build that measured false the day before —
+> `DragTabsToWindows=true is_release_bundle=false`. It also made the
+> hand-rolled axis relax redundant, which is the shape this fork keeps finding:
+> the flag was always the gate, and touching anything downstream of it was
+> working around a switch rather than throwing it.
+>
+> The drag-cancel key was the interesting one, because **this page and the task
+> board both named a seam that cannot work.** Keystrokes are matched along the
+> responder chain before the element tree sees the event, innermost view first,
+> so no ancestor view and no `Draggable` ever gets a look at Escape. And the
+> agent-view pop that made the missing cancel look like a bug happens in
+> `TerminalView` *before* the event the workspace would have handled. What was
+> actually missing was smaller and lower down — nothing in the app could answer
+> "is a drag happening?", because a `DraggableState` belongs to the view that
+> renders it. `warpui_core`'s `drag::in_flight` is that answer.
+>
+> One gate this page still has not spotted: `vertical_tabs.rs:3206` pins the
+> *tab group* draggable to one axis **unconditionally**, no flag. Tabs detach
+> now; groups do not.
 
 ## Related, and cheap once the above lands
 
@@ -981,6 +1002,25 @@ Explicitly not in v1: a new layout algorithm. `PaneTemplateType`
 serializable pane tree and `PanesLayout::Template` already instantiates one, so
 if a master/stack layout is wanted later it is expressible without new tree
 machinery. But that is the *third* thing `main` does, not the first.
+
+> **Built 2026-08-22 and 2026-08-23 — T8.5.** The bit, the CWD consumer, and
+> then the orchestration one. The page was right that this is an *anchor* and
+> not a layout feature, and right that "follow the focused pane" was the wrong
+> scoping.
+>
+> **The ordering it proposed was wrong, though.** Layout was to be second and
+> orchestration third; layout is now not built at all, deliberately. There is
+> no small version of "main gets the large flex": the flex of a pane is already
+> owned by the border you dragged and by the layout restored from app state,
+> and a third opinion that silently overrules both is a policy argument, not a
+> feature. Orchestration had no such competition — the unqualified `warpctrl`
+> target was one `or_else` — and it is the consumer that makes the bit worth
+> having, so it went second.
+>
+> Worth keeping from the "three consumers" table: **a bit with one consumer is
+> easy to delete and a bit with three is not** was the right instinct, and the
+> reason to stop at two is the same instinct. Nobody has asked for the layout
+> half yet.
 
 ---
 

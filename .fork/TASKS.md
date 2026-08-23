@@ -3639,7 +3639,7 @@ what could run in parallel, which is the plan it would emit next.
 
 ---
 
-## T8 — The app you actually use  ← NEXT
+## T8 — The app you actually use  ← DONE (2026-08-23)
 
 Phases 0–7 made the fork *correct*: no telemetry, no account, your agents on
 your keys, all of it measured rather than asserted. T8 is the first phase aimed
@@ -3762,7 +3762,7 @@ T1, T4, T5 and T7, and by now should be the prior rather than the surprise.
       it opens an agent, but not one that knows about another window's
       designated pane. That is cross-window agent context and a separate idea.
 
-- [~] **T8.2** Tab → pane drag, with a drop target you can see. (I3)
+- [x] **T8.2** Tab → pane drag, with a drop target you can see. (I3)
       Quadrant split-on-drop is *implemented*
       (`pane_group/pane/view/header/mod.rs:853`, with an ASCII diagram) and the
       tree surgery exists (`tree.rs:260`). Two things make it feel unintuitive,
@@ -4036,6 +4036,125 @@ T1, T4, T5 and T7, and by now should be the prior rather than the surprise.
       X/Y labels in the report are transposed relative to the code, which is
       why everything above says "along the strip" and "out of the strip".
 
+      #### Answered 2026-08-23 — all four, and one retraction
+
+      **1. Tab-out-to-new-window: enabled, by forcing the flag.**
+      `FeatureFlag::DragTabsToWindows` joins `fork::FORCE_ENABLED`, and the
+      hand-rolled axis relax in `tab.rs` is deleted as redundant — forcing the
+      flag opens `tab.rs`'s axis lock, `vertical_tabs.rs:2554`'s, and the
+      detach they both feed, from one line. `fork::tab_pane_drag_enabled` now
+      owns only the half that has no upstream flag: the drop-target acceptance
+      that lets a tab land on a pane at all.
+
+      **Measured, both ways, in the same build:**
+
+      ```
+      FORKDBG DragTabsToWindows=true  is_release_bundle=false   # fork policy on
+      FORKDBG DragTabsToWindows=false is_release_bundle=false   # WARP_FORK_POLICY=0
+      ```
+
+      That is the exact inverse of 2026-08-22's measurement, in a build that is
+      still not a release bundle — which is the I16 claim about user
+      preferences outranking `cfg` demonstrated rather than asserted.
+
+      Two technique findings from taking that measurement, both worth keeping:
+
+      * **`--warpctrl` runs `init_feature_flags` too.** So a flag can be A/B'd
+        with `warpctrl instance list` in a process that opens no window and
+        binds no port — which is the way around the `WARP_FORK_POLICY=0`
+        shutdown trap this file warns about, rather than the way into it.
+      * **`FeatureFlag::is_enabled` panics before `mark_initialized()`**, so a
+        probe placed between `apply_feature_preferences` and that call takes
+        the process down. Put it after.
+
+      **And one thing this does not fix**, found while reading the axis locks:
+      `vertical_tabs.rs:3206` pins the *tab group* draggable to
+      `DragAxis::VerticalOnly` **unconditionally** — no flag. So dragging a
+      whole group out of the sidebar to a new window still cannot happen, and
+      the flag has nothing to say about it. The report said "tab/group"; this
+      answers the tab.
+
+      **2. Escape cancels a drag — and the seam named above was wrong.**
+
+      > **Retraction.** This section said a first branch in
+      > `workspace/view.rs`'s `pane_group::Event::Escape` arm would buy both
+      > the cancel and the suppression of the agent-view pop. It buys neither.
+      > The pop happens in `TerminalView`'s `InputEvent::Escape` handler and
+      > *then* emits `Event::Escape`, so the workspace arm runs after the thing
+      > it was supposed to prevent. And keystrokes never reach that arm as
+      > keystrokes at all: `app.rs:3538` matches bindings along the responder
+      > chain **before** the element tree is offered the event, and
+      > `dispatch_keystroke` walks that chain innermost-first, so the focused
+      > editor claims Escape and an ancestor view never sees it. Written from
+      > reading; wrong on both counts.
+
+      What was actually missing is smaller and further down: **nothing in the
+      app can answer "is a drag happening?"** A `DraggableState` belongs to the
+      view that renders the element, so the code that sees the keystroke is
+      nowhere near the code that owns the drag. `warpui_core`'s new
+      `elements::gui::drag::in_flight` is that answer — a process-global
+      register of drags that have started and not finished, with `any_in_flight`
+      and `cancel_all`. Entries are pruned lazily by asking each one whether it
+      is still dragging, so a missed deregistration cannot leak a permanent
+      "yes".
+
+      The cancel is then four lines at the top of `TerminalInput::editor_escape`
+      — the first handler, before any branch — and two typed actions,
+      `PaneGroupAction::CancelDrag` and `WorkspaceAction::CancelDrag`, that tell
+      the two views which accumulate state on the way to drop it: the half-pane
+      overlay, a pane hidden in anticipation of a tab-bar move, the hover index,
+      `is_tab_being_dragged`, and the per-tab `detached` flag.
+
+      Three decisions inside it:
+
+      * **Cross-window tab drag is excluded.** It owns a second window, a ghost
+        and a handoff protocol, and already calls `cancel_drag` along its own
+        paths; stopping its `DraggableState` from outside would abandon the
+        rest. The guard uses `has_singleton_model` first, because
+        `CrossWindowTabDrag` is *not registered in the app's own test harness*
+        and `as_ref` panics rather than answering — on a line that now runs on
+        every Escape.
+      * **A cancel stops a drag; it does not rewind one.** For a pane header,
+        which previews and commits on drop, nothing had happened, so it is a
+        true cancel. The tab strip reorders live as you drag — upstream — so
+        there the movement so far stands. Pretending otherwise would need an
+        undo stack for a gesture.
+      * **The header clears its preview on drag *start*.** Without a drop it
+        never clears, and `set_drop_preview` is silent when unchanged — so a
+        leftover from a cancelled drag would swallow the first identical
+        preview of the next one and the overlay would simply not appear.
+
+      Verified through the real handler, not a mock:
+      `a_drag_in_flight_takes_the_escape_key` opens a history menu, registers a
+      drag, presses Escape and asserts the menu is *untouched* and the drag
+      gone — then presses it again with no drag and asserts the menu closes.
+      The second half matters as much as the first. Five more tests cover the
+      register.
+
+      **3. A modifier key for drags: decided against, for now.**
+      The tension it was meant to resolve is gone. With the flag forced on,
+      one gesture has three outcomes and geometry already picks between them —
+      along the strip reorders, over a pane splits, outside the window
+      detaches. Those are disjoint regions of the screen, so a modifier would
+      not be disambiguating anything; it would add a key to the two cases that
+      work today in order to reach the third. Revisit if the detach fires by
+      accident in use, which is the evidence that would change the answer.
+
+      **4. Header-drag lag: answered as far as this machine can answer it.**
+      The frame log settled the mechanism — debug ~27fps against release ~54,
+      2.4× the cost per frame — and that is sufficient to explain the report
+      without the drop preview contributing anything. What is left is
+      confirmation on the machine that saw it: **a `--release` build on
+      Windows, dragged by hand.** If it still stutters there, the next suspect
+      is the path that did not change, `PaneDragDropLocation::TabBar` emitting
+      and recomputing a hover index on every drag event.
+
+      **Not verified by running, and cannot be here:** the gestures. A drag is
+      press-move-release and synthetic input still reaches no X11 client under
+      WSLg. The flag is measured, the cancel is tested through the handler that
+      would run, and the drag itself has been performed by a person exactly
+      once — on Windows, before either change.
+
       #### Three side findings from the same session
 
       **`is_busy` was true for a conversation nobody had asked anything.**
@@ -4255,7 +4374,7 @@ T1, T4, T5 and T7, and by now should be the prior rather than the surprise.
       `~/.local/state/warp-oss/fork/`, and a verb to reset an approval record
       is a verb an attacker would like.
 
-- [~] **T8.5** A main pane, and the CWD following it. (I13 + I6)
+- [x] **T8.5** A main pane, and the CWD following it. (I13 + I6)
       One `Option<PaneId>` on `PaneGroup`, `None` meaning today's behaviour.
       Then consumers one at a time: CWD follow first, layout second,
       orchestration third. **This supersedes the "follow the focused pane"
@@ -4299,8 +4418,49 @@ T1, T4, T5 and T7, and by now should be the prior rather than the surprise.
         session, it does not follow *focus* either. The anchor underneath does
         move — the toolbar diff badge tracks it.
 
-      Remaining: the layout and orchestration consumers, and making the code
-      review panel honour the anchor if that turns out to be wanted.
+      **Second consumer, 2026-08-23 — orchestration.** An unqualified
+      `warpctrl` target now means the main pane when the group has one, and the
+      active session only when it does not. One `or_else` in
+      `local_control::resolver::input_target_pane_id`.
+
+      This is the consumer `main` was promoted for. T6.6 and T7.1 both built
+      agent fan-out and both left the same question implicit — which pane is
+      the one you are talking to — and the answer was "whichever has focus",
+      which is fine for a person with a mouse and wrong for a script: a graph
+      that runs for twenty minutes addressed a pane that moved every time
+      somebody clicked. A pane you named does not move.
+
+      **Deliberately not scoped to agent actions.** Making `agent prompt`
+      follow `main` while `input submit` followed focus would put two panes in
+      play for one script, which is worse than either rule on its own.
+
+      **Verified by running**, focus and main deliberately on different panes,
+      each shell carrying a different `WHICH_PANE` so the answer is decisive:
+
+      | main | focus | unqualified `input submit` ran in |
+      |---|---|---|
+      | none | pane 0 | pane 0 |
+      | pane 1 | pane 0 | **pane 1** |
+      | none | pane 0 | pane 0 |
+
+      Pinned by `test_an_unqualified_control_target_is_the_main_pane_when_there_is_one`,
+      which is also why `local_control::resolver` is now `pub(crate)`.
+
+      **The layout consumer is deliberately not built.** `IDEAS.md` I13 already
+      says a new layout algorithm is out of scope for v1, and nothing found
+      since changes that: the only honest version of "main gets the large flex"
+      is a policy about `PaneFlex` that competes with the flex the user set by
+      dragging a border, and with the one restored from app state. There is no
+      small version that is still the idea, only a small version that fights
+      two existing sources of truth. `PaneTemplateType` is already a
+      serializable pane tree, so a master/stack layout stays expressible later
+      without new machinery. Ordering therefore went CWD → orchestration, not
+      the CWD → layout → orchestration this entry proposed.
+
+      Still open: making the code review panel honour the anchor, if that turns
+      out to be wanted. Its repo dropdown is a sticky per-pane-group selection
+      that does not follow focus either, so it is a pre-existing choice rather
+      than a gap in `main`.
 
 - [x] **T8.6** WSL as a remote target, the way Zed does it. (I16)
       Promoted off the idea board because it is mostly built. Zed treats WSL as

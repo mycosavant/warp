@@ -327,6 +327,10 @@ pub enum PaneGroupAction {
     /// Make the active pane this group's main pane, or clear the designation
     /// if it already is. See [`PaneGroup::main_pane`].
     ToggleMainPane,
+    /// Drop everything a drag had built up but not committed (`.fork/TASKS.md`
+    /// T8.2). Dispatched after the drag itself has already been stopped, from
+    /// wherever the cancel key was seen.
+    CancelDrag,
 }
 #[derive(PartialEq)]
 enum PaneRemovalReason {
@@ -5862,6 +5866,25 @@ impl PaneGroup {
         self.drop_preview
     }
 
+    /// Throw away what a drag had arranged but not committed (T8.2).
+    ///
+    /// The drag is already stopped by the time this runs — `in_flight::cancel_all`
+    /// does that, from wherever the key was pressed. What is left is the state a
+    /// drag accumulates on its way: the half-pane overlay, a pane hidden in
+    /// anticipation of a move to the tab bar, and the tab bar's hover index.
+    /// None of it is a commit, and all of it would otherwise sit there — the
+    /// hidden pane in particular, because only a drop puts it back.
+    ///
+    /// This is the same clean-up `PaneViewEvent::PaneDragEnded` does, minus the
+    /// focus change: a cancelled drag should leave focus where it was, since
+    /// the point of cancelling is that nothing happened.
+    fn cancel_drag(&mut self, ctx: &mut ViewContext<Self>) {
+        self.panes.clear_hidden_panes_from_move();
+        self.set_drop_preview(None, ctx);
+        ctx.emit(Event::ClearHoveredTabIndex);
+        ctx.notify();
+    }
+
     pub fn move_pane(
         &mut self,
         id: PaneId,
@@ -8494,6 +8517,7 @@ impl TypedActionView for PaneGroup {
             HandleFocusChange => self.handle_focus_change(ctx),
             FocusTerminalView(terminal_view_id) => self.focus_terminal_view(*terminal_view_id, ctx),
             ToggleMainPane => self.toggle_main_pane(ctx),
+            CancelDrag => self.cancel_drag(ctx),
         }
     }
 }

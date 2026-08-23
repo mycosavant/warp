@@ -963,6 +963,13 @@ impl<P: BackingView> TypedActionView for PaneHeader<P> {
                 self.share_pane_contents(SharingDialogSource::PaneHeader, ctx)
             }
             PaneHeaderAction::PaneHeaderDragStarted => {
+                // Start from nothing. A drag normally clears its own preview on
+                // drop, but a cancelled one (`.fork/TASKS.md` T8.2) never gets
+                // a drop — and `set_drop_preview` is silent when the value has
+                // not changed, so a leftover from last time would swallow the
+                // first identical preview of this drag and the overlay would
+                // not appear at all.
+                self.set_drop_preview(None, ctx);
                 send_telemetry_from_ctx!(TelemetryEvent::PaneDragInitiated, ctx);
             }
             PaneHeaderAction::PaneHeaderDragged {

@@ -25172,6 +25172,22 @@ impl TypedActionView for Workspace {
                 tab_index,
                 tab_position,
             } => self.on_tab_drag(*tab_index, *tab_position, ctx),
+            CancelDrag => {
+                // Fork (T8.2). Deliberately *not* a `DropTab` with the drop
+                // skipped: `DropTab` decides group membership, pinning and
+                // cross-window handoff from where the tab ended up, and every
+                // one of those is a commit. This resets only the flags the
+                // drag set on its way — the ones that would otherwise keep the
+                // tab bar rendering as though a drag were still happening.
+                //
+                // Nothing is rewound. The strip reorders live as you drag,
+                // upstream, so where the tab has got to is where it stays.
+                self.current_workspace_state.is_tab_being_dragged = false;
+                for tab in self.tabs.iter_mut() {
+                    tab.detached = false;
+                }
+                ctx.notify();
+            }
             DropTab => {
                 let is_cross_window = CrossWindowTabDrag::as_ref(ctx).is_active();
                 let handed_off_tab_index =

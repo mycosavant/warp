@@ -9639,3 +9639,65 @@ fn upload_files_then_submit_cloud_followup_restores_input_on_upload_error() {
         );
     });
 }
+
+/// Fork (T8.2): a drag in flight takes Escape, and nothing else acts on it.
+///
+/// The observable is deliberately the *absence* of the input's usual response.
+/// A history-up menu is open, which Escape would normally close and whose
+/// buffer it would restore; with a drag registered it stays open, and the
+/// second Escape — with the drag gone — closes it as usual. That second half
+/// matters as much as the first: swallowing an Escape that no drag claimed
+/// would break every other use of the key.
+#[test]
+fn a_drag_in_flight_takes_the_escape_key() {
+    App::test((), |mut app| async move {
+        initialize_app(&mut app);
+
+        let history_file_commands = vec!["cd ~".to_string()];
+        let terminal =
+            add_window_with_bootstrapped_terminal(&mut app, Some(history_file_commands), None)
+                .await;
+        let input = terminal.read(&app, |terminal, _| terminal.input().clone());
+
+        input.update(&mut app, |input, ctx| {
+            input.editor_up(ctx);
+        });
+        input.read(&app, |input, ctx| {
+            assert_eq!(input.buffer_text(ctx), "cd ~");
+            assert!(!input.suggestions_mode_model.as_ref(ctx).is_closed());
+        });
+
+        let dragging = warpui::elements::DraggableState::default();
+        dragging.set_dragging(
+            pathfinder_geometry::vector::vec2f(10., 10.),
+            pathfinder_geometry::vector::vec2f(0., 0.),
+        );
+        assert!(warpui::elements::in_flight::any_in_flight());
+
+        input.update(&mut app, |input, ctx| {
+            input.editor_escape(ctx);
+        });
+
+        assert!(
+            !dragging.is_dragging(),
+            "the drag should have been cancelled"
+        );
+        assert!(!warpui::elements::in_flight::any_in_flight());
+        input.read(&app, |input, ctx| {
+            assert!(
+                !input.suggestions_mode_model.as_ref(ctx).is_closed(),
+                "the menu must be untouched: the drag consumed the key"
+            );
+            assert_eq!(input.buffer_text(ctx), "cd ~");
+        });
+
+        // No drag this time, so Escape does its ordinary job.
+        input.update(&mut app, |input, ctx| {
+            input.editor_escape(ctx);
+        });
+        input.read(&app, |input, ctx| {
+            assert!(input.suggestions_mode_model.as_ref(ctx).is_closed());
+            assert!(input.buffer_text(ctx).is_empty());
+        });
+    });
+}

@@ -79,6 +79,16 @@ const FORCE_DISABLED: &[FeatureFlag] = &[
 /// check in the daemon is scoped to remote codebase indexing, and the protocol
 /// documents `user_id` as "Empty when not logged in". Verified by completing a
 /// credential-free handshake against a daemon this binary spawned.
+///
+/// `DragTabsToWindows` is here for the same reason and not for a fork feature
+/// at all — it is stock behaviour this fork's builds could not reach (T8.2).
+/// It sits in `RELEASE_FLAGS` under
+/// `cfg!(any(target_os = "macos", target_os = "windows"))`, and `RELEASE_FLAGS`
+/// is only applied when `ChannelState::is_release_bundle()`, which is
+/// `cfg!(feature = "release_bundle")` — so on Linux it is off twice over, and
+/// even on Windows it is off in anything you build yourself. Measured false in
+/// every build made here. A user preference outranks both `cfg`s, so this is
+/// one line where the alternative was two cargo features.
 const FORCE_ENABLED: &[FeatureFlag] = &[
     FeatureFlag::AgentHarness,
     FeatureFlag::APIKeyManagement,
@@ -87,6 +97,7 @@ const FORCE_ENABLED: &[FeatureFlag] = &[
     FeatureFlag::SkipFirebaseAnonymousUser,
     FeatureFlag::WarpControlCli,
     FeatureFlag::SshRemoteServer,
+    FeatureFlag::DragTabsToWindows,
 ];
 
 /// Whether local control (`warpctrl`) should default to enabled.
@@ -343,34 +354,64 @@ fn slow_frame_threshold_from(value: Option<&str>) -> Option<Duration> {
 /// other half of the feature was already built: the quadrant maths, the tree
 /// surgery, and the pane drop targets the drag would land on.
 ///
-/// This deliberately relaxes only the axis, and not the flag. The same flag
-/// gates cross-window tab detach at four other sites, which spawns a ghost
-/// window and has never been exercised on this fork's platform — opening the
-/// axis is the whole of what a tab-to-pane drag needs, and opening the flag
-/// would take a working behaviour and replace it with an untested one.
+/// **The axis is no longer this predicate's business.** The first version
+/// relaxed `tab.rs`'s axis lock directly and deliberately left the flag alone,
+/// on the reasoning that opening the flag would light up cross-window detach
+/// that nothing here had exercised. Dragging one showed the cost of that
+/// choice: the axis you pull along to reach a pane is the same axis you pull
+/// along to tear a tab into a new window, so relaxing one without the other
+/// produced a tab that could leave the strip and land nowhere.
 ///
-/// **Amended 2026-08-22, after dragging one.** "The whole of what a
-/// tab-to-pane drag needs" was true and still is. What it missed is that the
-/// axis it relaxes is also the axis you pull along to *tear a tab out into a
-/// new window*, and that detach reads the same flag from a different site
-/// (`workspace/view.rs`, `is_drag_outside_tab_bar`) — so in the horizontal tab
-/// bar a tab can now leave the strip and land nowhere.
+/// So [`FORCE_ENABLED`] now carries `DragTabsToWindows`, which opens
+/// `tab.rs`'s axis lock, `vertical_tabs.rs`'s, and the detach they both feed,
+/// all from one place — and the hand-rolled relax is gone. The caution was not
+/// wrong, only mis-scoped: `cross_window_tab_drag.rs` really had never run
+/// here, which is why that is now a thing to *test* rather than a thing to
+/// avoid.
 ///
-/// Scope, because a first draft of this note overstated it: this applies to
-/// **`tab.rs` only**. `workspace/view/vertical_tabs.rs` is a separate
-/// implementation with its own axis lock, is untouched by the fork, and is the
-/// one most users here actually see. `DragTabsToWindows` is measured off in
-/// every build made here (`RELEASE_FLAGS` needs `cfg!(feature =
-/// "release_bundle")`), so tab-out-to-new-window has never worked in either
-/// layout — a gap against stock, not something this predicate broke.
-///
-/// The fix under consideration is the opposite of the paragraph above: force
-/// the flag on via [`FORCE_ENABLED`] (which outranks both `cfg`s, per I16),
-/// which opens both axis locks and the detach together, and delete this relax
-/// as redundant. See `.fork/TASKS.md` T8.2 "REVISIT SOON".
+/// What is left is the half that has no upstream flag: upstream sets **no**
+/// `with_accepted_by_drop_target_fn` on a tab at all, so a tab dragged over a
+/// pane carries no target and the drop resolves from cursor geometry against
+/// the tab bar. Accepting `PaneDropTargetData` is what makes a tab-to-pane
+/// drop possible, and it is purely additive — the `data` argument it fills was
+/// unconditionally `None` before.
 ///
 /// Consumed by `tab::Tab::render` and `workspace::view`'s drop handling.
 pub fn tab_pane_drag_enabled() -> bool {
+    is_active()
+}
+
+/// Whether Escape ends a drag instead of falling through to whatever is
+/// underneath it (T8.2).
+///
+/// **The reported bug and the missing feature are the same bug.** Mid-drag of
+/// an agent pane, Escape looked like it cancelled the drag and reverted the
+/// pane to an empty terminal. It did nothing of the sort: nothing consults the
+/// drag, so Escape fell *through* it and did its ordinary job to the pane
+/// underneath, which for an agent pane is popping the agent view. A drag with
+/// no cancel key and a key that silently does something else are one problem.
+///
+/// Fixing it needed a fact that had to be measured rather than assumed.
+/// `.fork/TASKS.md` named `workspace/view.rs`'s `pane_group::Event::Escape` arm
+/// as the seam, on the reasoning that a branch there could consume the event.
+/// It cannot, twice over: the agent-view pop happens in `TerminalView` *before*
+/// that event is emitted, and keystrokes are matched along the responder chain
+/// innermost-first, so a binding on an ancestor never gets a look in. The only
+/// place early enough is the input's own Escape handler.
+///
+/// A cancel here stops the drag; it does not rewind it. For a pane header —
+/// which previews and commits on drop — nothing had happened yet, so that is a
+/// true cancel. The tab strip reorders as you drag, upstream, so there the
+/// movement so far stands and only the gesture ends.
+///
+/// Scope, stated because the call site is one handler and not a global hook:
+/// this covers a drag started while a **terminal input** holds focus, which is
+/// every drag started by grabbing a pane header or a tab in the ordinary way.
+/// A drag begun with focus parked in some other editor — a settings field, the
+/// conversation list filter — reaches that editor's Escape binding instead and
+/// is not cancelled. Widening it means repeating these four lines in each such
+/// handler, which is worth doing when one of them turns out to matter.
+pub fn drag_cancel_key_enabled() -> bool {
     is_active()
 }
 

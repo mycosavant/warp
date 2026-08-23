@@ -797,3 +797,20 @@ fn the_cloud_harness_plugin_is_refused_under_fork_policy() {
         "oz-harness-support must be installable only when fork policy is off"
     );
 }
+
+/// Tab-out-to-new-window is stock behaviour that this fork's builds could not
+/// reach, and the reason is worth pinning: `DragTabsToWindows` is gated twice
+/// by `cfg`, and a user preference is the only thing that outranks a `cfg`.
+///
+/// This also guards a deletion. `tab.rs` used to relax its own drag axis when
+/// `fork::tab_pane_drag_enabled()`; that line is gone, and the tab-to-pane
+/// drag now depends on this flag being forced on. If it ever leaves
+/// `FORCE_ENABLED`, a tab stops being draggable off the strip at all and
+/// nothing else would say so.
+#[test]
+fn dragging_a_tab_out_of_the_strip_depends_on_a_forced_flag() {
+    assert!(
+        FORCE_ENABLED.contains(&FeatureFlag::DragTabsToWindows),
+        "both tab strips lock their drag axis unless this flag is on"
+    );
+}

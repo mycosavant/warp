@@ -4129,3 +4129,113 @@ fn test_a_drop_preview_is_cleared_when_the_drag_ends() {
         })
     });
 }
+
+/// Cancelling a drag leaves nothing behind (`.fork/TASKS.md` T8.2).
+///
+/// Distinct from the `PaneDragEnded` path above: that one runs on a *drop* with
+/// no preview to commit, and this one runs when the gesture is abandoned
+/// mid-flight, which is the case where nothing else will ever fire. The hidden
+/// pane matters more than the overlay — a pane hidden in anticipation of a move
+/// to the tab bar is only put back by a drop, so a cancelled drag would
+/// otherwise leave a pane missing from the layout.
+#[test]
+fn test_cancelling_a_drag_clears_the_preview_and_restores_a_hidden_pane() {
+    App::test((), |mut app| async move {
+        initialize_app(&mut app);
+        let pane_group = mock_pane_group(&mut app, Default::default());
+
+        pane_group.update(&mut app, |panes, ctx| {
+            let first_pane_id = get_newly_created_pane_id(panes, &[]);
+            panes.add_terminal_pane(Direction::Right, None, ctx);
+            let second_pane_id = get_newly_created_pane_id(panes, &[first_pane_id]);
+
+            panes.set_drop_preview(
+                Some(PaneDropPreview {
+                    target_id: first_pane_id,
+                    direction: Direction::Left,
+                }),
+                ctx,
+            );
+            panes.hide_pane_for_move(second_pane_id, ctx);
+            assert!(panes.drop_preview().is_some());
+            assert!(
+                !panes.visible_pane_ids().contains(&second_pane_id),
+                "the pane should be hidden while the drag is over the tab bar",
+            );
+
+            panes.cancel_drag(ctx);
+
+            assert_eq!(panes.drop_preview(), None);
+            assert!(
+                panes.visible_pane_ids().contains(&second_pane_id),
+                "a cancelled drag must not leave a pane hidden",
+            );
+        })
+    });
+}
+
+/// A designated main pane is what an unqualified `warpctrl` action addresses
+/// (`.fork/TASKS.md` T8.5, second consumer).
+///
+/// The point of the designation is that it does not move when focus does, so
+/// the test deliberately puts them on different panes — with focus on the pane
+/// that is *not* main, which is the case where the old rule and the new one
+/// disagree. Clearing it puts the old rule back, which is what makes `None`
+/// mean "exactly as before".
+#[test]
+fn test_an_unqualified_control_target_is_the_main_pane_when_there_is_one() {
+    App::test((), |mut app| async move {
+        initialize_app(&mut app);
+        let pane_group = mock_pane_group(&mut app, Default::default());
+
+        let (first_pane_id, second_pane_id) = pane_group.update(&mut app, |panes, ctx| {
+            let first_pane_id = get_newly_created_pane_id(panes, &[]);
+            panes.add_terminal_pane(Direction::Right, None, ctx);
+            let second_pane_id = get_newly_created_pane_id(panes, &[first_pane_id]);
+
+            panes.focus_pane_by_id(first_pane_id, ctx);
+            (first_pane_id, second_pane_id)
+        });
+
+        let target = local_control::selectors::TargetSelector::default();
+        let resolve = |app: &App, group: &warpui::ViewHandle<PaneGroup>| {
+            app.read(|ctx| {
+                crate::local_control::resolver::input_target_pane_id(
+                    local_control::catalog::ActionKind::InputSubmit,
+                    &target,
+                    group,
+                    ctx,
+                )
+            })
+        };
+
+        assert_eq!(
+            resolve(&app, &pane_group).ok(),
+            Some(first_pane_id),
+            "with no main pane, the focused pane is the target — unchanged behaviour",
+        );
+
+        pane_group.update(&mut app, |panes, ctx| {
+            panes.set_main_pane(Some(second_pane_id), ctx);
+            assert_eq!(
+                panes.focused_pane_id(ctx),
+                first_pane_id,
+                "focus must stay on the other pane, or this proves nothing",
+            );
+        });
+
+        assert_eq!(
+            resolve(&app, &pane_group).ok(),
+            Some(second_pane_id),
+            "a designated main pane outranks focus",
+        );
+
+        pane_group.update(&mut app, |panes, ctx| panes.set_main_pane(None, ctx));
+
+        assert_eq!(
+            resolve(&app, &pane_group).ok(),
+            Some(first_pane_id),
+            "clearing the designation restores the focus-following rule",
+        );
+    });
+}

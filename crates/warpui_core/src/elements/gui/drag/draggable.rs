@@ -78,12 +78,20 @@ impl DraggableState {
         }
     }
 
+    /// Begin a drag.
+    ///
+    /// Both entries into `Dragging` come through here — the element's own
+    /// threshold crossing and a drag handed over from another window — which is
+    /// what makes this the one place a drag can announce itself to
+    /// [`super::in_flight`]. The per-mouse-move updates deliberately do not,
+    /// since they are not transitions and would push an entry per pixel.
     pub fn set_dragging(&self, new_mouse_position: Vector2F, new_mouse_offset: Vector2F) {
         self.store(DragState::Dragging {
             mouse_position: new_mouse_position,
             mouse_offset: new_mouse_offset,
             is_on_accepted_drop_target: false,
         });
+        super::in_flight::register(self.clone());
     }
 
     pub fn cancel_drag(&self) {
@@ -677,11 +685,7 @@ impl Element for Draggable {
                     if drag_start_distance > self.drag_threshold {
                         // If the drag has moved beyond the `drag_threshold`, then we officially
                         // start the drag and fire the `on_drag_start` callback.
-                        self.state.store(DragState::Dragging {
-                            mouse_offset: mouse_down_offset,
-                            mouse_position: *position,
-                            is_on_accepted_drop_target: false,
-                        });
+                        self.state.set_dragging(*position, mouse_down_offset);
 
                         // Note: For the `on_drag_start` callback, we pass the position that the
                         // mouse down happened, since that is where the element was at the start

@@ -1380,7 +1380,38 @@ one. Designating pane 0 moved the anchor:
 old_focused_repo=Some(Local("…/NeuralAudio"))  new_focused_repo=Some(Local("…/warp"))
 ```
 
+### It is also where `warpctrl` types
+
+An action that addresses "a terminal" without naming one — `input submit`,
+`agent prompt`, everything a graph does — goes to the main pane when the tab
+has one, and to the active session when it does not.
+
+This is the reason to have the designation at all if you drive Warp from a
+script. "Whichever pane has focus" is fine for a person with a mouse and wrong
+for a twenty-minute graph, which would otherwise change target every time you
+clicked somewhere. A named pane does not move.
+
+Verified by running, with focus and main deliberately on different panes and
+each shell holding a different `WHICH_PANE`:
+
+| main | focus | unqualified `input submit` ran in |
+|---|---|---|
+| none | pane 0 | pane 0 |
+| pane 1 | pane 0 | **pane 1** |
+| none | pane 0 | pane 0 |
+
+An explicit `--pane`, `--pane-index` or `--session` still wins over both, so
+nothing that names its target changes. And this is one rule for every action,
+not a special case for agents: a script where `agent prompt` follows `main`
+while `input submit` follows focus has two panes in play, which is worse than
+either rule on its own.
+
 ### What it does not move yet
+
+**Layout.** A main pane does not get more space, and that is deliberate rather
+than pending — see `.fork/TASKS.md` T8.5. The flex of each pane is already
+owned by two things, the border you dragged and the layout restored from app
+state, and a third opinion that silently overrules both is not a small feature.
 
 **The code review panel keeps its own sticky selection.** Once opened, its repo
 dropdown stays where it was, across a close and reopen. That is pre-existing and
@@ -1557,33 +1588,61 @@ holds exactly one pane
 
 ### Dragging the tab itself
 
-A tab is now a drag source into the pane area, not only along the tab bar. The
-gate was **an axis**: upstream pins each tab's `Draggable` to
-`DragAxis::HorizontalOnly` unless `FeatureFlag::DragTabsToWindows` is on, and
-that flag is `RELEASE_FLAGS` + `cfg!(any(macos, windows))` — so on Linux a tab
-physically could not leave the tab bar.
+A tab is a drag source into the pane area, not only along the tab bar, and one
+gesture now has three outcomes picked entirely by where you let go:
 
-Fork policy relaxes **only the axis**. The same flag gates cross-window tab
-detach at four other sites; that stays exactly as upstream left it.
-`WARP_FORK_POLICY=0` puts the axis back.
+| release it | what happens |
+|---|---|
+| in the tab strip | reorder, as always |
+| over a pane | split that pane — quadrant picks the half |
+| outside the window | a new window carrying the tab |
 
-**Verified by hand on Windows, 2026-08-22** — it works, and it turned up three
-things that are not fixed yet. Read `.fork/TASKS.md` T8.2 "REVISIT SOON" before
-relying on any of this:
+The third of those is stock Warp behaviour that **no build made here could
+reach**. `FeatureFlag::DragTabsToWindows` is gated twice by `cfg` —
+`RELEASE_FLAGS` needs `cfg!(feature = "release_bundle")`, and the app's own
+list needs `drag_tabs_to_windows` — and neither is a default cargo feature.
+Stock Warp ships as a release bundle, which is where the behaviour you remember
+comes from. The fork forces the flag on through `fork::FORCE_ENABLED`, which is
+a *user preference* and so outranks both `cfg`s. Measured in one build:
 
-- **Pulling a tab out of the strip does not open a window** — in either tab
-  layout, and it never has in a build made here. Measured at runtime:
-  `DragTabsToWindows=false`, because `RELEASE_FLAGS` needs
-  `cfg!(feature = "release_bundle")` and neither that nor
-  `drag_tabs_to_windows` is a default cargo feature. Stock Warp ships as a
-  release bundle, which is where the behaviour you remember comes from. Not a
-  regression; a gap.
-- **Nothing cancels a drag.** Esc looks like it does, but it is only doing its
-  usual job to the pane underneath — on an agent pane that means popping agent
-  view, which reads as "my session turned into a terminal".
-- **Header drags feel laggy on Windows.** Reported on a *debug* build. Measure
-  it with the slow-frame log below rather than guessing — that is what it is
-  for.
+```
+FORKDBG DragTabsToWindows=true  is_release_bundle=false   # fork policy on
+FORKDBG DragTabsToWindows=false is_release_bundle=false   # WARP_FORK_POLICY=0
+```
+
+That one flag opens the horizontal strip's axis lock, the vertical panel's, and
+the detach they both feed. What fork policy adds on top is the middle row of
+that table: upstream sets no drop-target callback on a tab at all, so a tab
+dragged over a pane carried no target to land on.
+
+**Escape cancels a drag.** Press it mid-drag and the gesture ends without
+committing: no split, no new window, no reorder-in-progress left half done, and
+— importantly — Escape does *not* also reach the pane underneath. That last
+part was the reported bug: on an agent pane, a fall-through Escape pops agent
+view, which reads as "my session turned into a terminal".
+
+A cancel **stops** a drag rather than rewinding it. A pane header previews and
+commits on release, so cancelling one undoes nothing because nothing had
+happened. The tab strip reorders live as you drag — upstream behaviour — so
+there the tab stays where it has got to. Cross-window tab drags are excluded
+and keep their own behaviour.
+
+The hook is the terminal input's own Escape handler, so it covers any drag you
+started with a terminal focused — which is every drag started by grabbing a
+pane header or a tab normally. If focus happens to be parked in some other
+editor (a settings field, the conversation-list filter), that editor's Escape
+wins and the drag is not cancelled.
+
+**Still not done**, and both need a person on Windows:
+
+- **A tab *group* cannot be pulled out to a new window.** Its draggable is
+  pinned to the vertical axis unconditionally, with no flag to force —
+  `vertical_tabs.rs:3206`. The flag above fixes tabs, not groups.
+- **Header drags felt laggy.** On a *debug* build, which the slow-frame log
+  below has since measured at 2.4× the per-frame cost of release. That is
+  enough to explain it; if a `--release` build still stutters, say so and the
+  next suspect is the tab-bar hover index, which recomputes on every drag
+  event and is untouched upstream code.
 
 ## The inbox, and settling a thread
 

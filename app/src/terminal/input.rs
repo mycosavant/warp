@@ -346,6 +346,7 @@ use crate::workflows::info_box::{
 use crate::workflows::local_workflows::LocalWorkflows;
 use crate::workflows::workflow_enum::EnumVariants;
 use crate::workflows::{self, WorkflowSelectionSource, WorkflowSource, WorkflowType};
+use crate::workspace::cross_window_tab_drag::CrossWindowTabDrag;
 use crate::workspace::sync_inputs::SyncedInputState;
 use crate::workspace::{
     CommandSearchOptions, ForkFromExchange, ForkedConversationDestination, InitContent,
@@ -9372,6 +9373,32 @@ impl Input {
     }
 
     fn editor_escape(&mut self, ctx: &mut ViewContext<Self>) {
+        // Fork (T8.2): a drag in flight claims Escape before anything else can.
+        // This is the first line of the first handler on purpose — every branch
+        // below is a side effect, and so is everything downstream of the
+        // `Event::Escape` this method ends with, including the agent-view pop
+        // that made a missing cancel key look like a bug. See
+        // `fork::drag_cancel_key_enabled`.
+        //
+        // A cross-window tab drag is excluded, and not out of caution: it owns
+        // a second window, a ghost and a handoff protocol, and it already calls
+        // `cancel_drag` itself along its own paths. Stopping its
+        // `DraggableState` from out here would abandon the rest. The
+        // singleton guard is not defensive dressing either: it is absent in
+        // the app's own test harness, and `as_ref` panics rather than
+        // answering, on a line that now runs on every Escape.
+        if crate::fork::drag_cancel_key_enabled()
+            && !(ctx.has_singleton_model::<CrossWindowTabDrag>()
+                && CrossWindowTabDrag::as_ref(ctx).is_active())
+            && warpui::elements::in_flight::cancel_all()
+        {
+            // Cancelling the drag stops the gesture and nothing more; the two
+            // views that accumulate state on the way have to be told to drop
+            // it. Neither handles the other's action type, so both are reached.
+            ctx.dispatch_typed_action(&PaneGroupAction::CancelDrag);
+            ctx.dispatch_typed_action(&WorkspaceAction::CancelDrag);
+            return;
+        }
         let vim_mode = self.editor.as_ref(ctx).vim_mode(ctx);
         let has_attached_context = {
             let context_model = self.ai_context_model.as_ref(ctx);
