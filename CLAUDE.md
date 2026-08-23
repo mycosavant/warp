@@ -30,6 +30,14 @@ the project is built on, and it is stated here because it keeps paying:
 When something here has only been read, say so. `.fork/IDEAS.md` marks its
 unverified claims at the top of the file; keep that habit.
 
+**GUI gestures are runnable now, so "needs a person" needs an argument.**
+`use_computer drag` (T9.1) performs press-move-release against one window and
+photographs the frame *before* the release, which is the only moment a drop
+preview or a drag ghost exists. Recipe under "Driving a gesture" in
+`.fork/README.md`. It found a real bug on its first run. What still needs a
+person is anything about how something *feels* — latency, smoothness — because
+no capture answers that.
+
 ## Look for the gate first
 
 The single most repeated finding in this fork: **the feature already exists,

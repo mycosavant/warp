@@ -41,7 +41,7 @@ board supersedes it from Phase 5 on, and renumbers nothing.
 
 ---
 
-## T1 — `warpctrl` local control plane  ← ACTIVE
+## T1 — `warpctrl` local control plane  ← DONE
 
 The highest value-per-line item in the fork. A complete local IPC control
 plane for a running Warp instance already exists, fully written and tested,
@@ -3843,6 +3843,14 @@ T1, T4, T5 and T7, and by now should be the prior rather than the surprise.
       it works.** What that run found is below, and it is enough to reopen the
       item.
 
+      > **It no longer needs a person, and the sentence above is why T9
+      > exists.** `use_computer drag` (T9.1) performs the gesture, and driving
+      > it on 2026-08-23 found that the tab-as-drop-source work reached only
+      > `tab.rs` — the horizontal strip — and not `vertical_tabs.rs`, which is
+      > what the Linux build renders. Fixed in `93895f796`; both halves of
+      > this item are now confirmed by a performed gesture rather than by a
+      > compiler.
+
       **Left undone:** merge semantics for a multi-pane tab, and changing the
       tab-out-to-new-window behaviour. Both were out of scope in `IDEAS.md` I3
       — and the second one no longer can be, for the reason in the next
@@ -4690,6 +4698,132 @@ Consequences, all of them simplifications:
 **Synthetic clicks still work**, and remain useful — two quit-confirmation
 dialogs were dismissed with `use_computer click` during the T8 remote-server
 run, which is how those sessions were closed without killing the process.
+
+---
+
+## T9 — Verifying the pixels  ← ACTIVE
+
+> Every GUI claim in this file was verified by a person clicking, by SQLite, or
+> by a log. That is the fork's one standing exception to *run it*, and T8 spent
+> it three times: "needs a person on Windows" is written into T8.2 twice and
+> into the closing report once.
+>
+> T9 removes the exception. It is `IDEAS.md` I15 (computer use), scoped down to
+> the half this fork actually wants.
+
+- [x] **T9.1** A drag an agent can perform. (`IDEAS.md` I15)
+- [ ] **T9.2** The same on Windows, where the user runs the build.
+
+### T9.1 — as built
+
+**`use_computer drag`, and nothing else.** `crates/computer_use` already had
+screenshots, clicks, typing, window enumeration and an XInput2 MPX agent seat.
+The one gesture missing from its CLI was the one every blocked item needed. The
+verb is built out of `Action::{MouseDown, MouseMove, Wait, MouseUp}` — variants
+that already existed — so the library, the crate's dependencies and the app
+surface are all unchanged.
+
+#### The scope correction: the flag gates the wrong half
+
+`IDEAS.md` I15 says opening computer use means `fork::FORCE_ENABLED` **and**
+the `local_computer_use` cargo feature, "T1.1 and T1.2 again". For the thing
+this fork wants, **neither is needed**, and the entry was scoped from the
+wrong end.
+
+`FeatureFlag::LocalComputerUse` gates whether **Warp's own agent** is offered
+computer-use tools (`app/src/ai/agent/api.rs:361`, one term of a four-way
+`&&`). But this fork's agent is Claude Code driving the `claude` binary, and it
+reaches the computer through its own Bash tool. It does not need Warp to hand
+it a `use_computer` action.
+
+`use_computer` is a separate binary that checks no feature flag at all. It was
+built with `cargo build -p computer_use --bin use_computer` and driven against
+a running Warp with no flag touched, no preference seeded and no cargo feature
+added. The gate was never in the way of the half that matters.
+
+Whether to open the in-app tool as well is a separate question and is not
+answered here.
+
+#### Three things the crate had already decided correctly
+
+* **Window-target coordinates are window-local pixels**, translated to root by
+  `windows::window_local_to_root`. So a drag is expressed in the coordinates a
+  screenshot of that window shows you, which is the only sane arrangement and
+  not the one the flag names suggest.
+* **The agent seat is actor-scoped, not call-scoped** — a private XInput2
+  master pointer/keyboard pair, with a comment saying "a drag that spans
+  batches keeps its button held". That is what makes `--screenshot` possible:
+  the drag runs as two `perform_actions` calls on one actor, the capture
+  happens between them, and the button is still down for it.
+* **None of it touches the real cursor.** The MPX seat has its own pointer.
+  The user's mouse does not move and their focus does not change.
+
+#### The frame that only exists mid-drag
+
+`perform_actions` takes its screenshot at the end of a batch, so a naive drag
+photographs the *result*. The result was already reachable — `warpctrl pane
+list` answers it better than a PNG does. What was not reachable is the drop
+preview, the floating tab ghost and the detach chip, none of which survive the
+mouse-up.
+
+So `--screenshot` writes its PNG **before** the release, and that is the whole
+reason the verb is shaped as two batches instead of one.
+
+#### What it found, immediately
+
+The first drag it performed was supposed to split a pane. It detached a tab
+into a new window instead, and **that was correct behaviour for the code as it
+stood** — see the T8.2 entry above. T8.2's tab-as-drop-source work went into
+`tab.rs`, the horizontal strip, and never reached `vertical_tabs.rs`, which is
+what the Linux build renders. One tool, one gesture, one real gap, on the first
+run.
+
+#### Verified by running, 2026-08-23 (Linux, X11 under WSLg)
+
+* **Detach works.** Dragging a tab out of the vertical panel and releasing:
+  `begin_multi_tab_drag source_wid=0 preview_wid=1 source_tab_index=2` →
+  `finalize_preview_as_new_window (CREATES NEW WINDOW)`, and `window list`
+  goes from one window to two. **This is the T8.2 item that shipped compiled
+  but never performed** — `DragTabsToWindows` in `fork::FORCE_ENABLED` is the
+  gate, and it is now confirmed by the gesture rather than by an `eprintln!`.
+* **Tab → pane split works**, after the fix above: five `DragTabOverPane` and
+  one `DropTabOnPane`, one window, the pane moved into the target tab and the
+  source tab closed itself.
+* **The drop target is visible.** The mid-drag capture shows the translucent
+  accent overlay across exactly the half the drop takes. T8.2 built that and a
+  person confirmed it on the horizontal strip; this is the first time it has
+  been photographed.
+
+#### One observation that did not survive being tested
+
+A first run left the app firing tab drags on its own for two minutes after the
+CLI had exited — eight `StartTabDrag` with nothing driving the pointer, all
+originating from windows the detach had created.
+
+The obvious suspect was a button leaked by the agent seat. **It reproduced
+zero times.** A controlled run — one drag, then forty seconds during which no
+command was issued at all — recorded exactly one `StartTabDrag` and nothing
+after it. The cause is not established; the most likely remaining explanation
+is the physical mouse over the windows the detach had just put on the desktop.
+Recorded because it looked exactly like a tool bug and was not one.
+
+### Corrections to T8, from this pass
+
+**A tab *group* cannot be dragged out to a new window, and the axis is not
+why.** The T8 closing report named `vertical_tabs.rs:3206` — the group
+draggable's unconditional `DragAxis::VerticalOnly` — which reads as though a
+flag would open it. It would not. `WorkspaceAction::DropGroup` is
+`send_telemetry` plus `ctx.notify()`, and `CrossWindowTabDrag` has no concept
+of a tab group at all (its `pane_group` is the split layout *inside* a tab, a
+different thing wearing a similar name). Relaxing the axis would produce a
+group that leaves the panel and lands nowhere — precisely the bug T8.2 already
+hit once and fixed for tabs. This is a feature, not a gate, and it is not
+small.
+
+**A cold Windows release build is 19 minutes, not an hour.** `build.ps1`'s own
+comment says "a release build from cold is roughly an hour", which is why the
+debug profile is its default. Measured 2026-08-23 with no `target\release`
+directory present: **18m 48s**, 351,897,600 bytes. Corrected in the script.
 
 ---
 

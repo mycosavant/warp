@@ -1159,6 +1159,28 @@ Not selected yet — it wants a scope of its own and the keyboard question
 answered first. But it is the strongest unselected item on this page and it
 came out of a question about browsers.
 
+## Selected, and scoped from the other end — T9.1, 2026-08-23
+
+**Built.** See `TASKS.md` T9. One correction to the section above, and it
+changes what the idea *is*.
+
+**The gate this entry names is the wrong gate.** "Opening it means both
+`fork::FORCE_ENABLED` and the feature list — T1.1 and T1.2 again" was written
+from reading. `FeatureFlag::LocalComputerUse` gates whether **Warp's own
+agent** is offered computer-use tools. This fork's agent is Claude Code
+driving the `claude` binary, and it reaches the computer through its own Bash
+tool — so what this fork wants is the **CLI**, and `use_computer` checks no
+feature flag at all. It was built and driven against a running Warp with no
+flag touched, no preference seeded and no cargo feature added.
+
+The idea was graded as "a gated subsystem to open". It is closer to "a tool
+that was already open, missing one verb". The verb was `drag`, and adding it
+took no library change — the `Action` variants it needs already existed.
+
+Everything above about the *stack* stands and was confirmed by running it:
+window-targeted screenshots, the MPX agent seat, no effect on the real cursor.
+The keyboard question is still open and still only matters under WSLg.
+
 ---
 
 # I16 — WSL as a remote target, the way Zed does it

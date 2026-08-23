@@ -25,6 +25,7 @@ then each capability the fork opened.
 * [**The release build**](#the-release-build-what-to-use-day-to-day) — what to use day to day
 * [Running under WSL2 (WSLg)](#running-under-wsl2-wslg) — and why the launch flags matter
 * [Driving the Windows build from WSL](#driving-the-windows-build-from-wsl)
+* [**Driving a gesture**](#driving-a-gesture--use_computer-drag) — how an agent checks its own GUI work
 * [**Warp's remote server, in a WSL distribution**](#warps-remote-server-in-a-wsl-distribution) — the Zed-style split, and how to run it
 
 **What the fork opened**
@@ -1615,6 +1616,14 @@ the detach they both feed. What fork policy adds on top is the middle row of
 that table: upstream sets no drop-target callback on a tab at all, so a tab
 dragged over a pane carried no target to land on.
 
+**All three rows are confirmed by a performed gesture**, not by a compiler —
+`use_computer drag` (see "Driving a gesture" below) drove them on the Linux
+build, 2026-08-23. It also found that the middle row had reached only the
+*horizontal* strip: `tab.rs` got the drop-target callback and
+`vertical_tabs.rs` did not, so a tab dragged out of the panel the Linux build
+renders was resolved by cursor geometry and detached into a new window instead
+of splitting. Fixed the same day.
+
 **Escape cancels a drag.** Press it mid-drag and the gesture ends without
 committing: no split, no new window, no reorder-in-progress left half done, and
 — importantly — Escape does *not* also reach the pane underneath. That last
@@ -1633,16 +1642,67 @@ pane header or a tab normally. If focus happens to be parked in some other
 editor (a settings field, the conversation-list filter), that editor's Escape
 wins and the drag is not cancelled.
 
-**Still not done**, and both need a person on Windows:
+**Still not done:**
 
-- **A tab *group* cannot be pulled out to a new window.** Its draggable is
-  pinned to the vertical axis unconditionally, with no flag to force —
-  `vertical_tabs.rs:3206`. The flag above fixes tabs, not groups.
+- **A tab *group* cannot be pulled out to a new window, and the axis is not
+  why.** Its draggable is pinned to the vertical axis unconditionally
+  (`vertical_tabs.rs:3206`), which reads as though a flag would open it — but
+  `WorkspaceAction::DropGroup` is a telemetry call and a `notify()`, and
+  `CrossWindowTabDrag` has no concept of a tab group at all. Relaxing the axis
+  would give you a group that leaves the panel and lands nowhere. This is an
+  unbuilt feature, not a closed gate, and it is not small.
 - **Header drags felt laggy.** On a *debug* build, which the slow-frame log
   below has since measured at 2.4× the per-frame cost of release. That is
   enough to explain it; if a `--release` build still stutters, say so and the
   next suspect is the tab-bar hover index, which recomputes on every drag
-  event and is untouched upstream code.
+  event and is untouched upstream code. **Needs a person on Windows** — this
+  is a question about how it feels, and no capture answers it.
+
+## Driving a gesture — `use_computer drag`
+
+The one thing an agent working in this repo could never do was check its own
+GUI work. `crates/computer_use` had screenshots, clicks, typing and window
+enumeration; it had no drag, which is the gesture every unverified item in
+T8.2 was waiting on. It has one now.
+
+```bash
+cargo build -p computer_use --bin use_computer
+
+# Window ids and bounds. Note `env -u WAYLAND_DISPLAY` on every call: with it
+# set, the crate picks its Wayland backend and answers "only supported on X11".
+env -u WAYLAND_DISPLAY ./target/debug/use_computer windows
+
+env -u WAYLAND_DISPLAY ./target/debug/use_computer \
+    drag 156 256 850 400 --steps 30 --step-ms 40 \
+    --screenshot /tmp/mid_drag.png \
+    --pid <warp-pid> --window-id <x-window-id>
+```
+
+Four things about this that are easy to get wrong:
+
+* **Coordinates are window-local** when `--pid` and `--window-id` are given —
+  the same pixels a window-targeted screenshot shows you. Both flags are
+  required together; a lone one is rejected rather than silently downgraded to
+  screen targeting.
+* **`--screenshot` captures before the release.** The drop preview, the
+  floating tab ghost and the detach chip exist only while the button is down;
+  a capture after the mouse-up shows the *result*, which `warpctrl pane list`
+  already answered better.
+* **The steps in the middle are load-bearing.** A `Draggable` needs to cross a
+  threshold, and drop previews recompute per move. A single jump exercises
+  neither. On a debug build use `--step-ms 40`; 16 is fine on release.
+* **The real cursor does not move.** On X11 this runs on a private XInput2 MPX
+  master pointer, so the user's mouse and focus are untouched. On Windows it
+  will *not* be — that backend is `SetCursorPos` + `SendInput` and drives the
+  real desktop (`background_supported()` returns `false` there).
+
+`use_computer` checks no feature flag. `FeatureFlag::LocalComputerUse` gates
+whether *Warp's own agent* is offered computer-use tools, which is a different
+question this fork does not need answered — its agent is Claude Code, and
+Claude Code has Bash.
+
+A worked example, and the one that found a real bug on its first run, is in
+`.fork/TASKS.md` under T9.1.
 
 ## The inbox, and settling a thread
 
