@@ -1588,12 +1588,64 @@ plus input — and **not** tool-result bodies. That kills the disk-footprint
 question this page raised: no file contents or command stdout need to be
 retained, because the interesting part is what the agent decided to do.
 
-**Not yet verified, and it is the obvious next step.** No CLI-agent Claude
-session has been run inside Warp while watching OSC 777 events arrive; all of
-the above is read. Two specific unknowns: whether the fork's own local-agent
-path (`WARP_FORK_LOCAL_AGENT=1`, which spawns `claude --print` rather than
-running it as a CLI-agent session) produces a transcript and events at all,
-and how the plugin install behaves under WSL as opposed to native Windows.
+## Run, 2026-08-23 — the join key is already in the database
+
+> **Third correction, and the largest.** Hours earlier this page called the
+> fork's local agent "the poorer of the two substrates", with only a tool's
+> name available. **That is wrong.** The local agent has the complete
+> trajectory, on disk, already linked to Warp's own record by a field the fork
+> itself writes.
+
+The two open questions were run rather than read, and both answered.
+
+**1. The fork's local agent writes full Claude transcripts.** `claude --print`
+is still a Claude session, so it still writes
+`~/.claude/projects/<cwd-slug>/<session-id>.jsonl`. The three local-agent turns
+driven during this investigation produced three transcripts, timestamped to the
+minute they ran.
+
+**And the file name is a key Warp already stores.** `agent_conversations.
+conversation_data` for the `HELLO_FROM_TOOL_42` turn holds
+`"server_conversation_token":"90115094-0a55-4761-a73d-52eac05a3f06"`, and the
+transcript is `90115094-0a55-4761-a73d-52eac05a3f06.jsonl`. Not a coincidence:
+`translate.rs:401` takes Claude's `session_id` from the `system` init event and
+puts it into `StreamInit.conversation_id`, which Warp persists as the server
+conversation token. **The fork already threads Claude's session id into its own
+record.** It simply does not know that this makes the whole transcript
+addressable.
+
+Reading that transcript gives, for the turn whose Warp record was the single
+string `` `Bash` ``:
+
+```
+[user]        Run: echo HELLO_FROM_TOOL_42
+[tool_use]    name=Bash input={"command": "echo HELLO_FROM_TOOL_42",
+                               "description": "Echo test string"}
+[tool_result] "HELLO_FROM_TOOL_42"
+[assistant]   Output: `HELLO_FROM_TOOL_42`
+```
+
+Tool name, full input, result, and the assistant's reply — all four, for free,
+for a path this page had written off an hour earlier.
+
+**So there is no capture work in this idea at all.** Not for CLI-agent
+sessions (`transcript_path` on every event) and not for the local agent
+(`server_conversation_token` + the cwd slug). The whole feature is a reader.
+`translate.rs` and `event/v1.rs` still drop fields, and both are still worth
+fixing on principle, but neither is on the path to a trajectory view.
+
+**2. The Warp plugin is not installed on this WSL machine.** `claude plugin
+list` shows no `warp@claude-code-warp`, and `claude plugin marketplace list`
+has no `warpdotdev/claude-code-warp` entry. The sidebar activity is real, but
+on this box it would have to be installed first — so the OSC 777 half of this
+page remains **read, not run**, and the local-agent half above is what is
+actually verified here.
+
+**A hazard worth stating before anybody installs it to find out.** The plugin
+installs at *user* scope and works by adding hooks to Claude Code, so it fires
+on **every** Claude session on the machine — including whichever one is being
+used to do the installing. That is not a reason not to do it; it is a reason
+not to do it absent-mindedly mid-session.
 
 ## What is still missing after all that
 
@@ -1639,26 +1691,24 @@ problem, and single-player is the case this fork actually has.
 
 The reason for running this before the inbox, and it did change something.
 
-**Which trajectory a row can show depends entirely on which kind of session it
-is, and that distinction did not exist on this page before today.**
+**An inbox row can show the full trajectory, for both kinds of session, with
+no capture work first.** This section said the opposite twice today before the
+transcripts were actually looked at; what follows is what survived running it.
 
-- **A CLI-agent session** (Claude running in a pane, plugin installed) has the
-  full trajectory available — tool names, full inputs, diffs — via the
-  `transcript_path` its own events already report. Nothing needs capturing;
-  the path needs keeping.
-- **A Warp agent conversation**, including the fork's local agent, has a
-  record that holds a tool's *name* and nothing else.
+- **A CLI-agent session** (Claude in a pane with the plugin) reports a
+  `transcript_path` on every event.
+- **A Warp agent conversation on the fork's local agent** stores Claude's
+  session id as `server_conversation_token`, which names the transcript file.
 
-So the honest inbox design has to know which it is looking at, and say less
-about the second kind. Anything built on "the agent did X to file Y is
-available" is true for one and false for the other.
+Both resolve to the same thing: Claude's own JSONL, holding every tool call
+with its full input, and `Edit` inputs that *are* the diff. The inbox needs a
+reader, not a capture pipeline. `translate.rs` and `event/v1.rs` still discard
+fields and are still worth fixing, but neither blocks this.
 
-That also **reverses the sequencing note this section carried an hour ago**,
-which said `translate.rs` capture had to come first. It does not: for CLI-agent
-sessions the richer answer needs no capture at all, and the cheap first move is
-retaining a path and adding a reader. `translate.rs` is still worth fixing —
-it is the fork's own code dropping its own data — but it is no longer the
-blocker, because it only governs the poorer of the two substrates.
+The one thing a row does have to handle is **a missing transcript** — an old
+conversation whose session file has been cleaned up, or a path that predates
+the fork writing the token. Degrade to what Warp's own record holds rather
+than assuming the richer source is there.
 
 Nothing about T8.3's own plan is invalidated: `settled` is still a field on
 `AgentConversationData`, eviction is still the trap, and the conversation list

@@ -4085,21 +4085,27 @@ T1, T4, T5 and T7, and by now should be the prior rather than the surprise.
       not handled at all. Tool results in `agent read --tools` come from the
       live surface's action model, so they do not survive the pane.
 
-      **Amended hours later, and the amendment matters more than the finding.**
-      There are **two kinds of session** and the inbox has to know which it is
-      looking at. A *CLI-agent* session — Claude running in a pane with Warp's
-      own `warp@claude-code-warp` plugin, which upstream already installs —
-      reports a **`transcript_path`** on every event, pointing at Claude's own
-      JSONL. That file already holds every tool call with its full input, and
-      an `Edit` call's `{old_string, new_string}` *is* the diff. Nothing needs
-      capturing there; the path needs keeping. A *Warp agent conversation*,
-      including the fork's local agent, has only the name.
+      **Amended twice the same day; this is the version that was run.**
+      **No capture work blocks this, for either kind of session.** Claude
+      writes a complete JSONL transcript — every tool call with its full
+      input, and an `Edit` call's `{old_string, new_string}` *is* the diff —
+      and Warp can already name the file two different ways:
 
-      So: no capture work blocks this. The cheap first move is retaining a path
-      and adding a reader. `translate.rs` is still worth fixing — it is the
-      fork's own code dropping its own data — but it governs the poorer of the
-      two substrates and is not the blocker this entry briefly called it.
-      Nothing else about the plan above is affected.
+      - a *CLI-agent* session (Claude in a pane, with the
+        `warp@claude-code-warp` plugin upstream already installs) reports a
+        **`transcript_path`** on every OSC 777 event;
+      - a *local-agent* conversation stores Claude's session id as
+        **`server_conversation_token`**, because `translate.rs:401` puts
+        `session_id` into `StreamInit.conversation_id`. Verified: token
+        `90115094-…` ↔ `90115094-….jsonl`, holding the `Bash` call whose Warp
+        record was the single string `` `Bash` ``.
+
+      So T8.3 needs a *reader*, not a pipeline. The row must degrade when the
+      transcript is missing — cleaned up, or a conversation predating the
+      token — to whatever Warp's own record holds. `translate.rs` and
+      `event/v1.rs` both still drop fields and are both still worth fixing, but
+      neither is on the path here. Nothing else about the plan above is
+      affected.
 
 - [ ] **T8.4** Pin what a tool claims to be. (I11)
       Hash each MCP tool's `(name, description, input_schema)` at connect,
