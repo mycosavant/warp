@@ -1003,6 +1003,11 @@ impl EventLoop {
             })
         }
 
+        // Timed rather than the whole of `redraw_window`, because this closure
+        // is the part that scales with what is on screen: scene build plus
+        // render. `is_enabled` is one relaxed load, so a build that never turns
+        // this on does not take the clock. See `crate::frame_log`.
+        let frame_started = crate::frame_log::is_enabled().then(Instant::now);
         let render_result = (|| {
             // Before building the scene, make sure the window size is up-to-date, to ensure
             // that the scene is built at a size that matches the size we're about to render at.
@@ -1017,6 +1022,10 @@ impl EventLoop {
             self.callbacks
                 .with_mutable_app_context(|ctx| window.render(new_scene, ctx.font_cache()))
         })();
+
+        if let Some(started) = frame_started {
+            crate::frame_log::record(started.elapsed());
+        }
 
         match render_result {
             Ok(_) => self.callbacks.for_window(window).frame_drawn(),

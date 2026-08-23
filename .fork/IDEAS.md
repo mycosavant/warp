@@ -1391,6 +1391,92 @@ client half — `RemoteServerManager`, install, reconnect — has not been run.
 Three of the five questions came back the same day, and two of the answers
 changed the work rather than confirming it.
 
+---
+
+# I17 — The agent trajectory, traced locally
+
+**Raised 2026-08-23.** The ask: trace a whole agent trajectory — messages, tool
+calls, failures, plans, every agent event — and eventually render it in a thin
+UI. Prompted by Zed's Delta beta and DeltaDB, which replicate the conversation
+and the worktree together so a thread carries the full history of how code came
+to be.
+
+The fork's standard question first: **how much of this is already built?** More
+than expected, and one gate is already open.
+
+## What exists
+
+**The trajectory is already instrumented.** `app/src/ai/agent_sdk/` is covered
+in `#[tracing::instrument]` — `AgentDriver::new`, `AgentDriver::run_internal`,
+`agent_sdk::run`, environment setup, attachments, git credential refresh —
+carrying `conversation_id` and `environment_id` as span fields. This is
+upstream's own work; nobody has to add spans to get a trajectory.
+
+**The export path exists and the fork already unauthenticated it.**
+`app/src/tracing/local_export.rs` is a `LocalHttpClient` that sends OTLP with
+no `Authorization` header, selected only for loopback endpoints
+(`native::use_local_export`). So a collector on `127.0.0.1` needs no
+cloud-agent credential, which no local user could obtain anyway.
+
+**And the interesting gate is already open.** Upstream's exporter drops every
+span not marked `tags.cloud_agent = true` (`filter_cloud_agent_span`), which is
+almost all of them. Commit `4951304e2` added `export_all_spans`: when the
+endpoint is local, keep everything the `EnvFilter` admitted — "what surfaces
+local agent/harness spans, which are created but discarded under upstream's
+filter."
+
+So the pipe is: run a collector on loopback, set
+`WARP_CLOUD_AGENT_OTLP_ENDPOINT=http://127.0.0.1:4318`, and local agent and
+harness spans flow to it. **Unverified end to end** — no collector has been run
+against it in this fork. That is the first thing to do, and it is an
+afternoon, not a project.
+
+## What is actually missing
+
+Three things, in increasing size.
+
+**1. Whether the spans carry the trajectory, or just its shape.** A span per
+driver run is not the same as a span per message, tool call and failure. Needs
+a collector pointed at a real local-agent turn, then a look at what actually
+arrived. Until that is done, "the trajectory is instrumented" is a claim about
+function attributes, not about content.
+
+**2. Transcripts may be the better substrate for the *content*.** The
+user's instinct here is worth taking seriously, and it lines up with "the
+context is already yours": conversation history is already persisted locally
+and already complete. Traces are good at *timing and causality* — what called
+what, what failed, how long it took. Transcripts are good at *what was said*.
+Trying to push message bodies through OTLP spans is how you get a slow
+collector and a lossy record. The likely answer is both, joined on
+`conversation_id`, which the spans already carry.
+
+**3. The UI.** Deliberately last, and deliberately thin. `warpctrl` plus a
+local collector already makes the data queryable without any UI at all, which
+is the cheapest way to find out what a UI should show.
+
+## On Delta, honestly
+
+DeltaDB replicates a worktree and a conversation together in real time for
+multiple participants. That is a distributed-systems product, not a tracing
+feature, and this fork should not pretend the two are the same size. What
+overlaps is the *premise* — that the conversation and the code belong to the
+same record — and that premise is already available here for free, because
+this fork's whole thesis is that the record is local. Whether any of DeltaDB
+is open source has not been checked.
+
+The version of this idea that fits this fork is the small one: **a local
+collector, a verified pipe, and a join key.** Multiplayer is somebody else's
+problem, and single-player is the case this fork actually has.
+
+## Related, already done
+
+The slow-frame log (`warpui::frame_log`, T8.2) is the same pattern at a much
+smaller scale, and it is worth noting as precedent: upstream had the
+capability, it reported to Sentry, the fork force-disabled it, and the
+replacement kept the measurement and dropped the network path. A local-first
+Sentry replacement — crash and error reporting to a machine you own — is the
+same move again, and is not yet written down as its own entry.
+
 | | answer | what it changed |
 |---|---|---|
 | **I1** | Beside, not instead of | Removed the only large unknown. The inbox stays where the code already is. |

@@ -81,9 +81,11 @@ Environment variables the fork adds: `WARP_FORK_POLICY` (set `0`/`off`/`false`
 to run stock upstream behaviour without rebuilding — use this to A/B a suspected
 fork regression), `WARP_FORK_LOCAL_AGENT`, `WARP_FORK_AGENT_SPAWN_DEPTH`,
 `WARP_FORK_ALLOW_TELEMETRY_EGRESS`, `WARP_FORK_QUAKE_VISOR` (the one that
-defaults **on** — set it off to get upstream's terminal in the hotkey window).
-Tab→pane drag has no variable of its own; `WARP_FORK_POLICY=0` puts the tab's
-horizontal-only drag axis back.
+defaults **on** — set it off to get upstream's terminal in the hotkey window),
+`WARP_FORK_FRAME_LOG` (`on`, or a threshold in ms — slow-frame accounting to
+the local log; **reach for this before theorising about why something feels
+slow**). Tab→pane drag has no variable of its own; `WARP_FORK_POLICY=0` puts
+the tab's horizontal-only drag axis back.
 
 ---
 

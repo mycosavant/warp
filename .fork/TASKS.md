@@ -3988,11 +3988,44 @@ T1, T4, T5 and T7, and by now should be the prior rather than the surprise.
 
       The established fork answer to exactly this shape of problem is a local
       replacement rather than a re-enablement — `LocalTranscriber` for voice,
-      the local agent for the transport. A slow-frame log behind an env var,
-      writing to the local log and nowhere else, would be small (the winit
-      event loop already keeps `Instant::now()` around its redraw path) and
-      would turn every future "feels laggy" report into a number. Worth doing
-      before guessing at this one.
+      the local agent for the transport.
+
+      **Built the same day: `WARP_FORK_FRAME_LOG`.** `crates/warpui/src/frame_log.rs`
+      holds the accounting and no policy; `fork::slow_frame_threshold` holds
+      the policy and no accounting; the hook is four lines in
+      `redraw_window`, timing the scene-build-plus-render closure rather than
+      the whole function. `on` means 33ms (two frames at 60Hz), a bare number
+      is a threshold in ms, and it is off by default.
+
+      Two decisions worth keeping. **It summarises once per second rather than
+      logging per frame** — a line per slow frame is its own performance
+      problem during exactly the stutter it is describing, and would change
+      what it measures. And **an unparseable value takes the default rather
+      than switching off**, the opposite call from `WARP_FORK_QUAKE_VISOR`,
+      because here the default is *off* and a typo answered with silence is
+      indistinguishable from a broken feature.
+
+      Verified by running, three ways: with `on`, five summary lines and a
+      `worst 246.2ms` on the WSLg debug build; with the variable unset, zero
+      lines; with `WARP_FORK_POLICY=0` and the variable set, zero lines.
+
+      **And then it answered item 4.** Same workload (eight `tab create`s,
+      WSLg, software GL), same threshold of 1ms so every rendered frame is
+      counted, one build against the other:
+
+      | build | frames/sec | mean frame | worst |
+      |---|---|---|---|
+      | debug | ~27 | 13.9–20.5ms | 44.9ms |
+      | release | ~54 | 6.1–7.9ms | 15.0ms |
+
+      **A debug build cannot hold a 16.7ms frame budget and a release build
+      sits well inside it** — 2.4× cheaper per frame, twice the frame rate.
+      That is sufficient to explain a drag that feels laggy without any
+      contribution from the drop preview, and it retires the suspicion of the
+      overlay unless a `--release` build still stutters.
+
+      Absolute numbers here are pessimistic for both (software GL under WSLg);
+      the ratio is the finding, not the milliseconds.
 
       **Answered: it was the vertical panel.** The open question this section
       first carried — horizontal strip or vertical sidebar — is closed. The

@@ -735,3 +735,47 @@ fn the_visor_opens_an_agent_unless_it_is_switched_off() {
     // rather than guessing, which is the same call `WARP_FORK_POLICY` makes.
     assert!(quake_visor_from(Some("no")));
 }
+
+/// The frame log is off unless asked for, and asking badly still measures.
+///
+/// Asserted against the parser rather than by setting the variable, for the
+/// same reason as [`the_visor_opens_an_agent_unless_it_is_switched_off`]: env
+/// vars are process-wide and a test that sets one races every test beside it.
+#[test]
+fn the_frame_log_is_off_until_it_is_asked_for() {
+    // Absent is the ordinary case, and it must cost nothing.
+    assert_eq!(slow_frame_threshold_from(None), None);
+    assert_eq!(slow_frame_threshold_from(Some("")), None);
+    assert_eq!(slow_frame_threshold_from(Some("0")), None);
+    assert_eq!(slow_frame_threshold_from(Some("off")), None);
+    assert_eq!(slow_frame_threshold_from(Some("false")), None);
+
+    assert_eq!(
+        slow_frame_threshold_from(Some("on")),
+        Some(DEFAULT_SLOW_FRAME_THRESHOLD)
+    );
+    assert_eq!(
+        slow_frame_threshold_from(Some("true")),
+        Some(DEFAULT_SLOW_FRAME_THRESHOLD)
+    );
+
+    // A bare number is a threshold in milliseconds.
+    assert_eq!(
+        slow_frame_threshold_from(Some("100")),
+        Some(Duration::from_millis(100))
+    );
+    assert_eq!(
+        slow_frame_threshold_from(Some("  8  ")),
+        Some(Duration::from_millis(8))
+    );
+
+    // Unparseable takes the default rather than switching off. The variable
+    // being set at all is a request to measure, and answering a typo with
+    // silence is indistinguishable from the feature not working — the opposite
+    // call from `WARP_FORK_QUAKE_VISOR`, because here the default is *off* and
+    // the failure being avoided is a measurement that silently never happens.
+    assert_eq!(
+        slow_frame_threshold_from(Some("later")),
+        Some(DEFAULT_SLOW_FRAME_THRESHOLD)
+    );
+}

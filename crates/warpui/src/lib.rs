@@ -1,5 +1,6 @@
 pub mod browser;
 pub mod fonts;
+pub mod frame_log;
 pub mod platform;
 pub mod rendering;
 pub mod windowing;

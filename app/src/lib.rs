@@ -991,6 +991,11 @@ fn run_internal(mut launch_mode: LaunchMode) -> Result<()> {
     // for other entrypoints.
     features::init_feature_flags();
 
+    // Fork policy: arm the local slow-frame log, if asked. After the flags,
+    // because the policy this reads is only meaningful once `is_active()` can
+    // be answered, and before the event loop, which is what will call it.
+    warpui::frame_log::set_threshold(fork::slow_frame_threshold());
+
     #[cfg(feature = "crash_reporting")]
     if launch_mode.needs_crash_reporting() {
         // Ensure that the main/root Sentry hub is initialized on the main

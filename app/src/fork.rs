@@ -14,6 +14,8 @@
 //! Keeping the policy here means an upstream merge can only conflict in the
 //! two one-line call sites, never in the policy itself.
 
+use std::time::Duration;
+
 use warp_cli::agent::Harness;
 use warpui::{AppContext, SingletonEntity};
 
@@ -226,6 +228,55 @@ fn spawn_depth_limit_from(value: Option<&str>) -> u32 {
         .filter(|value| !value.is_empty())
         .and_then(|value| value.parse().ok())
         .unwrap_or(DEFAULT_SPAWN_DEPTH)
+}
+
+const FRAME_LOG_ENV_VAR: &str = "WARP_FORK_FRAME_LOG";
+
+/// Two frames' worth of budget at 60Hz. One frame's would report the ordinary
+/// jitter of a busy machine, which is noise; this is roughly where a stutter
+/// stops being a number and starts being something a person notices.
+const DEFAULT_SLOW_FRAME_THRESHOLD: Duration = Duration::from_millis(33);
+
+/// How slow a frame has to be before it is worth a line in the local log, or
+/// `None` to leave frames untimed (T8.2).
+///
+/// **This exists because of a gate this file closed.** Upstream's only
+/// frame-cost instrumentation is [`FeatureFlag::LogExpensiveFramesInSentry`],
+/// which [`FORCE_DISABLED`] switches off with the rest of the telemetry flags.
+/// Correct — it reports to Sentry — but the consequence was that the fork could
+/// not put a number on its own rendering, which stayed invisible until somebody
+/// reported a drag as laggy and there was nothing to measure it with. The
+/// replacement follows the same pattern as `LocalTranscriber` and the local
+/// OTLP export: keep the capability, drop the network path.
+///
+/// Off by default, because an always-on measurement of a thing that is usually
+/// fine is a cost with no reader. `WARP_FORK_FRAME_LOG=on` takes the default
+/// threshold, a bare number is a threshold in milliseconds, and `0` / `off` is
+/// the same answer as unset. Consumed by `warpui::frame_log`, which owns the
+/// accounting and holds no policy.
+pub fn slow_frame_threshold() -> Option<Duration> {
+    if !is_active() {
+        return None;
+    }
+    slow_frame_threshold_from(std::env::var(FRAME_LOG_ENV_VAR).ok().as_deref())
+}
+
+/// Split from the environment so the decision can be asserted without setting a
+/// process-global variable from a test that runs beside others.
+fn slow_frame_threshold_from(value: Option<&str>) -> Option<Duration> {
+    match value.map(str::trim) {
+        None | Some("") | Some("0") | Some("off") | Some("false") => None,
+        Some("on") | Some("true") => Some(DEFAULT_SLOW_FRAME_THRESHOLD),
+        // An unparseable value takes the default rather than switching off: the
+        // variable being present at all is a request to measure, and answering
+        // a typo with silence looks exactly like "the feature does not work".
+        Some(value) => Some(
+            value
+                .parse()
+                .map(Duration::from_millis)
+                .unwrap_or(DEFAULT_SLOW_FRAME_THRESHOLD),
+        ),
+    }
 }
 
 /// Whether a tab can be dragged into the pane area to split a pane (T8.2).

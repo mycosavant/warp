@@ -1420,8 +1420,43 @@ relying on any of this:
 - **Nothing cancels a drag.** Esc looks like it does, but it is only doing its
   usual job to the pane underneath — on an agent pane that means popping agent
   view, which reads as "my session turned into a terminal".
-- **Header drags feel laggy on Windows.** Unmeasured; the change should have
-  made them cheaper, so do not assume the overlay is the cause.
+- **Header drags feel laggy on Windows.** Reported on a *debug* build. Measure
+  it with the slow-frame log below rather than guessing — that is what it is
+  for.
+
+## Measuring a frame, without telling anybody
+
+Upstream's only frame-cost instrumentation is
+`FeatureFlag::LogExpensiveFramesInSentry`, and this fork force-disables it with
+the other telemetry flags. Right call, unintended consequence: for a while the
+fork had no way to put a number on its own rendering. The replacement keeps the
+capability and drops the network path, like `LocalTranscriber` before it.
+
+```bash
+WARP_FORK_FRAME_LOG=on ./target/release/warp-oss
+```
+
+Then reproduce whatever felt slow and read the log:
+
+```
+[WARN] [warpui::frame_log] Slow frames: 4 in 1.4s (worst 60.1ms, mean 48.2ms, threshold 33.0ms)
+```
+
+`on` uses a 33ms threshold — two frames at 60Hz, roughly where a stutter stops
+being a number and becomes something you notice. A bare number sets the
+threshold in milliseconds (`WARP_FORK_FRAME_LOG=16` for one frame,
+`WARP_FORK_FRAME_LOG=100` for only the egregious ones). Unset, `0`, `off` and
+`false` all mean off, which is the default, and `WARP_FORK_POLICY=0` switches
+it off along with everything else.
+
+**It reports once per second, not once per frame.** A line per slow frame
+would be its own performance problem during exactly the stutter it is meant to
+describe. When frames are healthy the whole thing is one relaxed atomic load
+per frame and no clock is taken.
+
+> Measured on the WSLg debug build while opening tabs: `worst 246.2ms`. That is
+> the number to compare a `--release` build against before blaming any
+> particular feature for feeling slow.
 
 ## Voice input, transcribed on this machine
 
