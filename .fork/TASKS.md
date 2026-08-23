@@ -4075,6 +4075,22 @@ T1, T4, T5 and T7, and by now should be the prior rather than the surprise.
       archive; exempt settled rows or the feature silently loses work at
       conversation 201.
 
+      **Sequencing changed 2026-08-23, by measurement (see `IDEAS.md` I17).**
+      A collector was pointed at a real local-agent turn to find out what an
+      inbox row could show. Two things came back. `is_busy` was already known
+      to be wrong for empty threads and is fixed. The new one:
+      **there is no trajectory to show.** The persisted record holds a tool's
+      *name* and nothing else — `translate.rs:139` keeps `name` from Claude's
+      `tool_use` and drops `id` and `input` at parse time, and `tool_result` is
+      not handled at all. Tool results in `agent read --tools` come from the
+      live surface's action model, so they do not survive the pane.
+
+      So an inbox row can say what was asked and what was answered, and cannot
+      say what the agent *did*. **Do the `translate.rs` capture first** — it is
+      small, additive, has no UI in it, and the inbox is its consumer.
+      Building the row shape first means changing it as soon as the trajectory
+      lands. Nothing else about the plan above is affected.
+
 - [ ] **T8.4** Pin what a tool claims to be. (I11)
       Hash each MCP tool's `(name, description, input_schema)` at connect,
       store it, and say so when a digest changes under an existing name. This

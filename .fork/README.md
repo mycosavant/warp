@@ -619,10 +619,34 @@ Traces appear at <http://localhost:16686>. Use `RUST_LOG` to widen beyond the
 `INFO` default — upstream picked `INFO` because only marked spans were
 exported, so `RUST_LOG=warp=debug` is now considerably more expensive.
 
-Agent and harness spans come for free: `ai/agent_sdk/setup_observability.rs`
-already emits `setup_environment_resolution`, `..._repo_clone`,
-`..._setup_commands`, `..._codebase_indexing` and `..._skill_loading`, and
-`tracing-opentelemetry` bridges them into OTLP.
+If you would rather not run a container, `script/otlp_collector.py` is a
+loopback OTLP/HTTP receiver in one file. It decodes the protobuf by hand,
+installs nothing, and writes one JSON object per span:
+
+```bash
+python3 script/otlp_collector.py spans.jsonl
+```
+
+### What actually arrives — measured 2026-08-23
+
+**128 spans from one session**, and they are app-level:
+`persistence::initialize`, `launch`, `initialize_app`, `run_internal`, plus
+terminal-server IPC (`read_socket`, `write_commands`, `authenticate`).
+
+> **Correction.** This section used to say "agent and harness spans come for
+> free", naming `ai/agent_sdk/setup_observability.rs`. Measured against a real
+> local-agent turn — prompt in, `Bash` tool call, `status: success` — that is
+> **wrong**: the turn produced **zero** spans, at the `INFO` default and again
+> at `RUST_LOG=warp=trace,ai=trace`, and no span in any run carried a
+> `conversation_id`. `agent_sdk` is the cloud/CLI driver path; the fork's own
+> `app/src/ai/local_agent/` has no instrumentation at all. Those
+> `setup_environment_resolution` spans are cloud *environment* setup, which
+> never runs here.
+
+So this pipe is real and useful for app and IPC timing, and it is **not** an
+agent-trajectory feed today. See `.fork/IDEAS.md` I17 for what capture would
+take — the short version is that Claude's `stream-json` hands us
+`tool_use.input` and `translate.rs` drops it.
 
 **Safety properties, both covered by tests in `app/src/tracing/native_tests.rs`:**
 

@@ -1431,27 +1431,101 @@ harness spans flow to it. **Unverified end to end** — no collector has been ru
 against it in this fork. That is the first thing to do, and it is an
 afternoon, not a project.
 
-## What is actually missing
+## Run against a collector, 2026-08-23 — and half the section above is wrong
 
-Three things, in increasing size.
+> **Retraction.** "The trajectory is already instrumented" was a claim about
+> `#[tracing::instrument]` attributes, made by grepping. A collector on
+> loopback and a real local-agent turn say otherwise: **the agent path emits no
+> spans at all.** The instrumented code in `app/src/ai/agent_sdk/` is the
+> cloud/CLI driver, not the in-app conversation the fork's local agent serves.
+> `app/src/ai/local_agent/` has **zero** instrumentation. I also read one
+> arriving span named `run_internal` as `AgentDriver::run_internal`; its
+> `code.file.path` is `app/src/lib.rs`. It is app startup. I matched on a name.
 
-**1. Whether the spans carry the trajectory, or just its shape.** A span per
-driver run is not the same as a span per message, tool call and failure. Needs
-a collector pointed at a real local-agent turn, then a look at what actually
-arrived. Until that is done, "the trajectory is instrumented" is a claim about
-function attributes, not about content.
+**The pipe itself works, and this is the first time anyone ran it.** A
+hand-written OTLP/HTTP receiver on `127.0.0.1:4318` (no collector installed,
+nothing left the machine) took **128 spans** from one session:
+`persistence::initialize`, `launch`, `initialize_app`, `run_internal`, and a
+lot of terminal-server IPC — `read_socket`, `write_commands`, `authenticate`.
+`export_all_spans` does exactly what its doc comment says.
 
-**2. Transcripts may be the better substrate for the *content*.** The
-user's instinct here is worth taking seriously, and it lines up with "the
-context is already yours": conversation history is already persisted locally
-and already complete. Traces are good at *timing and causality* — what called
-what, what failed, how long it took. Transcripts are good at *what was said*.
-Trying to push message bodies through OTLP spans is how you get a slow
-collector and a lossy record. The likely answer is both, joined on
-`conversation_id`, which the spans already carry.
+**And none of it is the trajectory.** A real turn — prompt in, `Bash` tool
+call, `status: success` — added **zero** spans. Repeated with
+`RUST_LOG=warp=trace,ai=trace`: still zero, and the span count *dropped* to 4,
+which incidentally confirms the directive was applied. No span anywhere
+carried a `conversation_id`.
 
-**3. The UI.** Deliberately last, and deliberately thin. `warpctrl` plus a
-local collector already makes the data queryable without any UI at all, which
+## What is persisted, and in what shape
+
+`agent_tasks.task` is a protobuf of **rendered message parts**, not a
+structured trajectory. For a turn whose prompt was `Run: echo
+HELLO_FROM_TOOL_42`, the whole record is three strings:
+
+```
+-1   Run: echo HELLO_FROM_TOOL_42        <- the user's input
+-2   `Bash`                              <- the tool call. The name. That is all.
+-3   Output: `HELLO_FROM_TOOL_42`        <- the model narrating, not a captured result
+```
+
+`agent read --tools` changes nothing here, because tool results are read from
+the **live surface's action model**, not from the record — so they are gone the
+moment the pane is, and were never there for a local-agent turn anyway.
+
+## The gate, and it is one struct we own
+
+Claude Code's `stream-json` delivers the whole thing. The fork's own test
+fixture is the proof:
+
+```json
+{"type":"tool_use","id":"toolu_1","name":"Bash","input":{"command":"rm -rf build"}}
+```
+
+And `translate.rs:139` keeps one field of it:
+
+```rust
+#[serde(rename = "tool_use")]
+ToolUse { name: String },
+```
+
+`id` and `input` are dropped at parse time. `tool_result` is not handled at
+all — it sits in the deliberately-ignored list in `translate_tests.rs`, for the
+good reason that Claude's stream is versioned independently and unknown lines
+must not take a turn down.
+
+**So the structured trajectory arrives at our door and we throw it away**, in
+about ten lines of fork-authored code. That makes the capture problem small,
+but it is a *capture* problem, not the rendering problem this page assumed.
+
+**One trap, already documented in the code that would have to change.**
+`ToolUse` is deliberately rendered as text and **not** emitted as a
+`ToolCall`, because a `ToolCall` is an *instruction* — Warp's action model
+would execute it, and Claude has already run it. A second `rm`, a second push.
+Anything that captures the arguments must put them in the record without
+turning them into an instruction; the existing test pins that and should stay
+pinned.
+
+## What is still missing after all that
+
+**1. The transcript is the right substrate, and it is closer than the traces.**
+The instinct behind "perhaps that's simpler via transcripts" survives the
+measurement better than the tracing half of this page did. The record already
+exists per conversation, persists across restarts, and is keyed by
+`conversation_id`. What it lacks is not a store, it is the two fields thrown
+away in `translate.rs`. Traces remain the right home for *timing and
+causality* and the wrong home for message bodies — but note that with the
+agent path emitting nothing, "join the two on `conversation_id`" currently
+joins a full table to an empty one.
+
+**2. A decision this page cannot make: does the record keep tool output?**
+Capturing `input` is unambiguous — it is small, it is what the agent asked
+for, and it is what any trajectory view has to show. Capturing `tool_result`
+content means the conversation store starts holding **every file read and
+every command's stdout**, which is a different thing to keep on disk and to
+think about before doing. `MAX_PERSISTED_CONVERSATION_COUNT = 200` with
+tree-wise eviction (the T8.3 trap) applies to whatever this becomes.
+
+**3. The UI.** Deliberately last, and deliberately thin. `warpctrl agent read`
+plus the store already makes the data inspectable without any UI at all, which
 is the cheapest way to find out what a UI should show.
 
 ## On Delta, honestly
@@ -1464,9 +1538,29 @@ same record — and that premise is already available here for free, because
 this fork's whole thesis is that the record is local. Whether any of DeltaDB
 is open source has not been checked.
 
-The version of this idea that fits this fork is the small one: **a local
-collector, a verified pipe, and a join key.** Multiplayer is somebody else's
+The version of this idea that fits this fork is the small one: **capture what
+Claude already tells us, keep it in the record that already persists, and read
+it back with a verb that already exists.** Multiplayer is somebody else's
 problem, and single-player is the case this fork actually has.
+
+## What this changes for T8.3
+
+The reason for running this before the inbox, and it did change something.
+
+**The inbox cannot show a trajectory, because there is no trajectory to
+show.** A row can say what was asked and what was answered; it cannot say
+which tools ran with what arguments, because the record holds a tool's *name*
+and nothing else. Anything designed on the assumption that "the agent did X to
+file Y" is available is designing against data that does not exist yet.
+
+That makes the order matter. `translate.rs` capture is small and additive and
+has no UI in it; the inbox is the consumer. **Capture first, inbox second** —
+otherwise T8.3 ships a row shape that has to change as soon as the trajectory
+arrives, which is the more expensive way round.
+
+Nothing about T8.3's own plan is invalidated: `settled` is still a field on
+`AgentConversationData`, the eviction trap is still the trap, and the
+conversation list view is still the place it goes.
 
 ## Related, already done
 
