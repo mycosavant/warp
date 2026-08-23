@@ -13,16 +13,18 @@ use computer_use::{
 #[command(name = "use_computer")]
 #[command(about = "Manually test computer use actions")]
 struct Cli {
-    /// Experimental (macOS and Linux X11): target a specific background window/process instead
-    /// of the screen, without moving the real cursor. On macOS events are delivered to this
-    /// process ID; on Linux X11 delivery is addressed by `--window-id` and the pid is
-    /// informational.
+    /// Experimental: target a specific window instead of the screen, without moving the real
+    /// cursor. On macOS events are delivered to this process ID; on Linux X11 and on Windows
+    /// delivery is addressed by `--window-id` and the pid is informational.
+    ///
+    /// Windows caveat: posted input reaches the window without touching the cursor, but the
+    /// window must be the foreground one — a posted drag on an inactive window is inert.
     #[arg(long, global = true)]
     pid: Option<i32>,
 
-    /// Experimental (macOS and Linux X11): the platform window id to target (a CGWindowID on
-    /// macOS, an X window id on Linux). Required when `--pid` is given. Use the `windows`
-    /// subcommand to list window ids.
+    /// Experimental: the platform window id to target (a CGWindowID on macOS, an X window id on
+    /// Linux, an HWND on Windows). Required when `--pid` is given. Use the `windows` subcommand
+    /// to list window ids.
     #[arg(long, global = true)]
     window_id: Option<u32>,
 
@@ -103,8 +105,8 @@ enum Command {
         /// The key to press. Can be a single character (e.g., "a") or a keycode (e.g., "0x24" for Return on macOS).
         key: String,
     },
-    /// Experimental (macOS and Linux X11): list on-screen windows with their window number,
-    /// owner PID, owner name, and bounds, to help identify the right target PID/window.
+    /// Experimental: list on-screen windows with their window number, owner PID, owner name,
+    /// and bounds, to help identify the right target PID/window.
     Windows,
 }
 

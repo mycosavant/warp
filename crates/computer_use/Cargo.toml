@@ -75,6 +75,9 @@ warpui_core.workspace = true
 windows = { workspace = true, features = [
     "Win32_Foundation",
     "Win32_Graphics_Gdi",
+    # `PrintWindow` — the only way to capture a window that is not on top, and the Win32
+    # metadata files it with the printing APIs rather than with the windowing ones.
+    "Win32_Storage_Xps",
     "Win32_System_StationsAndDesktops",
     "Win32_UI_HiDpi",
     "Win32_UI_Input_KeyboardAndMouse",

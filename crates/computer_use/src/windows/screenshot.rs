@@ -13,12 +13,16 @@ use windows::Win32::Graphics::Gdi::{
     DIB_RGB_COLORS, DeleteDC, DeleteObject, GetDC, GetDIBits, HBITMAP, HDC, HGDIOBJ, ReleaseDC,
     SRCCOPY, SelectObject,
 };
+// `PrintWindow` lives under `Storage::Xps` in the `windows` crate — the Win32 metadata files it
+// with the printing APIs, because "print this window" is literally what it is.
+use windows::Win32::Storage::Xps::{PRINT_WINDOW_FLAGS, PrintWindow};
 use windows::Win32::UI::WindowsAndMessaging::{
     GetSystemMetrics, SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN, SM_XVIRTUALSCREEN, SM_YVIRTUALSCREEN,
 };
 
 use super::dpi::DpiAwarenessGuard;
-use crate::{Screenshot, ScreenshotParams};
+use super::enumerate::{hwnd_from_id, window_rect};
+use crate::{CapturedWindow, Screenshot, ScreenshotParams};
 
 /// Captures a screenshot of the full virtual screen (or a region of it).
 ///
@@ -88,6 +92,100 @@ pub fn take(params: ScreenshotParams) -> Result<Screenshot, String> {
     let img = DynamicImage::ImageRgba8(img);
 
     crate::screenshot_utils::process_screenshot(img, params)
+}
+
+/// `PW_RENDERFULLCONTENT`. Not optional: without it a GPU-composited window — which every
+/// modern GUI toolkit produces, Warp included — prints blank.
+const PW_RENDERFULLCONTENT: u32 = 2;
+
+/// Captures one window, *without raising it, focusing it, or caring what is on top of it*.
+///
+/// This is `BitBlt`-from-the-screen's opposite. `BitBlt` copies what is physically displayed,
+/// so any overlapping window lands in the shot; `PrintWindow` asks the window to draw itself
+/// into a bitmap we own. Raising the window first is not an alternative, because Windows
+/// refuses `SetForegroundWindow` from a background process — the foreground lock.
+///
+/// The recipe is not new to this fork: `shot.ps1` has done exactly this for months, and
+/// `.fork/README.md` records that it has been lost to a cleared session twice. This is that
+/// recipe, in the crate, so it stops being folklore.
+pub fn take_window(
+    window_id: u32,
+    params: ScreenshotParams,
+) -> Result<(Screenshot, CapturedWindow), String> {
+    let _dpi_guard = DpiAwarenessGuard::enter_per_monitor_v2();
+
+    let rect = window_rect(window_id)
+        .ok_or_else(|| format!("Could not resolve window {window_id}; it may have closed."))?;
+    let width = rect.right - rect.left;
+    let height = rect.bottom - rect.top;
+    if width <= 0 || height <= 0 {
+        return Err(format!(
+            "Window {window_id} has no drawable area ({width}x{height})."
+        ));
+    }
+
+    let rgba = print_window_rgba(window_id, width, height)?;
+    let img = RgbaImage::from_raw(width as u32, height as u32, rgba)
+        .ok_or_else(|| "Failed to construct image from GDI pixel data".to_string())?;
+    let mut img = DynamicImage::ImageRgba8(img);
+
+    // A region on a window target is window-local, so it is a crop of what we just printed
+    // rather than a different capture. Clamped rather than rejected: a region that runs off
+    // the edge of a window the user just resized is a race, not a mistake.
+    if let Some(region) = params.region {
+        region.validate()?;
+        let x = region.top_left.x().max(0);
+        let y = region.top_left.y().max(0);
+        let w = (region.bottom_right.x() - x).clamp(0, width - x.min(width));
+        let h = (region.bottom_right.y() - y).clamp(0, height - y.min(height));
+        if w > 0 && h > 0 {
+            img = img.crop_imm(x as u32, y as u32, w as u32, h as u32);
+        }
+    }
+
+    let captured = CapturedWindow {
+        window_id,
+        width_px: width,
+        height_px: height,
+    };
+    crate::screenshot_utils::process_screenshot(img, params).map(|shot| (shot, captured))
+}
+
+/// `PrintWindow` into an offscreen DIB, read back as RGBA.
+fn print_window_rgba(window_id: u32, width: i32, height: i32) -> Result<Vec<u8>, String> {
+    const HGDI_ERROR_SENTINEL: isize = -1;
+
+    let screen_dc = ScreenDc::acquire()?;
+    let mem_dc = MemoryDc::create_compatible(screen_dc.handle())?;
+    let bitmap = Bitmap::create_compatible(screen_dc.handle(), width, height)?;
+
+    // SAFETY: `mem_dc` and `bitmap` are valid GDI handles owned by the guards.
+    let prev_object = unsafe { SelectObject(mem_dc.handle(), bitmap.handle().into()) };
+    if prev_object.is_invalid() || prev_object.0 as isize == HGDI_ERROR_SENTINEL {
+        return Err("SelectObject failed for window capture bitmap".to_string());
+    }
+    let _restore_select_guard = SelectObjectGuard {
+        dc: mem_dc.handle(),
+        prev_object,
+    };
+
+    // SAFETY: the handle came from the enumerated window list and the DC is ours. `PrintWindow`
+    // returns FALSE rather than faulting if the window has gone away.
+    let printed = unsafe {
+        PrintWindow(
+            hwnd_from_id(window_id),
+            mem_dc.handle(),
+            PRINT_WINDOW_FLAGS(PW_RENDERFULLCONTENT),
+        )
+    };
+    if !printed.as_bool() {
+        return Err(format!(
+            "PrintWindow failed for window {window_id}; it may have closed mid-capture."
+        ));
+    }
+
+    let buffer = read_bitmap_bits(mem_dc.handle(), bitmap.handle(), width, height)?;
+    Ok(convert_bgra_to_rgba(buffer))
 }
 
 /// Captures the screen into a freshly allocated RGBA buffer.

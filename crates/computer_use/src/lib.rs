@@ -141,11 +141,11 @@ pub fn end_background_session(owner: &str) {
 /// Enumerates the on-screen windows, returning their metadata so a caller can pick one to
 /// target. Returns an empty list on platforms where window enumeration is unsupported.
 pub fn enumerate_windows() -> Vec<WindowInfo> {
-    #[cfg(any(macos, linux))]
+    #[cfg(any(macos, linux, windows))]
     {
         imp::enumerate_windows()
     }
-    #[cfg(not(any(macos, linux)))]
+    #[cfg(not(any(macos, linux, windows)))]
     {
         Vec::new()
     }
@@ -171,10 +171,20 @@ pub fn experimental_list_windows() -> Result<String, String> {
     imp::list_windows()
 }
 
-/// Experimental: lists on-screen windows. Unsupported on this platform.
-#[cfg(not(any(macos, linux)))]
+/// Experimental: lists on-screen windows as a formatted diagnostic string.
+///
+/// Windows enumerates with `EnumWindows` rather than the process's "main window", because a
+/// single process routinely owns several top-level windows and only one of them is nominated
+/// as main — the others are invisible to that API, and the nomination moves.
+#[cfg(windows)]
 pub fn experimental_list_windows() -> Result<String, String> {
-    Err("Window listing is only supported on macOS and Linux (X11).".to_string())
+    Ok(imp::list_windows())
+}
+
+/// Experimental: lists on-screen windows. Unsupported on this platform.
+#[cfg(not(any(macos, linux, windows)))]
+pub fn experimental_list_windows() -> Result<String, String> {
+    Err("Window listing is only supported on macOS, Linux (X11) and Windows.".to_string())
 }
 
 /// The surface that a computer-use action or screenshot targets.

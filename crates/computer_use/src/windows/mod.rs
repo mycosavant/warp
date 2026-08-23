@@ -1,12 +1,15 @@
 //! Windows implementation of computer use actions using the Win32 SendInput
 //! API for input and GDI for screenshots.
 
+mod background;
 mod dpi;
+mod enumerate;
 mod keyboard;
 mod mouse;
 mod screenshot;
 
 use async_trait::async_trait;
+pub use enumerate::{enumerate_windows, list_windows};
 use warpui_core::r#async::Timer;
 use windows::Win32::System::StationsAndDesktops::{
     CloseDesktop, DESKTOP_ACCESS_FLAGS, DESKTOP_CONTROL_FLAGS, HDESK, OpenInputDesktop,
@@ -14,7 +17,7 @@ use windows::Win32::System::StationsAndDesktops::{
 
 // Video recording is not yet implemented on Windows; reuse the no-op recorder.
 pub use crate::noop::Recorder;
-use crate::{Action, ActionResult, Options, TargetedAction};
+use crate::{Action, ActionResult, Options, Target, TargetedAction};
 
 /// Returns whether computer_use can drive input on this machine right now.
 ///
@@ -26,10 +29,14 @@ pub fn is_supported_on_current_platform() -> bool {
     probe_input_desktop_available()
 }
 
-/// Reports whether background, per-window control is available. The Windows input stack drives the
-/// screen / foreground window, so per-window background control is unsupported.
+/// Reports whether background, per-window control is available.
+///
+/// It is, via posted messages — see `background.rs`. What "background" buys here is narrower
+/// than on X11: the cursor never moves and the user keeps their pointer, but the target window
+/// still has to be the foreground one, because a posted drag on an inactive window is inert.
+/// That was measured, not assumed; the A/B is in `background.rs`'s module comment.
 pub fn background_supported() -> bool {
-    false
+    true
 }
 
 /// Shared probe used by both [`is_supported_on_current_platform`] and [`Actor::new`] so the
@@ -76,6 +83,11 @@ impl Drop for InputDesktop {
 pub struct Actor {
     keyboard: keyboard::Keyboard,
     mouse: mouse::Mouse,
+    /// Posted-message input for window targets. Held on the actor, not built per call, so a
+    /// drag that spans two `perform_actions` batches keeps its button-state bookkeeping —
+    /// the same reason the X11 backend owns its agent seat.
+    background_mouse: background::BackgroundMouse,
+    background_keyboard: background::BackgroundKeyboard,
 }
 
 impl Actor {
@@ -83,6 +95,8 @@ impl Actor {
         Self {
             keyboard: keyboard::Keyboard::new(),
             mouse: mouse::Mouse::new(),
+            background_mouse: background::BackgroundMouse::default(),
+            background_keyboard: background::BackgroundKeyboard,
         }
     }
 }
@@ -120,52 +134,127 @@ impl super::Actor for Actor {
         if !probe_input_desktop_available() {
             return Err(NO_INPUT_DESKTOP_ERROR.to_string());
         }
+        let background = options.background_enabled;
         let keyboard = &mut self.keyboard;
         let mouse = &mut self.mouse;
+        let background_mouse = &mut self.background_mouse;
+        let background_keyboard = &mut self.background_keyboard;
+        let mut drove_a_window = false;
 
+        // Validate window targets before performing anything, so a bad id cannot leave a batch
+        // half-applied — and, on a drag, cannot leave a button held with no release to come.
         for targeted in actions {
-            // Per-window targeting is not supported on Windows; act on the screen / foreground
-            // window regardless of the requested target.
-            let action: &Action = &targeted.action;
-            match action {
-                Action::Wait(duration) => {
-                    Timer::after(*duration).await;
-                }
-                Action::MouseDown { button, at } => {
-                    mouse.move_to(*at)?;
-                    mouse.button_down(button)?;
-                }
-                Action::MouseUp { button } => mouse.button_up(button)?,
-                Action::MouseMove { to } => mouse.move_to(*to)?,
-                Action::MouseWheel {
-                    at,
-                    direction,
-                    distance,
-                } => {
-                    mouse.move_to(*at)?;
-                    mouse.scroll(direction, distance)?;
-                }
-                Action::TypeText { text } => {
-                    keyboard.type_text(text)?;
-                }
-                Action::KeyDown { key } => {
-                    keyboard.key_down(key)?;
-                }
-                Action::KeyUp { key } => {
-                    keyboard.key_up(key)?;
-                }
+            if background && let Target::Window { window_id: 0, .. } = targeted.target {
+                return Err(
+                    "A window target requires a non-zero window id. Select a window \
+                            from the enumerated window list."
+                        .to_string(),
+                );
             }
         }
 
-        let screenshot = if let Some(params) = options.screenshot_params {
-            Some(screenshot::take(params)?)
-        } else {
-            None
+        for targeted in actions {
+            let action: &Action = &targeted.action;
+            // `background_enabled: false` is the legacy contract: act on the screen regardless
+            // of what the caller asked for.
+            let target = if background {
+                targeted.target
+            } else {
+                Target::Screen
+            };
+            let window_id = match target {
+                Target::Window { window_id, .. } => {
+                    drove_a_window = true;
+                    Some(window_id)
+                }
+                Target::Screen => None,
+            };
+
+            match (window_id, action) {
+                (_, Action::Wait(duration)) => {
+                    Timer::after(*duration).await;
+                }
+
+                // Window-targeted: posted messages, no cursor movement.
+                (Some(id), Action::MouseDown { button, at }) => {
+                    background_mouse.button_down(id, button, *at)?
+                }
+                (Some(id), Action::MouseUp { button }) => background_mouse.button_up(id, button)?,
+                (Some(id), Action::MouseMove { to }) => background_mouse.move_to(id, *to)?,
+                (
+                    Some(id),
+                    Action::MouseWheel {
+                        at,
+                        direction,
+                        distance,
+                    },
+                ) => background_mouse.scroll(id, *at, direction, distance)?,
+                (Some(id), Action::TypeText { text }) => background_keyboard.type_text(id, text)?,
+                (Some(id), Action::KeyDown { key }) => background_keyboard.key_down(id, key)?,
+                (Some(id), Action::KeyUp { key }) => background_keyboard.key_up(id, key)?,
+
+                // Screen-targeted: the desktop, as before.
+                (None, Action::MouseDown { button, at }) => {
+                    mouse.move_to(*at)?;
+                    mouse.button_down(button)?;
+                }
+                (None, Action::MouseUp { button }) => mouse.button_up(button)?,
+                (None, Action::MouseMove { to }) => mouse.move_to(*to)?,
+                (
+                    None,
+                    Action::MouseWheel {
+                        at,
+                        direction,
+                        distance,
+                    },
+                ) => {
+                    mouse.move_to(*at)?;
+                    mouse.scroll(direction, distance)?;
+                }
+                (None, Action::TypeText { text }) => keyboard.type_text(text)?,
+                (None, Action::KeyDown { key }) => keyboard.key_down(key)?,
+                (None, Action::KeyUp { key }) => keyboard.key_up(key)?,
+            }
+        }
+
+        let (screenshot, captured_window) = match options.screenshot_params {
+            Some(mut params) => {
+                if !background {
+                    params.target = Target::Screen;
+                }
+                match params.target {
+                    Target::Window { window_id: 0, .. } => {
+                        return Err("A window target requires a non-zero window id. Select a \
+                                    window from the enumerated window list."
+                            .to_string());
+                    }
+                    Target::Window { window_id, .. } => {
+                        let (shot, captured) = screenshot::take_window(window_id, params)?;
+                        (Some(shot), Some(captured))
+                    }
+                    Target::Screen => (Some(screenshot::take(params)?), None),
+                }
+            }
+            None => (None, None),
         };
 
-        Ok(ActionResult::legacy(
+        // A window-targeted batch never moved the cursor, so reporting the desktop cursor
+        // would be answering a question nobody asked; report the posted position instead.
+        let cursor_position = if drove_a_window {
+            background_mouse.last_position()
+        } else {
+            Some(mouse.current_position()?)
+        };
+
+        Ok(ActionResult {
             screenshot,
-            Some(mouse.current_position()?),
-        ))
+            cursor_position,
+            windows: if background {
+                enumerate::enumerate_windows()
+            } else {
+                Vec::new()
+            },
+            captured_window,
+        })
     }
 }
