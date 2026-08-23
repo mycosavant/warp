@@ -3955,24 +3955,44 @@ T1, T4, T5 and T7, and by now should be the prior rather than the surprise.
       Over a pane, the new path is strictly cheaper than the old one.
 
       Which means the cause is somewhere this reasoning does not reach, and
-      "should be cheaper" is not a measurement. Two things to rule out first,
-      cheapest first:
+      "should be cheaper" is not a measurement.
 
-      - **Debug vs release.** T8.0 built a release binary precisely because a
-        debug build is a different animal. If the lag was seen in a `cargo
-        build` binary rather than `--release`, that is the whole answer and
-        costs nothing to check.
-      - **The path that did *not* change.** The user drags a pane header
-        *toward the sidebar*, and that is `PaneDragDropLocation::TabBar`, which
-        emits `Event::DraggedOverTabBar` unconditionally on every drag event —
-        upstream, untouched, and it recomputes a hover index each time.
-        `PaneDragDropLocation::Other` likewise emits
-        `PaneDraggedOutsideTabBarOrPaneGroup` every event.
+      **The build was a debug build** — confirmed by the user, who was watching
+      its output in a terminal at the time. That is now the leading explanation
+      and it costs one `--release` build to confirm or kill; T8.0 exists
+      precisely because a debug binary is a different animal. Note the terminal
+      output is *not* itself the cost: nothing on the drag path logs per event
+      (`draggable.rs` has no logging at all, and the only `log::trace!` under
+      `elements/gui/` is in `new_scrollable`). It is the unoptimised layout and
+      render, not the writes.
 
-      Only after those: the ghost's own composite, and the `Stack`+`Flex`
-      overlay rebuild. `WARP_FORK_POLICY=0` A/Bs fork behaviour without a
-      rebuild, but note it does **not** isolate T8.2 — it turns off every fork
-      predicate at once.
+      Next after that, if release still drags badly: **the path that did not
+      change.** A pane header dragged *toward the sidebar* is
+      `PaneDragDropLocation::TabBar`, which emits `Event::DraggedOverTabBar`
+      unconditionally on every drag event and recomputes a hover index each
+      time — upstream, untouched. `PaneDragDropLocation::Other` likewise emits
+      `PaneDraggedOutsideTabBarOrPaneGroup` every event. Only after those: the
+      ghost's composite and the `Stack`+`Flex` overlay rebuild.
+
+      `WARP_FORK_POLICY=0` A/Bs fork behaviour without a rebuild, but it does
+      **not** isolate T8.2 — it turns off every fork predicate at once.
+
+      **And there is a blind spot to fix first.** None of this can be measured
+      today, because the only frame-cost instrumentation upstream ships is
+      `LogExpensiveFramesInSentry` — and fork policy force-disables it
+      (`fork.rs:46`) along with the rest of the telemetry flags. The reasoning
+      was right (it reports to Sentry) but the consequence was not intended:
+      **the fork has blinded itself to its own frame performance**, and the
+      first time that mattered is the first time somebody said a gesture felt
+      slow.
+
+      The established fork answer to exactly this shape of problem is a local
+      replacement rather than a re-enablement — `LocalTranscriber` for voice,
+      the local agent for the transport. A slow-frame log behind an env var,
+      writing to the local log and nowhere else, would be small (the winit
+      event loop already keeps `Instant::now()` around its redraw path) and
+      would turn every future "feels laggy" report into a number. Worth doing
+      before guessing at this one.
 
       **Answered: it was the vertical panel.** The open question this section
       first carried — horizontal strip or vertical sidebar — is closed. The
