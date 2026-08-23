@@ -318,12 +318,18 @@ semantics, which nobody has defined yet.
 > **Amended after dragging one, 2026-08-22.** The "deliberately not in v1"
 > paragraph above is wrong on its own terms: tab-out-to-new-window does **not**
 > "already work". `PaneDraggedOutsideTabBarOrPaneGroup` exists, but the branch
-> that acts on it is behind `DragTabsToWindows` — the same flag — so it is off
-> in every build made here. Relaxing the axis without it means a tab can now be
-> pulled out of the strip and simply lands nowhere. That is no longer optional
-> scope; it is a thing this change broke the feel of. See `.fork/TASKS.md` T8.2
-> "REVISIT SOON", which also collects the missing drag-cancel key and a
-> Windows-only lag report.
+> that acts on it is behind `DragTabsToWindows`, and that flag is **measured
+> off** in this fork's builds (`FORKDBG DragTabsToWindows=false
+> is_release_bundle=false`) — `RELEASE_FLAGS` only applies to a release bundle.
+> So the gesture has never worked here, in either tab layout. Making it work is
+> a one-line `FORCE_ENABLED` entry, not a rewrite.
+>
+> A first pass at this note claimed the T8.2 axis relax had *broken* the
+> gesture. It had not: `tab.rs` is the horizontal tab bar and the user runs
+> vertical tabs, whose `vertical_tabs.rs` was never touched. Recorded because
+> the mistake is the same one this page keeps making — reasoning about a gate
+> from one of its two call sites. See `.fork/TASKS.md` T8.2 "REVISIT SOON",
+> which also collects the missing drag-cancel key and a Windows-only lag report.
 
 ## Related, and cheap once the above lands
 

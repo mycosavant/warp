@@ -1410,10 +1410,13 @@ detach at four other sites; that stays exactly as upstream left it.
 things that are not fixed yet. Read `.fork/TASKS.md` T8.2 "REVISIT SOON" before
 relying on any of this:
 
-- **Pulling a tab out of the strip no longer opens a window.** The axis and the
-  detach are separate gates and only the axis got relaxed, so the tab now
-  travels out of the strip and lands nowhere. This is a regression in feel over
-  upstream, where the gesture was simply impossible.
+- **Pulling a tab out of the strip does not open a window** — in either tab
+  layout, and it never has in a build made here. Measured at runtime:
+  `DragTabsToWindows=false`, because `RELEASE_FLAGS` needs
+  `cfg!(feature = "release_bundle")` and neither that nor
+  `drag_tabs_to_windows` is a default cargo feature. Stock Warp ships as a
+  release bundle, which is where the behaviour you remember comes from. Not a
+  regression; a gap.
 - **Nothing cancels a drag.** Esc looks like it does, but it is only doing its
   usual job to the pane underneath — on an agent pane that means popping agent
   view, which reads as "my session turned into a terminal".

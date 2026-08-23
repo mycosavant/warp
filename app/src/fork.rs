@@ -245,15 +245,24 @@ fn spawn_depth_limit_from(value: Option<&str>) -> u32 {
 /// would take a working behaviour and replace it with an untested one.
 ///
 /// **Amended 2026-08-22, after dragging one.** "The whole of what a
-/// tab-to-pane drag needs" was true and still is; what it missed is that the
+/// tab-to-pane drag needs" was true and still is. What it missed is that the
 /// axis it relaxes is also the axis you pull along to *tear a tab out into a
-/// new window*. That detach reads the same flag from a different site
-/// (`workspace/view.rs`, `is_drag_outside_tab_bar`), so a tab now leaves the
-/// strip and lands nowhere — possible and inert, where before it was
-/// impossible. The fix under consideration is the opposite of the paragraph
-/// above: force the flag on via [`FORCE_ENABLED`] (which outranks both `cfg`s,
-/// per I16) and delete the axis relax. See `.fork/TASKS.md` T8.2
-/// "REVISIT SOON".
+/// new window*, and that detach reads the same flag from a different site
+/// (`workspace/view.rs`, `is_drag_outside_tab_bar`) — so in the horizontal tab
+/// bar a tab can now leave the strip and land nowhere.
+///
+/// Scope, because a first draft of this note overstated it: this applies to
+/// **`tab.rs` only**. `workspace/view/vertical_tabs.rs` is a separate
+/// implementation with its own axis lock, is untouched by the fork, and is the
+/// one most users here actually see. `DragTabsToWindows` is measured off in
+/// every build made here (`RELEASE_FLAGS` needs `cfg!(feature =
+/// "release_bundle")`), so tab-out-to-new-window has never worked in either
+/// layout — a gap against stock, not something this predicate broke.
+///
+/// The fix under consideration is the opposite of the paragraph above: force
+/// the flag on via [`FORCE_ENABLED`] (which outranks both `cfg`s, per I16),
+/// which opens both axis locks and the detach together, and delete this relax
+/// as redundant. See `.fork/TASKS.md` T8.2 "REVISIT SOON".
 ///
 /// Consumed by `tab::Tab::render` and `workspace::view`'s drop handling.
 pub fn tab_pane_drag_enabled() -> bool {

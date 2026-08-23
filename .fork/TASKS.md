@@ -3854,34 +3854,66 @@ T1, T4, T5 and T7, and by now should be the prior rather than the surprise.
       consequence of the change itself. Nothing here is fixed yet; this section
       is the brief for the next pass.
 
-      **1. The axis and the detach are two different gates, and only one got
-      opened.** This is the real defect. Upstream's tab strip pins each tab to
-      its own axis; pulling *perpendicular* to the strip is what tears the tab
-      out into a new window. Both behaviours read `DragTabsToWindows`, but at
-      **different sites**: the axis at `tab.rs:2280`, the detach at
-      `workspace/view.rs:28693` (`(is_drag_outside_tab_bar || source_is_single_tab)
-      && FeatureFlag::DragTabsToWindows.is_enabled()`), with the ghost chip at
-      `view.rs:27806` and a focus call at `pane_group/mod.rs:3303`.
+      **1. Tab-out-to-new-window does not work — and T8.2 did not break it.**
 
-      `fork::tab_pane_drag_enabled()` relaxed **only the axis** — deliberately,
-      and the note above still gives the reasoning. The unforeseen half is what
-      that produces *for a person*: the tab now moves perpendicular to the
-      strip, travels out of it, and then lands nowhere, because the code that
-      would catch it is still behind the flag. Before the change the gesture was
-      impossible; now it is possible and inert, which is worse. Expected
-      behaviour, per the user: release outside the window creates a new window
-      at the release point carrying the dragged tab/group — i.e. upstream's.
+      > **Retraction, same day.** The first version of this section said the
+      > axis relax made the gesture "possible and inert", and called that a
+      > regression T8.2 introduced. It was written from reading, it is wrong for
+      > the layout the user actually runs, and it is wrong in the commit that
+      > recorded it (`f22cc9e3c`). Two facts kill it. **The user runs vertical
+      > tabs exclusively** — `vertical_tabs` is in `app/Cargo.toml`'s `default`
+      > list, and the sidebar is in every screenshot taken this session. And
+      > **`vertical_tabs.rs` was never touched**: `tab.rs` is the *horizontal*
+      > tab bar, and no commit in T8 modifies the vertical path. Its axis lock
+      > at `vertical_tabs.rs:2554` still reads `DragTabsToWindows` alone,
+      > exactly as upstream wrote it.
 
-      **The candidate fix is one line, and the precedent is I16.**
-      `fork::FORCE_ENABLED` sets a *user preference*, and `is_enabled` resolves
-      override → user preference → channel state, so it outranks both the
-      `cfg!(any(macos, windows))` in `RELEASE_FLAGS` and the
-      `#[cfg(feature = "drag_tabs_to_windows")]` in `app/src/features.rs:112`.
-      Adding `DragTabsToWindows` there turns on the detach, the ghost chip and
-      the axis together — and makes the `tab.rs:2280` relax redundant, so it
-      should come back out. **Unverified**: it lights up cross-window drag
-      machinery (`cross_window_tab_drag.rs`, ~1,800 lines) that nothing in this
-      fork has ever exercised. Do not assume; run it.
+      **Measured, not read.** A temporary `eprintln!` in `init_feature_flags`,
+      built and run:
+
+      ```
+      FORKDBG DragTabsToWindows=false is_release_bundle=false
+      ```
+
+      The flag has never been on in a build made here, for **two independent
+      reasons**. `RELEASE_FLAGS` is only extended when
+      `ChannelState::is_release_bundle()`, which is
+      `cfg!(feature = "release_bundle")` (`channel/state.rs:84`); and the
+      app-side entry at `features.rs:112` sits behind
+      `#[cfg(feature = "drag_tabs_to_windows")]`. Neither cargo feature is in
+      `default`, and `oss.rs` sets `Channel::Oss` with only `DEBUG_FLAGS`. The
+      installed stable Warp *is* a release bundle, which is why the behaviour
+      exists there and not here — the comparison being made is fork-build
+      against stock, not before-T8.2 against after.
+
+      So the correct statement is the boring one: **tab-out-to-new-window has
+      never worked in this fork's builds, in either tab layout, and still does
+      not.** A gap against stock, not a regression. Expected behaviour, per the
+      user: release outside the window creates a new window at the release point
+      carrying the dragged tab/group.
+
+      **The fix is still one line, but it is an enablement rather than a
+      repair.** `fork::FORCE_ENABLED` sets a *user preference*, and `is_enabled`
+      resolves override → user preference → channel state, so it outranks both
+      cfgs — the I16 precedent exactly. Adding `DragTabsToWindows` there lights
+      up the detach (`workspace/view.rs:28693`), the ghost chip
+      (`view.rs:27806`), the focus call (`pane_group/mod.rs:3303`) **and both
+      axis locks at once** — which is the part that matters, because
+      `vertical_tabs.rs:2554` is already flag-gated, so forcing the flag fixes
+      the layout the user runs without touching that file. It also makes the
+      `tab.rs:2280` axis relax redundant, so that should come back out.
+      **Unverified**: it exercises `cross_window_tab_drag.rs` (~1,800 lines)
+      that nothing in this fork has ever run. Do not assume; run it.
+
+      Note that `FORCE_ENABLED` is a code const applied by
+      `apply_feature_preferences`, so this is a rebuild — there is no env var
+      that flips it, and `WARP_FORK_POLICY=0` would turn it *off* along with
+      everything else fork policy does.
+
+      **What survives from the original claim**, scoped correctly: in the
+      *horizontal* tab bar T8.2 did relax the axis without opening the detach,
+      so there a tab can be pulled out of the strip and land nowhere. Real, but
+      in a layout nobody here uses — and forcing the flag on removes it too.
 
       **2. Nothing cancels a drag, and Esc is not the exception — it only looks
       like one.** Reported symptom: mid-drag of an *agent* pane, Esc appears to
@@ -3913,23 +3945,43 @@ T1, T4, T5 and T7, and by now should be the prior rather than the surprise.
       choosing between "reorder within the strip" and "tear out to a window" —
       the modifier picks.
 
-      **4. Header-drag lag on the Windows build — unmeasured, do not guess.**
-      The translucent ghost is the suspect, but the arithmetic runs the other
-      way: this change *replaced* per-drag-event tree surgery
-      (`MovePaneWithinPaneGroup` on every event, with a full relayout) with a
-      notify-on-change field, so the drag should have got cheaper. Candidates
-      worth measuring before touching anything: the ghost's own composite, the
-      `Stack`+`Flex` overlay rebuild, and whether the lag predates the change
-      (`WARP_FORK_POLICY=0` A/Bs it without a rebuild).
+      **4. Header-drag lag on the Windows build — still unmeasured, and the
+      first explanation offered was not good enough.** Reading the path a second
+      time only strengthened the wrong half of the argument: both
+      `set_drop_preview` implementations (`pane_group/mod.rs`,
+      `header/mod.rs:~1017`) return early when the value is unchanged, the
+      overlay wrapper is a `.filter()` that wraps at most one pane, and the
+      `PaneGroup` arm *replaced* per-drag-event tree surgery with a field write.
+      Over a pane, the new path is strictly cheaper than the old one.
 
-      **One open question that needs the user, not the code.** The report says
-      "sidebar", which is the vertical tabs panel — but the axis relax landed
-      **only** in `tab.rs`, the horizontal tab bar. `vertical_tabs.rs:2554` is
-      untouched and still gates on the flag alone. If the loosening was seen in
-      the vertical panel it is not this change, and something else is going on;
-      if in the horizontal strip, the diagnosis in item 1 holds as written. The
-      X/Y labels in the report are also transposed relative to the code, which
-      is why everything above says "along the strip" and "out of the strip".
+      Which means the cause is somewhere this reasoning does not reach, and
+      "should be cheaper" is not a measurement. Two things to rule out first,
+      cheapest first:
+
+      - **Debug vs release.** T8.0 built a release binary precisely because a
+        debug build is a different animal. If the lag was seen in a `cargo
+        build` binary rather than `--release`, that is the whole answer and
+        costs nothing to check.
+      - **The path that did *not* change.** The user drags a pane header
+        *toward the sidebar*, and that is `PaneDragDropLocation::TabBar`, which
+        emits `Event::DraggedOverTabBar` unconditionally on every drag event —
+        upstream, untouched, and it recomputes a hover index each time.
+        `PaneDragDropLocation::Other` likewise emits
+        `PaneDraggedOutsideTabBarOrPaneGroup` every event.
+
+      Only after those: the ghost's own composite, and the `Stack`+`Flex`
+      overlay rebuild. `WARP_FORK_POLICY=0` A/Bs fork behaviour without a
+      rebuild, but note it does **not** isolate T8.2 — it turns off every fork
+      predicate at once.
+
+      **Answered: it was the vertical panel.** The open question this section
+      first carried — horizontal strip or vertical sidebar — is closed. The
+      user has never used the horizontal layout, which is what turned item 1
+      from a regression report into a retraction. Worth keeping as a habit:
+      **`vertical_tabs.rs` and `tab.rs` are two separate implementations of
+      "the tab strip"**, and a change to one says nothing about the other. The
+      X/Y labels in the report are transposed relative to the code, which is
+      why everything above says "along the strip" and "out of the strip".
 
       #### Three side findings from the same session
 
