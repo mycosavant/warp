@@ -314,6 +314,16 @@ semantics, which nobody has defined yet.
 > could not leave the tab bar at all, so "give the tab the same drag payload"
 > was necessary but not sufficient. Item 2 was as small as claimed —
 > `calculate_pane_move_direction` did return exactly what the overlay needed.
+>
+> **Amended after dragging one, 2026-08-22.** The "deliberately not in v1"
+> paragraph above is wrong on its own terms: tab-out-to-new-window does **not**
+> "already work". `PaneDraggedOutsideTabBarOrPaneGroup` exists, but the branch
+> that acts on it is behind `DragTabsToWindows` — the same flag — so it is off
+> in every build made here. Relaxing the axis without it means a tab can now be
+> pulled out of the strip and simply lands nowhere. That is no longer optional
+> scope; it is a thing this change broke the feel of. See `.fork/TASKS.md` T8.2
+> "REVISIT SOON", which also collects the missing drag-cancel key and a
+> Windows-only lag report.
 
 ## Related, and cheap once the above lands
 

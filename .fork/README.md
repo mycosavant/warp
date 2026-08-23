@@ -1406,10 +1406,19 @@ Fork policy relaxes **only the axis**. The same flag gates cross-window tab
 detach at four other sites; that stays exactly as upstream left it.
 `WARP_FORK_POLICY=0` puts the axis back.
 
-> **Unverified by running.** A drag is press-move-release, and synthetic input
-> reaches no X11 client under WSLg. The overlay, the quadrant maths and the
-> underlying merge are each verified independently — the drag gesture itself
-> has only been compiled. If it misbehaves, that is where to look first.
+**Verified by hand on Windows, 2026-08-22** — it works, and it turned up three
+things that are not fixed yet. Read `.fork/TASKS.md` T8.2 "REVISIT SOON" before
+relying on any of this:
+
+- **Pulling a tab out of the strip no longer opens a window.** The axis and the
+  detach are separate gates and only the axis got relaxed, so the tab now
+  travels out of the strip and lands nowhere. This is a regression in feel over
+  upstream, where the gesture was simply impossible.
+- **Nothing cancels a drag.** Esc looks like it does, but it is only doing its
+  usual job to the pane underneath — on an agent pane that means popping agent
+  view, which reads as "my session turned into a terminal".
+- **Header drags feel laggy on Windows.** Unmeasured; the change should have
+  made them cheaper, so do not assume the overlay is the cause.
 
 ## Voice input, transcribed on this machine
 

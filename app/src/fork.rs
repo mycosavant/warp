@@ -244,6 +244,17 @@ fn spawn_depth_limit_from(value: Option<&str>) -> u32 {
 /// axis is the whole of what a tab-to-pane drag needs, and opening the flag
 /// would take a working behaviour and replace it with an untested one.
 ///
+/// **Amended 2026-08-22, after dragging one.** "The whole of what a
+/// tab-to-pane drag needs" was true and still is; what it missed is that the
+/// axis it relaxes is also the axis you pull along to *tear a tab out into a
+/// new window*. That detach reads the same flag from a different site
+/// (`workspace/view.rs`, `is_drag_outside_tab_bar`), so a tab now leaves the
+/// strip and lands nowhere — possible and inert, where before it was
+/// impossible. The fix under consideration is the opposite of the paragraph
+/// above: force the flag on via [`FORCE_ENABLED`] (which outranks both `cfg`s,
+/// per I16) and delete the axis relax. See `.fork/TASKS.md` T8.2
+/// "REVISIT SOON".
+///
 /// Consumed by `tab::Tab::render` and `workspace::view`'s drop handling.
 pub fn tab_pane_drag_enabled() -> bool {
     is_active()

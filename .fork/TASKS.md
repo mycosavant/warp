@@ -3837,15 +3837,99 @@ T1, T4, T5 and T7, and by now should be the prior rather than the surprise.
       `PaneDropTargetData` makes `data` `Some` for panes and changes nothing
       else.
 
-      **This one needs a person.** A drag is press-move-release, and synthetic
-      input does not reach X11 clients under WSLg. Everything it depends on is
-      verified — the overlay renders, the quadrant maths is pinned, and
-      `merge_tab_into_active_tab` is exercised end-to-end by `tab.merge` — but
-      the drag itself has only been compiled, not performed.
+      **This one needed a person** — a drag is press-move-release, and
+      synthetic input does not reach X11 clients under WSLg, so it shipped
+      compiled but not performed. **Performed by hand on Windows 2026-08-22;
+      it works.** What that run found is below, and it is enough to reopen the
+      item.
 
       **Left undone:** merge semantics for a multi-pane tab, and changing the
       tab-out-to-new-window behaviour. Both were out of scope in `IDEAS.md` I3
-      and remain so.
+      — and the second one no longer can be, for the reason in the next
+      section.
+
+      #### REVISIT SOON — what a mouse found, 2026-08-22
+
+      The gesture works. Four things about it do not, and one of them is a
+      consequence of the change itself. Nothing here is fixed yet; this section
+      is the brief for the next pass.
+
+      **1. The axis and the detach are two different gates, and only one got
+      opened.** This is the real defect. Upstream's tab strip pins each tab to
+      its own axis; pulling *perpendicular* to the strip is what tears the tab
+      out into a new window. Both behaviours read `DragTabsToWindows`, but at
+      **different sites**: the axis at `tab.rs:2280`, the detach at
+      `workspace/view.rs:28693` (`(is_drag_outside_tab_bar || source_is_single_tab)
+      && FeatureFlag::DragTabsToWindows.is_enabled()`), with the ghost chip at
+      `view.rs:27806` and a focus call at `pane_group/mod.rs:3303`.
+
+      `fork::tab_pane_drag_enabled()` relaxed **only the axis** — deliberately,
+      and the note above still gives the reasoning. The unforeseen half is what
+      that produces *for a person*: the tab now moves perpendicular to the
+      strip, travels out of it, and then lands nowhere, because the code that
+      would catch it is still behind the flag. Before the change the gesture was
+      impossible; now it is possible and inert, which is worse. Expected
+      behaviour, per the user: release outside the window creates a new window
+      at the release point carrying the dragged tab/group — i.e. upstream's.
+
+      **The candidate fix is one line, and the precedent is I16.**
+      `fork::FORCE_ENABLED` sets a *user preference*, and `is_enabled` resolves
+      override → user preference → channel state, so it outranks both the
+      `cfg!(any(macos, windows))` in `RELEASE_FLAGS` and the
+      `#[cfg(feature = "drag_tabs_to_windows")]` in `app/src/features.rs:112`.
+      Adding `DragTabsToWindows` there turns on the detach, the ghost chip and
+      the axis together — and makes the `tab.rs:2280` relax redundant, so it
+      should come back out. **Unverified**: it lights up cross-window drag
+      machinery (`cross_window_tab_drag.rs`, ~1,800 lines) that nothing in this
+      fork has ever exercised. Do not assume; run it.
+
+      **2. Nothing cancels a drag, and Esc is not the exception — it only looks
+      like one.** Reported symptom: mid-drag of an *agent* pane, Esc appears to
+      cancel, and the pane comes back as an empty terminal. It is not a cancel.
+      Esc pops agent view, which is upstream behaviour with upstream tests
+      (`escape_pops_nested_cloud_agent_view_with_long_running_command`,
+      `escape_does_not_exit_root_cloud_agent_view_...`,
+      `escape_does_not_exit_local_agent_view_...`, all in
+      `terminal/view_tests.rs`). The path is `input.rs:9454`
+      `ctx.emit(Event::Escape)` → `terminal_pane.rs:907` →
+      `pane_group::Event::Escape` → `workspace/view.rs:16144`. The drag is not
+      consulted anywhere along it, so Esc falls *through* the drag and does its
+      normal job to the pane underneath. The conversation is popped, not
+      destroyed — **read, not run: confirm it is still in `agent list` before
+      repeating this claim.**
+
+      The seam for a real cancel is that same arm, `workspace/view.rs:16144`.
+      The workspace owns the drop preview, `DraggableState::cancel_drag` already
+      exists (`draggable.rs:89`, and its only callers today are
+      `cross_window_tab_drag.rs:1456` and `:1777`), and the arm already runs a
+      priority chain — resource center, then feature intro. A first branch that
+      clears the preview, cancels the drag and consumes the event buys both
+      halves at once: the cancel key that is missing, **and** the suppression of
+      the agent-view pop that made its absence look like a bug.
+
+      **3. A modifier key for drags is wanted, and would decide item 1 cleanly.**
+      The user is open to gating the perpendicular pull behind a modifier rather
+      than making it free. That also resolves the tension in item 1 without
+      choosing between "reorder within the strip" and "tear out to a window" —
+      the modifier picks.
+
+      **4. Header-drag lag on the Windows build — unmeasured, do not guess.**
+      The translucent ghost is the suspect, but the arithmetic runs the other
+      way: this change *replaced* per-drag-event tree surgery
+      (`MovePaneWithinPaneGroup` on every event, with a full relayout) with a
+      notify-on-change field, so the drag should have got cheaper. Candidates
+      worth measuring before touching anything: the ghost's own composite, the
+      `Stack`+`Flex` overlay rebuild, and whether the lag predates the change
+      (`WARP_FORK_POLICY=0` A/Bs it without a rebuild).
+
+      **One open question that needs the user, not the code.** The report says
+      "sidebar", which is the vertical tabs panel — but the axis relax landed
+      **only** in `tab.rs`, the horizontal tab bar. `vertical_tabs.rs:2554` is
+      untouched and still gates on the flag alone. If the loosening was seen in
+      the vertical panel it is not this change, and something else is going on;
+      if in the horizontal strip, the diagnosis in item 1 holds as written. The
+      X/Y labels in the report are also transposed relative to the code, which
+      is why everything above says "along the strip" and "out of the strip".
 
       #### Three side findings from the same session
 
