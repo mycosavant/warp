@@ -228,6 +228,27 @@ fn spawn_depth_limit_from(value: Option<&str>) -> u32 {
         .unwrap_or(DEFAULT_SPAWN_DEPTH)
 }
 
+/// Whether a tab can be dragged into the pane area to split a pane (T8.2).
+///
+/// **The gate was an axis.** Upstream wraps each tab in a `Draggable` pinned to
+/// `DragAxis::HorizontalOnly` unless [`FeatureFlag::DragTabsToWindows`] is on —
+/// and that flag lives in `RELEASE_FLAGS` under
+/// `cfg!(any(target_os = "macos", target_os = "windows"))`, so on Linux it is
+/// off at *compile* time and a tab physically cannot leave the tab bar. Every
+/// other half of the feature was already built: the quadrant maths, the tree
+/// surgery, and the pane drop targets the drag would land on.
+///
+/// This deliberately relaxes only the axis, and not the flag. The same flag
+/// gates cross-window tab detach at four other sites, which spawns a ghost
+/// window and has never been exercised on this fork's platform — opening the
+/// axis is the whole of what a tab-to-pane drag needs, and opening the flag
+/// would take a working behaviour and replace it with an untested one.
+///
+/// Consumed by `tab::Tab::render` and `workspace::view`'s drop handling.
+pub fn tab_pane_drag_enabled() -> bool {
+    is_active()
+}
+
 /// Set to `0`, `off` or `false` to make the hotkey window open a plain
 /// terminal, the way upstream does.
 const QUAKE_VISOR_ENV_VAR: &str = "WARP_FORK_QUAKE_VISOR";

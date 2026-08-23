@@ -177,7 +177,15 @@ fn conversation_summary(
         // agent yielded and is listening — and `Blocked` is waiting on a
         // person, so reporting either as busy would make a poller wait for
         // something that is already waiting for it.
-        is_busy: matches!(status, ConversationStatus::InProgress),
+        //
+        // And it must have a turn to be busy *with*. `AIConversation` is
+        // constructed `InProgress` (`conversation.rs:420`) and only leaves that
+        // state when a turn finishes, so a conversation nobody has asked
+        // anything reports `in_progress` for as long as it exists — measured at
+        // a minute and counting on a freshly opened agent tab. `status` still
+        // says what upstream says; `is_busy` is the fork's derived answer and
+        // it should mean a turn is actually running.
+        is_busy: matches!(status, ConversationStatus::InProgress) && !conversation.is_empty(),
         pane_id: location.map(|location| location.pane_id.to_string()),
         tab_id: location.map(|location| location.tab_id.clone()),
         is_hidden: location.is_some_and(|location| location.is_hidden),

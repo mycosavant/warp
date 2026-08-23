@@ -60,6 +60,7 @@ pub(crate) fn handle(
         ActionKind::TabCreate => create_tab(instance_id, params, target, ctx),
         ActionKind::TabActivate => tab_activate(instance_id, params, target, ctx),
         ActionKind::TabMove => tab_move(instance_id, params, target, ctx),
+        ActionKind::TabMerge => tab_merge(instance_id, params, target, ctx),
         ActionKind::PaneSplit => pane_split(instance_id, params, target, ctx),
         ActionKind::PaneFocus | ActionKind::SessionActivate => {
             pane_focus(instance_id, action, target, ctx)
@@ -462,6 +463,48 @@ fn tab_move(
         Ok::<_, ControlError>(())
     })?;
     Ok(ack(instance_id, ActionKind::TabMove))
+}
+
+/// Folds the targeted tab into the *active* tab as a split.
+///
+/// The scriptable half of T8.2: the same operation a pane drag performs, but
+/// addressable, which is the only way it can be checked without a mouse.
+///
+/// Refuses rather than guesses when the move has no single meaning — the tab is
+/// already the active one, or it holds more than one pane. `Previous`/`Next`
+/// are rejected for the same reason: a split has a side, and "next" does not
+/// name one.
+fn tab_merge(
+    instance_id: &Option<InstanceId>,
+    params: &serde_json::Value,
+    target: &TargetSelector,
+    ctx: &mut ModelContext<LocalControlBridge>,
+) -> Result<serde_json::Value, ControlError> {
+    reject_target_families(
+        ActionKind::TabMerge,
+        target.pane.is_some() || target.session.is_some(),
+        "pane or session selectors",
+    )?;
+    let direction = pane_direction(direction_param(params)?)?;
+    let workspace = target_workspace(ActionKind::TabMerge, target, ctx)?;
+    workspace.update(ctx, |workspace, ctx| {
+        let index = tab_index_from_target(target, workspace, ctx)?;
+        if !workspace.tab_can_merge_into_active_tab(index, ctx) {
+            return Err(ControlError::new(
+                ErrorCode::InvalidSelector,
+                "tab.merge needs a tab that is not the active one and holds exactly one pane",
+            ));
+        }
+        workspace.handle_action(
+            &WorkspaceAction::MergeTabIntoActiveTab {
+                tab_index: index,
+                direction,
+            },
+            ctx,
+        );
+        Ok::<_, ControlError>(())
+    })?;
+    Ok(ack(instance_id, ActionKind::TabMerge))
 }
 
 fn pane_direction_action(

@@ -296,11 +296,12 @@ use crate::palette::PaletteMode;
 #[cfg(feature = "local_fs")]
 use crate::pane_group::FilePane;
 use crate::pane_group::pane::ActionOrigin;
+use crate::pane_group::pane::view::header::calculate_pane_move_direction;
 use crate::pane_group::{
     self, AIFactPane, AnyPaneContent, ChildAgentOrigin, CodeDiffPane, CodePane, CodeReviewPanelArg,
     CustomRouterEditorPane, Direction as PaneGroupDirection, Direction, EnvironmentManagementPane,
-    ExecutionProfileEditorPane, NetworkLogPane, NewTerminalOptions, PaneGroup, PaneId, PanesLayout,
-    TabBarHoverIndex, TerminalPaneId,
+    ExecutionProfileEditorPane, NetworkLogPane, NewTerminalOptions, PaneDropPreview, PaneGroup,
+    PaneId, PanesLayout, TabBarHoverIndex, TerminalPaneId,
 };
 use crate::persistence::ModelEvent;
 use crate::projects::ProjectManagementModel;
@@ -7892,6 +7893,7 @@ impl Workspace {
         let can_move_left = self.can_move_tab(tab_index, TabMovement::Left);
         let can_move_right = self.can_move_tab(tab_index, TabMovement::Right);
         let is_only_member_of_group = self.tab_is_only_member_of_its_group(tab_index);
+        let can_merge_into_active_tab = self.tab_can_merge_into_active_tab(tab_index, ctx);
         let menu_items = {
             let tab = &self.tabs[tab_index];
             tab.menu_items(
@@ -7901,6 +7903,7 @@ impl Workspace {
                 is_only_member_of_group,
                 can_move_left,
                 can_move_right,
+                can_merge_into_active_tab,
                 ctx,
             )
         };
@@ -7979,6 +7982,7 @@ impl Workspace {
         let can_move_left = self.can_move_tab(tab_index, TabMovement::Left);
         let can_move_right = self.can_move_tab(tab_index, TabMovement::Right);
         let is_only_member_of_group = self.tab_is_only_member_of_its_group(tab_index);
+        let can_merge_into_active_tab = self.tab_can_merge_into_active_tab(tab_index, ctx);
         let tab = &self.tabs[tab_index];
         let menu_items = tab.menu_items_with_pane_name_target(
             tab_index,
@@ -7987,6 +7991,7 @@ impl Workspace {
             is_only_member_of_group,
             can_move_left,
             can_move_right,
+            can_merge_into_active_tab,
             Some(pane_name_target),
             ctx,
         );
@@ -14183,6 +14188,130 @@ impl Workspace {
                 !tab_pinned || self.is_tab_effectively_pinned(neighbor)
             }
         }
+    }
+
+    /// Whether the tab at `index` can be folded into the active tab as a split
+    /// (`.fork/TASKS.md` T8.2).
+    ///
+    /// Two gates, and both are about the operation having exactly one meaning:
+    /// a tab cannot merge into itself, and a tab holding more than one pane has
+    /// no single "this tab" to move — `remove_pane_for_move` takes one pane, and
+    /// silently moving the first of several would be a worse answer than not
+    /// offering it.
+    pub(crate) fn tab_can_merge_into_active_tab(&self, index: usize, ctx: &AppContext) -> bool {
+        index != self.active_tab_index
+            && self.get_pane_group_view(index).is_some_and(|pane_group| {
+                pane_group.read(ctx, |pane_group, _| {
+                    pane_group.visible_pane_ids().len() == 1
+                })
+            })
+    }
+
+    /// Moves the tab at `index` into the active tab, splitting the active tab's
+    /// focused pane in `direction`.
+    ///
+    /// The menu-and-CLI route to what the pane drag already did. The source tab
+    /// closes on its own: `remove_pane_for_move` emits `Event::Exited` when it
+    /// takes the group's last pane, which is the same path a pane dragged out
+    /// to the tab bar takes.
+    /// Draws where a tab dragged over `target_pane_id` would land.
+    ///
+    /// The tab drag is a second source for the drop targets the pane drag
+    /// already uses, so it reuses the pane drag's quadrant maths verbatim
+    /// rather than inventing a second rule that could disagree with it. Only
+    /// the *active* tab's panes are rendered, so the pane being hovered is
+    /// always in the active tab's group.
+    ///
+    /// Clears the preview when the tab could not merge anyway, so a drag that
+    /// is going to be refused never promises otherwise.
+    fn drag_tab_over_pane(
+        &mut self,
+        index: usize,
+        target_pane_id: PaneId,
+        drag_position: RectF,
+        ctx: &mut ViewContext<Self>,
+    ) {
+        let direction = self
+            .tab_can_merge_into_active_tab(index, ctx)
+            .then(|| ctx.element_position_by_id(target_pane_id.position_id()))
+            .flatten()
+            .and_then(|target_pane| calculate_pane_move_direction(target_pane, drag_position));
+
+        let pane_group = self.active_tab_pane_group().clone();
+        pane_group.update(ctx, |pane_group, ctx| {
+            pane_group.set_drop_preview(
+                direction.map(|direction| PaneDropPreview {
+                    target_id: target_pane_id,
+                    direction,
+                }),
+                ctx,
+            );
+        });
+    }
+
+    /// Commits a tab dragged onto a pane, using the direction the preview was
+    /// already showing rather than recomputing it — so what lands is exactly
+    /// what was drawn, even if the cursor moved between the last drag event
+    /// and the release.
+    fn drop_tab_on_pane(
+        &mut self,
+        index: usize,
+        target_pane_id: PaneId,
+        ctx: &mut ViewContext<Self>,
+    ) {
+        let pane_group = self.active_tab_pane_group().clone();
+        let preview = pane_group.read(ctx, |pane_group, _| pane_group.drop_preview());
+        pane_group.update(ctx, |pane_group, ctx| {
+            pane_group.set_drop_preview(None, ctx);
+        });
+
+        let Some(preview) = preview.filter(|preview| preview.target_id == target_pane_id) else {
+            // Released in a pane's dead centre, or over a pane that is no
+            // longer the one the preview named. Nothing was promised, so
+            // nothing happens.
+            return;
+        };
+        self.merge_tab_into_active_tab(index, Some(target_pane_id), preview.direction, ctx);
+    }
+
+    fn merge_tab_into_active_tab(
+        &mut self,
+        index: usize,
+        target_pane_id: Option<PaneId>,
+        direction: Direction,
+        ctx: &mut ViewContext<Self>,
+    ) {
+        if !self.tab_can_merge_into_active_tab(index, ctx) {
+            return;
+        }
+        let Some(source_group) = self.get_pane_group_view(index).cloned() else {
+            return;
+        };
+        let Some(source_pane_id) = source_group.read(ctx, |pane_group, _| {
+            pane_group.visible_pane_ids().first().copied()
+        }) else {
+            return;
+        };
+
+        let target_group = self.active_tab_pane_group().clone();
+        // A drag names the pane it landed on; the menu and the CLI do not, and
+        // fall back to whichever pane has focus.
+        let target_pane_id = target_pane_id.unwrap_or_else(|| {
+            target_group.read(ctx, |pane_group, ctx| pane_group.focused_pane_id(ctx))
+        });
+
+        // Take it out first. If the source group refuses, nothing has been
+        // disturbed in the destination — the reverse order would leave a hole.
+        let Some(pane) = source_group.update(ctx, |pane_group, ctx| {
+            pane_group.remove_pane_for_move(&source_pane_id, ctx)
+        }) else {
+            return;
+        };
+
+        target_group.update(ctx, |pane_group, ctx| {
+            pane_group.add_pane_sibling(target_pane_id, direction, pane, true, ctx);
+        });
+        ctx.notify();
     }
 
     /// Moves the tab at `index` one slot left/right, where a "slot" is either a
@@ -23886,6 +24015,25 @@ impl TypedActionView for Workspace {
             MoveActiveTabRight => self.move_tab(self.active_tab_index, TabMovement::Right, ctx),
             MoveTabLeft(index) => self.move_tab(*index, TabMovement::Left, ctx),
             MoveTabRight(index) => self.move_tab(*index, TabMovement::Right, ctx),
+            MergeTabIntoActiveTab {
+                tab_index,
+                direction,
+            } => {
+                self.merge_tab_into_active_tab(*tab_index, None, *direction, ctx);
+            }
+            DragTabOverPane {
+                tab_index,
+                target_pane_id,
+                drag_position,
+            } => {
+                self.drag_tab_over_pane(*tab_index, *target_pane_id, *drag_position, ctx);
+            }
+            DropTabOnPane {
+                tab_index,
+                target_pane_id,
+            } => {
+                self.drop_tab_on_pane(*tab_index, *target_pane_id, ctx);
+            }
             RenameTab(index) => self.rename_tab(*index, ctx),
             ResetTabName(index) => self.clear_tab_name(*index, ctx),
             RenamePane(locator) => self.rename_pane(*locator, ctx),

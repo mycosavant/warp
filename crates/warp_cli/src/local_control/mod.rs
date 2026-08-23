@@ -349,6 +349,13 @@ pub enum TabCommand {
     /// Move the active tab.
     Move(TabMoveArgs),
 
+    /// Fold a tab into the active tab as a split.
+    ///
+    /// The scriptable form of dragging a pane onto another pane. The tab must
+    /// not be the active one and must hold exactly one pane; anything else has
+    /// no single meaning and is refused rather than guessed.
+    Merge(TabMergeArgs),
+
     /// Close tabs.
     Close(TabCloseArgs),
 
@@ -1157,6 +1164,16 @@ pub struct TabMoveArgs {
 
     #[arg(long = "direction", value_enum)]
     pub direction: CliTabMoveDirection,
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct TabMergeArgs {
+    #[command(flatten)]
+    pub target: TargetArgs,
+
+    /// Which side of the active tab's focused pane the tab lands on.
+    #[arg(long = "direction", value_enum)]
+    pub direction: CliCardinalDirection,
 }
 
 #[derive(Debug, Clone, Args)]

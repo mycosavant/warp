@@ -29,7 +29,7 @@ use crate::auth::auth_manager::LoginGatedFeature;
 use crate::drive::CloudObjectTypeAndId;
 use crate::drive::items::WarpDriveItemId;
 use crate::palette::PaletteMode;
-use crate::pane_group::PaneGroup;
+use crate::pane_group::{Direction, PaneGroup, PaneId};
 use crate::prompt::editor_modal::OpenSource as PromptEditorOpenSource;
 use crate::search;
 use crate::server::ids::{ServerId, SyncId};
@@ -136,6 +136,31 @@ pub enum WorkspaceAction {
     MoveActiveTabRight,
     MoveTabLeft(usize),
     MoveTabRight(usize),
+    /// Moves a tab's pane into the *active* tab's pane group, splitting the
+    /// active tab's focused pane in the given direction (`.fork/TASKS.md`
+    /// T8.2, `IDEAS.md` I3).
+    ///
+    /// The keyboard-and-menu route to the capability the pane drag already
+    /// had. Only offered for a single-pane tab: with more than one pane
+    /// "move this tab" has no single meaning, and the underlying
+    /// `remove_pane_for_move` takes one pane at a time.
+    MergeTabIntoActiveTab {
+        tab_index: usize,
+        direction: Direction,
+    },
+    /// A tab is being dragged over a pane. Draws the drop preview; changes
+    /// nothing (`.fork/TASKS.md` T8.2).
+    DragTabOverPane {
+        tab_index: usize,
+        target_pane_id: PaneId,
+        /// Cursor rect, for the same quadrant maths a pane drag uses.
+        drag_position: RectF,
+    },
+    /// A tab was released over a pane. Commits whatever the preview promised.
+    DropTabOnPane {
+        tab_index: usize,
+        target_pane_id: PaneId,
+    },
     RenameTab(usize),
     ResetTabName(usize),
     RenamePane(PaneViewLocator),
@@ -942,6 +967,8 @@ impl WorkspaceAction {
             | MoveActiveTabRight
             | MoveTabLeft(_)
             | MoveTabRight(_)
+            | MergeTabIntoActiveTab { .. }
+            | DropTabOnPane { .. }
             | DropTab
             | DropGroup
             | RenameTab(_)
@@ -1083,6 +1110,7 @@ impl WorkspaceAction {
             | CreateTeamAIPrompt
             | OpenInExplorer { .. }
             | DragTab { .. }
+            | DragTabOverPane { .. }
             | StartTabDrag
             | DragGroup { .. }
             | StartGroupDrag(_)

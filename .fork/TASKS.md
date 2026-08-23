@@ -3762,7 +3762,7 @@ T1, T4, T5 and T7, and by now should be the prior rather than the surprise.
       it opens an agent, but not one that knows about another window's
       designated pane. That is cross-window agent context and a separate idea.
 
-- [ ] **T8.2** Tab → pane drag, with a drop target you can see. (I3)
+- [~] **T8.2** Tab → pane drag, with a drop target you can see. (I3)
       Quadrant split-on-drop is *implemented*
       (`pane_group/pane/view/header/mod.rs:853`, with an ASCII diagram) and the
       tree surgery exists (`tree.rs:260`). Two things make it feel unintuitive,
@@ -3771,6 +3771,110 @@ T1, T4, T5 and T7, and by now should be the prior rather than the surprise.
       `PaneHeaderDropped`, so the layout reflows live under the cursor and
       there is no preview distinct from the result. Split preview from commit,
       add the tab as a drag source, and add right-click → Split.
+
+      **As built (2026-08-22).** All three items, plus a control-plane verb so
+      the operation can be checked without a mouse. One of the three is
+      built-but-unverified and is called out below.
+
+      **1. Split preview from commit — done and seen.** `MovePaneWithinPaneGroup`
+      was emitted from `PaneHeaderDragged`; it now fires only from
+      `PaneHeaderDropped`. On drag the header records a `PaneDropPreview`
+      (target pane + direction) and the pane group draws it as a translucent
+      accent overlay across the half the drop will take.
+
+      The overlay needs **no measurement**: a `Flex` with two equal `Expanded`
+      children lands exactly on the split the drop produces. That matters
+      because `render` is handed an `&AppContext` and `element_position_by_id`
+      lives on `ViewContext` — the pixel maths stays in the drag handler, where
+      a `ViewContext` exists. `drop_preview` threads through
+      `PaneTree::render → PaneNode::render → PaneBranch::render` exactly the
+      way `hidden_panes` already did.
+
+      *The dead zone became a real state.* `calculate_pane_move_direction`
+      returns `None` within 18% of a pane's centre. That used to mean "emit
+      nothing and leave the last move standing", so it was invisible; now it
+      clears the preview, so the overlay disappears and releasing there moves
+      nothing. Pinned by a table test.
+
+      *The header owns the pending direction*, because `PaneHeaderDropped`
+      carries a target but no position — so the direction has to be remembered
+      from the last drag event. That memory **is** the preview, which is why
+      the two ended up as one field.
+
+      **2. Right-click a tab → "Move into active tab, left/right/above/below"
+      — done and run.** Four flat entries rather than a submenu; a submenu
+      needs the sidecar machinery "Move to group" uses and four short labels
+      cost less than that buys. The section vanishes entirely when the move
+      would be ambiguous: a tab cannot merge into itself, and a tab holding
+      more than one pane has no single "this tab" to move —
+      `remove_pane_for_move` takes one pane, and silently moving the first of
+      several is a worse answer than not offering it.
+
+      **`tab.merge` (107 → 108 actions)** is the same operation for scripts,
+      and the reason any of this could be checked at all. Verified live: pane
+      `3527` moved out of tab `3139` into tab `1818` at index 2 and took focus,
+      **and the source tab closed itself** — `remove_pane_for_move` emits
+      `Event::Exited` when it takes a group's last pane, the same path a pane
+      dragged to the tab bar takes. Both refusals fire with the reason in the
+      message.
+
+      **3. The tab as a drag source — built, NOT verified by running.** The
+      gate was **an axis**, and it is a compile-time one: upstream pins each
+      tab's `Draggable` to `DragAxis::HorizontalOnly` unless
+      `FeatureFlag::DragTabsToWindows` is on, and that flag sits in
+      `RELEASE_FLAGS` under `cfg!(any(target_os = "macos", target_os =
+      "windows"))`. On Linux a tab physically cannot leave the tab bar.
+
+      `fork::tab_pane_drag_enabled()` relaxes **only the axis**, not the flag —
+      the same flag gates cross-window tab detach at four other sites, which
+      spawns a ghost window nobody has exercised here. Opening the axis is all
+      a tab-to-pane drag needs.
+
+      The rest is additive and provably so: upstream sets **no**
+      `with_accepted_by_drop_target_fn` on the tab at all, so the `data`
+      argument to its `on_drag`/`on_drop` was unconditionally `None` and the
+      tab-bar path resolves its drop from cursor geometry. Accepting
+      `PaneDropTargetData` makes `data` `Some` for panes and changes nothing
+      else.
+
+      **This one needs a person.** A drag is press-move-release, and synthetic
+      input does not reach X11 clients under WSLg. Everything it depends on is
+      verified — the overlay renders, the quadrant maths is pinned, and
+      `merge_tab_into_active_tab` is exercised end-to-end by `tab.merge` — but
+      the drag itself has only been compiled, not performed.
+
+      **Left undone:** merge semantics for a multi-pane tab, and changing the
+      tab-out-to-new-window behaviour. Both were out of scope in `IDEAS.md` I3
+      and remain so.
+
+      #### Three side findings from the same session
+
+      **`is_busy` was true for a conversation nobody had asked anything.**
+      `AIConversation` is constructed `InProgress` (`conversation.rs:420`) and
+      only leaves that state when a turn *finishes*, so a freshly opened agent
+      tab reports `in_progress` indefinitely — measured still true at t+60s,
+      in the visor and in a plain `tab create --type agent` alike. `graph.rs`
+      is unaffected (`turn_is_finished` also requires
+      `last_exchange_is_complete == Some(true)`, which a never-prompted thread
+      never has), but **T8.3's inbox would have put empty threads in the wrong
+      bucket**. `agent.list`'s `is_busy` now also requires a non-empty
+      conversation; `status` still reports upstream's word.
+
+      **`window.list` now says which window is the hotkey window.**
+      `is_hotkey_window`, one field, so "close the window I opened" stops being
+      a guess that needs a join against `window.visor.status`.
+
+      **Hide-on-blur for the visor: tried on Linux, put back.**
+      `QUAKE_WINDOW_AUTOHIDE_SUPPORTED` is `cfg!(any(macos, windows))` and the
+      implementation (`update_quake_mode_state`) is entirely
+      platform-independent, so the constant looks over-cautious. It is not.
+      Measured on X11/winit: a visor opened by `warpctrl window visor toggle`
+      never becomes the key window, so the very next focus event sees a
+      different active window and hides it — `Map State: IsUnMapped` within
+      four seconds of opening, with no focus change from me. The autohide
+      works; what does not survive it is the only entry point this platform
+      has. Reverted, with the measurement recorded in the constant's doc
+      comment so the next person does not repeat it.
 
 - [ ] **T8.3** The thread inbox, and `settled`. (I1)
       `ToolPanelView::ConversationListView` already exists with 2,198 lines

@@ -905,6 +905,23 @@ pub enum PaneDragDropLocation {
     Other,
 }
 
+/// Where a dragged pane will land if it is released now (`.fork/TASKS.md`
+/// T8.2, `IDEAS.md` I3).
+///
+/// This exists because upstream had no *preview* distinct from the *result*:
+/// the move was committed on every drag event, so the layout reflowed live
+/// under the cursor and the only way to find out what a drop would do was to
+/// have it already done. A pending intent, drawn as an overlay and committed
+/// on release, is the difference between "watch what is happening" and "see
+/// what will happen".
+#[derive(Clone, Debug, Copy, PartialEq, Eq)]
+pub struct PaneDropPreview {
+    /// The pane that will be split.
+    pub target_id: PaneId,
+    /// Which of its halves the dragged pane will take.
+    pub direction: Direction,
+}
+
 pub struct PaneGroup {
     tips_completed: ModelHandle<TipsCompleted>,
     user_default_shell_unsupported_banner_model_handle: ModelHandle<BannerState>,
@@ -944,6 +961,15 @@ pub struct PaneGroup {
     // the context menu event.
     share_block_modal: ViewHandle<ShareBlockModal>,
     dragged_border: Option<DraggedBorder>,
+    /// Where a pane drag currently in flight would land, or `None` when no
+    /// drag is hovering a pane in this group (`.fork/TASKS.md` T8.2).
+    ///
+    /// Purely presentational — it is drawn and then either committed or
+    /// discarded, and nothing outside `render` and the drag handlers reads it.
+    /// It has to live here rather than on the target `PaneView` because the
+    /// drag events all originate from the *dragged* pane's header, so the
+    /// target pane never hears about the drag at all.
+    drop_preview: Option<PaneDropPreview>,
     user_default_shell_changed_banner: ViewHandle<Banner<PaneGroupAction>>,
 
     /// If there is an open share session modal, the pane ID of its terminal. Only terminal panes
@@ -1305,6 +1331,9 @@ impl PaneGroup {
                     ctx.emit(Event::ClearHoveredTabIndex);
                     self.move_pane(pane_id, *target_id, *direction, ctx);
                 }
+                PaneViewEvent::DropPreviewChanged(preview) => {
+                    self.set_drop_preview(*preview, ctx);
+                }
                 PaneViewEvent::DroppedOnTabBar { origin } => {
                     ctx.emit(Event::DroppedOnTabBar {
                         origin: *origin,
@@ -1355,6 +1384,12 @@ impl PaneGroup {
                     ctx.emit(Event::AppStateChanged);
                 }
                 PaneViewEvent::PaneDragEnded => {
+                    // Belt and braces. The header clears its own preview on
+                    // every drop, but a drag can also end without one — a
+                    // cancelled gesture, or a pane that went away mid-drag —
+                    // and a stale overlay would sit there until the next
+                    // drag started.
+                    self.set_drop_preview(None, ctx);
                     self.focus_pane_by_id(pane_id, ctx);
                     ctx.emit(Event::TerminalViewStateChanged);
                     ctx.notify();
@@ -3235,6 +3270,7 @@ impl PaneGroup {
             terminal_with_open_share_block_modal: None,
             share_block_modal: share_modal,
             dragged_border: None,
+            drop_preview: None,
             user_default_shell_changed_banner,
             terminal_with_open_share_session_modal: None,
             share_session_modal,
@@ -5801,6 +5837,29 @@ impl PaneGroup {
         ctx.notify();
         ctx.emit(Event::TerminalViewStateChanged);
         ctx.emit(Event::AppStateChanged);
+    }
+
+    /// Records where an in-flight drag would land, so `render` can draw it.
+    ///
+    /// Changes nothing about the tree. The commit happens in [`Self::move_pane`]
+    /// when the drag is released — keeping those two apart is the whole of
+    /// T8.2.
+    pub(crate) fn set_drop_preview(
+        &mut self,
+        preview: Option<PaneDropPreview>,
+        ctx: &mut ViewContext<Self>,
+    ) {
+        if self.drop_preview == preview {
+            return;
+        }
+        self.drop_preview = preview;
+        ctx.notify();
+    }
+
+    /// The pane a drop would currently split, and which half it would take.
+    /// `None` whenever no drag is hovering a pane in this group.
+    pub fn drop_preview(&self) -> Option<PaneDropPreview> {
+        self.drop_preview
     }
 
     pub fn move_pane(
@@ -8506,16 +8565,19 @@ impl View for PaneGroup {
         let main_content = if self.is_focused_pane_maximized(app) {
             self.focused_pane_id(app).render(app)
         } else {
-            EventHandler::new(self.panes.render(appearance.theme(), app))
-                .on_mouse_dragged(move |ctx, _, position| {
-                    ctx.dispatch_typed_action(PaneGroupAction::ResizeMove(position));
-                    DispatchEventResult::StopPropagation
-                })
-                .on_left_mouse_up(move |ctx, _, _| {
-                    ctx.dispatch_typed_action(PaneGroupAction::EndResizing);
-                    DispatchEventResult::StopPropagation
-                })
-                .finish()
+            EventHandler::new(
+                self.panes
+                    .render(appearance.theme(), self.drop_preview, app),
+            )
+            .on_mouse_dragged(move |ctx, _, position| {
+                ctx.dispatch_typed_action(PaneGroupAction::ResizeMove(position));
+                DispatchEventResult::StopPropagation
+            })
+            .on_left_mouse_up(move |ctx, _, _| {
+                ctx.dispatch_typed_action(PaneGroupAction::EndResizing);
+                DispatchEventResult::StopPropagation
+            })
+            .finish()
         };
         column.add_child(Shrinkable::new(1., main_content).finish());
 

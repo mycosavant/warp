@@ -2732,8 +2732,16 @@ fn test_tab_context_menu_share_session_items() {
         // When there's a single shared session in a tab (focused), the options
         // for sharing are "Stop sharing" and "Stop sharing all".
         workspace.read(&app, |workspace, ctx| {
-            let items =
-                workspace.tabs[1].menu_items(1, 3, &workspace.tab_groups, false, true, true, ctx);
+            let items = workspace.tabs[1].menu_items(
+                1,
+                3,
+                &workspace.tab_groups,
+                false,
+                true,
+                true,
+                false,
+                ctx,
+            );
             assert!(
                 items[0].is_approximately_same_item_as(
                     &MenuItemFields::new("Stop sharing").into_item()
@@ -2757,8 +2765,16 @@ fn test_tab_context_menu_share_session_items() {
         // When there's a single shared session in a tab (unfocused), the options
         // for sharing are "Share session" and "Stop sharing all".
         workspace.read(&app, |workspace, ctx| {
-            let items =
-                workspace.tabs[1].menu_items(1, 3, &workspace.tab_groups, false, true, true, ctx);
+            let items = workspace.tabs[1].menu_items(
+                1,
+                3,
+                &workspace.tab_groups,
+                false,
+                true,
+                true,
+                false,
+                ctx,
+            );
             assert!(
                 items[0].is_approximately_same_item_as(
                     &MenuItemFields::new("Share session").into_item()
@@ -2777,8 +2793,16 @@ fn test_tab_context_menu_share_session_items() {
 
         // When there's no shared sessions in a tab, the only option is "Share session".
         workspace.read(&app, |workspace, ctx| {
-            let items =
-                workspace.tabs[1].menu_items(1, 3, &workspace.tab_groups, false, true, true, ctx);
+            let items = workspace.tabs[1].menu_items(
+                1,
+                3,
+                &workspace.tab_groups,
+                false,
+                true,
+                true,
+                false,
+                ctx,
+            );
             assert!(
                 items[0].is_approximately_same_item_as(
                     &MenuItemFields::new("Share session").into_item()

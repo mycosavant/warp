@@ -11,12 +11,12 @@ use warp_core::ui::builder::UiBuilder;
 use warp_core::ui::theme::AnsiColors;
 use warp_core::ui::theme::color::internal_colors;
 use warpui::elements::{
-    Align, Border, ChildAnchor, Clipped, ConstrainedBox, Container, CornerRadius,
-    CrossAxisAlignment, DragAxis, Draggable, DraggableState, DropTarget, Element, Empty, Fill,
-    Flex, Hoverable, MainAxisAlignment, MainAxisSize, MouseStateHandle, OffsetPositioning, Padding,
-    ParentAnchor, ParentElement, ParentOffsetBounds, PositionedElementAnchor,
-    PositionedElementOffsetBounds, Radius, Rect, SavePosition, Shrinkable, SizeConstraintCondition,
-    SizeConstraintSwitch, Stack, Text,
+    AcceptedByDropTarget, Align, Border, ChildAnchor, Clipped, ConstrainedBox, Container,
+    CornerRadius, CrossAxisAlignment, DragAxis, Draggable, DraggableState, DropTarget, Element,
+    Empty, Fill, Flex, Hoverable, MainAxisAlignment, MainAxisSize, MouseStateHandle,
+    OffsetPositioning, Padding, ParentAnchor, ParentElement, ParentOffsetBounds,
+    PositionedElementAnchor, PositionedElementOffsetBounds, Radius, Rect, SavePosition, Shrinkable,
+    SizeConstraintCondition, SizeConstraintSwitch, Stack, Text,
 };
 use warpui::fonts::Weight;
 use warpui::text_layout::ClipConfig;
@@ -34,7 +34,8 @@ use crate::editor::EditorView;
 use crate::features::FeatureFlag;
 use crate::launch_configs::launch_config::LaunchConfig;
 use crate::menu::{MenuAction, MenuItem, MenuItemFields};
-use crate::pane_group::{PaneGroup, PaneId};
+use crate::pane_group::pane::view::PaneDropTargetData;
+use crate::pane_group::{Direction, PaneGroup, PaneId};
 use crate::shell_indicator::ShellIndicatorType;
 use crate::terminal::shared_session::SharedSessionStatus;
 use crate::terminal::shared_session::manager::Manager;
@@ -258,6 +259,7 @@ impl TabData {
         is_only_member_of_group: bool,
         can_move_left: bool,
         can_move_right: bool,
+        can_merge_into_active_tab: bool,
         ctx: &AppContext,
     ) -> Vec<MenuItem<WorkspaceAction>> {
         self.menu_items_with_pane_name_target(
@@ -267,6 +269,7 @@ impl TabData {
             is_only_member_of_group,
             can_move_left,
             can_move_right,
+            can_merge_into_active_tab,
             None,
             ctx,
         )
@@ -281,6 +284,7 @@ impl TabData {
         is_only_member_of_group: bool,
         can_move_left: bool,
         can_move_right: bool,
+        can_merge_into_active_tab: bool,
         pane_name_target: Option<PaneNameMenuTarget>,
         ctx: &AppContext,
     ) -> Vec<MenuItem<WorkspaceAction>> {
@@ -294,6 +298,7 @@ impl TabData {
             self.session_sharing_menu_items(index, ctx),
             self.copy_metadata_menu_items(pane_name_target, ctx),
             self.modify_tab_menu_items(index, can_move_left, can_move_right, pane_name_target, ctx),
+            Self::merge_into_active_tab_menu_items(index, can_merge_into_active_tab),
             self.close_tab_menu_items(index, tabs_len, ctx),
             Self::save_config_menu_items(index),
             self.color_option_menu_items(index, terminal_colors),
@@ -503,6 +508,43 @@ impl TabData {
 
     fn copyable_metadata_value(value: Option<String>) -> Option<String> {
         value.filter(|value| !value.trim().is_empty())
+    }
+
+    /// "Move into active tab" — the menu route to the split a pane drag makes
+    /// (`.fork/TASKS.md` T8.2, `IDEAS.md` I3).
+    ///
+    /// Four flat entries rather than a submenu: a submenu here needs the
+    /// sidecar machinery "Move to group" uses, and four short labels cost less
+    /// than that buys. Empty — so the section separator disappears too — when
+    /// the move would be ambiguous or a no-op; see
+    /// `Workspace::tab_can_merge_into_active_tab`.
+    ///
+    /// The labels say *active tab* and not "current tab", because the tab you
+    /// right-clicked is also current in the ordinary sense and it is the one
+    /// being moved, not the one being split.
+    fn merge_into_active_tab_menu_items(
+        index: usize,
+        can_merge_into_active_tab: bool,
+    ) -> Vec<MenuItem<WorkspaceAction>> {
+        if !can_merge_into_active_tab {
+            return vec![];
+        }
+        [
+            ("Move into active tab, left", Direction::Left),
+            ("Move into active tab, right", Direction::Right),
+            ("Move into active tab, above", Direction::Up),
+            ("Move into active tab, below", Direction::Down),
+        ]
+        .into_iter()
+        .map(|(label, direction)| {
+            MenuItemFields::new(label)
+                .with_on_select_action(WorkspaceAction::MergeTabIntoActiveTab {
+                    tab_index: index,
+                    direction,
+                })
+                .into_item()
+        })
+        .collect()
     }
 
     fn modify_tab_menu_items(
@@ -2188,16 +2230,56 @@ impl UiComponent for TabComponent<'_> {
             // Grouped members use the same `Draggable` wrapper as regular tabs
             // so dragging fires `DragTab`; the workspace's `on_tab_drag`
             // handles cross-group reassignment.
+            // Fork: accept pane drop targets so a tab dragged over a pane
+            // carries which pane it is over (`.fork/TASKS.md` T8.2). Purely
+            // additive — upstream sets no accepted-target callback at all, so
+            // the `data` argument below was unconditionally `None` and the
+            // tab-bar path resolves its drop from cursor geometry instead.
             let draggable = Draggable::new(draggable_state, constrained_tab)
+                .with_accepted_by_drop_target_fn(|drop_target_data, _| {
+                    if crate::fork::tab_pane_drag_enabled()
+                        && drop_target_data.as_any().is::<PaneDropTargetData>()
+                    {
+                        AcceptedByDropTarget::Yes
+                    } else {
+                        AcceptedByDropTarget::No
+                    }
+                })
                 .on_drag_start(|ctx, _, _| ctx.dispatch_typed_action(WorkspaceAction::StartTabDrag))
-                .on_drag(move |ctx, _, rect, _| {
+                .on_drag(move |ctx, _, rect, data| {
+                    if let Some(pane) =
+                        data.and_then(|data| data.as_any().downcast_ref::<PaneDropTargetData>())
+                    {
+                        ctx.dispatch_typed_action(WorkspaceAction::DragTabOverPane {
+                            tab_index,
+                            target_pane_id: pane.id(),
+                            drag_position: rect,
+                        });
+                        return;
+                    }
                     ctx.dispatch_typed_action(WorkspaceAction::DragTab {
                         tab_index,
                         tab_position: rect,
                     });
                 })
-                .on_drop(|ctx, _, _, _| ctx.dispatch_typed_action(WorkspaceAction::DropTab));
-            let draggable = if FeatureFlag::DragTabsToWindows.is_enabled() {
+                .on_drop(move |ctx, _, _, data| {
+                    if let Some(pane) =
+                        data.and_then(|data| data.as_any().downcast_ref::<PaneDropTargetData>())
+                    {
+                        ctx.dispatch_typed_action(WorkspaceAction::DropTabOnPane {
+                            tab_index,
+                            target_pane_id: pane.id(),
+                        });
+                        return;
+                    }
+                    ctx.dispatch_typed_action(WorkspaceAction::DropTab)
+                });
+            // The axis is the gate, and it is the only thing this opens.
+            // `DragTabsToWindows` also gates cross-window detach at four other
+            // sites; those stay exactly as upstream left them.
+            let draggable = if FeatureFlag::DragTabsToWindows.is_enabled()
+                || crate::fork::tab_pane_drag_enabled()
+            {
                 draggable
             } else {
                 draggable.with_drag_axis(DragAxis::HorizontalOnly)

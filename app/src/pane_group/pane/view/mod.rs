@@ -25,7 +25,7 @@ use super::{
 use crate::appearance::Appearance;
 use crate::pane_group::focus_state::{PaneFocusHandle, PaneGroupFocusEvent};
 use crate::pane_group::pane::ActionOrigin;
-use crate::pane_group::{Direction, SplitPaneState, TabBarHoverIndex};
+use crate::pane_group::{Direction, PaneDropPreview, SplitPaneState, TabBarHoverIndex};
 use crate::server::telemetry::SharingDialogSource;
 use crate::settings::{PaneSettings, PaneSettingsChangedEvent};
 use crate::util::bindings::CustomAction;
@@ -58,6 +58,9 @@ pub enum PaneViewEvent {
         target_id: PaneId,
         direction: Direction,
     },
+    /// Forwarded straight through from the header — see
+    /// `header::Event::DropPreviewChanged` (`.fork/TASKS.md` T8.2).
+    DropPreviewChanged(Option<PaneDropPreview>),
     DroppedOnTabBar {
         origin: ActionOrigin,
     },
@@ -313,6 +316,14 @@ impl<P: BackingView> PaneView<P> {
                 });
                 ctx.notify();
             }
+            header::Event::DropPreviewChanged(preview) => {
+                // `is_being_dragged` used to be set by the move event, which
+                // now only fires on release. Setting it here keeps this pane
+                // dimmed for the whole drag instead of only at the very end.
+                self.is_being_dragged = true;
+                ctx.emit(PaneViewEvent::DropPreviewChanged(*preview));
+                ctx.notify();
+            }
             header::Event::PaneDroppedWithinPaneGroup => {
                 ctx.emit(PaneViewEvent::PaneDragEnded);
                 self.is_being_dragged = false;
@@ -371,6 +382,14 @@ impl<P: BackingView> PaneView<P> {
 #[derive(PartialEq, Copy, Clone, Debug)]
 pub struct PaneDropTargetData {
     id: PaneId,
+}
+
+impl PaneDropTargetData {
+    /// The pane this drop target covers. Read by the tab drag, which is a
+    /// second drag source for the same targets (`.fork/TASKS.md` T8.2).
+    pub fn id(&self) -> PaneId {
+        self.id
+    }
 }
 
 impl<P: BackingView> View for PaneView<P> {

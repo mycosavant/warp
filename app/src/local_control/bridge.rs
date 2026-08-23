@@ -105,6 +105,7 @@ impl LocalControlBridge {
             | ActionKind::TabCreate
             | ActionKind::TabActivate
             | ActionKind::TabMove
+            | ActionKind::TabMerge
             | ActionKind::PaneSplit
             | ActionKind::PaneFocus
             | ActionKind::PaneNavigate

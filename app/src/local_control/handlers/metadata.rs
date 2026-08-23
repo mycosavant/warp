@@ -386,12 +386,18 @@ pub(crate) fn window_list(
         "tab, pane, or session selectors",
     )?;
     let active_window = ctx.windows().active_window();
+    // The hotkey window is an ordinary entry in this list and looks like any
+    // other, which makes "close the window I opened" a guess. Naming it here
+    // means a script never has to join against `window.visor.status` just to
+    // avoid closing the wrong one (`.fork/TASKS.md` T8.1).
+    let hotkey_window = crate::root_view::quake_mode_window_id();
     let mut windows = Vec::new();
     for entry in select_window_entries(target, false, ActionKind::WindowList, ctx)? {
         windows.push(json!({
             "window_id": entry.window_id.to_string(),
             "index": entry.index as u32,
             "is_active": Some(entry.window_id) == active_window,
+            "is_hotkey_window": Some(entry.window_id) == hotkey_window,
             "has_workspace": workspace_for_window(entry.window_id, ActionKind::WindowList, ctx)?.is_some(),
         }));
     }

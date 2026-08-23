@@ -228,6 +228,7 @@ define_action_catalog! {
         TabList => { name: "tab.list", status: Implemented, target: Tab, params: None, result: TargetList },
         TabInspect => { name: "tab.inspect", status: Implemented, target: Tab, params: None, result: TargetMetadata },
         TabCreate => { name: "tab.create", status: Implemented, target: Tab, params: TabCreate, result: Acknowledgement },
+        TabMerge => { name: "tab.merge", status: Implemented, target: Tab, params: Direction, result: Acknowledgement },
         TabActivate => { name: "tab.activate", status: Implemented, target: Tab, params: TabActivate, result: Acknowledgement },
         TabMove => { name: "tab.move", status: Implemented, target: Tab, params: Direction, result: Acknowledgement },
         TabClose => { name: "tab.close", status: Implemented, target: Tab, params: TabClose, result: Acknowledgement },

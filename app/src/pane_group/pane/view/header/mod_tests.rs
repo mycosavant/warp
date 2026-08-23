@@ -199,3 +199,59 @@ fn test_handle_close() {
         });
     })
 }
+
+/// The quadrant maths, pinned as a table because T8.2 changed what its `None`
+/// *means*.
+///
+/// Before, `None` was "emit nothing and leave the last move standing", so the
+/// dead zone at a pane's centre was invisible: whatever split you had already
+/// caused stayed. Now `None` clears the preview, so the dead zone is a real,
+/// visible state — no overlay, and releasing there moves nothing. That makes
+/// the threshold a behaviour a person can see rather than an implementation
+/// detail, which is why it is worth a test.
+#[test]
+fn the_drag_quadrant_has_a_dead_zone_at_the_centre() {
+    use pathfinder_geometry::rect::RectF;
+    use pathfinder_geometry::vector::vec2f;
+
+    use super::{Direction, calculate_pane_move_direction};
+
+    // A 100x100 pane at the origin, so a drag's offset from the centre reads
+    // directly as a percentage.
+    let pane = RectF::new(vec2f(0., 0.), vec2f(100., 100.));
+    let drag_at = |x: f32, y: f32| RectF::new(vec2f(x, y), vec2f(0., 0.));
+
+    assert!(
+        calculate_pane_move_direction(pane, drag_at(50., 50.)).is_none(),
+        "dead centre commits to nothing",
+    );
+    assert!(
+        calculate_pane_move_direction(pane, drag_at(60., 50.)).is_none(),
+        "10% off centre is inside the 18% threshold and still commits to nothing",
+    );
+
+    assert!(matches!(
+        calculate_pane_move_direction(pane, drag_at(95., 50.)),
+        Some(Direction::Right)
+    ));
+    assert!(matches!(
+        calculate_pane_move_direction(pane, drag_at(5., 50.)),
+        Some(Direction::Left)
+    ));
+    assert!(matches!(
+        calculate_pane_move_direction(pane, drag_at(50., 95.)),
+        Some(Direction::Down)
+    ));
+    assert!(matches!(
+        calculate_pane_move_direction(pane, drag_at(50., 5.)),
+        Some(Direction::Up)
+    ));
+
+    // On the diagonal the larger axis wins, which is what makes the quadrants
+    // triangles rather than rectangles — a corner drag is up or down, not left
+    // or right, as soon as it is more vertical than horizontal.
+    assert!(matches!(
+        calculate_pane_move_direction(pane, drag_at(90., 95.)),
+        Some(Direction::Down)
+    ));
+}

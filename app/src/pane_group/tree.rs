@@ -7,14 +7,14 @@ use warp_core::features::FeatureFlag;
 use warp_errors::report_error;
 use warpui::elements::{
     ChildAnchor, ConstrainedBox, Container, DispatchEventResult, Element, Empty, EventHandler,
-    Flex, Hoverable, MouseStateHandle, OffsetPositioning, ParentAnchor, ParentElement,
+    Expanded, Flex, Hoverable, MouseStateHandle, OffsetPositioning, ParentAnchor, ParentElement,
     ParentOffsetBounds, PositionedElementAnchor, PositionedElementOffsetBounds, Rect, SavePosition,
     Shrinkable, Stack,
 };
 use warpui::platform::Cursor;
 use warpui::{AppContext, EntityId, ViewContext};
 
-use super::{ActivationReason, PaneGroup, PaneId};
+use super::{ActivationReason, PaneDropPreview, PaneGroup, PaneId};
 use crate::app_state;
 use crate::pane_group::{DraggedBorder, PaneGroupAction, get_minimum_pane_size};
 use crate::themes::theme::WarpTheme;
@@ -25,6 +25,53 @@ mod tests;
 
 pub(in crate::pane_group) const DEFAULT_FLEX_VALUE: f32 = 1.0;
 pub(in crate::pane_group) const DEFAULT_FLEX_SIZE: PaneFlex = PaneFlex(DEFAULT_FLEX_VALUE);
+
+/// Draws the half of `pane` that a dragged pane will take, when `pane` is the
+/// pane a drop is currently hovering (`.fork/TASKS.md` T8.2).
+///
+/// Fractions, not measured pixels. A `Flex` with two equal `Expanded` children
+/// lands exactly on the split the drop will produce, and needs no element
+/// position lookup — which matters, because `render` is handed an
+/// `&AppContext` and `element_position_by_id` lives on `ViewContext`. The one
+/// place that *does* measure is the direction calculation itself, which runs
+/// in the drag handler where a `ViewContext` is available.
+///
+/// Returns `pane` untouched when there is no preview or it names a different
+/// pane, so the non-drag path allocates nothing extra.
+fn with_drop_preview_overlay(
+    pane: Box<dyn Element>,
+    pane_id: PaneId,
+    drop_preview: Option<PaneDropPreview>,
+    theme: &WarpTheme,
+) -> Box<dyn Element> {
+    let Some(preview) = drop_preview.filter(|preview| preview.target_id == pane_id) else {
+        return pane;
+    };
+
+    let taken = Expanded::new(
+        1.,
+        Container::new(Empty::new().finish())
+            .with_background(theme.accent_overlay())
+            .finish(),
+    )
+    .finish();
+    let untouched = Expanded::new(1., Empty::new().finish()).finish();
+
+    // The dragged pane takes the half named by the direction, so that half is
+    // the one that gets tinted — the overlay marks where the *new* pane lands,
+    // not where the old one is pushed to.
+    let halves = match preview.direction {
+        Direction::Left => Flex::row().with_child(taken).with_child(untouched),
+        Direction::Right => Flex::row().with_child(untouched).with_child(taken),
+        Direction::Up => Flex::column().with_child(taken).with_child(untouched),
+        Direction::Down => Flex::column().with_child(untouched).with_child(taken),
+    };
+
+    Stack::new()
+        .with_child(pane)
+        .with_child(halves.finish())
+        .finish()
+}
 
 pub fn get_divider_thickness() -> f32 {
     if FeatureFlag::MinimalistUI.is_enabled() {
@@ -165,7 +212,7 @@ trait FindPaneByDirection {
     ) -> FindPaneByDirectionResult;
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Direction {
     Left,
     Right,
@@ -513,10 +560,19 @@ impl PaneData {
         self.len == 0
     }
 
-    pub fn render(&self, theme: &WarpTheme, app: &AppContext) -> Box<dyn Element> {
+    pub fn render(
+        &self,
+        theme: &WarpTheme,
+        drop_preview: Option<PaneDropPreview>,
+        app: &AppContext,
+    ) -> Box<dyn Element> {
         match &self.root {
-            PaneNode::Leaf(pane) => pane.render(app),
-            PaneNode::Branch(node) => node.render(theme, &self.hidden_panes, app),
+            // A single-pane group still previews: dropping onto the only pane
+            // splits it, which is the same operation and the same overlay.
+            PaneNode::Leaf(pane) => {
+                with_drop_preview_overlay(pane.render(app), *pane, drop_preview, theme)
+            }
+            PaneNode::Branch(node) => node.render(theme, &self.hidden_panes, drop_preview, app),
         }
     }
 
@@ -721,12 +777,13 @@ impl PaneNode {
         &self,
         theme: &WarpTheme,
         hidden_panes: &Vec<HiddenPane>,
+        drop_preview: Option<PaneDropPreview>,
         app: &AppContext,
     ) -> Box<dyn Element> {
         match self {
             PaneNode::Leaf(view) => {
                 let view = *view;
-                EventHandler::new(view.render(app))
+                let pane = EventHandler::new(view.render(app))
                     .on_left_mouse_down(move |ctx, _, _| {
                         ctx.dispatch_typed_action(PaneGroupAction::Activate(
                             view,
@@ -734,9 +791,10 @@ impl PaneNode {
                         ));
                         DispatchEventResult::StopPropagation
                     })
-                    .finish()
+                    .finish();
+                with_drop_preview_overlay(pane, view, drop_preview, theme)
             }
-            PaneNode::Branch(branch) => branch.render(theme, hidden_panes, app),
+            PaneNode::Branch(branch) => branch.render(theme, hidden_panes, drop_preview, app),
         }
     }
 
@@ -1057,6 +1115,7 @@ impl PaneBranch {
         &self,
         theme: &WarpTheme,
         hidden_panes: &Vec<HiddenPane>,
+        drop_preview: Option<PaneDropPreview>,
         app: &AppContext,
     ) -> Box<dyn Element> {
         let mut parent = match self.axis {
@@ -1089,7 +1148,11 @@ impl PaneBranch {
             }
 
             parent.add_child(
-                Shrinkable::new(flex_value, node.render(theme, hidden_panes, app)).finish(),
+                Shrinkable::new(
+                    flex_value,
+                    node.render(theme, hidden_panes, drop_preview, app),
+                )
+                .finish(),
             );
             if let Some(divider) = dividers.next() {
                 if matches!(node, PaneNode::Leaf(id) if pane_hidden_for_move(hidden_panes, id)) {

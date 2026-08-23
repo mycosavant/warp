@@ -4043,3 +4043,88 @@ fn test_undo_close_keeps_a_file_pane_watching_its_file() {
         });
     });
 }
+
+/// A drop preview is drawn, not done. This pins the half of T8.2 that a
+/// screenshot cannot check: that recording where a drop *would* land leaves
+/// the pane tree exactly as it was.
+///
+/// Before T8.2 there was no separate preview at all — the move was committed
+/// on every drag event — so "previewing changed nothing" is precisely the new
+/// guarantee and precisely what a future refactor could quietly undo.
+#[test]
+fn test_previewing_a_drop_does_not_move_anything() {
+    App::test((), |mut app| async move {
+        initialize_app(&mut app);
+        let pane_group = mock_pane_group(&mut app, Default::default());
+
+        pane_group.update(&mut app, |panes, ctx| {
+            let first_pane_id = get_newly_created_pane_id(panes, &[]);
+            panes.add_terminal_pane(Direction::Right, None, ctx);
+            let second_pane_id = get_newly_created_pane_id(panes, &[first_pane_id]);
+
+            // The tree's `Debug` rendering, not `visible_pane_ids` — the ids
+            // are identical either way, and it is the *shape* that a move
+            // changes. `Horizontal(..)` becomes `Vertical(..)`.
+            let before = format!("{:?}", panes.panes);
+
+            panes.set_drop_preview(
+                Some(PaneDropPreview {
+                    target_id: first_pane_id,
+                    direction: Direction::Down,
+                }),
+                ctx,
+            );
+
+            assert_eq!(
+                panes.drop_preview().map(|preview| preview.target_id),
+                Some(first_pane_id),
+            );
+            assert_eq!(
+                format!("{:?}", panes.panes),
+                before,
+                "a preview must not change the pane tree",
+            );
+
+            // And committing the same intent does move it, so the preview is
+            // not simply inert.
+            panes.move_pane(second_pane_id, first_pane_id, Direction::Down, ctx);
+            assert_ne!(
+                format!("{:?}", panes.panes),
+                before,
+                "the commit is what changes the layout",
+            );
+        })
+    });
+}
+
+/// The overlay must not outlive the gesture that asked for it. The header
+/// clears its own preview on every drop, but a drag can also end without one —
+/// so the pane group clears on `PaneDragEnded` as well, and this pins that
+/// second path rather than trusting the first.
+#[test]
+fn test_a_drop_preview_is_cleared_when_the_drag_ends() {
+    App::test((), |mut app| async move {
+        initialize_app(&mut app);
+        let pane_group = mock_pane_group(&mut app, Default::default());
+
+        pane_group.update(&mut app, |panes, ctx| {
+            let first_pane_id = get_newly_created_pane_id(panes, &[]);
+            panes.set_drop_preview(
+                Some(PaneDropPreview {
+                    target_id: first_pane_id,
+                    direction: Direction::Left,
+                }),
+                ctx,
+            );
+            assert!(panes.drop_preview().is_some());
+
+            panes.handle_pane_view_event(first_pane_id, &PaneViewEvent::PaneDragEnded, ctx);
+
+            assert_eq!(
+                panes.drop_preview(),
+                None,
+                "an overlay left behind would promise a split that is no longer coming",
+            );
+        })
+    });
+}

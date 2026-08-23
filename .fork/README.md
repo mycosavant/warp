@@ -28,7 +28,7 @@ then each capability the fork opened.
 * [**Warp's remote server, in a WSL distribution**](#warps-remote-server-in-a-wsl-distribution) — the Zed-style split, and how to run it
 
 **What the fork opened**
-* [Driving Warp from an agent (`warpctrl`)](#driving-warp-from-an-agent-warpctrl) — 107 actions, the orchestration surface. The largest section; has its own sub-index.
+* [Driving Warp from an agent (`warpctrl`)](#driving-warp-from-an-agent-warpctrl) — 108 actions, the orchestration surface. The largest section; has its own sub-index.
 * [Warp Drive without an account](#warp-drive-without-an-account) · [Your drive as a git repository](#your-drive-as-a-git-repository)
 * [The agent, answered by your own Claude](#the-agent-answered-by-your-own-claude-experimental)
 * [Voice input, transcribed on this machine](#voice-input-transcribed-on-this-machine)
@@ -699,10 +699,11 @@ In this section: [what it can do](#what-it-can-do) ·
 
 ### What it can do
 
-**107 actions. Every one of them run against a live build — the first 92 on
+**108 actions. Every one of them run against a live build — the first 92 on
 Windows, then T6.6's four `agent` verbs and T1.12's four `drive object` verbs
 on Linux, I16's two `remote wsl` verbs back on Windows, and T8.5's three
-`pane main` and T8.1's two `window visor` verbs on Linux again. So this list is
+`pane main`, T8.1's two `window visor` verbs and T8.2's `tab merge` on Linux
+again. So this list is
 the verified surface rather than the catalog's own claim about itself.**
 `warpctrl action list` emits the catalog as JSON with
 `parameter_spec`, `result_spec` and `target_scope` per action, so tool
@@ -714,7 +715,7 @@ definitions can be generated from it rather than hardcoded.
 | `app`        | 4  | ping version active focus |
 | `capability` | 2  | list inspect |
 | `window`     | 7  | list inspect create focus close, visor toggle/status — the last two **fork-added**, see T8.1 |
-| `tab`        | 10 | list inspect create activate move close rename reset-name color set/clear |
+| `tab`        | 11 | list inspect create activate move close rename reset-name color set/clear, merge — **fork-added**, see T8.2 |
 | `pane`       | 14 | list inspect split focus navigate resize maximize unmaximize close rename reset-name, main get/set/clear — the last three **fork-added**, see T8.5 |
 | `session`    | 6  | list inspect activate previous next reopen-closed |
 | `input`      | 3  | insert replace submit |
@@ -1338,6 +1339,77 @@ a different branch that never rebuilds the workspace.
 Both windows carry the quake geometry — `1387x260+32+32`, top-anchored — and
 the app id is `dev.warp.WarpOss-hotkey`, which is how you tell the visor from a
 normal window in `xwininfo -root -tree` without matching on the title.
+
+## Splitting by drag, and seeing where it will land
+
+Warp has had quadrant split-on-drop for a long time: drag a pane header over
+another pane and the half you are nearest becomes the split. Two things made it
+feel unpredictable, and both were precise.
+
+**The move was committed on every drag event.** There was no *preview* distinct
+from the *result* — the layout reflowed live under the cursor, so the only way
+to learn what a drop would do was to have it already done, and the only way back
+was to keep dragging.
+
+Now the drag paints a translucent accent overlay across exactly the half the
+drop will take, and nothing moves until you let go.
+
+```
++-----------------+          +-----------------+
+|:::::::|         |          |         |:::::::|
+|:::::::|         |   drag   |         |:::::::|
+|:::left|         |  ------> |         |right::|
+|:::::::|         |          |         |:::::::|
++-----------------+          +-----------------+
+```
+
+**There is a dead zone**, within 18% of the pane's centre, and it is now
+visible: no overlay, and releasing there moves nothing. Before, the dead zone
+silently left whatever split you had already caused in place.
+
+### Right-click a tab
+
+The same capability without a drag. Right-click any tab and you get **"Move
+into active tab, left / right / above / below"**, which takes that tab's pane
+into the tab you are looking at and splits it. The source tab closes itself.
+
+The section is absent when the move has no single meaning: a tab cannot merge
+into itself, and a tab holding more than one pane has no single "this tab" to
+move.
+
+### From the CLI
+
+```powershell
+warpctrl tab merge --tab-index 1 --direction right
+```
+
+```json
+{ "action": "tab.merge", "ok": true }
+```
+
+Refusals name the reason rather than failing quietly:
+
+```
+error: invalid_selector: tab.merge needs a tab that is not the active one and
+holds exactly one pane
+```
+
+### Dragging the tab itself
+
+A tab is now a drag source into the pane area, not only along the tab bar. The
+gate was **an axis**: upstream pins each tab's `Draggable` to
+`DragAxis::HorizontalOnly` unless `FeatureFlag::DragTabsToWindows` is on, and
+that flag is `RELEASE_FLAGS` + `cfg!(any(macos, windows))` — so on Linux a tab
+physically could not leave the tab bar.
+
+Fork policy relaxes **only the axis**. The same flag gates cross-window tab
+detach at four other sites; that stays exactly as upstream left it.
+`WARP_FORK_POLICY=0` puts the axis back.
+
+> **Unverified by running.** A drag is press-move-release, and synthetic input
+> reaches no X11 client under WSLg. The overlay, the quadrant maths and the
+> underlying merge are each verified independently — the drag gesture itself
+> has only been compiled. If it misbehaves, that is where to look first.
 
 ## Voice input, transcribed on this machine
 

@@ -30,7 +30,8 @@ use crate::pane_group::pane::{
     ToolbeltButton,
 };
 use crate::pane_group::{
-    BackingView, Direction, PaneDragDropLocation, PaneId, TabBarAxis, TabBarHoverIndex,
+    BackingView, Direction, PaneDragDropLocation, PaneDropPreview, PaneId, TabBarAxis,
+    TabBarHoverIndex,
 };
 use crate::send_telemetry_from_ctx;
 use crate::server::telemetry::{SharingDialogSource, TelemetryEvent};
@@ -65,6 +66,14 @@ pub enum Event<A: ActionPayload, B: ActionPayload> {
         target_id: PaneId,
         direction: Direction,
     },
+    /// Where this drag would land if it were released now, or `None` when it
+    /// would do nothing — either it is over the dead zone at a pane's centre,
+    /// or it has left the pane group entirely (`.fork/TASKS.md` T8.2).
+    ///
+    /// Distinct from `MovePaneWithinPaneGroup`, which used to be emitted here
+    /// and now fires only on release. The split is the whole point: this one
+    /// is a *preview* and changes nothing.
+    DropPreviewChanged(Option<PaneDropPreview>),
     /// A pane or file tab was dragged over the workspace tab bar.
     DraggedOverTabBar {
         origin: ActionOrigin,
@@ -135,6 +144,15 @@ pub struct PaneHeader<P: BackingView> {
     open_overlay: OpenOverlay,
     is_visible_in_pane_group: bool, // If this pane header is being dragged along the tab bar, then it is not visible in the pane group
     toolbelt_feature_popup: ViewHandle<FeaturePopup>,
+    /// Where the drag this header is driving would land if released now
+    /// (`.fork/TASKS.md` T8.2).
+    ///
+    /// The header owns it because it is the only thing that sees both halves:
+    /// the drag events carry a position and a target, and only the *drop*
+    /// event is allowed to act — but the drop event carries no position, so
+    /// the direction has to be remembered from the last drag. That memory is
+    /// exactly what a preview is.
+    drop_preview: Option<PaneDropPreview>,
 }
 
 impl<P: BackingView> PaneHeader<P> {
@@ -172,6 +190,7 @@ impl<P: BackingView> PaneHeader<P> {
             open_overlay: Default::default(),
             toolbelt_buttons: Default::default(),
             is_visible_in_pane_group: true,
+            drop_preview: None,
             toolbelt_feature_popup,
         }
     }
@@ -323,6 +342,26 @@ impl<P: BackingView> PaneHeader<P> {
 
     pub fn is_visible_in_pane_group(&self) -> bool {
         self.is_visible_in_pane_group
+    }
+
+    /// Records where a drop would land and tells the pane group to redraw.
+    ///
+    /// Silent when nothing changed, which matters: drag events arrive on every
+    /// mouse move, and re-emitting an identical preview would repaint the
+    /// whole pane group at cursor rate for no visible difference.
+    fn set_drop_preview(&mut self, preview: Option<PaneDropPreview>, ctx: &mut ViewContext<Self>) {
+        if self.drop_preview == preview {
+            return;
+        }
+        self.drop_preview = preview;
+        ctx.emit(Event::DropPreviewChanged(preview));
+    }
+
+    /// Clears the preview and returns what it was, for a drop to act on.
+    fn take_drop_preview(&mut self, ctx: &mut ViewContext<Self>) -> Option<PaneDropPreview> {
+        let preview = self.drop_preview;
+        self.set_drop_preview(None, ctx);
+        preview
     }
 
     /// Based on the drag position and tab bar location, returns whether the drag
@@ -871,7 +910,10 @@ impl<P: BackingView> View for PaneHeader<P> {
 ///
 /// The only caveat here is that the drag position needs to be greater than a given threshold to trigger a drag,
 /// otherwise this will result in a no-op. This ensures that the split is not too sensitive.
-fn calculate_pane_move_direction(target_pane: RectF, drag_position: RectF) -> Option<Direction> {
+pub(crate) fn calculate_pane_move_direction(
+    target_pane: RectF,
+    drag_position: RectF,
+) -> Option<Direction> {
     let moved_drag_center = drag_position.center() - target_pane.center();
     let normalized_drag_center = Vector2F::new(
         moved_drag_center.x() / target_pane.width(),
@@ -933,6 +975,9 @@ impl<P: BackingView> TypedActionView for PaneHeader<P> {
                     if matches!(origin, ActionOrigin::Pane) {
                         self.is_visible_in_pane_group = false;
                     }
+                    // The drag left the pane group, so any half-pane overlay it
+                    // was painting is now a promise it will not keep.
+                    self.set_drop_preview(None, ctx);
                     let axis = tab_bar_axis.unwrap_or(TabBarAxis::Horizontal);
                     let tab_hover_index = Self::calculate_tab_focus_hover_index(
                         drag_position,
@@ -953,23 +998,34 @@ impl<P: BackingView> TypedActionView for PaneHeader<P> {
                 PaneDragDropLocation::PaneGroup(target_id) => {
                     self.is_visible_in_pane_group = true;
                     if let Some(target_pane) = ctx.element_position_by_id(target_id.position_id()) {
-                        if let Some(direction) =
-                            calculate_pane_move_direction(target_pane, *drag_position)
-                        {
-                            ctx.emit(Event::MovePaneWithinPaneGroup {
+                        // Previously this committed the move on every drag
+                        // event, which is why the layout reflowed under the
+                        // cursor and there was no way to see what a drop would
+                        // do without it already being done. Now it only
+                        // records the intent; `PaneHeaderDropped` commits it.
+                        //
+                        // `None` from the direction calculation is the dead
+                        // zone at the pane's centre, and clearing on it is
+                        // deliberate: a drop there should do nothing, and the
+                        // overlay disappearing is how you find that out before
+                        // letting go.
+                        let preview = calculate_pane_move_direction(target_pane, *drag_position)
+                            .map(|direction| PaneDropPreview {
                                 target_id: *target_id,
                                 direction,
                             });
-                        }
+                        self.set_drop_preview(preview, ctx);
                     } else {
                         report_error!(
                             "Attempting to move to pane that does not exist",
                             extra: { "target_id" => ?target_id }
                         );
+                        self.set_drop_preview(None, ctx);
                     }
                 }
                 PaneDragDropLocation::Other => {
                     self.is_visible_in_pane_group = true;
+                    self.set_drop_preview(None, ctx);
                     ctx.emit(Event::PaneDraggedOutsideTabBarOrPaneGroup)
                 }
             },
@@ -977,12 +1033,28 @@ impl<P: BackingView> TypedActionView for PaneHeader<P> {
                 origin,
                 drop_location,
             } => {
+                // Commit whatever the overlay was promising, then stop
+                // promising it. Taken before the match so that every exit —
+                // including a drop that landed on the tab bar or outside —
+                // leaves no stale overlay behind.
+                let committed = self.take_drop_preview(ctx);
                 match drop_location {
                     PaneDragDropLocation::TabBar(_) => {
                         self.is_visible_in_pane_group = true;
                         ctx.emit(Event::DroppedOnTabBar { origin: *origin })
                     }
                     PaneDragDropLocation::PaneGroup(_) => {
+                        // The target comes from the preview rather than from
+                        // `drop_location`, because only the preview carries the
+                        // direction — and the two cannot disagree, since the
+                        // preview was computed from the last drag over this
+                        // same target.
+                        if let Some(preview) = committed {
+                            ctx.emit(Event::MovePaneWithinPaneGroup {
+                                target_id: preview.target_id,
+                                direction: preview.direction,
+                            });
+                        }
                         ctx.emit(Event::PaneDroppedWithinPaneGroup)
                     }
                     PaneDragDropLocation::Other => {

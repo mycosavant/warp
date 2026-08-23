@@ -306,6 +306,15 @@ Deliberately not in v1: changing the tab-out-to-new-window behaviour (it already
 works via `PaneDraggedOutsideTabBarOrPaneGroup` + `DetachType`), or merge
 semantics, which nobody has defined yet.
 
+> **Built 2026-08-22 — T8.2.** All three items, and the diagnosis on this page
+> held up exactly. One correction worth carrying: item 1 was blocked by a gate
+> this page did not spot — the tab's `Draggable` is pinned to
+> `DragAxis::HorizontalOnly` unless `FeatureFlag::DragTabsToWindows` is on, and
+> that flag is `RELEASE_FLAGS` + `cfg!(any(macos, windows))`. On Linux a tab
+> could not leave the tab bar at all, so "give the tab the same drag payload"
+> was necessary but not sufficient. Item 2 was as small as claimed —
+> `calculate_pane_move_direction` did return exactly what the overlay needed.
+
 ## Related, and cheap once the above lands
 
 **Drag to re-order and resize** — dividers already drag (`dragged_border:

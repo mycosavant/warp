@@ -402,6 +402,14 @@ pub(super) fn run_tab_command(
             },
             output_format,
         ),
+        TabCommand::Merge(args) => run_action_with_params(
+            args.target,
+            ActionKind::TabMerge,
+            DirectionParams {
+                direction: args.direction.into(),
+            },
+            output_format,
+        ),
         TabCommand::Close(args) => {
             let mode = tab_close_mode(&args);
             run_action_with_params(

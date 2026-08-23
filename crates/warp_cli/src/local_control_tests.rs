@@ -694,6 +694,18 @@ fn retained_action_examples() -> Vec<(ActionKind, Vec<&'static str>)> {
             vec!["warpctrl", "pane", "main", "clear"],
         ),
         (
+            ActionKind::TabMerge,
+            vec![
+                "warpctrl",
+                "tab",
+                "merge",
+                "--tab-index",
+                "1",
+                "--direction",
+                "right",
+            ],
+        ),
+        (
             ActionKind::WindowVisorToggle,
             vec!["warpctrl", "window", "visor", "toggle"],
         ),
@@ -746,6 +758,7 @@ fn parsed_action_kind(command: &ControlCommand) -> Option<ActionKind> {
             TabCommand::Create(_) => Some(ActionKind::TabCreate),
             TabCommand::Activate(_) => Some(ActionKind::TabActivate),
             TabCommand::Move(_) => Some(ActionKind::TabMove),
+            TabCommand::Merge(_) => Some(ActionKind::TabMerge),
             TabCommand::Close(_) => Some(ActionKind::TabClose),
             TabCommand::Rename(_) => Some(ActionKind::TabRename),
             TabCommand::ResetName(_) => Some(ActionKind::TabResetName),

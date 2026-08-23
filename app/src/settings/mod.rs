@@ -162,6 +162,17 @@ pub const ACTIVATION_HOTKEY_KEYBINDING: &str = "ActivationHotkeyKeybinding";
 pub const DISMISSED_AI_ASSISTANT_WELCOME_KEY: &str = "DismissedWarpAIWarmWelcome";
 
 pub const TIMES_TO_SHOW_AUTOSUGGESTION_HINT: i8 = 2;
+/// Whether hide-the-hotkey-window-on-blur is offered, and defaulted on.
+///
+/// Upstream limits this to macOS and Windows, and **the fork tried adding
+/// Linux and put it back** (`.fork/TASKS.md` T8.2). The implementation
+/// (`root_view::update_quake_mode_state`) is entirely platform-independent, so
+/// the obvious reading is that this constant is over-cautious — but measured
+/// on X11/winit, a visor opened by `warpctrl window visor toggle` never
+/// becomes the key window, so the very next focus event sees a different
+/// active window and hides it. `Map State: IsUnMapped` within four seconds of
+/// opening. The autohide works; what does not survive it is the only entry
+/// point this platform has.
 pub const QUAKE_WINDOW_AUTOHIDE_SUPPORTED: bool = cfg!(any(target_os = "macos", windows));
 
 lazy_static! {
