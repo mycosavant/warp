@@ -1504,25 +1504,117 @@ Anything that captures the arguments must put them in the record without
 turning them into an instruction; the existing test pins that and should stay
 pinned.
 
+## The plugin idea, 2026-08-23 — upstream already ships it
+
+> **Second correction, this one in the idea's favour.** "Shipping a plugin to
+> Claude Code might give us all the data we need" is not a proposal. **Warp
+> already does it**, the plugin is already installed for you, and the events
+> already arrive parsed. Everything below was found by reading after that was
+> pointed out, and the reading was prompted by a single sentence about a
+> sidebar showing activity.
+
+**The plugin.** `ClaudeCodePluginManager`
+(`terminal/cli_agent_sessions/plugin_manager/claude.rs`) installs
+`warp@claude-code-warp` from the marketplace repo `warpdotdev/claude-code-warp`,
+minimum version 2.1.0, plus an `oz-harness-support` plugin. There are siblings
+for Codex, Gemini and OpenCode.
+
+**The transport is OSC 777 through the PTY.** Not a socket, not a port, not a
+collector — the plugin writes an escape sequence and Warp's terminal parses it
+out of the stream. Nothing to configure and nothing to leak. (Codex has an
+OSC 9 plain-text fallback, dropped once a rich notification arrives.)
+
+**The protocol is the trajectory.**
+`warp_core::cli_agent_protocol::CLIAgentNotification` carries `event`,
+`session_id`, `cwd`, `project`, `query`, `response`, **`transcript_path`**,
+`summary`, `tool_name`, **`tool_input`** (a full `serde_json::Value`),
+`plugin_version` and `error_type`. The event vocabulary is
+`session_start`, `prompt_submit`, `tool_complete`, `stop`, `stop_failure`,
+`permission_request`, `permission_replied`, `question_asked`, `idle_prompt` —
+which is messages, tool calls, failures *and* approvals, i.e. the list this
+page opened by asking for.
+
+**And it is not gated.** `pluggable_notifications`, `cli_agent_rich_input` and
+`agent_harness` are all in `app/Cargo.toml`'s `default` list, and the only
+`FeatureFlag` check in the listener is Codex-specific. This is what the
+sidebar is showing.
+
+**What is missing is retention, and only retention.** `CLIAgentSession` holds
+*current state* — status, input state, plugin version, whether a rich
+notification has been seen. **There is no history.** Events drive the UI and
+are dropped. And `event/v1.rs` narrows the full `tool_input` JSON to a
+`tool_input_preview`, keeping whichever of `command` or `file_path` it finds
+and discarding the rest — **the same gate as `translate.rs`, in a different
+file.** Twice now, the fork has found the trajectory arriving intact and being
+flattened at the boundary.
+
+## Better than capture: Claude already wrote it down
+
+`transcript_path` is the part that changes the size of this idea. It points at
+Claude Code's own session JSONL, which already holds everything. Measured
+against a real transcript on this machine:
+
+| record | count |
+|---|---|
+| `assistant` | 2,423 |
+| `user` | 1,477 |
+| `tool_use` — `Bash` | 1,124 |
+| `tool_use` — `Edit` | 163 |
+| `tool_use` — `Read` | 113 |
+| `tool_use` — `Write` | 18 |
+| `file-history-snapshot` / `-delta` | 34 / 37 |
+
+Each `tool_use` carries its full `input`. And **the diff is already there,
+exactly**: an `Edit` call's input is `{file_path, old_string, new_string}`,
+which *is* the change, and a `Write` call's input is the whole new content.
+No reconstruction, no separate diff store. (`file-history-delta` records point
+at per-file backups rather than inlining a patch, so the tool calls are the
+better source of the two.)
+
+So the three elements really are all owned, and none of them is a capture
+problem:
+
+1. **Claude writes the complete record**, tool inputs and diffs included.
+2. **Warp's plugin already says where it is**, on every event.
+3. **`warpctrl` is already the read surface.**
+
+**The smallest version that is still the idea** is therefore not
+instrumentation and not a new store: *keep the `transcript_path` a session
+already reports, and add a verb that reads it.* No protocol change, no new
+capture, nothing extra written to disk.
+
+**Decided by the user, 2026-08-23:** the tool *call* is the wanted data — name
+plus input — and **not** tool-result bodies. That kills the disk-footprint
+question this page raised: no file contents or command stdout need to be
+retained, because the interesting part is what the agent decided to do.
+
+**Not yet verified, and it is the obvious next step.** No CLI-agent Claude
+session has been run inside Warp while watching OSC 777 events arrive; all of
+the above is read. Two specific unknowns: whether the fork's own local-agent
+path (`WARP_FORK_LOCAL_AGENT=1`, which spawns `claude --print` rather than
+running it as a CLI-agent session) produces a transcript and events at all,
+and how the plugin install behaves under WSL as opposed to native Windows.
+
 ## What is still missing after all that
 
-**1. The transcript is the right substrate, and it is closer than the traces.**
-The instinct behind "perhaps that's simpler via transcripts" survives the
-measurement better than the tracing half of this page did. The record already
-exists per conversation, persists across restarts, and is keyed by
-`conversation_id`. What it lacks is not a store, it is the two fields thrown
-away in `translate.rs`. Traces remain the right home for *timing and
-causality* and the wrong home for message bodies — but note that with the
-agent path emitting nothing, "join the two on `conversation_id`" currently
-joins a full table to an empty one.
+**1. The transcript is the right substrate, and there are two of them.**
+"Perhaps that's simpler via transcripts" survived the measurement better than
+the tracing half of this page did — and better than expected, because there
+turn out to be two candidates. Warp's own conversation record is the poorer
+one: it keeps rendered message parts and a tool's *name*. **Claude's session
+JSONL is the richer one**, and it is complete without anyone doing anything.
+Prefer it where a `transcript_path` exists; fall back to Warp's record where
+one does not. Traces remain the right home for *timing and causality* and the
+wrong home for message bodies — but note that with the agent path emitting
+nothing, "join the two on `conversation_id`" currently joins a full table to
+an empty one.
 
-**2. A decision this page cannot make: does the record keep tool output?**
-Capturing `input` is unambiguous — it is small, it is what the agent asked
-for, and it is what any trajectory view has to show. Capturing `tool_result`
-content means the conversation store starts holding **every file read and
-every command's stdout**, which is a different thing to keep on disk and to
-think about before doing. `MAX_PERSISTED_CONVERSATION_COUNT = 200` with
-tree-wise eviction (the T8.3 trap) applies to whatever this becomes.
+**2. ~~A decision this page cannot make: does the record keep tool output?~~**
+**Settled 2026-08-23: no.** The tool *call* — name plus input — is the wanted
+data; tool-result bodies are not. That removes the disk-footprint worry this
+entry raised, since nothing has to hold file contents or command stdout, and
+it means `MAX_PERSISTED_CONVERSATION_COUNT = 200` (the T8.3 trap) is a much
+smaller consideration than it looked.
 
 **3. The UI.** Deliberately last, and deliberately thin. `warpctrl agent read`
 plus the store already makes the data inspectable without any UI at all, which
@@ -1547,20 +1639,30 @@ problem, and single-player is the case this fork actually has.
 
 The reason for running this before the inbox, and it did change something.
 
-**The inbox cannot show a trajectory, because there is no trajectory to
-show.** A row can say what was asked and what was answered; it cannot say
-which tools ran with what arguments, because the record holds a tool's *name*
-and nothing else. Anything designed on the assumption that "the agent did X to
-file Y" is available is designing against data that does not exist yet.
+**Which trajectory a row can show depends entirely on which kind of session it
+is, and that distinction did not exist on this page before today.**
 
-That makes the order matter. `translate.rs` capture is small and additive and
-has no UI in it; the inbox is the consumer. **Capture first, inbox second** —
-otherwise T8.3 ships a row shape that has to change as soon as the trajectory
-arrives, which is the more expensive way round.
+- **A CLI-agent session** (Claude running in a pane, plugin installed) has the
+  full trajectory available — tool names, full inputs, diffs — via the
+  `transcript_path` its own events already report. Nothing needs capturing;
+  the path needs keeping.
+- **A Warp agent conversation**, including the fork's local agent, has a
+  record that holds a tool's *name* and nothing else.
+
+So the honest inbox design has to know which it is looking at, and say less
+about the second kind. Anything built on "the agent did X to file Y is
+available" is true for one and false for the other.
+
+That also **reverses the sequencing note this section carried an hour ago**,
+which said `translate.rs` capture had to come first. It does not: for CLI-agent
+sessions the richer answer needs no capture at all, and the cheap first move is
+retaining a path and adding a reader. `translate.rs` is still worth fixing —
+it is the fork's own code dropping its own data — but it is no longer the
+blocker, because it only governs the poorer of the two substrates.
 
 Nothing about T8.3's own plan is invalidated: `settled` is still a field on
-`AgentConversationData`, the eviction trap is still the trap, and the
-conversation list view is still the place it goes.
+`AgentConversationData`, eviction is still the trap, and the conversation list
+view is still the place it goes.
 
 ## Related, already done
 

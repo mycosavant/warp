@@ -4085,11 +4085,21 @@ T1, T4, T5 and T7, and by now should be the prior rather than the surprise.
       not handled at all. Tool results in `agent read --tools` come from the
       live surface's action model, so they do not survive the pane.
 
-      So an inbox row can say what was asked and what was answered, and cannot
-      say what the agent *did*. **Do the `translate.rs` capture first** — it is
-      small, additive, has no UI in it, and the inbox is its consumer.
-      Building the row shape first means changing it as soon as the trajectory
-      lands. Nothing else about the plan above is affected.
+      **Amended hours later, and the amendment matters more than the finding.**
+      There are **two kinds of session** and the inbox has to know which it is
+      looking at. A *CLI-agent* session — Claude running in a pane with Warp's
+      own `warp@claude-code-warp` plugin, which upstream already installs —
+      reports a **`transcript_path`** on every event, pointing at Claude's own
+      JSONL. That file already holds every tool call with its full input, and
+      an `Edit` call's `{old_string, new_string}` *is* the diff. Nothing needs
+      capturing there; the path needs keeping. A *Warp agent conversation*,
+      including the fork's local agent, has only the name.
+
+      So: no capture work blocks this. The cheap first move is retaining a path
+      and adding a reader. `translate.rs` is still worth fixing — it is the
+      fork's own code dropping its own data — but it governs the poorer of the
+      two substrates and is not the blocker this entry briefly called it.
+      Nothing else about the plan above is affected.
 
 - [ ] **T8.4** Pin what a tool claims to be. (I11)
       Hash each MCP tool's `(name, description, input_schema)` at connect,
