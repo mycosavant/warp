@@ -10,6 +10,7 @@ use mcp::oauth::{
 };
 use mcp::runtime::{error_to_user_message, spawn_server};
 use parking_lot::Mutex;
+use simple_logger::SimpleLogger;
 use simple_logger::manager::LogManager;
 use url::Url;
 use uuid::Uuid;
@@ -36,6 +37,7 @@ use crate::ai::mcp::{
     Author, CloudMCPServer, FileBasedMCPManager, JsonTemplate, MCPGalleryManager, MCPServer,
     MCPServerExt, MCPServerUpdate, ParsedTemplatableMCPServerResult, StaticEnvVar,
     TemplatableMCPServer, TemplatableMCPServerInstallation, TransportType, builtin, logs,
+    tool_digest,
 };
 use crate::auth::AuthStateProvider;
 use crate::auth::auth_manager::{AuthManager, AuthManagerEvent};
@@ -1152,6 +1154,15 @@ impl TemplatableMCPServerManager {
                 let error = match server_info {
                     Ok(info) => {
                         let peer = info.peer();
+                        // Fork (T8.4): compare what this server just advertised
+                        // against what it advertised last time, before anything
+                        // is allowed to read the new definitions.
+                        report_tool_definition_changes(
+                            info.name(),
+                            info.tools(),
+                            &logger_clone,
+                            ctx,
+                        );
                         me.active_servers.insert(installation_uuid, info);
 
                         // Clear any previous error message on successful connection.
@@ -2020,5 +2031,71 @@ impl TemplatableMCPServerManager {
     pub fn has_oauth_credentials_for_file_based_server(&self, installation_hash: u64) -> bool {
         self.file_based_server_credentials
             .contains_key(&installation_hash)
+    }
+}
+
+/// Fork (T8.4): say so when a connected server's tools are not the tools that
+/// were approved.
+///
+/// **This is the only place the check can run**, and that is a finding rather
+/// than a preference: nothing in this client handles `notifications/tools/
+/// list_changed`, and `spawn_server` calls `tools/list` exactly once. The tool
+/// list is a snapshot taken at connect and never refreshed, so connect is both
+/// the only moment the definitions arrive and the only moment they can be
+/// compared. A server that rewrites its tools *mid-session* is therefore not
+/// covered — but neither is it acted on, because the client keeps using the
+/// snapshot it already has.
+///
+/// Two surfaces, deliberately different in weight. Everything goes to the
+/// server's own MCP log, which is where somebody investigating will look and
+/// where a JSON schema can be read. Only a redefinition raises a toast, because
+/// a notification that fires for routine events is one that gets dismissed
+/// without reading.
+fn report_tool_definition_changes(
+    server_name: &str,
+    tools: &[rmcp::model::Tool],
+    logger: &SimpleLogger,
+    ctx: &mut ModelContext<'_, TemplatableMCPServerManager>,
+) {
+    if !crate::fork::mcp_tool_pinning_enabled() {
+        return;
+    }
+
+    let changes = tool_digest::record(server_name, tools);
+    if changes.is_empty() {
+        return;
+    }
+
+    let mut alarming = Vec::new();
+    for change in &changes {
+        let message = tool_digest::describe(server_name, change);
+        if change.is_alarming() {
+            logger.log(format!("[warn] MCP: {message}"));
+            if let Some(definition) = tool_digest::current_definition(tools, change.tool()) {
+                logger.log(format!(
+                    "[warn] MCP: '{tool}' now advertises itself as: {definition}",
+                    tool = change.tool()
+                ));
+            }
+            log::warn!("{message}");
+            alarming.push(message);
+        } else {
+            logger.log(format!("[info] MCP: {message}"));
+        }
+    }
+
+    let Some(first) = alarming.first() else {
+        return;
+    };
+    // One toast however many tools changed: a server that rewrote six of them
+    // is one event, and six stacked notifications would bury it.
+    let summary = match alarming.len() {
+        1 => first.clone(),
+        count => format!("{first} ({} other tools also changed.)", count - 1),
+    };
+    if let Some(active_window_id) = ctx.windows().active_window() {
+        ToastStack::handle(ctx).update(ctx, |stack, ctx| {
+            stack.add_ephemeral_toast(DismissibleToast::default(summary), active_window_id, ctx);
+        });
     }
 }

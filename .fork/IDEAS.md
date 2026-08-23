@@ -849,6 +849,33 @@ currently notices.
   matter for hashing a few kilobytes of tool schema once per connect. **Use
   `sha2` and add no dependency.** The fork's own rule.
 
+> **Built 2026-08-23 — T8.4.** The recommendation above was right about the
+> *which* and the *when*, and the "two days, one new file, no new dependency"
+> estimate held. Three things it could not have known, all from code it had not
+> read:
+>
+> **Connect is not one checkpoint among several — it is the only one.** No part
+> of this client handles `notifications/tools/list_changed`, and `tools/list` is
+> called exactly once per spawn. The tool list is a snapshot. So step 1 above is
+> not "hash at connect *for now*"; connect is the only moment the definitions
+> exist to be hashed, and also the only moment they can change what the client
+> does.
+>
+> **"Store `server → {tool name → digest}`" hides a choice, and the obvious one
+> is wrong.** Keyed on the installation id — which looks far more like an
+> identity than a name does — the feature would have run, written its file, and
+> never reported anything, because `parsing.rs` mints a fresh `Uuid::new_v4()`
+> for every file-based server on every parse. Keyed on the name.
+>
+> **`(name, description, input_schema)` is not the whole claim.** `annotations`
+> belongs in the digest too: `readOnlyHint` is a claim that a tool is safe, and
+> flipping it is a rug-pull that touches no prompt text at all.
+>
+> One thing the page got exactly right and is worth keeping: "show the diff" is
+> not achievable from digests, and does not need to be. What a person has to
+> decide is whether to run what is in front of them now, and that text is in
+> hand at the moment of the warning.
+
 ## The smallest version that is still the idea
 
 `crates/mcp/src/lib.rs:38` already exposes `tools() -> &Vec<rmcp::model::Tool>`,

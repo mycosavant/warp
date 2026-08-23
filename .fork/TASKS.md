@@ -4187,13 +4187,73 @@ T1, T4, T5 and T7, and by now should be the prior rather than the surprise.
       transcript reader from I17 is still a separate piece of work; this ships
       the sections and the bit, not the trajectory.
 
-- [ ] **T8.4** Pin what a tool claims to be. (I11)
+- [x] **T8.4** Pin what a tool claims to be. (I11)
       Hash each MCP tool's `(name, description, input_schema)` at connect,
       store it, and say so when a digest changes under an existing name. This
       is the tool rug-pull defence: a server can rewrite the prompt the model
       reads, after you approved it, and nothing currently notices. `sha2` is
       already a workspace dependency — **no new dep**, and no blake3. Warn in
       v1; do not auto-block until the noise level is known.
+
+      As built. One new file, `app/src/ai/mcp/tool_digest.rs`, plus a
+      twelve-line call site. No new dependency, no schema, no catalog action.
+
+      **Three findings changed the design, all from reading the code the plan
+      assumed:**
+
+      1. **Connect is not one of several checkpoints; it is the only one.**
+         Nothing in this client handles `notifications/tools/list_changed`, and
+         `crates/mcp/src/runtime.rs:324` calls `tools/list` exactly once per
+         spawn. The tool list is a snapshot taken at connect and never
+         refreshed. So a mid-session rewrite is not detected — and is also not
+         *acted on*, because the client keeps using the snapshot it already
+         has. That is a much better answer than it first looks, and it is only
+         true as long as nobody adds `list_changed` handling without adding a
+         digest check beside it.
+      2. **The installation id is not an identity.** `parsing.rs:322` and
+         `:363` mint a fresh `Uuid::new_v4()` for every file-based server on
+         every parse, so a `.mcp.json` server has a different installation id
+         at each launch. Keying the store on it would have made every connect a
+         first connect — a feature that runs, writes a file, and never once
+         reports anything. Confirmed by running: three consecutive launches of
+         the same server gave `a74fd341…`, `2592fda1…`, `d42814b5…`. Keyed on
+         the server **name** instead, which is the key in the config file.
+      3. **`(name, description, input_schema)` is not the whole claim.** It
+         also hashes `title`, `output_schema` and `annotations`, each
+         separately so a change is attributed rather than merely detected.
+         `annotations.readOnlyHint` earned its place on its own: it is a claim
+         that a tool is safe, and flipping it is a rug-pull that touches no
+         prompt text at all.
+
+      Trust on first use: the first connect of a server records what it
+      advertises and says nothing, because there is no prior approval to
+      compare against. After that, a redefinition is a `[warn]` in the server's
+      MCP log — with the definition it advertises *now*, pretty-printed, since
+      the store keeps hashes and the old text is gone — plus one toast however
+      many tools changed. A new or removed tool is `[info]` only. Then the
+      record is updated, so a change is reported once rather than at every
+      launch.
+
+      **Verified by running**, with `script/mcp_probe_server.py` — a
+      dependency-free stdio MCP server that re-reads its own tool definition
+      from a file at every `tools/list`, so changing that file and reconnecting
+      *is* the attack. Eight launches against a scratch `HOME`:
+
+      - first connect → store written, nothing said;
+      - description and schema rewritten → `[warn]`, both fields named,
+        the new definition in the log;
+      - relaunched unchanged → silent;
+      - a second tool added → `[info]` in the MCP log, nothing in the app log.
+
+      **Not verified:** the toast. `import`/`xwd` cannot capture a root window
+      under WSLg — there is no composited root to read — so it is built,
+      compiles, and uses the same `add_ephemeral_toast` call as the MCP PATH
+      error beside it, but nobody has seen it.
+
+      **Left undone deliberately:** no auto-block, per the plan. And no
+      `warpctrl` action to read or reset the store: the file is JSON in
+      `~/.local/state/warp-oss/fork/`, and a verb to reset an approval record
+      is a verb an attacker would like.
 
 - [~] **T8.5** A main pane, and the CWD following it. (I13 + I6)
       One `Option<PaneId>` on `PaneGroup`, `None` meaning today's behaviour.

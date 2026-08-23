@@ -255,6 +255,35 @@ pub fn cloud_harness_plugin_allowed() -> bool {
     !is_active()
 }
 
+/// Whether to pin what an MCP server's tools claim to be, and say so when a
+/// definition changes under a name that was already approved (T8.4).
+///
+/// The defence is against the tool rug-pull: a tool's `description` is prompt,
+/// written by a third party, that the user reviews once at install and the
+/// model re-reads on every turn. A server is free to rewrite it afterwards, and
+/// nothing in the protocol or the client notices. Hashing what was advertised
+/// and comparing on the next connect turns that into something a person can be
+/// told about.
+///
+/// On under fork policy and off under `WARP_FORK_POLICY=0`, with no variable of
+/// its own: there is no reading of the fork's thesis under which watching your
+/// own tool definitions is optional, and a switch would only ever be found by
+/// somebody trying to silence a warning they should read.
+pub fn mcp_tool_pinning_enabled() -> bool {
+    is_active()
+}
+
+/// The directory for fork-local state that has no upstream home.
+///
+/// Deliberately a subdirectory rather than loose files in `state_dir()`: what
+/// the fork writes should be identifiable, inspectable and deletable as a unit
+/// without a list of filenames.
+pub fn state_dir() -> std::path::PathBuf {
+    warp_core::paths::secure_state_dir()
+        .unwrap_or_else(warp_core::paths::state_dir)
+        .join("fork")
+}
+
 const FRAME_LOG_ENV_VAR: &str = "WARP_FORK_FRAME_LOG";
 
 /// Two frames' worth of budget at 60Hz. One frame's would report the ordinary
