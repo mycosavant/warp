@@ -40,12 +40,19 @@ found a real bug on each of its first two runs. What still needs a person is
 anything about how something *feels* — latency, smoothness — because no
 capture answers that.
 
-**If Warp crashes, copy the log before touching anything.** A crash is usually
-Warp's deliberate `Failed to render a frame 3 times in a row; exiting...`, and
-the recovery sibling takes over and *renames* the dead parent's log — to
-`warp-oss.log.old.0` when it works, and over the top of it when it does not,
-because the rename is `let _ = fs::rename(...)`. One user crash has already
-been lost this way.
+**Launch Warp on Windows with `Start-Process … -NoNewWindow`, or it writes no
+log at all.** `warp-oss.exe` is a console-subsystem binary; `Start-Process`
+gives it its own console, so `stdout_is_a_tty` is true and `warp_logging`'s
+`use_logfile` is false. What hides this is that a log still appears — the
+crash-recovery sibling has no console and does log, and its file is moved into
+`warp-oss.log` when the parent dies. If a log starts with "Parent has crashed;
+continuing execution", it is the sibling's and the interesting half was never
+written. A person double-clicking the binary is unaffected.
+
+A crash itself is usually Warp's deliberate `Failed to render a frame 3 times
+in a row; exiting...`, and the sibling that appears was spawned at *startup*
+and parked in `WaitForSingleObject` — its arrival means only that the parent
+went away.
 
 ## Look for the gate first
 

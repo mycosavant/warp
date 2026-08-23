@@ -2659,6 +2659,25 @@ window you have open and is close to useless for reading anything. With it you
 get Warp's window alone, cropped to its own bounds. See below for why that
 works even when the window is buried.
 
+**Launch Warp with `-NoNewWindow`, or it writes no log.**
+
+```bash
+powershell.exe -NoProfile -Command \
+    "Start-Process -FilePath 'C:\dev\warp\target\release\warp-oss.exe' \
+     -WorkingDirectory 'C:\dev\warp' -NoNewWindow"
+```
+
+`warp-oss.exe` is a console-subsystem binary, so plain `Start-Process` hands it
+a console of its own; `warp_logging` sees `stdout_is_a_tty` and sets
+`use_logfile = false`. The process runs perfectly and records nothing. What
+disguises it is that `warp-oss.log` still gets written — by the crash-recovery
+sibling, which has no console of its own and whose log is moved into that name
+when the parent dies. **A log beginning "Parent has crashed; continuing
+execution" is the sibling's**, and the half you wanted was never written. Note
+that `-NoNewWindow` makes PowerShell wait for Warp to exit, so background the
+call. A person double-clicking the binary is unaffected — Explorer gives it no
+console.
+
 Anything under `/mnt/c` is visible to both sides, so scripts, screenshots and
 proof files pass between them as plain files. No SSH, no agent, no daemon.
 

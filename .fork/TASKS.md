@@ -4991,15 +4991,9 @@ What was established:
   the "child spawned immediately" the user saw. That sibling is spawned at
   *startup* and blocks in `WaitForSingleObject` on the parent, so its
   appearance is not evidence of anything beyond "the parent went away".
-* **The log preservation is best-effort and it did not hold.**
-  `warp_logging::on_parent_process_crash` renames the crashed parent's log to
-  `.old.temp` and moves the recovery process's log into its place — and both
-  renames are `let _ = fs::rename(...)`, so a failure is discarded and the
-  second rename overwrites what the first failed to move. In the crash we
-  caused deliberately it worked (the parent's log landed in `.old.0`, ending
-  with the three frame errors). In the user's, the chain shows no log for the
-  crashed parent at all. Observed once each way; the mechanism for the failure
-  is not established.
+* **The crashed parent never wrote a log, and the reason is how we launch it.**
+  See the correction below — an earlier version of this bullet blamed a
+  best-effort rename in `on_parent_process_crash`, and that was wrong.
 * **Not reproduced by dragging.** Six rounds of tear-out-and-drag-back, eight
   windows created in a burst, and twelve create/close cycles, all on the
   release build: no crash. The one lead that remains is Warp's own startup
@@ -5011,23 +5005,48 @@ What was established:
 
 **Next time it crashes, copy `warp-oss.log.old.0` before doing anything else.**
 
-#### And then it stopped logging altogether
+#### `Start-Process` silently turns Warp's log file off
 
-Recorded because it silently blinds everything above. Since the deliberate
-crash at 16:26 local on 2026-08-23, **no freshly launched session has written
-to `warp-oss.log` at all** — the file has stayed frozen at 76,544 bytes and
-16:45 through five or six launch/close cycles, while `warp-oss.log.recovery`
-sits at 0 bytes. Not a transient: checked repeatedly over ninety minutes.
+**This is the correction, and it explains every missing log above.**
 
-`init_internal` decides with `use_logfile = !stdout_is_a_tty && !in_ci &&
-!integration_test`, and neither `CI` nor `WARP_INTEGRATION` is set in the
-launching environment, so that is not obviously it. Every launch in this window
-went through `powershell.exe … Start-Process` from WSL, which is also how the
-sessions that *did* log were started.
+`init_internal` decides with
+`use_logfile = !stdout_is_a_tty && !in_ci && !integration_test`. `warp-oss.exe`
+is a console-subsystem binary, and **`Start-Process` without `-NoNewWindow`
+gives it a console of its own** — so `stdout_is_a_tty` is true, `use_logfile`
+is false, and the process writes no log file at all. Not a rename failure, not
+a rotation bug: the parent never wrote one.
 
-**Cause not established.** The T9.3 A/B above was therefore verified from
-window and tab counts and from screenshots rather than from the log, which is
-worth knowing when reading it.
+What made this hard to see is that a log *did* keep appearing. The
+crash-recovery sibling is spawned by the parent rather than by a shell, so it
+has no console, so it logs — to `warp-oss.log.recovery`. When the parent dies,
+`on_parent_process_crash` moves that file into `warp-oss.log`. Every log this
+machine produced on 2026-08-23 under `Start-Process` therefore begins:
+
+```
+2026-08-23T20:26:08Z [INFO] Parent has crashed; continuing execution.
+2026-08-23T20:16:18Z [INFO] Parent has crashed; continuing execution.
+2026-08-23T19:34:14Z [INFO] Parent has crashed; continuing execution.
+```
+
+…which reads like three crashes' worth of evidence and is in fact three
+recovery processes' logs with the interesting half missing.
+
+Proved by changing one flag. `Start-Process … -NoNewWindow`, same binary, same
+everything else:
+
+```
+warp-oss.log        32455  6:32 PM     <- fresh, rotated the old one to .old.0
+first line: 2026-08-23T22:29:02Z [INFO] Using DXC for DirectX shader compilation
+```
+
+A normal startup line rather than "Parent has crashed". **So: launch Warp with
+`-NoNewWindow` whenever you might want to know what it did.** A person
+double-clicking the binary is unaffected — Explorer gives it no console — which
+is why this only ever bit the agent.
+
+Consequence for the record above: the user's crash log was never written, so
+there is nothing to recover, and the T9.3 A/B was verified from window and tab
+counts and screenshots rather than from a log.
 
 ### Corrections to T8, from this pass
 
