@@ -4,12 +4,13 @@ use std::path::Path;
 use local_control::discovery::InstanceRecord;
 use local_control::protocol::{
     Action, ActionKind, ActionNameParams, AgentCancelParams, AgentPromptParams, AgentReadParams,
-    AgentRevealParams, AgentRevealTarget, AgentSpawnParams, BindingNameParams, BooleanValueParams,
-    ColorValueParams, ControlError, DirectionParams, DriveObjectCreateParams, DriveObjectGetParams,
-    DriveObjectListParams, DriveObjectTrashParams, EmptyParams, ErrorCode, FileOpenParams,
-    KeyParams, KeyValueParams, PageQueryParams, QueryParams, RemoteWslConnectParams, RenameParams,
-    RequestEnvelope, ResizeParams, SettingListParams, SlashRunParams, TabActivateParams,
-    TabActivationMode, TabCloseMode, TabCloseParams, TabCreateParams, TextParams, ThemeNameParams,
+    AgentRevealParams, AgentRevealTarget, AgentSettleParams, AgentSpawnParams, BindingNameParams,
+    BooleanValueParams, ColorValueParams, ControlError, DirectionParams, DriveObjectCreateParams,
+    DriveObjectGetParams, DriveObjectListParams, DriveObjectTrashParams, EmptyParams, ErrorCode,
+    FileOpenParams, KeyParams, KeyValueParams, PageQueryParams, QueryParams,
+    RemoteWslConnectParams, RenameParams, RequestEnvelope, ResizeParams, SettingListParams,
+    SlashRunParams, TabActivateParams, TabActivationMode, TabCloseMode, TabCloseParams,
+    TabCreateParams, TextParams, ThemeNameParams,
 };
 use local_control::selection::select_instance;
 use serde::Serialize;
@@ -775,6 +776,15 @@ pub(super) fn run_agent_command(
             ActionKind::AgentCancel,
             AgentCancelParams {
                 conversation_id: args.conversation,
+            },
+            output_format,
+        ),
+        AgentCommand::Settle(args) => run_action_with_params(
+            args.target,
+            ActionKind::AgentSettle,
+            AgentSettleParams {
+                conversation_id: args.conversation,
+                settled: !args.undo,
             },
             output_format,
         ),

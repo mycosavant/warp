@@ -1703,6 +1703,13 @@ impl AgentConversationsModel {
             | BlocklistAIHistoryEvent::LocalSharedSessionEstablished { .. }
             | BlocklistAIHistoryEvent::UpdatedConversationMetadata { .. } => {}
 
+            // Fork (T8.3): settling moves a row between sections, so the list
+            // has to rebuild rather than merely repaint.
+            BlocklistAIHistoryEvent::ConversationSettledChanged { .. } => {
+                ctx.emit(AgentConversationsModelEvent::ConversationUpdated {
+                    kind: ConversationUpdateKind::MetadataChanged,
+                });
+            }
             BlocklistAIHistoryEvent::ConversationServerTokenAssigned { .. } => {
                 ctx.emit(AgentConversationsModelEvent::ConversationUpdated {
                     kind: ConversationUpdateKind::MetadataChanged,

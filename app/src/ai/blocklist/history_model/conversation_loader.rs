@@ -643,6 +643,12 @@ impl BlocklistAIHistoryModel {
                     .as_ref()
                     .and_then(|data| data.server_conversation_token.as_ref())
                     .map(|token| ServerConversationToken::new(token.clone()));
+                // Fork (T8.3): read the settled bit here, where the row is
+                // already deserialized. Without this the inbox would show every
+                // restored thread as unsettled until it was opened.
+                let settled = conversation_data
+                    .as_ref()
+                    .is_some_and(|data| data.settled);
 
                 Some((
                     conversation_id,
@@ -657,6 +663,7 @@ impl BlocklistAIHistoryModel {
                         has_cloud_data: server_conversation_token.is_some(),
                         server_conversation_token,
                         has_local_data: true,
+                        settled,
                         artifacts,
                         // Only populated when loading from server, not from local DB
                         server_conversation_metadata: None,

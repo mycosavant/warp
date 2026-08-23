@@ -20,8 +20,9 @@ use std::collections::HashMap;
 use ::local_control::protocol::{
     AgentCancelParams, AgentCancelResult, AgentConversationSummary, AgentExchangeSummary,
     AgentListResult, AgentPromptParams, AgentPromptResult, AgentReadParams, AgentReadResult,
-    AgentRevealParams, AgentRevealResult, AgentRevealTarget, AgentSpawnParams, AgentSpawnResult,
-    SlashCommandSummary, SlashListResult, SlashRunParams, TargetSelector,
+    AgentRevealParams, AgentRevealResult, AgentRevealTarget, AgentSettleParams, AgentSettleResult,
+    AgentSpawnParams, AgentSpawnResult, SlashCommandSummary, SlashListResult, SlashRunParams,
+    TargetSelector,
 };
 use ::local_control::{ActionKind, ControlError, ErrorCode, InstanceId};
 use warp_multi_agent_api::ToolType;
@@ -163,6 +164,7 @@ fn surface_locations(
 fn conversation_summary(
     conversation: &AIConversation,
     location: Option<&SurfaceLocation>,
+    settled: bool,
 ) -> AgentConversationSummary {
     let status = conversation.status();
     AgentConversationSummary {
@@ -186,6 +188,7 @@ fn conversation_summary(
         // says what upstream says; `is_busy` is the fork's derived answer and
         // it should mean a turn is actually running.
         is_busy: matches!(status, ConversationStatus::InProgress) && !conversation.is_empty(),
+        settled,
         pane_id: location.map(|location| location.pane_id.to_string()),
         tab_id: location.map(|location| location.tab_id.clone()),
         is_hidden: location.is_some_and(|location| location.is_hidden),
@@ -199,11 +202,16 @@ pub fn agent_list(
     ctx: &mut ModelContext<LocalControlBridge>,
 ) -> Result<serde_json::Value, ControlError> {
     let locations = surface_locations(ctx);
-    let conversations = BlocklistAIHistoryModel::as_ref(ctx)
+    let history = BlocklistAIHistoryModel::as_ref(ctx);
+    let conversations = history
         .all_live_conversations()
         .into_iter()
         .map(|(terminal_surface_id, conversation)| {
-            conversation_summary(conversation, locations.get(&terminal_surface_id))
+            conversation_summary(
+                conversation,
+                locations.get(&terminal_surface_id),
+                history.is_conversation_settled(&conversation.id()),
+            )
         })
         .collect::<Vec<_>>();
 
@@ -285,7 +293,11 @@ pub fn agent_read(
         .collect::<Vec<_>>();
 
     let result = AgentReadResult {
-        conversation: conversation_summary(conversation, location),
+        conversation: conversation_summary(
+            conversation,
+            location,
+            history.is_conversation_settled(&conversation_id),
+        ),
         exchanges,
         exchange_count: exchange_count as u32,
         included_tool_results: action_model.is_some(),
@@ -682,6 +694,56 @@ pub fn agent_cancel(
             conversation_id: conversation_id.to_string(),
             was_running,
             status,
+        })
+        .map_err(|error| ControlError::new(ErrorCode::Internal, error.to_string()))?,
+    );
+    Ok(response)
+}
+
+/// `agent.settle` — mark a thread dealt with, or bring it back (T8.3).
+///
+/// Settling keeps a thread and moves it to the bottom of the inbox; it is not
+/// a delete, and the promise that it will still be there later is enforced in
+/// `select_conversations_to_evict`, which exempts settled rows from the
+/// 200-conversation cap.
+///
+/// Unlike `agent.cancel`, this accepts a conversation that is **not loaded** —
+/// checked against the metadata cache as well as the live map. That is the
+/// normal case rather than an edge case: the threads worth settling are the
+/// ones nobody has opened this session, and requiring a load to change one bit
+/// would make the verb useless for exactly its intended target.
+pub fn agent_settle(
+    instance_id: &Option<InstanceId>,
+    params: &serde_json::Value,
+    ctx: &mut ModelContext<LocalControlBridge>,
+) -> Result<serde_json::Value, ControlError> {
+    let params: AgentSettleParams = serde_json::from_value(params.clone())
+        .map_err(|error| ControlError::new(ErrorCode::InvalidParams, error.to_string()))?;
+    let conversation_id = parse_conversation_id(&params.conversation_id)?;
+
+    {
+        let history = BlocklistAIHistoryModel::as_ref(ctx);
+        let known = history.conversation(&conversation_id).is_some()
+            || history
+                .get_conversation_metadata(&conversation_id)
+                .is_some();
+        if !known {
+            return Err(unknown_conversation(&params.conversation_id));
+        }
+    }
+
+    let settled = params.settled;
+    let changed = BlocklistAIHistoryModel::handle(ctx).update(ctx, |history, ctx| {
+        history.set_conversation_settled(conversation_id, settled, ctx)
+    });
+
+    let mut response = ack(instance_id, ActionKind::AgentSettle);
+    merge(
+        &mut response,
+        serde_json::to_value(AgentSettleResult {
+            conversation_id: conversation_id.to_string(),
+            settled,
+            changed,
         })
         .map_err(|error| ControlError::new(ErrorCode::Internal, error.to_string()))?,
     );

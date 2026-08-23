@@ -171,6 +171,32 @@ Explicitly **not** in the first version: a new panel, a new pane type, a second
 sidebar implementation, or anything that makes "inbox" and "vertical tabs"
 different code paths. It is a sort mode on a list that already renders.
 
+> **Built 2026-08-23 — T8.3.** All four items, and the page was right about the
+> shape: `settled` really was `pinned` again with no migration, and the inbox
+> really was a sort mode on a list that already renders. Better than expected
+> on one point — `ConversationSection` already existed with `Active`/`Past`,
+> already collapsible, so *Settled* is a third variant rather than new
+> machinery.
+>
+> Two things this page could not have known, both found by running:
+>
+> **The eviction trap has a second half.** Exempting settled rows was correct
+> and sufficient for the cap. But `agent_conversations` carries an AFTER UPDATE
+> trigger that stamps `last_modified_at` on any write leaving it alone — so the
+> obvious implementation made every settled thread look freshly used, and since
+> eviction *orders* by that column, unsettling one would have let it evict
+> genuinely newer work. Caught by reading the inbox, where every settled row
+> said "2 min ago".
+>
+> **Settling has to work on threads that are not loaded**, and the `pinned`
+> precedent does not: `set_conversation_pinned` warns and gives up when the
+> conversation is not in memory. Fine for a pill bar full of on-screen
+> children; useless for an inbox, where the rows worth settling are the ones
+> nobody opened this session. Needed its own persistence path.
+>
+> Also added `agent settle`, which is how any of it was checked without a
+> mouse. The keybinding is still deliberately absent, per item 4.
+
 ## Settled: beside, not instead of
 
 Asked and answered 2026-08-21 — **beside**. So the inbox is the fourth

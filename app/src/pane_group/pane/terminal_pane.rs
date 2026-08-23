@@ -2095,6 +2095,7 @@ fn handle_ai_history_event(
         | BlocklistAIHistoryEvent::UpgradedTask { .. }
         | BlocklistAIHistoryEvent::UpdatedConversationTitle { .. }
         | BlocklistAIHistoryEvent::UpdatedConversationMetadata { .. }
+        | BlocklistAIHistoryEvent::ConversationSettledChanged { .. }
         | BlocklistAIHistoryEvent::UpdatedConversationArtifacts { .. }
         | BlocklistAIHistoryEvent::ConversationServerTokenAssigned { .. }
         | BlocklistAIHistoryEvent::ConversationTransferredBetweenTerminalSurfaces { .. }

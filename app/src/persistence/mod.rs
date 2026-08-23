@@ -431,6 +431,12 @@ pub enum ModelEvent {
         updated_tasks: Vec<api::Task>,
         conversation_data: AgentConversationData,
     },
+    /// Fork (T8.3): flip the inbox's `settled` bit on one conversation without
+    /// a task snapshot, so a thread can be settled without being loaded.
+    UpdateAgentConversationSettled {
+        conversation_id: String,
+        settled: bool,
+    },
     /// Persists read-time-derived conversation summaries for rows written
     /// before the `summary` column existed.
     BackfillConversationSummaries {

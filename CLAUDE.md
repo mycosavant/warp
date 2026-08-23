@@ -74,7 +74,7 @@ upstream and rebasable.
 | `crates/http_client/src/egress.rs` | the telemetry deny-list. The "nothing escapes" claim rests on this. |
 | `app/src/ai/local_agent/` | a local implementation of the one agent-transport function, answering from the `claude` CLI. |
 | `app/src/drive/local_sync/` | account-free Warp Drive: snapshot, apply, git-backed sync. |
-| `app/src/local_control/`, `crates/local_control/`, `crates/warp_cli/src/local_control/` | the `warpctrl` control plane, 108 actions. The count is pinned by **two** tests in different crates — update both, and never loosen either. |
+| `app/src/local_control/`, `crates/local_control/`, `crates/warp_cli/src/local_control/` | the `warpctrl` control plane, 109 actions. The count is pinned by **two** tests in different crates — update both, and never loosen either. |
 | `app/src/remote_server/wsl_transport.rs`, `crates/remote_server/src/wsl.rs` | the second `RemoteTransport`: Warp's remote-development server, in a WSL distro instead of over SSH. |
 
 Environment variables the fork adds: `WARP_FORK_POLICY` (set `0`/`off`/`false`

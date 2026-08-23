@@ -108,6 +108,12 @@ pub struct AIConversationMetadata {
     /// Mirrors [`AIConversation::parent_agent_id`]; the same value the ambient
     /// task carries as `parent_run_id`.
     pub parent_agent_id: Option<String>,
+
+    /// Fork: whether the user has settled this thread (T8.3). Mirrored here
+    /// for the same reason `parent_conversation_id` is — the inbox lists
+    /// conversations that are not loaded, and a row has to know which section
+    /// it belongs in without paying to load the whole conversation.
+    pub settled: bool,
 }
 
 impl From<&AIConversation> for AIConversationMetadata {
@@ -137,6 +143,7 @@ impl From<&AIConversation> for AIConversationMetadata {
             server_conversation_metadata: conversation.server_metadata().cloned(),
             parent_conversation_id: conversation.parent_conversation_id(),
             parent_agent_id: conversation.parent_agent_id().map(ToString::to_string),
+            settled: conversation.is_settled(),
         }
     }
 }
@@ -185,6 +192,8 @@ impl AIConversationMetadata {
             // `parent_run_id` instead (see `AgentConversationsModel::get_entries`).
             parent_conversation_id: None,
             parent_agent_id: None,
+            // Server-fetched metadata carries no local inbox state.
+            settled: false,
         }
     }
 
@@ -936,6 +945,96 @@ impl BlocklistAIHistoryModel {
             terminal_surface_id: self.terminal_surface_id_for_conversation(&conversation_id),
             conversation_id,
         });
+    }
+
+    /// Fork (T8.3): whether a thread has been settled — dealt with, kept, and
+    /// moved to the bottom of the inbox.
+    ///
+    /// Reads the live conversation when there is one and the cached metadata
+    /// otherwise, because the inbox lists far more threads than are loaded.
+    pub fn is_conversation_settled(&self, conversation_id: &AIConversationId) -> bool {
+        if let Some(conversation) = self.conversations_by_id.get(conversation_id) {
+            return conversation.is_settled();
+        }
+        self.all_conversations_metadata
+            .get(conversation_id)
+            .is_some_and(|metadata| metadata.settled)
+    }
+
+    /// Fork (T8.3): settles or unsettles a thread, and persists it.
+    ///
+    /// Deliberately *not* shaped like [`Self::set_conversation_pinned`], which
+    /// warns and gives up when the conversation is not loaded. Pinning acts on
+    /// a child in an orchestration pill bar, which is on screen and therefore
+    /// loaded by definition. Settling acts on an inbox row, and the rows most
+    /// worth settling are the old ones nobody has opened this session — so
+    /// "not loaded" is the normal case here, not an error case.
+    ///
+    /// The two paths differ only in how they reach SQLite: a loaded
+    /// conversation goes through `write_updated_conversation_state`, which
+    /// writes the whole row and is the proven path; an unloaded one takes
+    /// `UpdateAgentConversationSettled`, which patches the one field. In both
+    /// cases the cached metadata is updated too, so the list re-renders into
+    /// the right section without waiting for a reload.
+    ///
+    /// Returns whether anything changed.
+    pub fn set_conversation_settled(
+        &mut self,
+        conversation_id: AIConversationId,
+        settled: bool,
+        ctx: &mut ModelContext<Self>,
+    ) -> bool {
+        if self.is_conversation_settled(&conversation_id) == settled {
+            return false;
+        }
+
+        let Some(sqlite_sender) = GlobalResourceHandlesProvider::as_ref(ctx)
+            .get()
+            .model_event_sender
+            .clone()
+        else {
+            // No persistence handle: refuse rather than move the row in the UI
+            // and lose the change on restart. Settling is a promise about
+            // later, so a settle that cannot be written is a settle that must
+            // not appear to have happened.
+            return false;
+        };
+        if let Err(e) = sqlite_sender.send(ModelEvent::UpdateAgentConversationSettled {
+            conversation_id: conversation_id.to_string(),
+            settled,
+        }) {
+            log::warn!("Failed to persist settled state for {conversation_id:?}: {e:?}");
+            return false;
+        }
+
+        // Both loaded and unloaded threads take the same write, rather than
+        // routing a loaded one through `write_updated_conversation_state`.
+        // That path is a full upsert, and a full upsert lets the
+        // `update_last_modified_at_for_agent_conversations` trigger stamp the
+        // row — so settling an open thread would push it to the top of every
+        // recency sort, while settling a closed one did not. Same action, same
+        // write, same timestamps.
+        //
+        // The in-memory flag still has to move, or a later full write for an
+        // unrelated reason would serialize the stale value straight back over
+        // the one just persisted.
+        if let Some(conversation) = self.conversations_by_id.get_mut(&conversation_id) {
+            conversation.set_settled(settled);
+        }
+
+        if let Some(metadata) = self.all_conversations_metadata.get_mut(&conversation_id) {
+            metadata.settled = settled;
+        }
+
+        ctx.emit(BlocklistAIHistoryEvent::UpdatedConversationMetadata {
+            terminal_surface_id: self.terminal_surface_id_for_conversation(&conversation_id),
+            conversation_id,
+        });
+        ctx.emit(BlocklistAIHistoryEvent::ConversationSettledChanged {
+            conversation_id,
+            settled,
+        });
+        true
     }
 
     /// Sets a live conversation's server token, updates the reverse index, and
@@ -1739,6 +1838,7 @@ impl BlocklistAIHistoryModel {
             autoexecute_override: Some(source_conversation.autoexecute_override().into()),
             last_event_sequence: None,
             pinned: false,
+            settled: false,
         };
         let forked_conversation_id = AIConversationId::new();
         if let Err(e) = sqlite_sender.send(ModelEvent::UpdateMultiAgentConversation {
@@ -1917,6 +2017,7 @@ impl BlocklistAIHistoryModel {
             autoexecute_override: Some(conversation.autoexecute_override().into()),
             last_event_sequence: None,
             pinned: false,
+            settled: false,
         };
 
         let forked_conversation_id = AIConversationId::new();
@@ -2962,6 +3063,9 @@ fn merged_remote_child_placeholder_conversation_data(
             .map(|id| id.to_string()),
         is_remote_child: placeholder.is_remote_child(),
         pinned: placeholder.is_pinned(),
+        // Settling is a local decision about a local inbox; the cloud has no
+        // opinion on it and must not clear it on merge.
+        settled: placeholder.is_settled(),
 
         // Reset on merge.
         reverted_action_ids: None,
@@ -2992,6 +3096,18 @@ pub enum ConversationStatusUpdate {
 
 #[derive(Clone, Debug)]
 pub enum BlocklistAIHistoryEvent {
+    /// Fork (T8.3): a thread was settled or brought back.
+    ///
+    /// Separate from `UpdatedConversationMetadata`, which
+    /// `AgentConversationsModel` deliberately ignores. Settling changes which
+    /// *section* a row belongs to rather than how it reads, so it has to reach
+    /// the list, and widening the ignored event to make that happen would
+    /// re-render the inbox on every title and token-count update as well.
+    ConversationSettledChanged {
+        conversation_id: AIConversationId,
+        settled: bool,
+    },
+
     /// A new conversation was started.
     StartedNewConversation {
         new_conversation_id: AIConversationId,
@@ -3276,6 +3392,9 @@ impl BlocklistAIHistoryEvent {
                 terminal_surface_id,
                 ..
             } => *terminal_surface_id,
+            // Fork (T8.3): settling is a fact about a thread, not about a
+            // pane — the threads most worth settling have no pane at all.
+            BlocklistAIHistoryEvent::ConversationSettledChanged { .. } => None,
             // NewConversationRequestComplete is executor-scoped and has no
             // terminal_surface_id.
             BlocklistAIHistoryEvent::NewConversationRequestComplete { .. } => None,

@@ -60,6 +60,7 @@ pub enum ActionParameterSpec {
     AgentRead,
     AgentSpawn,
     AgentCancel,
+    AgentSettle,
     AgentReveal,
     SlashRun,
     DriveObjectList,
@@ -97,6 +98,7 @@ pub enum ActionResultSpec {
     AgentTranscript,
     AgentSpawnedChild,
     AgentCancellation,
+    AgentSettled,
     AgentRevelation,
     SlashCommandList,
     DriveObjectList,
@@ -370,6 +372,9 @@ define_action_catalog! {
         // `Agent`: the targeted pane supplies the default parent conversation.
         AgentSpawn => { name: "agent.spawn", status: Implemented, target: Agent, params: AgentSpawn, result: AgentSpawnedChild },
         AgentCancel => { name: "agent.cancel", status: Implemented, target: Instance, params: AgentCancel, result: AgentCancellation },
+        // `Instance`: settling is a fact about a thread, not about a pane, and
+        // the threads most worth settling have no pane open (T8.3).
+        AgentSettle => { name: "agent.settle", status: Implemented, target: Instance, params: AgentSettle, result: AgentSettled },
         // `Agent` rather than `Instance`: `swap` replaces the contents of a
         // pane, so which pane is part of the request.
         AgentReveal => { name: "agent.reveal", status: Implemented, target: Agent, params: AgentReveal, result: AgentRevelation },

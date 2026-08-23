@@ -390,6 +390,12 @@ pub struct AIConversation {
     /// Whether the user has pinned this child agent in the orchestration
     /// pill bar. Persisted via `AgentConversationData.pinned`.
     pinned: bool,
+
+    /// Fork: whether the user has settled this thread in the inbox (T8.3).
+    /// Persisted via `AgentConversationData.settled`, and carried on
+    /// [`AIConversationMetadata`] as well so a thread can be settled without
+    /// being loaded.
+    settled: bool,
 }
 
 pub(crate) fn artifact_from_fork_proto(
@@ -446,6 +452,7 @@ impl AIConversation {
             last_event_sequence: None,
             orchestration_configs: HashMap::new(),
             pinned: false,
+            settled: false,
         }
     }
 
@@ -582,6 +589,7 @@ impl AIConversation {
             autoexecute_override,
             last_event_sequence,
             pinned,
+            settled,
         ) = if let Some(data) = conversation_data {
             let server_conversation_token = data
                 .server_conversation_token
@@ -638,6 +646,7 @@ impl AIConversation {
                 autoexecute_override,
                 data.last_event_sequence,
                 data.pinned,
+                data.settled,
             )
         } else {
             (
@@ -655,6 +664,7 @@ impl AIConversation {
                 None,
                 AIConversationAutoexecuteMode::default(),
                 None,
+                false,
                 false,
             )
         };
@@ -698,6 +708,7 @@ impl AIConversation {
             last_event_sequence,
             orchestration_configs: HashMap::new(),
             pinned,
+            settled,
         })
     }
 
@@ -1215,6 +1226,18 @@ impl AIConversation {
     /// `write_updated_conversation_state` to push the change to SQLite.
     pub fn set_pinned(&mut self, pinned: bool) {
         self.pinned = pinned;
+    }
+
+    /// Fork: whether the user has settled this thread in the inbox (T8.3).
+    pub fn is_settled(&self) -> bool {
+        self.settled
+    }
+
+    /// Fork: sets the persisted settled state. Like [`Self::set_pinned`], the
+    /// caller must follow up with `write_updated_conversation_state` to reach
+    /// SQLite — this only moves the in-memory value.
+    pub fn set_settled(&mut self, settled: bool) {
+        self.settled = settled;
     }
 
     /// Returns true if this conversation was spawned by a parent orchestrator
@@ -3635,6 +3658,7 @@ impl AIConversation {
                 autoexecute_override: Some(self.autoexecute_override.into()),
                 last_event_sequence: self.last_event_sequence,
                 pinned: self.pinned,
+                settled: self.settled,
             },
         };
         ctx.spawn(

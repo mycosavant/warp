@@ -275,6 +275,21 @@ pub struct AgentCancelParams {
     pub conversation_id: String,
 }
 
+/// Params for `agent.settle` (T8.3).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentSettleParams {
+    pub conversation_id: String,
+    /// `false` unsettles. Explicit rather than a toggle, because a caller that
+    /// cannot see the current state would otherwise have to read it first and
+    /// race anyone else changing it.
+    #[serde(default = "default_true")]
+    pub settled: bool,
+}
+
+fn default_true() -> bool {
+    true
+}
+
 /// Where `agent.reveal` should put a conversation.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -370,6 +385,11 @@ pub struct AgentConversationSummary {
     /// Whether the agent is still working. True for `in_progress` only —
     /// `waiting_for_events` is quiescent, and `blocked` is waiting on a person.
     pub is_busy: bool,
+    /// Whether the thread has been settled — dealt with, kept, and moved to the
+    /// bottom of the inbox (T8.3). Omitted when false, so the ordinary listing
+    /// is unchanged.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub settled: bool,
     /// The pane hosting it. Absent for a conversation whose terminal surface
     /// has been closed, which outlives the pane it was shown in.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -446,6 +466,17 @@ pub struct AgentReadResult {
     /// be gone. Reported so a caller can tell "no tools were used" from "the
     /// tool results were not reachable".
     pub included_tool_results: bool,
+}
+
+/// Result of `agent.settle` (T8.3).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AgentSettleResult {
+    pub conversation_id: String,
+    pub settled: bool,
+    /// Whether this call changed anything. `false` means the thread was
+    /// already in the requested state — not an error, and not refused, because
+    /// the caller asked for a state rather than for a transition.
+    pub changed: bool,
 }
 
 /// The result of `agent.cancel`.

@@ -28,7 +28,7 @@ then each capability the fork opened.
 * [**Warp's remote server, in a WSL distribution**](#warps-remote-server-in-a-wsl-distribution) — the Zed-style split, and how to run it
 
 **What the fork opened**
-* [Driving Warp from an agent (`warpctrl`)](#driving-warp-from-an-agent-warpctrl) — 108 actions, the orchestration surface. The largest section; has its own sub-index.
+* [Driving Warp from an agent (`warpctrl`)](#driving-warp-from-an-agent-warpctrl) — 109 actions, the orchestration surface. The largest section; has its own sub-index.
 * [Warp Drive without an account](#warp-drive-without-an-account) · [Your drive as a git repository](#your-drive-as-a-git-repository)
 * [The agent, answered by your own Claude](#the-agent-answered-by-your-own-claude-experimental)
 * [Voice input, transcribed on this machine](#voice-input-transcribed-on-this-machine)
@@ -754,11 +754,11 @@ In this section: [what it can do](#what-it-can-do) ·
 
 ### What it can do
 
-**108 actions. Every one of them run against a live build — the first 92 on
+**109 actions. Every one of them run against a live build — the first 92 on
 Windows, then T6.6's four `agent` verbs and T1.12's four `drive object` verbs
 on Linux, I16's two `remote wsl` verbs back on Windows, and T8.5's three
-`pane main`, T8.1's two `window visor` verbs and T8.2's `tab merge` on Linux
-again. So this list is
+`pane main`, T8.1's two `window visor` verbs, T8.2's `tab merge` and T8.3's
+`agent settle` on Linux again. So this list is
 the verified surface rather than the catalog's own claim about itself.**
 `warpctrl action list` emits the catalog as JSON with
 `parameter_spec`, `result_spec` and `target_scope` per action, so tool
@@ -782,7 +782,7 @@ definitions can be generated from it rather than hardcoded.
 | `surface`    | 20 | list, plus 19 panels and modals |
 | `file`       | 1  | open |
 | `drive`      | 7  | status export import, object list/get/create/trash — **fork-added**, see T4.4 and T1.12 |
-| `agent`      | 6  | list prompt read spawn cancel reveal — **fork-added**, see T6.5/T6.6 |
+| `agent`      | 7  | list prompt read spawn cancel settle reveal — **fork-added**, see T6.5/T6.6/T8.3 |
 | `slash`      | 2  | list run — **fork-added**, see T6.5 |
 | `remote`     | 2  | wsl list, wsl connect — **fork-added**, see I16 |
 
@@ -911,6 +911,23 @@ surface can be closed while the conversation survives.
 still works. Cancelling one that has already finished is not an error —
 `was_running: false` says which happened, because an orchestrator cancelling a
 child races the child finishing and both outcomes are the state it asked for.
+
+**`agent settle` puts a thread away without deleting it.** Settled threads drop
+to a collapsed **SETTLED** section at the bottom of the conversation list, and
+are **exempt from the 200-conversation eviction cap** — which is the difference
+between an archive and a place things fall into.
+
+```bash
+warpctrl agent settle 68c2eb37-…          # deal with it
+warpctrl agent settle 68c2eb37-… --undo   # bring it back
+```
+
+It works on conversations that are not open, which is the point: the threads
+worth settling are usually ones nobody has looked at this session. Settling
+something already settled answers `changed: false` rather than failing. And it
+deliberately does **not** touch `last_modified_at` — putting a thread away
+should not make it look freshly used, and the recency order it would corrupt is
+the one eviction uses.
 
 **`agent reveal` puts a hidden child on screen.** With no selector it hosts the
 reveal from the tab that already holds the conversation, not from your active
@@ -1478,6 +1495,35 @@ relying on any of this:
 - **Header drags feel laggy on Windows.** Reported on a *debug* build. Measure
   it with the slow-frame log below rather than guessing — that is what it is
   for.
+
+## The inbox, and settling a thread
+
+The conversation list (left panel → the speech-bubble icon, or `warpctrl
+surface conversation-list open`) groups threads into **ACTIVE**, **PAST** and
+now **SETTLED**.
+
+Settling is not deleting and not hiding. A settled thread drops to a collapsed
+section at the bottom, keeps its transcript, and comes back with one click —
+"dealt with", the way an email archive works. Settle from a row's overflow menu
+("Settle thread" / "Bring back to inbox") or from the CLI with `warpctrl agent
+settle`.
+
+**The part that makes it a promise rather than a gesture:** Warp keeps at most
+200 conversations on disk and evicts whole trees oldest-first past that
+(`MAX_PERSISTED_CONVERSATION_COUNT`). Settled threads are **exempt, and do not
+count against the cap** — otherwise settling would be a slow way of losing
+things at conversation 201, silently. Exemption is tree-wise, because eviction
+is: settling a child keeps its parent too, or the word would mean different
+things depending on which row you clicked.
+
+The trade is unbounded growth if you settle everything. That is a real risk but
+a slow and visible one, and it is the right way round — losing work you asked
+to keep is neither.
+
+Two smaller behaviours worth knowing. Settling **does not touch a thread's
+timestamp**, so putting something away never makes it look freshly used.
+Settled beats active: a settled thread with a pane still open stays in SETTLED
+rather than climbing back to the top.
 
 ## Measuring a frame, without telling anybody
 

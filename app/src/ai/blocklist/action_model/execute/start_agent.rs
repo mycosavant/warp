@@ -232,6 +232,7 @@ impl StartAgentExecutor {
             | BlocklistAIHistoryEvent::RestoredConversations { .. }
             | BlocklistAIHistoryEvent::UpdatedConversationTitle { .. }
             | BlocklistAIHistoryEvent::UpdatedConversationMetadata { .. }
+            | BlocklistAIHistoryEvent::ConversationSettledChanged { .. }
             | BlocklistAIHistoryEvent::UpdatedConversationArtifacts { .. }
             | BlocklistAIHistoryEvent::ConversationTransferredBetweenTerminalSurfaces { .. } => {}
             BlocklistAIHistoryEvent::OrchestrationConfigUpdated { .. }

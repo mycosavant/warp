@@ -1684,7 +1684,8 @@ impl OrchestrationEventStreamer {
             | BlocklistAIHistoryEvent::UpdatedConversationMetadata {
                 conversation_id, ..
             } => self.reevaluate_eligibility(*conversation_id, ctx),
-            BlocklistAIHistoryEvent::StartedNewConversation { .. }
+            BlocklistAIHistoryEvent::ConversationSettledChanged { .. }
+            | BlocklistAIHistoryEvent::StartedNewConversation { .. }
             | BlocklistAIHistoryEvent::CreatedSubtask { .. }
             | BlocklistAIHistoryEvent::UpgradedTask { .. }
             | BlocklistAIHistoryEvent::AppendedExchange { .. }

@@ -616,6 +616,22 @@ fn add_parameter_properties(
                 "description": "Conversation whose turn should be stopped, from warp_agent_list.",
             }),
         ),
+        ActionParameterSpec::AgentSettle => {
+            require(
+                "conversation_id",
+                json!({
+                    "type": "string",
+                    "description": "Conversation to settle or unsettle, from warp_agent_list.",
+                }),
+            );
+            properties.insert(
+                "settled".to_owned(),
+                json!({
+                    "type": "boolean",
+                    "description": "True to settle the thread (default), false to bring it back.",
+                }),
+            );
+        }
         ActionParameterSpec::AgentReveal => {
             require(
                 "conversation_id",

@@ -141,6 +141,76 @@ pub(super) fn upsert_agent_conversation<'a>(
     Ok(())
 }
 
+/// Fork (T8.3): flips `settled` on one row without touching its tasks.
+///
+/// `upsert_agent_conversation` is the only other writer and it takes a full
+/// task snapshot, which a caller that never loaded the conversation does not
+/// have — and the inbox's whole point is listing threads that are *not*
+/// loaded. Rather than force a load to change one bit, this reads the JSON
+/// column, sets the field, and writes it back.
+///
+/// A row that fails to deserialize is left alone rather than replaced: a
+/// column we cannot parse is one we certainly should not overwrite with a
+/// default-shaped value, which would silently discard whatever it held.
+pub(super) fn update_agent_conversation_settled(
+    conn: &mut SqliteConnection,
+    conversation_id_param: &str,
+    settled_param: bool,
+) -> Result<(), UpsertConversationError> {
+    use diesel::QueryDsl;
+    use schema::agent_conversations::dsl::*;
+
+    let existing: Option<String> = agent_conversations
+        .filter(conversation_id.eq(conversation_id_param))
+        .select(conversation_data)
+        .first::<String>(conn)
+        .optional()?;
+
+    let Some(existing) = existing else {
+        // Nothing persisted yet. Not an error: a brand-new conversation is
+        // written by its own upsert, which carries the flag with it.
+        return Ok(());
+    };
+
+    let mut data: AgentConversationData = serde_json::from_str(&existing)?;
+    if data.settled == settled_param {
+        return Ok(());
+    }
+    data.settled = settled_param;
+    let serialized = serde_json::to_string(&data)?;
+
+    // Settling must not make a thread look freshly active, and the schema
+    // fights that: `update_last_modified_at_for_agent_conversations` is an
+    // AFTER UPDATE trigger that stamps `CURRENT_TIMESTAMP` on any write which
+    // leaves the column alone. Writing the old value in the same statement does
+    // not help — the trigger's guard is `NEW.last_modified_at IS OLD.
+    // last_modified_at`, which that satisfies.
+    //
+    // So: let the trigger fire, then put the timestamp back. The restoring
+    // update *differs* from the bumped value, so the guard fails and the
+    // trigger does not run again.
+    //
+    // This is not cosmetic. `select_conversations_to_evict` orders trees by
+    // `last_modified_at`, so a bumped row outranks genuinely newer
+    // conversations — harmless while it stays settled and exempt, and a way to
+    // evict someone else's work the moment it is unsettled.
+    let previous_timestamp: chrono::NaiveDateTime = agent_conversations
+        .filter(conversation_id.eq(conversation_id_param))
+        .select(last_modified_at)
+        .first(conn)?;
+
+    conn.transaction(|conn| {
+        diesel::update(agent_conversations.filter(conversation_id.eq(conversation_id_param)))
+            .set(conversation_data.eq(serialized))
+            .execute(conn)?;
+        diesel::update(agent_conversations.filter(conversation_id.eq(conversation_id_param)))
+            .set(last_modified_at.eq(previous_timestamp))
+            .execute(conn)?;
+        diesel::result::QueryResult::Ok(())
+    })?;
+    Ok(())
+}
+
 /// Evicts whole orchestration trees so the remaining set fits within `limit`.
 /// Trees are sorted freshest-first by `max(member.last_modified_at)` (ties
 /// broken by `root_id` ASC); the freshest tree is always retained, every
@@ -158,13 +228,19 @@ pub(super) fn select_conversations_to_evict(
     }
 
     // Map each row to its declared parent, but only when that parent is
-    // itself in `rows`; orphan references collapse to a root.
+    // itself in `rows`; orphan references collapse to a root. The same pass
+    // picks up the fork's `settled` bit, because both come out of the one
+    // deserialization of a column that is not cheap to parse twice.
     let row_set: HashSet<&str> = rows.iter().map(|r| r.conversation_id.as_str()).collect();
+    let mut settled_ids: HashSet<&str> = HashSet::new();
     let parent_by_id: HashMap<&str, Option<String>> = rows
         .iter()
         .map(|r| {
-            let parent = serde_json::from_str::<AgentConversationData>(&r.conversation_data)
-                .ok()
+            let data = serde_json::from_str::<AgentConversationData>(&r.conversation_data).ok();
+            if data.as_ref().is_some_and(|d| d.settled) {
+                settled_ids.insert(r.conversation_id.as_str());
+            }
+            let parent = data
                 .and_then(|d| d.parent_conversation_id)
                 .filter(|p| row_set.contains(p.as_str()));
             (r.conversation_id.as_str(), parent)
@@ -205,17 +281,41 @@ pub(super) fn select_conversations_to_evict(
         .collect();
     tree_list.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.cmp(&b.1)));
 
+    // Fork (T8.3): a tree holding any settled conversation is exempt, and does
+    // not count against `limit` either.
+    //
+    // **An archive that evicts is not an archive.** Settling a thread is a
+    // promise that it will still be there later, and without this the promise
+    // became false at conversation 201 — silently, with nothing in the UI
+    // saying so. Exemption is at *tree* granularity because eviction already
+    // is: trees are dropped whole, so a settled child inside an unsettled tree
+    // would otherwise be taken along with its parent.
+    //
+    // The cost is unbounded growth if a user settles everything. That is a real
+    // risk, but a slow and visible one, and it is the right way round: losing
+    // work the user explicitly asked to keep is neither.
+    let tree_is_exempt = |members: &[&AgentConversationRecord]| {
+        members
+            .iter()
+            .any(|m| settled_ids.contains(m.conversation_id.as_str()))
+    };
+
     let mut kept_count: usize = 0;
     let mut evicted: Vec<String> = Vec::new();
     let mut tree_iter = tree_list.into_iter();
 
     // Freshest tree is always retained, even when it alone exceeds `limit`.
     if let Some((_effective, _root, members)) = tree_iter.next() {
-        kept_count += members.len();
+        if !tree_is_exempt(&members) {
+            kept_count += members.len();
+        }
     }
 
     let mut stopped = false;
     for (_effective, _root, members) in tree_iter {
+        if tree_is_exempt(&members) {
+            continue;
+        }
         let tree_size = members.len();
         let keep_this = !stopped && kept_count + tree_size <= limit;
         if keep_this {

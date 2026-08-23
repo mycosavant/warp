@@ -58,6 +58,7 @@ fn conversation_data_with_provider_cost(
         autoexecute_override: None,
         last_event_sequence: None,
         pinned: false,
+        settled: false,
     }
 }
 

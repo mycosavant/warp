@@ -3947,7 +3947,8 @@ impl AgentDriver {
                 | BlocklistAIHistoryEvent::NewConversationRequestComplete { .. }
                 | BlocklistAIHistoryEvent::OrchestrationConfigUpdated { .. }
                 | BlocklistAIHistoryEvent::ConversationUsageMetadataUpdated { .. }
-                | BlocklistAIHistoryEvent::LocalSharedSessionEstablished { .. } => (),
+                | BlocklistAIHistoryEvent::LocalSharedSessionEstablished { .. }
+                | BlocklistAIHistoryEvent::ConversationSettledChanged { .. } => (),
             }
         });
 

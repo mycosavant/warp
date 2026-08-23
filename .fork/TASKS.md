@@ -4065,7 +4065,7 @@ T1, T4, T5 and T7, and by now should be the prior rather than the surprise.
       has. Reverted, with the measurement recorded in the constant's doc
       comment so the next person does not repeat it.
 
-- [ ] **T8.3** The thread inbox, and `settled`. (I1)
+- [x] **T8.3** The thread inbox, and `settled`. (I1)
       `ToolPanelView::ConversationListView` already exists with 2,198 lines
       behind it, and `AgentConversationEntry` already carries every field an
       inbox row wants. `settled: bool` mirrors the existing
@@ -4106,6 +4106,86 @@ T1, T4, T5 and T7, and by now should be the prior rather than the surprise.
       `event/v1.rs` both still drop fields and are both still worth fixing, but
       neither is on the path here. Nothing else about the plan above is
       affected.
+
+      **As built (2026-08-23).** The plan held: `settled` really was one field,
+      and the inbox really was a sort mode on a list that already renders.
+      `ConversationSection` already existed with `Active` and `Past`, already
+      collapsible, already header-rendered — so the inbox is a **third
+      variant**, not a second implementation. Four things were bigger than the
+      plan said, and one of them was a real defect.
+
+      **1. `settled` on `AgentConversationData`, mirroring `pinned`.** No
+      migration, as claimed — verified by reading the column back: settled rows
+      carry `"settled":true` and every other row has **no `settled` key at
+      all**, because `skip_serializing_if` keeps it out. Old rows parse as
+      unsettled and are pinned by a test.
+
+      **2. The trap is closed.** `select_conversations_to_evict` exempts any
+      tree containing a settled conversation, and does not count it against
+      the cap. Exemption is **tree-wise because eviction is** — trees are
+      dropped whole, so a per-row check would take a settled child along with
+      its parent. Four tests, the sharpest being a settled row that is *by far*
+      the oldest, so every ordering rule votes to drop it.
+
+      **3. A thread can be settled without being loaded, and that is the normal
+      case.** `set_conversation_pinned` warns and gives up when a conversation
+      is not in memory — fine for a pill bar, useless for an inbox, where the
+      rows most worth settling are the ones nobody opened this session. So
+      `ModelEvent::UpdateAgentConversationSettled` patches the one field
+      without a task snapshot, and both loaded and unloaded threads take the
+      same write.
+
+      **4. `agent.settle` (108 → 109 actions)**, which is how any of this was
+      checked without a mouse. Verified live: settle a live thread, restart,
+      read it back settled; settle a thread that was never opened; `--undo`
+      removes the key entirely; settling twice answers `changed: false` rather
+      than erroring.
+
+      #### The defect, found by looking rather than reading
+
+      Every settled row in the inbox said **"2 min ago"** — which was when I
+      settled them. `agent_conversations` has an AFTER UPDATE trigger,
+      `update_last_modified_at_for_agent_conversations`, that stamps
+      `CURRENT_TIMESTAMP` on any write leaving the column alone. Writing the
+      old value in the same statement does not help: the trigger's guard is
+      `NEW.last_modified_at IS OLD.last_modified_at`, which that satisfies.
+
+      **Not cosmetic.** Eviction orders trees by `last_modified_at`, so a
+      bumped row outranks genuinely newer conversations — harmless while it
+      stays settled and exempt, and **a way to evict live work the moment it is
+      unsettled**. Tidying up would have deleted things.
+
+      Fixed by letting the trigger fire and then putting the timestamp back:
+      the restoring update differs from the bumped value, so the guard fails
+      and it does not re-fire. Pinned by a test in both directions. The same
+      finding is why settling no longer routes a loaded conversation through
+      `write_updated_conversation_state` — that is a full upsert and would let
+      the trigger stamp the row, so settling an *open* thread bumped it while
+      settling a closed one did not. Same action, same write, same timestamps.
+
+      #### A second thing reading would not have caught
+
+      Settling from `warpctrl` changed the database and **the inbox did not
+      move**. `AgentConversationsModel` explicitly ignores
+      `UpdatedConversationMetadata`, so the emit went nowhere. Widening that
+      would rebuild the list on every title and token-count update, so
+      settling emits its own `ConversationSettledChanged` and only that is
+      translated into a rebuild.
+
+      **Verified by running:** SETTLED renders at the bottom, collapsed, with
+      PAST correctly emptied as threads moved out; temporarily starting it
+      expanded confirmed the rows are *in* the section rather than lost, and
+      the temporary change was reverted.
+
+      **Left unverified:** the row context-menu item ("Settle thread" / "Bring
+      back to inbox") is built and compiles but has not been clicked —
+      synthetic input still reaches no X11 client under WSLg. `agent.settle`
+      exercises the same `set_conversation_settled` underneath it.
+
+      **Left undone deliberately:** no keybinding, per `IDEAS.md` I1 — "not
+      until you have used it for a week and know what it should be." And the
+      transcript reader from I17 is still a separate piece of work; this ships
+      the sections and the bit, not the trajectory.
 
 - [ ] **T8.4** Pin what a tool claims to be. (I11)
       Hash each MCP tool's `(name, description, input_schema)` at connect,

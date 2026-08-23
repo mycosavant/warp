@@ -49,7 +49,7 @@ use warpui::{AppContext, SingletonEntity};
 
 use super::agent::{
     backfill_conversation_summaries, delete_agent_conversations, read_agent_conversation_metadata,
-    upsert_agent_conversation,
+    update_agent_conversation_settled, upsert_agent_conversation,
 };
 use super::block_list::{
     delete_ai_conversation, delete_blocks, save_block, update_block_agent_view_visibility,
@@ -766,6 +766,12 @@ fn handle_model_event(event: ModelEvent, connection: &mut SqliteConnection) -> a
             conversation_data,
         )
         .map_err(anyhow::Error::from),
+        ModelEvent::UpdateAgentConversationSettled {
+            conversation_id,
+            settled,
+        } => update_agent_conversation_settled(connection, &conversation_id, settled)
+            .map_err(anyhow::Error::from)
+            .context("error updating settled state for agent conversation"),
         ModelEvent::BackfillConversationSummaries { backfills } => {
             backfill_conversation_summaries(connection, backfills)
                 .map_err(anyhow::Error::from)

@@ -393,3 +393,188 @@ fn eviction_is_deterministic() {
     assert_eq!(e1, e2);
     assert_eq!(e1, vec!["c".to_string(), "d".to_string()]);
 }
+
+// ── Fork (T8.3): settled conversations are exempt from eviction ────────────
+
+fn make_settled_row(
+    id: i32,
+    conversation_id: &str,
+    parent: Option<&str>,
+    secs: i64,
+) -> AgentConversationRecord {
+    let data = match parent {
+        Some(p) => format!(
+            r#"{{"server_conversation_token":null,"parent_conversation_id":"{p}","settled":true}}"#
+        ),
+        None => r#"{"server_conversation_token":null,"settled":true}"#.to_string(),
+    };
+    AgentConversationRecord {
+        id,
+        conversation_id: conversation_id.to_string(),
+        conversation_data: data,
+        last_modified_at: ts(secs),
+        summary: None,
+    }
+}
+
+/// The whole point of `settled`, pinned.
+///
+/// Settling is a promise the thread will still be there later. Before the
+/// exemption, the oldest rows were evicted whatever the user had said about
+/// them — so the promise became false at conversation 201, silently. This is
+/// the deliberately hostile arrangement: the settled row is *by far* the
+/// oldest, so every ordering rule in `select_conversations_to_evict` votes to
+/// drop it.
+#[test]
+fn a_settled_conversation_is_never_evicted_however_old_it_is() {
+    let mut rows = vec![make_settled_row(1, "kept", None, 1)];
+    for i in 0_i32..12 {
+        let id = format!("s{i}");
+        rows.push(make_row(100 + i, &id, None, 1_000 + i64::from(i)));
+    }
+
+    let evicted = select_conversations_to_evict(&rows, 5);
+    assert!(!evicted.is_empty(), "the unsettled rows should still evict");
+    assert!(
+        !evicted.contains(&"kept".to_string()),
+        "the settled conversation was evicted; evicted={evicted:?}"
+    );
+}
+
+/// Settled rows do not count against the cap either.
+///
+/// If they did, settling threads would quietly shrink the working set —
+/// settle 200 and the cap would evict everything else, which is the same
+/// silent data loss wearing a different hat.
+#[test]
+fn settled_conversations_do_not_consume_the_cap() {
+    let mut rows: Vec<_> = (0_i32..8)
+        .map(|i| make_settled_row(i, &format!("archived{i}"), None, 5_000 + i64::from(i)))
+        .collect();
+    // Exactly `limit` unsettled rows: none should be evicted, because the
+    // eight settled ones are not competing for the same budget.
+    for i in 0_i32..4 {
+        rows.push(make_row(
+            100 + i,
+            &format!("live{i}"),
+            None,
+            100 + i64::from(i),
+        ));
+    }
+
+    let evicted = select_conversations_to_evict(&rows, 4);
+    assert!(
+        evicted.is_empty(),
+        "settled rows consumed the cap and pushed out live ones; evicted={evicted:?}"
+    );
+}
+
+/// Exemption is tree-wise, because eviction is.
+///
+/// Trees are dropped whole, so a settled child inside an otherwise-stale tree
+/// would be taken along with its parent if the check were per-row. Settling a
+/// child has to save the thread it belongs to, or "settled" means something
+/// different depending on where in a tree you clicked.
+#[test]
+fn settling_a_child_exempts_the_whole_tree() {
+    let mut rows = vec![
+        make_row(1, "parent", None, 2),
+        make_settled_row(2, "child", Some("parent"), 3),
+    ];
+    for i in 0_i32..12 {
+        let id = format!("s{i}");
+        rows.push(make_row(100 + i, &id, None, 9_000 + i64::from(i)));
+    }
+
+    let evicted = select_conversations_to_evict(&rows, 5);
+    assert!(
+        !evicted.contains(&"child".to_string()),
+        "settled child evicted; evicted={evicted:?}"
+    );
+    assert!(
+        !evicted.contains(&"parent".to_string()),
+        "parent of a settled child evicted, which drops the child with it; evicted={evicted:?}"
+    );
+}
+
+/// A row written before the field existed reads as unsettled rather than
+/// failing to parse — the `#[serde(default)]` half of the no-migration claim.
+#[test]
+fn rows_written_before_settled_existed_still_evict_normally() {
+    let mut rows = vec![make_row(1, "old", None, 1)];
+    for i in 0_i32..12 {
+        let id = format!("s{i}");
+        rows.push(make_row(100 + i, &id, None, 1_000 + i64::from(i)));
+    }
+
+    let evicted = select_conversations_to_evict(&rows, 5);
+    assert!(
+        evicted.contains(&"old".to_string()),
+        "a legacy row with no `settled` key must behave exactly as before; evicted={evicted:?}"
+    );
+}
+
+/// Settling writes the flag and leaves the clock alone.
+///
+/// `update_last_modified_at_for_agent_conversations` is an AFTER UPDATE
+/// trigger that stamps `CURRENT_TIMESTAMP` on any write which does not set the
+/// column itself, so the obvious one-statement implementation makes settling a
+/// thread look like using it. That is not cosmetic: `select_conversations_to_evict`
+/// orders trees by `last_modified_at`, so a bumped row outranks genuinely newer
+/// conversations the moment it is unsettled — a way to evict live work by
+/// tidying up.
+///
+/// Caught by looking at the inbox, not by reading the code: every settled row
+/// said "2 min ago".
+#[test]
+fn settling_does_not_bump_last_modified_at() {
+    use diesel::prelude::*;
+
+    use crate::persistence::schema::agent_conversations::dsl as conv_dsl;
+
+    let mut conn = test_connection();
+    let task = task_with_user_query("task-1", "Initial query", "Root title");
+    upsert_agent_conversation(&mut conn, "conv-1", [&task], empty_conversation_data())
+        .expect("upsert should succeed");
+
+    let before: chrono::NaiveDateTime = conv_dsl::agent_conversations
+        .filter(conv_dsl::conversation_id.eq("conv-1"))
+        .select(conv_dsl::last_modified_at)
+        .first(&mut conn)
+        .expect("row should exist");
+
+    update_agent_conversation_settled(&mut conn, "conv-1", true).expect("settle should succeed");
+
+    let after: chrono::NaiveDateTime = conv_dsl::agent_conversations
+        .filter(conv_dsl::conversation_id.eq("conv-1"))
+        .select(conv_dsl::last_modified_at)
+        .first(&mut conn)
+        .expect("row should exist");
+    assert_eq!(before, after, "settling must not touch last_modified_at");
+
+    let data: String = conv_dsl::agent_conversations
+        .filter(conv_dsl::conversation_id.eq("conv-1"))
+        .select(conv_dsl::conversation_data)
+        .first(&mut conn)
+        .expect("row should exist");
+    let parsed: AgentConversationData =
+        serde_json::from_str(&data).expect("conversation data should still parse");
+    assert!(parsed.settled, "the flag itself must actually be written");
+
+    // And back again, which is the direction that matters for eviction.
+    update_agent_conversation_settled(&mut conn, "conv-1", false).expect("unsettle should succeed");
+    let after_undo: chrono::NaiveDateTime = conv_dsl::agent_conversations
+        .filter(conv_dsl::conversation_id.eq("conv-1"))
+        .select(conv_dsl::last_modified_at)
+        .first(&mut conn)
+        .expect("row should exist");
+    assert_eq!(before, after_undo, "unsettling must not touch it either");
+}
+
+/// Settling a row that was never persisted is a no-op, not an error.
+#[test]
+fn settling_an_unpersisted_conversation_is_not_an_error() {
+    let mut conn = test_connection();
+    update_agent_conversation_settled(&mut conn, "never-written", true)
+        .expect("settling an absent row should be a quiet no-op");
+}

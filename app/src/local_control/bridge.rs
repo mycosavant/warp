@@ -165,6 +165,9 @@ impl LocalControlBridge {
             ActionKind::AgentCancel => {
                 agent::agent_cancel(&self.instance_id, &request.action.params, ctx)
             }
+            ActionKind::AgentSettle => {
+                agent::agent_settle(&self.instance_id, &request.action.params, ctx)
+            }
             ActionKind::AgentReveal => agent::agent_reveal(
                 &self.instance_id,
                 &request.action.params,

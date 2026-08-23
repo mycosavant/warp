@@ -825,6 +825,18 @@ pub enum AgentCommand {
     /// says `was_running: false`.
     Cancel(AgentCancelArgs),
 
+    /// Settle a thread, or bring one back.
+    ///
+    /// Settling keeps a thread and moves it to the bottom of the inbox; it is
+    /// not a delete. Settled threads are also exempt from the
+    /// 200-conversation eviction cap, which is what makes settling a promise
+    /// rather than a suggestion.
+    ///
+    /// Works on conversations that are not open — which is the point, since
+    /// the threads worth settling are usually the ones nobody has looked at
+    /// this session.
+    Settle(AgentSettleArgs),
+
     /// Put a background child agent on screen.
     ///
     /// The other half of spawning one hidden. By default it splits off beside
@@ -976,6 +988,19 @@ pub struct AgentSpawnArgs {
 pub struct AgentCancelArgs {
     /// The conversation to stop, from `warpctrl agent list`.
     pub conversation: String,
+
+    #[command(flatten)]
+    pub target: TargetArgs,
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct AgentSettleArgs {
+    /// The conversation to settle, from `warpctrl agent list`.
+    pub conversation: String,
+
+    /// Bring the thread back instead of settling it.
+    #[arg(long)]
+    pub undo: bool,
 
     #[command(flatten)]
     pub target: TargetArgs,

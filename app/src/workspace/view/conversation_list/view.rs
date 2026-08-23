@@ -67,6 +67,7 @@ struct StateHandles {
     zero_state_button: MouseStateHandle,
     active_header: MouseStateHandle,
     past_header: MouseStateHandle,
+    settled_header: MouseStateHandle,
 }
 
 impl Default for StateHandles {
@@ -80,6 +81,7 @@ impl Default for StateHandles {
             zero_state_button: MouseStateHandle::default(),
             active_header: MouseStateHandle::default(),
             past_header: MouseStateHandle::default(),
+            settled_header: MouseStateHandle::default(),
         }
     }
 }
@@ -88,6 +90,10 @@ impl Default for StateHandles {
 pub enum ConversationSection {
     Active,
     Past,
+    /// Fork (T8.3): threads the user has dealt with. Kept, not hidden — the
+    /// section sits below Past and starts collapsed, so a settled thread costs
+    /// one click to find and none to ignore.
+    Settled,
 }
 
 /// Represents an item in the uniform list - either a section header or a conversation.
@@ -129,6 +135,11 @@ pub enum ConversationListViewAction {
     },
     DeleteFromOverflowMenu {
         conversation_id: AgentConversationEntryId,
+    },
+    /// Fork (T8.3): settle a thread, or bring it back.
+    ToggleSettled {
+        conversation_id: AgentConversationEntryId,
+        settled: bool,
     },
     OpenItem {
         id: AgentConversationEntryId,
@@ -316,7 +327,11 @@ impl ConversationListView {
             renaming_conversation_id: None,
             share_dialog_open_for: None,
             selected_index: None,
-            collapsed_sections: HashSet::new(),
+            // Fork (T8.3): Settled starts collapsed. The header still shows,
+            // so the threads are visibly kept rather than gone — which is the
+            // difference between an archive and a hole. Expanding is one click
+            // and the choice sticks for the session.
+            collapsed_sections: HashSet::from([ConversationSection::Settled]),
             list_items: Arc::new(Vec::new()),
             view_all: false,
             total_past_items: 0,
@@ -343,14 +358,27 @@ impl ConversationListView {
             active_views_model.maybe_get_focused_new_conversation(ctx.window_id(), ctx);
         let model = self.view_model.as_ref(ctx);
 
-        // Sort entries into active and past lists.
+        // Sort entries into active, past and settled lists.
+        let history = BlocklistAIHistoryModel::as_ref(ctx);
         let mut active_items = Vec::new();
         let mut past_items = Vec::new();
+        let mut settled_items = Vec::new();
         for entry in model.filtered_items() {
-            let local_conversation_entry_id = model
+            let local_conversation_id = model
                 .get_item_by_id(&entry.id, ctx)
-                .and_then(|entry| entry.identity.local_conversation_id)
-                .map(AgentConversationEntryId::Conversation);
+                .and_then(|entry| entry.identity.local_conversation_id);
+            let local_conversation_entry_id =
+                local_conversation_id.map(AgentConversationEntryId::Conversation);
+            // Settled wins over active: a thread the user has put away should
+            // not climb back to the top merely because its pane is still open.
+            // Unsettling is one click and is the way back up.
+            if local_conversation_id.is_some_and(|id| history.is_conversation_settled(&id)) {
+                settled_items.push(ListItem::Conversation {
+                    entry: entry.clone(),
+                    section: ConversationSection::Settled,
+                });
+                continue;
+            }
             let is_active = active_ids.contains(&entry.id)
                 || local_conversation_entry_id.is_some_and(|id| active_ids.contains(&id));
             if is_active {
@@ -405,7 +433,8 @@ impl ConversationListView {
         });
 
         let mut items = Vec::new();
-        let has_content = !active_items.is_empty() || !past_items.is_empty();
+        let has_content =
+            !active_items.is_empty() || !past_items.is_empty() || !settled_items.is_empty();
 
         // If the section is not empty, add the section header + items.
         if !active_items.is_empty() {
@@ -443,6 +472,19 @@ impl ConversationListView {
             && !self.collapsed_sections.contains(&ConversationSection::Past)
         {
             items.push(ListItem::ToggleViewAllButton);
+        }
+
+        // Fork (T8.3): settled threads, last and collapsed by default. The
+        // header is rendered even when collapsed — a count you can see is the
+        // whole difference between an archive and a hole things fall into.
+        if !settled_items.is_empty() {
+            items.push(ListItem::SectionHeader(ConversationSection::Settled));
+            if !self
+                .collapsed_sections
+                .contains(&ConversationSection::Settled)
+            {
+                items.extend(settled_items);
+            }
         }
 
         self.list_items = Arc::new(items);
@@ -918,6 +960,7 @@ fn render_section_header(
         match section {
             ConversationSection::Active => "ACTIVE",
             ConversationSection::Past => "PAST",
+            ConversationSection::Settled => "SETTLED",
         },
         appearance.ui_font_family(),
         11.,
@@ -1086,7 +1129,29 @@ impl TypedActionView for ConversationListView {
                             None
                         };
 
+                    // Fork (T8.3): settle / unsettle. Offered only for a
+                    // conversation with a local id, because that is what the
+                    // settled bit is stored against — a cloud-only row has
+                    // nowhere to put it.
+                    let settle_item = entry.identity.local_conversation_id.map(|local_id| {
+                        let is_settled =
+                            BlocklistAIHistoryModel::as_ref(ctx).is_conversation_settled(&local_id);
+                        MenuItemFields::new(if is_settled {
+                            "Bring back to inbox"
+                        } else {
+                            "Settle thread"
+                        })
+                        .with_on_select_action(ConversationListViewAction::ToggleSettled {
+                            conversation_id,
+                            settled: !is_settled,
+                        })
+                        .into_item()
+                    });
+
                     let mut items = Vec::new();
+                    if let Some(settle_item) = settle_item {
+                        items.push(settle_item);
+                    }
                     if let Some(share_item) = share_item {
                         items.push(share_item);
                     }
@@ -1102,6 +1167,27 @@ impl TypedActionView for ConversationListView {
                         menu.set_items(items, ctx);
                     });
                 }
+                ctx.notify();
+            }
+            ConversationListViewAction::ToggleSettled {
+                conversation_id,
+                settled,
+            } => {
+                let Some(ai_conversation_id) = self
+                    .view_model
+                    .as_ref(ctx)
+                    .get_item_by_id(conversation_id, ctx)
+                    .and_then(|entry| entry.identity.local_conversation_id)
+                else {
+                    return;
+                };
+                let settled = *settled;
+                BlocklistAIHistoryModel::handle(ctx).update(ctx, |history, ctx| {
+                    history.set_conversation_settled(ai_conversation_id, settled, ctx);
+                });
+                // The section a row belongs to is computed in
+                // `rebuild_list_items`, so the move only happens on a rebuild.
+                self.rebuild_list_items(ctx);
                 ctx.notify();
             }
             ConversationListViewAction::OpenShareDialog { conversation_id } => {
@@ -1320,6 +1406,7 @@ impl View for ConversationListView {
             let collapsed_sections = self.collapsed_sections.clone();
             let active_header_mouse_state = self.state_handles.active_header.clone();
             let past_header_mouse_state = self.state_handles.past_header.clone();
+            let settled_header_mouse_state = self.state_handles.settled_header.clone();
             let toggle_view_all_button = self.toggle_view_all_button.clone();
             let list_items = self.list_items.clone();
             let overflow_menu = self.item_overflow_menu.clone();
@@ -1362,6 +1449,9 @@ impl View for ConversationListView {
                                         }
                                         ConversationSection::Past => {
                                             past_header_mouse_state.clone()
+                                        }
+                                        ConversationSection::Settled => {
+                                            settled_header_mouse_state.clone()
                                         }
                                     };
                                     Some(render_section_header(

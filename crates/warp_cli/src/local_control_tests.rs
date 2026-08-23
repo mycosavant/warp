@@ -663,6 +663,15 @@ fn retained_action_examples() -> Vec<(ActionKind, Vec<&'static str>)> {
             ],
         ),
         (
+            ActionKind::AgentSettle,
+            vec![
+                "warpctrl",
+                "agent",
+                "settle",
+                "3f2f0e6a-0000-4000-8000-000000000000",
+            ],
+        ),
+        (
             ActionKind::AgentReveal,
             vec![
                 "warpctrl",
@@ -899,6 +908,7 @@ fn parsed_action_kind(command: &ControlCommand) -> Option<ActionKind> {
             AgentCommand::Read(_) => Some(ActionKind::AgentRead),
             AgentCommand::Spawn(_) => Some(ActionKind::AgentSpawn),
             AgentCommand::Cancel(_) => Some(ActionKind::AgentCancel),
+            AgentCommand::Settle(_) => Some(ActionKind::AgentSettle),
             AgentCommand::Reveal(_) => Some(ActionKind::AgentReveal),
         },
         ControlCommand::Slash(command) => match command {
