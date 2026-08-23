@@ -4954,6 +4954,24 @@ on    after tear-out:  windows=2  tabs_in_window0=6
 same strip after the fix. The switch was removed before commit and the shipping
 binary rebuilt.
 
+And once the logging problem below was understood, the same gesture was run
+against a session that actually logs, which shows the repair line by line:
+
+```
+tab_drag: begin_single_tab_drag source_wid=1 (source window IS preview)
+tab_drag: on_drag_while_floating -> GhostInTarget target_wid=0 insertion_index=3 caller_wid=1
+dispatching typed action: WorkspaceAction::DropTab          <- was DropTabOnPane
+tab_drag: on_drop GhostInTarget -> DropResult::DropInto target_wid=0 insertion_index=2
+tab_drag: perform_handoff branch=single_tab_source->other target_wid=0 caller_wid=1
+tab_drag: execute_handoff_single_tab_to_other target_wid=0 insertion_index=2
+tab_drag: finalize branch=InsertedInTarget target_wid=0 insertion_index=2 source_wid=1
+tab_drag: finalize_handoff -> CloseSourceWindow transferred_tab_index=0
+```
+
+One line is the whole bug and the whole fix: `DropTab` where `DropTabOnPane`
+used to be. Everything after it is upstream's state machine, which was never
+broken — it was never called.
+
 **The regression risk was the other direction, and it was checked.** The guard
 must not switch off tab-to-pane dropping for ordinary drags. Driven after the
 fix on both strips: Windows horizontal, a tab dragged onto a pane still splits
@@ -5045,8 +5063,9 @@ double-clicking the binary is unaffected — Explorer gives it no console — wh
 is why this only ever bit the agent.
 
 Consequence for the record above: the user's crash log was never written, so
-there is nothing to recover, and the T9.3 A/B was verified from window and tab
-counts and screenshots rather than from a log.
+there is nothing to recover. The T9.3 A/B was measured from window and tab
+counts and screenshots because of this; once the launch flag was fixed, the
+same gesture was re-run against a logging session and the trace is in T9.3.
 
 ### Corrections to T8, from this pass
 
