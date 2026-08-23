@@ -1597,6 +1597,15 @@ gesture now has three outcomes picked entirely by where you let go:
 | in the tab strip | reorder, as always |
 | over a pane | split that pane — quadrant picks the half |
 | outside the window | a new window carrying the tab |
+| in *another* window's strip | the tab moves into that window |
+
+**While a tab is in flight between windows, the middle row is off.** That is
+deliberate and it is the fix for the ghost T9.3 chased: the source window
+follows the cursor during a cross-window drag, so its own pane sits under the
+tab's drag rect and used to answer the release — dispatching `DropTabOnPane`
+instead of `DropTab`, which left the cross-window drag live and its ghost tab
+drawn in the target. Nothing merged. The two gestures are mutually exclusive
+anyway; only the order they are attempted in can confuse them.
 
 The third of those is stock Warp behaviour that **no build made here could
 reach**. `FeatureFlag::DragTabsToWindows` is gated twice by `cfg` —

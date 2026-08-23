@@ -2543,8 +2543,8 @@ fn render_tab_group_internal(
         // path detaches it into a new window instead of splitting the pane.
         // Observed by driving the gesture, 2026-08-23 (`.fork/TASKS.md` T9.1).
         let draggable = Draggable::new(tab.draggable_state.clone(), group_element)
-            .with_accepted_by_drop_target_fn(|drop_target_data, _| {
-                if crate::fork::tab_pane_drag_enabled()
+            .with_accepted_by_drop_target_fn(|drop_target_data, app| {
+                if crate::fork::tab_pane_drop_target_accepted(app)
                     && drop_target_data.as_any().is::<PaneDropTargetData>()
                 {
                     AcceptedByDropTarget::Yes

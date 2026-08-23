@@ -100,3 +100,52 @@ fn single_tab_drag_never_collapses_a_slot() {
 
     assert_eq!(drag.collapsed_source_placeholder_index(source), None);
 }
+
+/// T9.3: a tab in flight between windows must stop advertising itself as a
+/// pane-drop candidate.
+///
+/// The bug this pins was not in this file — it was in the fork's tab-to-pane
+/// drop source. During a cross-window drag the source window follows the
+/// cursor, so its *own* pane sits under the drag rect and was the smallest
+/// intersecting drop target. The release therefore dispatched `DropTabOnPane`
+/// and never `DropTab`, `CrossWindowTabDrag::on_drop` was never called, and the
+/// ghost drawn in the target window stayed there.
+///
+/// The two states are mutually exclusive by design, so assert it directly:
+/// the moment a cross-window drag begins, the pane drop target is refused.
+#[test]
+fn a_tab_in_flight_between_windows_refuses_pane_drop_targets() {
+    let source = WindowId::from_usize(1);
+    let preview = WindowId::from_usize(2);
+
+    let mut drag = CrossWindowTabDrag::new();
+    assert!(!drag.is_active());
+    assert!(
+        crate::fork::tab_pane_drop_target_accepted_while(drag.is_active()),
+        "with no drag in flight a tab must still be able to land on a pane"
+    );
+
+    // The single-tab case is the one the user hit: drag the sole tab of a
+    // torn-out window back towards another window's strip.
+    drag.begin_single_tab_drag(
+        source,
+        Vector2F::zero(),
+        vec2f(800.0, 600.0),
+        Vector2F::zero(),
+        false,
+        vec2f(120.0, 34.0),
+    );
+    assert!(drag.is_active());
+    assert!(
+        !crate::fork::tab_pane_drop_target_accepted_while(drag.is_active()),
+        "a tab already in flight between windows must not also be a pane drop"
+    );
+
+    // And the multi-tab case, which is how a tab leaves a populated strip.
+    let mut drag = CrossWindowTabDrag::new();
+    begin_multi_tab_drag(&mut drag, source, preview);
+    assert!(
+        !crate::fork::tab_pane_drop_target_accepted_while(drag.is_active()),
+        "the multi-tab path strands the same state machine"
+    );
+}

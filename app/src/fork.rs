@@ -22,6 +22,7 @@ use warpui::{AppContext, SingletonEntity};
 use crate::auth::{AuthStateProvider, UserUid};
 use crate::cloud_object::Owner;
 use crate::features::FeatureFlag;
+use crate::workspace::cross_window_tab_drag::CrossWindowTabDrag;
 
 /// Set to `0`, `off` or `false` to run the fork with stock upstream behaviour.
 /// Useful for A/B-ing a suspected fork-caused regression against upstream
@@ -379,6 +380,48 @@ fn slow_frame_threshold_from(value: Option<&str>) -> Option<Duration> {
 /// Consumed by `tab::Tab::render` and `workspace::view`'s drop handling.
 pub fn tab_pane_drag_enabled() -> bool {
     is_active()
+}
+
+/// Whether a tab dragged over a pane should carry that pane as a drop target
+/// *right now*. [`tab_pane_drag_enabled`] is the policy half; this adds the one
+/// runtime condition policy cannot express.
+///
+/// **Not while a cross-window tab drag is in flight (T9.3).** The two paths are
+/// normally mutually exclusive by construction: a tab dragged straight onto a
+/// pane dispatches `DragTabOverPane` from the first frame, so `on_tab_drag`
+/// never runs and `CrossWindowTabDrag` never starts. Drag the tab *out* first
+/// and the order inverts — the cross-window drag begins, and from then on the
+/// tab belongs to that state machine.
+///
+/// What went wrong when it did not: dragging the sole tab of a torn-out window
+/// back onto another window's strip left a ghost tab drawn in the target and
+/// nothing merged. The log named it — the release dispatched
+/// `DropTabOnPane { tab_index: 0 }` and never `DropTab`, because the source
+/// window follows the cursor during the drag and its *own* pane was the
+/// smallest drop target intersecting the drag rect. So the pane path answered
+/// a drop that belonged to the cross-window path, `CrossWindowTabDrag::on_drop`
+/// was never called, and the drag stayed live until some later pointer motion
+/// unwound it into `FocusSelf` — i.e. the tab never went home.
+///
+/// Refusing the target here is the whole fix: `data` goes back to `None`, so
+/// `on_drag`/`on_drop` fall through to `DragTab`/`DropTab` and upstream's state
+/// machine runs exactly as it did before any of this was added.
+///
+/// The `has_singleton_model` guard is not decoration. `SingletonEntity::as_ref`
+/// panics when the model was never registered, and this runs on every drag
+/// event in every test harness that renders a tab.
+pub fn tab_pane_drop_target_accepted(app: &AppContext) -> bool {
+    tab_pane_drop_target_accepted_while(
+        app.has_singleton_model::<CrossWindowTabDrag>()
+            && CrossWindowTabDrag::as_ref(app).is_active(),
+    )
+}
+
+/// The decision in [`tab_pane_drop_target_accepted`], with the singleton lookup
+/// lifted out so it can be asserted against a real `CrossWindowTabDrag` without
+/// an app context. See `workspace::cross_window_tab_drag_tests`.
+pub(crate) fn tab_pane_drop_target_accepted_while(cross_window_drag_active: bool) -> bool {
+    tab_pane_drag_enabled() && !cross_window_drag_active
 }
 
 /// Whether Escape ends a drag instead of falling through to whatever is

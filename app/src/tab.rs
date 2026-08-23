@@ -2236,8 +2236,8 @@ impl UiComponent for TabComponent<'_> {
             // the `data` argument below was unconditionally `None` and the
             // tab-bar path resolves its drop from cursor geometry instead.
             let draggable = Draggable::new(draggable_state, constrained_tab)
-                .with_accepted_by_drop_target_fn(|drop_target_data, _| {
-                    if crate::fork::tab_pane_drag_enabled()
+                .with_accepted_by_drop_target_fn(|drop_target_data, app| {
+                    if crate::fork::tab_pane_drop_target_accepted(app)
                         && drop_target_data.as_any().is::<PaneDropTargetData>()
                     {
                         AcceptedByDropTarget::Yes

@@ -4718,8 +4718,9 @@ run, which is how those sessions were closed without killing the process.
 
 - [x] **T9.1** A drag an agent can perform. (`IDEAS.md` I15)
 - [x] **T9.2** The same on Windows, without taking the user's mouse.
-- [ ] **T9.3** The ghost a cross-window drag leaves behind. Reproduced and
-      traced below; not fixed.
+- [x] **T9.3** The ghost a cross-window drag leaves behind. It was T8.2's
+      tab-to-pane drop answering a release that belonged to the cross-window
+      drag; fixed and A/B'd.
 
 ### T9.1 — as built
 
@@ -4880,50 +4881,101 @@ on the desktop, with bounds, class and title.
   `keys.ps1` documents. `Target::Screen` keeps the `SendInput` path for the
   cases that need it.
 
-### T9.3 — the ghost, reproduced and traced
+### T9.3 — as built
 
 **The user's report, 2026-08-23:** "a tab torn out of the strip to create a new
 window, then dragged back got hung on the seam of the pane and the strip, in
 the ghost state. resizing the window fixed it."
 
-Reproduced on the first attempt with `use_computer drag`, and the log says
-exactly what happens:
+Reproduced on the first attempt with `use_computer drag`. The target window
+draws two tab labels on top of each other in one slot and leaves a gap at the
+next; `warpctrl tab list` still shows the tab in its own window, so nothing
+merged.
+
+#### The first explanation was wrong, and the log had already said so
+
+An earlier version of this section — and the commit that recorded it,
+`6dd5378c9` — said "the release never arrives, so the ghost stays". **It
+arrives.** What the log actually shows at the moment of release is:
 
 ```
-tab_drag: begin_single_tab_drag source_wid=2 (source window IS preview)
 tab_drag: on_drag_while_floating -> GhostInTarget target_wid=0 insertion_index=4 caller_wid=2
-                                    ... and then nothing.
+dispatching typed action: WorkspaceAction::DropTabOnPane { tab_index: 0, ... }
 ```
 
-**There is no `on_drop`.** The drag reaches `GhostInTarget` — the tab is being
-rendered inside the *target* window's strip — and the release never arrives, so
-the ghost stays. The strip draws two tabs on top of each other at one slot and
-leaves a gap at the next; `warpctrl tab list` still shows the tab in its own
-window, so nothing merged.
+`DropTabOnPane`, not `DropTab`. The release was delivered and *answered by the
+wrong handler*, which is a different bug with a different fix, and the line was
+sitting in the log the whole time under a heading that said the opposite.
 
-Three things worth having:
+#### The cause is T8.2's tab-to-pane drop source
 
-* **It is not a stuck state forever, it is a deferred one.** The drop fires on
-  the next pointer motion that leaves the target window — measured at seven
-  seconds later, when the following round's drag moved the cursor out:
-  `on_drag_while_ghost: cursor left target_wid=0 (GhostInTarget->Floating)`
-  immediately followed by `on_drop`. And the branch it then takes is
-  `Floating+single_tab -> FocusSelf`, so **the tab never merges back** — it
-  goes back to being its own window. Dragging a torn-out tab home does not
-  work at all; the ghost is the visible half of that.
-* **Escape does not rescue it, by construction.** T8.2's cancel excludes
-  cross-window drags on purpose (`fork.rs`, `drag_cancel_key_enabled`), and
-  pressing it here changes nothing — confirmed. That exclusion was the right
-  call when written; this is the first evidence against it.
-* **Resizing did not fix it for us.** The user's workaround did not clear the
-  ghost in this reproduction, which suggests their case and this one differ in
-  some way not yet identified. Not resolved.
+The fork made a tab accept `PaneDropTargetData` so it could be dropped on a
+pane. `Draggable` resolves that target by intersecting the drag rect with the
+drop targets **of the window dispatching the event**, and picking the smallest.
 
-Not fixed. The honest options are an escape hatch (let Escape resolve a
-cross-window drag that has no live `Draggable` behind it) or the real repair
-(work out why the release does not reach the source window's `Draggable` once
-its tab has been rendered into another window). The second is upstream's state
-machine and wants its own sitting.
+During a single-tab cross-window drag the source window *is* the floating
+preview and is repositioned under the cursor on every frame — so its own pane
+is right there, intersecting its own tab's drag rect. The tab's `on_drop`
+closure sees `Some(PaneDropTargetData)`, dispatches `DropTabOnPane` and returns
+early, so `WorkspaceAction::DropTab` is never dispatched and
+`CrossWindowTabDrag::on_drop` is never called. The drag stays live and the
+ghost stays drawn.
+
+The two paths are normally mutually exclusive by construction: a tab dragged
+straight down onto a pane dispatches `DragTabOverPane` from the first frame, so
+`on_tab_drag` never runs and no cross-window drag ever begins. Drag the tab
+*out* first and the order inverts — which is exactly the gesture the user
+performed, and exactly why it took a person to find.
+
+#### The fix
+
+`fork::tab_pane_drop_target_accepted(app)` — refuse pane drop targets while a
+cross-window tab drag is in flight. `data` goes back to `None`, `on_drag` and
+`on_drop` fall through to `DragTab`/`DropTab`, and upstream's state machine
+runs as it did before any of this was added. Both strips, one predicate.
+
+Pinned by `a_tab_in_flight_between_windows_refuses_pane_drop_targets` in
+`workspace/cross_window_tab_drag_tests.rs`, which asserts against a real
+`CrossWindowTabDrag` rather than the predicate's arithmetic.
+
+#### Verified by A/B in one binary, 2026-08-23 (Windows release)
+
+A temporary `FORKDBG_T93_OFF` env switch, so the two legs differ only in the
+guard — same binary, same script, same machine:
+
+```
+off   after tear-out:  windows=2  tabs_in_window0=7
+      after drag-back: windows=2  tabs_in_window0=7   NOT MERGED, ghost visible
+on    after tear-out:  windows=2  tabs_in_window0=6
+      after drag-back: windows=1  tabs_in_window0=7   MERGED, strip clean
+```
+
+`shots/t93_off.png` is the doubled label and the gap; `shots/t93_on.png` is the
+same strip after the fix. The switch was removed before commit and the shipping
+binary rebuilt.
+
+**The regression risk was the other direction, and it was checked.** The guard
+must not switch off tab-to-pane dropping for ordinary drags. Driven after the
+fix on both strips: Windows horizontal, a tab dragged onto a pane still splits
+it (one window, the target tab goes to two panes); Linux vertical panel, the
+same — five `DragTabOverPane` then `DropTabOnPane`, tab `2732` ends with two
+panes.
+
+**What was not driven is the cross-window gesture on the vertical panel.** A
+cross-window drag repositions the source window under the cursor every frame,
+so window-local coordinates drift and the X11 window-targeted path cannot
+express it. The predicate and the render wiring are shared with the horizontal
+strip and the unit test covers the decision, but nobody has performed *that*
+gesture on the Linux build.
+
+#### Two things that were true and stay true
+
+* **Escape does not rescue a stuck cross-window drag.** T8.2's cancel excludes
+  them on purpose, and pressing it changed nothing — confirmed before the fix.
+  Moot now for this bug, but the exclusion is still there for any other way in.
+* **Resizing did not clear it here**, though it did for the user. Their case
+  and this one differ in some way still not identified.
+
 
 ### The crash, and what is and is not known
 
@@ -4958,6 +5010,24 @@ What was established:
   Untested; it points at a driver control panel, not at this code.
 
 **Next time it crashes, copy `warp-oss.log.old.0` before doing anything else.**
+
+#### And then it stopped logging altogether
+
+Recorded because it silently blinds everything above. Since the deliberate
+crash at 16:26 local on 2026-08-23, **no freshly launched session has written
+to `warp-oss.log` at all** — the file has stayed frozen at 76,544 bytes and
+16:45 through five or six launch/close cycles, while `warp-oss.log.recovery`
+sits at 0 bytes. Not a transient: checked repeatedly over ninety minutes.
+
+`init_internal` decides with `use_logfile = !stdout_is_a_tty && !in_ci &&
+!integration_test`, and neither `CI` nor `WARP_INTEGRATION` is set in the
+launching environment, so that is not obviously it. Every launch in this window
+went through `powershell.exe … Start-Process` from WSL, which is also how the
+sessions that *did* log were started.
+
+**Cause not established.** The T9.3 A/B above was therefore verified from
+window and tab counts and from screenshots rather than from the log, which is
+worth knowing when reading it.
 
 ### Corrections to T8, from this pass
 
