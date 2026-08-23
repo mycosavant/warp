@@ -100,6 +100,17 @@ Windows). Killing the process leaves a stale discovery record, and a
 crash-recovery sibling re-binds `127.0.0.1:9282` so the next launch fails.
 Ordinary shutdown cleans both up.
 
+**…but not one you launched with `WARP_FORK_POLICY=0`, which is a trap,
+because the same file tells you to use that flag to A/B a regression.**
+Observed 2026-08-22: a policy-off instance ran with a visible window and held
+`127.0.0.1:9282`, while the discovery directory stayed **empty** — so
+`warpctrl window close` answered `no_instance` and there was no sanctioned way
+to stop it. The discovery record carries the credential, so no record means no
+client can authenticate, not merely that it cannot be found. **Which gate does
+this is not established** — `WarpControlCli` is a `FORCE_ENABLED` entry that
+policy-off stops applying, but that does not by itself explain a bound port.
+Plan the shutdown before you start a policy-off run.
+
 **Leave the user's `settings.toml` alone.** For any run that needs different
 settings, point `XDG_CONFIG_HOME`/`XDG_STATE_HOME` at a scratch directory —
 noting that this relocates every other XDG-config tool too, `gh` included.
