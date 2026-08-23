@@ -1651,12 +1651,11 @@ wins and the drag is not cancelled.
   `CrossWindowTabDrag` has no concept of a tab group at all. Relaxing the axis
   would give you a group that leaves the panel and lands nowhere. This is an
   unbuilt feature, not a closed gate, and it is not small.
-- **Header drags felt laggy.** On a *debug* build, which the slow-frame log
-  below has since measured at 2.4× the per-frame cost of release. That is
-  enough to explain it; if a `--release` build still stutters, say so and the
-  next suspect is the tab-bar hover index, which recomputes on every drag
-  event and is untouched upstream code. **Needs a person on Windows** — this
-  is a question about how it feels, and no capture answers it.
+**Answered, and it was the build.** "Header drags felt laggy" was measured on a
+*debug* build, which the slow-frame log puts at 2.4× the per-frame cost of
+release. Driven by hand on the Windows release build, 2026-08-23: "much
+snappier… nice and smooth." The tab-bar hover index, which recomputes on every
+drag event, was the next suspect and does not need to be.
 
 ## Driving a gesture — `use_computer drag`
 

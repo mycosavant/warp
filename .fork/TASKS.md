@@ -4151,11 +4151,16 @@ T1, T4, T5 and T7, and by now should be the prior rather than the surprise.
       **4. Header-drag lag: answered as far as this machine can answer it.**
       The frame log settled the mechanism — debug ~27fps against release ~54,
       2.4× the cost per frame — and that is sufficient to explain the report
-      without the drop preview contributing anything. What is left is
-      confirmation on the machine that saw it: **a `--release` build on
-      Windows, dragged by hand.** If it still stutters there, the next suspect
-      is the path that did not change, `PaneDragDropLocation::TabBar` emitting
-      and recomputing a hover index on every drag event.
+      without the drop preview contributing anything. What was left was
+      confirmation on the machine that saw it: a `--release` build on Windows,
+      dragged by hand.
+
+      > **Confirmed 2026-08-23, and it was the build.** Release, driven by
+      > hand: "much snappier… nice and smooth." The next suspect — the path
+      > that did not change, `PaneDragDropLocation::TabBar` recomputing a hover
+      > index on every drag event — does not need investigating. The same
+      > session confirmed the drop preview itself reads as intended; its colour
+      > is the theme accent, and it is T8.2's, not upstream's.
 
       **Not verified by running, and cannot be here:** the gestures. A drag is
       press-move-release and synthetic input still reaches no X11 client under
