@@ -1639,6 +1639,25 @@ committing: no split, no new window, no reorder-in-progress left half done, and
 part was the reported bug: on an agent pane, a fall-through Escape pops agent
 view, which reads as "my session turned into a terminal".
 
+Until T9.4 it also left the pane it had been dragging **looking blank**. The
+contents were never gone; `is_being_dragged` paints an opaque overlay for the
+duration of a drag and was cleared only by a *drop*, so the one ending that is
+not a drop left the dim on. Fixed by broadcasting
+`PaneConfigurationEvent::DragCancelled` to every pane on the cancel.
+
+**Where a drop splits, and from what point.** The pane is divided into four
+triangular quadrants around its centre, with a dead zone in the middle where a
+release does nothing — the overlay vanishing is how you find that boundary
+before letting go. Two things about it changed in T9.4, both measured by
+sweeping the drop point and photographing each frame:
+
+* the zone was 36% of the pane in each axis and is now 20%;
+* the point being tested is now the **pointer**. It used to be the centre of
+  the dragged placeholder chip, which sits at a fixed offset from the pointer
+  determined by where along the header you pressed — so the whole quadrant map
+  slid sideways by up to half a chip depending on your grab, and could not be
+  learned.
+
 A cancel **stops** a drag rather than rewinding it. A pane header previews and
 commits on release, so cancelling one undoes nothing because nothing had
 happened. The tab strip reorders live as you drag — upstream behaviour — so
@@ -1685,6 +1704,32 @@ env -u WAYLAND_DISPLAY ./target/debug/use_computer \
     --screenshot /tmp/mid_drag.png \
     --pid <warp-pid> --window-id <x-window-id>
 ```
+
+Two flags turn a drag into an instrument rather than an action:
+
+```bash
+# A probe: photograph what the drop *would* do, then release somewhere inert.
+env -u WAYLAND_DISPLAY ./target/release/use_computer \
+    drag 200 85 305 462 --screenshot /tmp/preview.png --release-at 305,390 \
+    --pid <warp-pid> --window-id <x-window-id>
+
+# A cancel: press a key while the button is still down.
+... drag 200 85 535 600 --press 0xff1b --screenshot /tmp/after_escape.png
+```
+
+* **`--release-at x,y` releases somewhere that commits nothing.** Sweeping a
+  drop point across a pane to find where a preview starts is only repeatable if
+  the samples do not each rearrange the layout the next sample's coordinates
+  came from. Used to measure the split dead zone in T9.4.
+* **`--press <key>` presses and releases mid-drag, before the screenshot.** A
+  cancel key is by definition a keystroke that arrives while a button is held,
+  which no click-then-type sequence can produce. On X11 `Key::Keycode(n)` is a
+  **keysym**, not a keycode: Escape is `0xff1b`.
+
+  This works, which corrects a claim that had been used to block work.
+  Keystrokes reach the **keymap** — `--press 0xff1b` mid-drag logged
+  `EditorAction::Escape` → `PaneGroupAction::CancelDrag` — but not text input:
+  `use_computer text "echo …"` into a focused terminal input produces nothing.
 
 Four things about this that are easy to get wrong:
 

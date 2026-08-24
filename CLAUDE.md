@@ -187,9 +187,15 @@ cleared session twice.**
 
 **Running on WSLg:** `env -u WAYLAND_DISPLAY LIBGL_ALWAYS_SOFTWARE=1
 ./target/release/warp-oss`. Unsetting `WAYLAND_DISPLAY` puts winit on X11, which
-is what screenshots and global hotkeys need. Synthetic clicks land there;
-synthetic keystrokes still do not, which is why two tasks are blocked on a
-person.
+is what screenshots and global hotkeys need. Synthetic clicks land there, and
+**so do synthetic keystrokes — but only as far as the keymap.** Measured
+2026-08-24, correcting a blanket "keystrokes do not land" that had been used to
+block work: `use_computer drag --press 0xff1b` mid-drag produced
+`EditorAction::Escape` → `PaneGroupAction::CancelDrag` in the log and visibly
+cancelled the drag, while `use_computer text "echo …"` into a focused terminal
+input produced nothing at all. So cancel keys and shortcuts are drivable and
+typing is not. `Key::Keycode(n)` is an X **keysym** on this backend, not a
+keycode — Escape is `0xff1b`.
 
 ---
 

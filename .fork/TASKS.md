@@ -4721,6 +4721,10 @@ run, which is how those sessions were closed without killing the process.
 - [x] **T9.3** The ghost a cross-window drag leaves behind. It was T8.2's
       tab-to-pane drop answering a release that belonged to the cross-window
       drag; fixed and A/B'd.
+- [x] **T9.4** Three things a person found in the release build: a dead zone
+      that was both too big and measured from the wrong point, a cancelled drag
+      that left a pane looking empty, and a modifier that was never wired.
+      Two fixed, the third answered — and a fourth found underneath it.
 
 ### T9.1 — as built
 
@@ -5066,6 +5070,210 @@ Consequence for the record above: the user's crash log was never written, so
 there is nothing to recover. The T9.3 A/B was measured from window and tab
 counts and screenshots because of this; once the launch flag was fixed, the
 same gesture was re-run against a logging session and the trace is in T9.3.
+
+### T9.4 — as built
+
+**Three reports from a person using the Windows release, 2026-08-23.** Two were
+defects in fork code; the third was a question, and answering it turned up a
+fourth defect nobody had run.
+
+#### T9.4a — the dead zone was two problems wearing one coat
+
+**The report:** "the dead space in the center of the panes when dragging to
+split is too large… for each of the panes to be split again by dragging, i have
+to drag to the relative middle of each of the 4 quads."
+
+Measured rather than guessed, with `use_computer drag --screenshot
+--release-at` sweeping the drop point across a pane and photographing each
+frame with the button still down. On a 544x644 pane the overlay appeared only
+outside a 196x232px box — a third of the pane in each axis, exactly what
+`DRAG_SPLIT_THRESHOLD = 0.18` says it should be, since the test is `max(|nx|,
+|ny|) < 0.18` against the *half*-extent.
+
+That is upstream's number and it was fine while the split happened immediately
+on every drag event: you found the boundary by crossing it. T8.2 made the drop
+a preview that only commits on release, and a dead zone you have to hunt for is
+a different object from one you fall through — the overlay is simply absent and
+nothing says why.
+
+**The second problem is the one the arithmetic hides.** `calculate_pane_move_
+direction` took the *drag rect*, and for a pane drag that rect is the 212x40
+placeholder chip, not the pointer. `Draggable` keeps the grab point in the same
+relative position inside the chip, so the chip's centre sits at a fixed offset
+from the pointer **set by where along the header you pressed**. From the old
+binary's own log, grabbing a 586px-wide header at x=200 put the reference point
+46px to the *right* of the pointer; grabbing near the right end puts it ~60px
+to the left. The whole quadrant map slides by up to half a chip depending on
+where you happened to grab, which is unlearnable, because it changes every
+time.
+
+**The fix is both halves.** `calculate_pane_move_direction(target_pane, at:
+Vector2F)` now takes the pointer, threaded from `DraggableState::
+dragging_mouse_position()` in the drag closures — the same shape
+`vertical_tabs.rs` already used for the group draggable. `DRAG_SPLIT_THRESHOLD`
+goes 0.18 → 0.10. The zone still exists, because releasing over the middle of a
+pane means "do nothing" and the overlay disappearing is how you learn that
+before letting go.
+
+**Verified by running, 2026-08-24 (Linux, X11 under WSLg).** Sweeps at 14px
+resolution through the centre of a 544x644 pane, with the exact pane rect and
+normalized values read out of a new `log::debug!` (`RUST_LOG=warp::pane_group::
+pane::view::header=debug`):
+
+```
+vertical    Up   <= 318      none 332..448     Down >= 462     band 144px = 22%
+horizontal  Left <= 244      none 258..352     Right >= 366    band 122px = 22%
+before                                                         band       = 36%
+```
+
+And the part that matters more than the number — **the same sweep from two
+different grab points now gives the same seven verdicts**, boundary for
+boundary:
+
+```
+grab x=200   up up none none none down down
+grab x=480   up up none none none down down
+```
+
+A committing drop was run afterwards to confirm the preview and the commit
+still agree: pointer normalized `(0.0005, 0.264)` → Down, and the layout
+became stacked.
+
+#### T9.4b — Escape left the pane blank, and it was T8.2's dim
+
+**The report:** "if you do hit the esc key when dragging a pane/tab, the pane
+goes blank. sometimes i can hit / and get it to render, but sometimes it
+appears that its just gone."
+
+Nothing is gone. `PaneView::is_being_dragged` paints an opaque `surface_2`
+overlay across the pane's contents, and it is cleared by exactly three events —
+`PaneDroppedWithinPaneGroup`, `DroppedOnTabBar`, `PaneDroppedOutsideofTabBar
+OrPaneGroup`. All three are *drops*. A cancelled drag reaches none of them.
+
+This is T8.2's exposure, not upstream's. Upstream set the flag from the move
+event, which only fired at the very end, so a cancel had almost nothing to
+undo. T8.2 moved it to `DropPreviewChanged` — deliberately, to keep the pane
+dimmed for the whole drag instead of only at the moment it committed — and in
+doing so made the flag live for the entire gesture without extending the
+cleanup to the gesture's other ending.
+
+`PaneGroup::cancel_drag` could not fix it directly: its pane tree stores
+`PaneId`s and its `pane_contents` are `dyn PaneContent`, so it holds no handle
+on either `PaneView` or `PaneHeader`. The message travels instead on the
+configuration model those two views already share, as
+`PaneConfigurationEvent::DragCancelled` — reachable from
+`PaneContent::pane_configuration`, and therefore no new trait method on all ten
+pane types.
+
+Pinned by `a_cancelled_drag_undims_the_pane_it_was_dragging`, which fails
+against the unfixed arm and passes against the fixed one.
+
+**Verified by driving Escape mid-drag**, which needed a new `use_computer drag
+--press` (a cancel key is by definition a keystroke that arrives while the
+button is still down, which no click-then-type sequence can produce). Two runs
+of the same drag, differing only in `--press 0xff1b`:
+
+```
+control   dragged pane dimmed (diff 35-45 vs baseline), target pane carries the
+          Down overlay (diff 32)
+--press   every sampled region 0.0 against the pre-drag baseline
+```
+
+and the log says why:
+
+```
+PaneHeaderDragged ...
+EditorAction::Escape
+PaneGroupAction::CancelDrag
+WorkspaceAction::CancelDrag
+```
+
+#### T9.4c — alt+drag does not merge tabs, and cannot
+
+**The report:** "if i hold alt+drag a tab, i have grown accustomed to that
+merging tabs… i'm not sure what this is."
+
+It is not a matter of hitting the right spot. **No drag callback in the app
+ever sees a modifier.** `Draggable` destructures `Event::LeftMouseDragged {
+position, .. }` and `LeftMouseUp { position, .. }`, dropping the
+`ModifiersState` both events carry. The word `modifiers` does not appear in
+`draggable.rs`.
+
+The horizontal strip *is* modifier-aware, but only at mouse-down and only for
+selection: `tab.rs`'s `on_mouse_down_with_modifiers` gives shift = extend
+range, cmd = toggle multi-selection, both behind `FeatureFlag::GroupedTabs`.
+Alt is not among them, and none of it survives into the drag.
+
+What merges today is the *pane* drag: drag a pane by its header onto a tab in
+the strip and the middle half of that tab merges the pane into it
+(`TabBarHoverIndex::OverTab` → `SwitchTabFocusAndMovePane`). Making alt+drag do
+it from the tab side is a feature, not a gate — it needs modifiers recorded in
+`DraggableState`, a branch in the strip's drag handler, and a merge that can
+target a tab other than the active one, which `merge_tab_into_active_tab`
+cannot express. Not built.
+
+#### Found on the way: tab → pane cannot fire on the horizontal strip
+
+T8.2 made a tab a drop source for panes, and T9.1 verified it working — **in
+the vertical panel**. On the horizontal strip it cannot work at all, and the
+reason is three lines apart from the feature.
+
+`tab.rs:2154` activates a tab on **mouse-down**. `vertical_tabs.rs:3312`
+activates on **click**, i.e. mouse-up. So on the strip, pressing a tab to drag
+it makes it the active tab *before the drag begins* — and
+`tab_can_merge_into_active_tab` opens with `index != self.active_tab_index`.
+The guard is right: once the dragged tab is active, the panes on screen are its
+own, and dropping it on one of them means nothing.
+
+Observed, 2026-08-24: click tab 0, drag tab 1 onto a pane.
+
+```
+ActivateTab(0)          <- the click
+ActivateTab(1)          <- the mouse-down that starts the drag
+StartTabDrag
+DragTabOverPane x13
+DropTabOnPane
+```
+
+Thirteen drag events, a drop, **zero** calls to `calculate_pane_move_direction`
+(the new debug line never appears), no preview drawn, nothing merged, tab and
+pane counts unchanged.
+
+Not fixed here, because every fix is a decision about tab activation that
+belongs to the user: activate on mouse-up like the vertical panel (a real
+change to how every tab click feels), or restore the previously active tab when
+a press turns into a drag (which changes where a plain reorder leaves you).
+
+#### Correction: synthetic keystrokes *do* land on X11
+
+`CLAUDE.md` says "synthetic clicks land there; synthetic keystrokes still do
+not, which is why two tasks are blocked on a person." Too strong, measured
+2026-08-24 through the actor's own XInput2 seat:
+
+* **Keymap actions land.** `--press 0xff1b` mid-drag produced
+  `EditorAction::Escape` → `PaneGroupAction::CancelDrag` in the log and a
+  visibly cancelled drag.
+* **Text does not.** `use_computer text "echo hello-from-the-agent"` into a
+  focused, accent-bordered terminal input produced nothing at all.
+
+So cancel keys and shortcuts are drivable; typing is not. `Key::Keycode(n)` is
+an X **keysym** on this backend, not a keycode — Escape is `0xff1b`.
+
+#### Two tool additions, both small
+
+* `use_computer drag --release-at x,y` — move somewhere inert *after* the
+  screenshot and before the release, which turns a drag into a probe. A sweep
+  that commits every hit has to rebuild the layout between samples, and the
+  layout is where the next sample's coordinates come from.
+* `use_computer drag --press <key>` — press and release a key mid-drag, before
+  the screenshot.
+
+#### An operational note
+
+The first release build of this pass died in the linker with `ld terminated
+with signal 7 [Bus error]`. The disk was **100% full**: `target/` was 134GB, of
+which `target/debug/incremental` alone was 66GB. Deleting the incremental cache
+(cargo regenerates it) freed it and the build went through in 5m 44s.
 
 ### Corrections to T8, from this pass
 
