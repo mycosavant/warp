@@ -14228,14 +14228,14 @@ impl Workspace {
         &mut self,
         index: usize,
         target_pane_id: PaneId,
-        drag_position: RectF,
+        cursor_position: Vector2F,
         ctx: &mut ViewContext<Self>,
     ) {
         let direction = self
             .tab_can_merge_into_active_tab(index, ctx)
             .then(|| ctx.element_position_by_id(target_pane_id.position_id()))
             .flatten()
-            .and_then(|target_pane| calculate_pane_move_direction(target_pane, drag_position));
+            .and_then(|target_pane| calculate_pane_move_direction(target_pane, cursor_position));
 
         let pane_group = self.active_tab_pane_group().clone();
         pane_group.update(ctx, |pane_group, ctx| {
@@ -24024,9 +24024,10 @@ impl TypedActionView for Workspace {
             DragTabOverPane {
                 tab_index,
                 target_pane_id,
-                drag_position,
+                drag_position: _,
+                cursor_position,
             } => {
-                self.drag_tab_over_pane(*tab_index, *target_pane_id, *drag_position, ctx);
+                self.drag_tab_over_pane(*tab_index, *target_pane_id, *cursor_position, ctx);
             }
             DropTabOnPane {
                 tab_index,

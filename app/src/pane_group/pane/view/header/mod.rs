@@ -46,7 +46,22 @@ mod sharing;
 pub(crate) mod components;
 
 pub(crate) const PANE_HEADER_HEIGHT: f32 = 34.;
-const DRAG_SPLIT_THRESHOLD: f32 = 0.18;
+
+/// How far from a pane's centre, as a fraction of that pane's width and height,
+/// a drag has to reach before it will split it.
+///
+/// Upstream this was `0.18`, which puts the dead zone at 36% of the pane in each
+/// axis — measured on a 544x644 pane, a 196x232px box you have to get out of
+/// before anything is offered. That was tolerable while the split happened
+/// *immediately* on every drag event, because you found the boundary by
+/// crossing it. T8.2 made the drop a preview that only commits on release, and a
+/// dead zone you have to hunt for is a different thing from one you fall
+/// through: the overlay simply is not there, and nothing says why.
+///
+/// The zone still has to exist — releasing over the middle of a pane means "do
+/// nothing", and the overlay disappearing is how you find that out before
+/// letting go. It just does not need to be a third of the pane.
+const DRAG_SPLIT_THRESHOLD: f32 = 0.10;
 
 pub trait ActionPayload: Debug + Send + Sync + Clone + 'static {}
 impl<T: Debug + Send + Sync + Clone + 'static> ActionPayload for T {}
@@ -115,6 +130,11 @@ pub enum PaneHeaderAction<A: ActionPayload, B: ActionPayload> {
         origin: ActionOrigin,
         drag_location: PaneDragDropLocation,
         drag_position: RectF,
+        /// Where the pointer actually is, which is not the centre of
+        /// `drag_position` — see [`calculate_pane_move_direction`]. Carried
+        /// alongside the rect rather than replacing it because the tab-bar
+        /// branch wants the dragged chip's geometry, not the pointer.
+        cursor_position: Vector2F,
         /// Axis for a tab-bar drag, so the header derives the hover index from
         /// cursor geometry along the right axis. `None` for non-tab-bar drag
         /// locations.
@@ -355,6 +375,21 @@ impl<P: BackingView> PaneHeader<P> {
         }
         self.drop_preview = preview;
         ctx.emit(Event::DropPreviewChanged(preview));
+    }
+
+    /// Forgets everything this drag had arranged on the header (`.fork/TASKS.md` T9.4).
+    ///
+    /// Deliberately assigns `drop_preview` instead of calling
+    /// [`Self::set_drop_preview`]: that emits `DropPreviewChanged`, and the
+    /// `PaneView` handling of *that* sets `is_being_dragged` back to `true` —
+    /// which is the very state being cleaned up here, and is why the caller has
+    /// to be the one holding both. Nothing needs to hear about this clear
+    /// anyway; `PaneGroup::cancel_drag` clears its own copy of the preview on
+    /// the same keystroke.
+    pub(crate) fn cancel_drag(&mut self, ctx: &mut ViewContext<Self>) {
+        self.drop_preview = None;
+        self.is_visible_in_pane_group = true;
+        ctx.notify();
     }
 
     /// Clears the preview and returns what it was, for a drop to act on.
@@ -889,7 +924,19 @@ impl<P: BackingView> View for PaneHeader<P> {
     }
 }
 
-/// Based on the drag position and target pane, calculates which direction the pane should move.
+/// Based on where the pointer is and the target pane, calculates which direction the pane should move.
+///
+/// `at` is the **pointer**, not the centre of the thing being dragged, and the
+/// difference is not cosmetic. A pane drag is previewed by a 212x40 placeholder
+/// chip, and `Draggable` keeps the grab point in the same relative position
+/// within it — so the chip's centre sits at a fixed offset from the pointer set
+/// by *where along the header you pressed*. Measured on a 586px-wide header:
+/// grabbing it at x=200 put the chip's centre 46px to the *right* of the
+/// pointer, and grabbing near the right end puts it ~60px to the left. Deciding the
+/// split from the chip's centre therefore slides the whole quadrant map sideways
+/// by up to a third of a pane depending on where you happened to grab, which is
+/// felt as "it splits somewhere other than where I am pointing" and is
+/// unlearnable, because the offset changes every time.
 ///
 /// We determine the split by dividing the pane into four quadrants, each referring to a split direction:
 /// +--------+
@@ -910,14 +957,16 @@ impl<P: BackingView> View for PaneHeader<P> {
 ///
 /// The only caveat here is that the drag position needs to be greater than a given threshold to trigger a drag,
 /// otherwise this will result in a no-op. This ensures that the split is not too sensitive.
-pub(crate) fn calculate_pane_move_direction(
-    target_pane: RectF,
-    drag_position: RectF,
-) -> Option<Direction> {
-    let moved_drag_center = drag_position.center() - target_pane.center();
+pub(crate) fn calculate_pane_move_direction(target_pane: RectF, at: Vector2F) -> Option<Direction> {
+    let moved_drag_center = at - target_pane.center();
     let normalized_drag_center = Vector2F::new(
         moved_drag_center.x() / target_pane.width(),
         moved_drag_center.y() / target_pane.height(),
+    );
+
+    log::debug!(
+        "pane split: pointer={at:?} pane={target_pane:?} normalized={normalized_drag_center:?} \
+         threshold={DRAG_SPLIT_THRESHOLD}"
     );
 
     if normalized_drag_center
@@ -976,6 +1025,7 @@ impl<P: BackingView> TypedActionView for PaneHeader<P> {
                 origin,
                 drag_location,
                 drag_position,
+                cursor_position,
                 tab_bar_axis,
             } => match drag_location {
                 PaneDragDropLocation::TabBar(tab_bar_location) => {
@@ -1016,7 +1066,7 @@ impl<P: BackingView> TypedActionView for PaneHeader<P> {
                         // deliberate: a drop there should do nothing, and the
                         // overlay disappearing is how you find that out before
                         // letting go.
-                        let preview = calculate_pane_move_direction(target_pane, *drag_position)
+                        let preview = calculate_pane_move_direction(target_pane, *cursor_position)
                             .map(|direction| PaneDropPreview {
                                 target_id: *target_id,
                                 direction,
@@ -1121,6 +1171,11 @@ pub fn render_pane_header_draggable<P: BackingView>(
     draggable_state: DraggableState,
     app: &AppContext,
 ) -> Box<dyn Element> {
+    // The pointer is not derivable from the drag rect the callbacks are handed —
+    // `Draggable` places the preview so the grab point keeps its relative position
+    // inside it — so ask the state that knows. Same shape as the group draggable in
+    // `workspace::view::vertical_tabs`.
+    let pointer = draggable_state.clone();
     Draggable::new(draggable_state, element)
         .with_drag_bounds_callback(|_, window_size| Some(RectF::new(Vector2F::zero(), window_size)))
         .with_accepted_by_drop_target_fn(move |drop_target_data, _| {
@@ -1144,6 +1199,9 @@ pub fn render_pane_header_draggable<P: BackingView>(
             >::PaneHeaderDragStarted);
         })
         .on_drag(move |ctx, _, drag_position, data| {
+            let cursor_position = pointer
+                .dragging_mouse_position()
+                .unwrap_or_else(|| drag_position.center());
             if let Some(pane_drop_data) =
                 data.and_then(|data| data.as_any().downcast_ref::<PaneDropTargetData>())
             {
@@ -1154,6 +1212,7 @@ pub fn render_pane_header_draggable<P: BackingView>(
                     origin: ActionOrigin::Pane,
                     drag_location: PaneDragDropLocation::PaneGroup(pane_drop_data.id),
                     drag_position,
+                    cursor_position,
                     tab_bar_axis: None,
                 });
             } else if let Some(data) =
@@ -1166,6 +1225,7 @@ pub fn render_pane_header_draggable<P: BackingView>(
                     origin: ActionOrigin::Pane,
                     drag_location: PaneDragDropLocation::TabBar(data.tab_bar_location),
                     drag_position,
+                    cursor_position,
                     tab_bar_axis: Some(TabBarAxis::Horizontal),
                 })
             } else if let Some(data) = data.and_then(|data| {
@@ -1179,6 +1239,7 @@ pub fn render_pane_header_draggable<P: BackingView>(
                     origin: ActionOrigin::Pane,
                     drag_location: PaneDragDropLocation::TabBar(data.tab_bar_location),
                     drag_position,
+                    cursor_position,
                     tab_bar_axis: Some(TabBarAxis::Vertical),
                 })
             } else {
@@ -1189,6 +1250,7 @@ pub fn render_pane_header_draggable<P: BackingView>(
                     origin: ActionOrigin::Pane,
                     drag_location: PaneDragDropLocation::Other,
                     drag_position,
+                    cursor_position,
                     tab_bar_axis: None,
                 })
             }

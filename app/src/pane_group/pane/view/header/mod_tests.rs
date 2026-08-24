@@ -219,15 +219,24 @@ fn the_drag_quadrant_has_a_dead_zone_at_the_centre() {
     // A 100x100 pane at the origin, so a drag's offset from the centre reads
     // directly as a percentage.
     let pane = RectF::new(vec2f(0., 0.), vec2f(100., 100.));
-    let drag_at = |x: f32, y: f32| RectF::new(vec2f(x, y), vec2f(0., 0.));
+    let drag_at = vec2f;
 
     assert!(
         calculate_pane_move_direction(pane, drag_at(50., 50.)).is_none(),
         "dead centre commits to nothing",
     );
     assert!(
-        calculate_pane_move_direction(pane, drag_at(60., 50.)).is_none(),
-        "10% off centre is inside the 18% threshold and still commits to nothing",
+        calculate_pane_move_direction(pane, drag_at(58., 50.)).is_none(),
+        "8% off centre is inside the threshold and still commits to nothing",
+    );
+    assert!(
+        matches!(
+            calculate_pane_move_direction(pane, drag_at(62., 50.)),
+            Some(Direction::Right)
+        ),
+        "12% off centre is outside it. The zone was 18% until T9.4 measured what \
+         that costs: on a 586x667 pane it is a 211x240px hole in the middle that \
+         offers nothing and does not say why",
     );
 
     assert!(matches!(

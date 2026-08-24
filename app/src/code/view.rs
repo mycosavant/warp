@@ -1706,6 +1706,9 @@ impl CodeView {
                         origin: ActionOrigin::EditorTab(index),
                         drag_location: PaneDragDropLocation::TabBar(data.tab_bar_location),
                         drag_position,
+                        // Only the `PaneGroup` branch reads this, and an editor
+                        // tab never reaches it.
+                        cursor_position: drag_position.center(),
                         tab_bar_axis: Some(TabBarAxis::Horizontal),
                     },
                 );

@@ -2235,6 +2235,7 @@ impl UiComponent for TabComponent<'_> {
             // additive — upstream sets no accepted-target callback at all, so
             // the `data` argument below was unconditionally `None` and the
             // tab-bar path resolves its drop from cursor geometry instead.
+            let pointer = draggable_state.clone();
             let draggable = Draggable::new(draggable_state, constrained_tab)
                 .with_accepted_by_drop_target_fn(|drop_target_data, app| {
                     if crate::fork::tab_pane_drop_target_accepted(app)
@@ -2254,6 +2255,9 @@ impl UiComponent for TabComponent<'_> {
                             tab_index,
                             target_pane_id: pane.id(),
                             drag_position: rect,
+                            cursor_position: pointer
+                                .dragging_mouse_position()
+                                .unwrap_or_else(|| rect.center()),
                         });
                         return;
                     }

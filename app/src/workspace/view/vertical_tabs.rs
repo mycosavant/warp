@@ -2542,6 +2542,7 @@ fn render_tab_group_internal(
         // geometry alone — it lands outside the tab bar, so the cross-window
         // path detaches it into a new window instead of splitting the pane.
         // Observed by driving the gesture, 2026-08-23 (`.fork/TASKS.md` T9.1).
+        let pointer = tab.draggable_state.clone();
         let draggable = Draggable::new(tab.draggable_state.clone(), group_element)
             .with_accepted_by_drop_target_fn(|drop_target_data, app| {
                 if crate::fork::tab_pane_drop_target_accepted(app)
@@ -2563,6 +2564,9 @@ fn render_tab_group_internal(
                         tab_index,
                         target_pane_id: pane.id(),
                         drag_position: rect,
+                        cursor_position: pointer
+                            .dragging_mouse_position()
+                            .unwrap_or_else(|| rect.center()),
                     });
                     return;
                 }

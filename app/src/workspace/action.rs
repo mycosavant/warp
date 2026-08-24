@@ -155,6 +155,10 @@ pub enum WorkspaceAction {
         target_pane_id: PaneId,
         /// Cursor rect, for the same quadrant maths a pane drag uses.
         drag_position: RectF,
+        /// The pointer itself. The rect above is the dragged tab, whose centre
+        /// sits wherever the grab point put it — see
+        /// `pane_group::pane::view::header::calculate_pane_move_direction`.
+        cursor_position: Vector2F,
     },
     /// A tab was released over a pane. Commits whatever the preview promised.
     DropTabOnPane {
