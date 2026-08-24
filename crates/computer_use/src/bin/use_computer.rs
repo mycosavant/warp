@@ -85,6 +85,22 @@ enum Command {
         /// release shows the result, which is a different question.
         #[arg(long)]
         screenshot: Option<PathBuf>,
+        /// Press and release this key mid-drag, just before the screenshot.
+        ///
+        /// The only way to exercise a cancel key, which by definition is a keystroke that
+        /// arrives while a button is still held — not something a click-then-type sequence
+        /// can produce, because the drag ends when the button comes up.
+        #[arg(long)]
+        press: Option<String>,
+        /// Move here, after the screenshot, before letting go: "x,y".
+        ///
+        /// Turns a drag into a *probe*. Photographing what a drop would do and then
+        /// doing it are different questions, and the second one changes the thing you
+        /// were measuring — a sweep that commits every hit has to rebuild the layout
+        /// between samples, and the layout is what the coordinates are derived from.
+        /// Releasing somewhere inert instead leaves the app exactly as it was found.
+        #[arg(long, value_parser = parse_point)]
+        release_at: Option<(i32, i32)>,
     },
     /// Type text using the keyboard.
     Text {
@@ -150,6 +166,22 @@ fn parse_region(s: &str) -> Result<(i32, i32, i32, i32), String> {
         .parse::<i32>()
         .map_err(|_| format!("Invalid y2: {}", parts[3]))?;
     Ok((x1, y1, x2, y2))
+}
+
+/// Parses a point string "x,y".
+fn parse_point(s: &str) -> Result<(i32, i32), String> {
+    let (x, y) = s
+        .split_once(',')
+        .ok_or_else(|| "Point must be specified as 'x,y'".to_string())?;
+    let x = x
+        .trim()
+        .parse::<i32>()
+        .map_err(|_| format!("Invalid x: {x}"))?;
+    let y = y
+        .trim()
+        .parse::<i32>()
+        .map_err(|_| format!("Invalid y: {y}"))?;
+    Ok((x, y))
 }
 
 // The binary exits by returning an `ExitCode` rather than calling `std::process::exit`, which
@@ -223,6 +255,8 @@ async fn main() -> ExitCode {
             steps,
             step_ms,
             screenshot,
+            press,
+            release_at,
         } => {
             let button: MouseButton = button.into();
             let step = std::time::Duration::from_millis(step_ms);
@@ -241,6 +275,18 @@ async fn main() -> ExitCode {
                 });
                 actions.push(Action::Wait(step));
             }
+            if let Some(press) = press.as_deref() {
+                let key = match parse_key(press) {
+                    Ok(key) => key,
+                    Err(e) => {
+                        eprintln!("{e}");
+                        return ExitCode::FAILURE;
+                    }
+                };
+                actions.push(Action::KeyDown { key: key.clone() });
+                actions.push(Action::KeyUp { key });
+                actions.push(Action::Wait(std::time::Duration::from_millis(200)));
+            }
             // Let the target render at the final position before it is photographed. Without
             // this the capture races the frame that draws the preview.
             actions.push(Action::Wait(std::time::Duration::from_millis(250)));
@@ -250,12 +296,18 @@ async fn main() -> ExitCode {
                 region: None,
                 target,
             });
-            (
-                actions,
-                screenshot_params,
-                screenshot,
-                vec![Action::MouseUp { button }],
-            )
+            // The move back has to be its own action, and has to be followed by a wait:
+            // a `Draggable` recomputes its drop target from each move, so the release
+            // only lands somewhere inert if the app has processed the move first.
+            let mut after = Vec::new();
+            if let Some((x, y)) = release_at {
+                after.push(Action::MouseMove {
+                    to: Vector2I::new(x, y),
+                });
+                after.push(Action::Wait(std::time::Duration::from_millis(150)));
+            }
+            after.push(Action::MouseUp { button });
+            (actions, screenshot_params, screenshot, after)
         }
         Command::Text { text } => (vec![Action::TypeText { text }], None, None, Vec::new()),
         Command::Screenshot { output, region } => {
