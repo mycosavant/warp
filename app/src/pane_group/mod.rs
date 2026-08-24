@@ -5881,6 +5881,18 @@ impl PaneGroup {
     fn cancel_drag(&mut self, ctx: &mut ViewContext<Self>) {
         self.panes.clear_hidden_panes_from_move();
         self.set_drop_preview(None, ctx);
+        // ...and the state the *views* accumulate, which this group cannot
+        // reach directly. Chief among it the drag dim, which left a cancelled
+        // pane looking blank (T9.4). Collected first because the update borrows
+        // `ctx` mutably.
+        let configurations: Vec<_> = self
+            .pane_contents
+            .values()
+            .map(|contents| contents.as_pane().pane_configuration())
+            .collect();
+        for configuration in configurations {
+            configuration.update(ctx, |configuration, ctx| configuration.cancel_drag(ctx));
+        }
         ctx.emit(Event::ClearHoveredTabIndex);
         ctx.notify();
     }

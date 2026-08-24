@@ -820,6 +820,14 @@ impl PaneConfiguration {
         ctx.emit(PaneConfigurationEvent::HeaderContentChanged);
     }
 
+    /// Tells this pane's views that the drag they were dressed for is off.
+    ///
+    /// Nothing on the configuration itself changes — the drag state lives on the
+    /// views — so this only carries the event.
+    pub fn cancel_drag(&mut self, ctx: &mut ModelContext<Self>) {
+        ctx.emit(PaneConfigurationEvent::DragCancelled);
+    }
+
     pub fn refresh_pane_header_overflow_menu_items(&mut self, ctx: &mut ModelContext<Self>) {
         ctx.emit(PaneConfigurationEvent::RefreshPaneHeaderOverflowMenuItems);
         ctx.emit(PaneConfigurationEvent::HeaderContentChanged);
@@ -888,6 +896,17 @@ pub enum PaneConfigurationEvent {
     /// This is used when the backing view's state changes in a way that
     /// affects what `render_header_content()` returns.
     HeaderContentChanged,
+    /// A drag was cancelled, and every view that dressed itself up for it should
+    /// undress (`.fork/TASKS.md` T9.4).
+    ///
+    /// This travels on the pane's configuration model rather than as an action
+    /// because `PaneGroup` — which is where the cancel arrives — has no handle
+    /// on either `PaneView` or `PaneHeader`; its pane tree stores `PaneId`s and
+    /// its `pane_contents` are `dyn PaneContent`. The configuration model is
+    /// already the shared channel between those two views and is reachable from
+    /// `PaneContent::pane_configuration`, so the message gets there without a
+    /// new trait method on all ten pane types.
+    DragCancelled,
 }
 
 /// Event emitted when the pane stack changes.

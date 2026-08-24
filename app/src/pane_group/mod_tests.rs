@@ -3631,6 +3631,65 @@ fn test_close_pane_clears_transitively_shared_child_entry_on_non_undo_branch() {
     });
 }
 
+/// A cancelled pane drag must undim the pane it was dressing up.
+///
+/// The failure this pins is the one a person hit: press Escape mid-drag and the
+/// pane goes blank and stays blank. Nothing is broken underneath — the contents
+/// are still there, under an opaque `surface_2` overlay that `is_being_dragged`
+/// paints and that only a *drop* used to take off. `.fork/TASKS.md` T9.4.
+///
+/// The drag is driven through `PaneDragDropLocation::Other`, the one branch that
+/// sets the flag without needing a laid-out tab bar or a real drop target
+/// underneath the cursor.
+#[test]
+fn a_cancelled_drag_undims_the_pane_it_was_dragging() {
+    App::test((), |mut app| async move {
+        initialize_app(&mut app);
+        let pane_group = mock_pane_group(&mut app, Default::default());
+        pane_group.update(&mut app, |pane_group, ctx| {
+            pane_group.add_terminal_pane(Direction::Right, None, ctx);
+        });
+
+        let pane_view = pane_group.read(&app, |pane_group, _| {
+            pane_group
+                .panes_of::<TerminalPane>()
+                .next()
+                .expect("a terminal pane")
+                .pane_view()
+        });
+
+        pane_view.update(&mut app, |pane_view, ctx| {
+            pane_view.header().clone().update(ctx, |header, ctx| {
+                header.handle_action(
+                    &PaneHeaderAction::PaneHeaderDragged {
+                        origin: ActionOrigin::Pane,
+                        drag_location: PaneDragDropLocation::Other,
+                        drag_position: RectF::new(
+                            pathfinder_geometry::vector::vec2f(0., 0.),
+                            pathfinder_geometry::vector::vec2f(10., 10.),
+                        ),
+                        cursor_position: pathfinder_geometry::vector::vec2f(5., 5.),
+                        tab_bar_axis: None,
+                    },
+                    ctx,
+                );
+            });
+        });
+
+        assert!(
+            pane_view.read(&app, |pane_view, _| pane_view.is_being_dragged()),
+            "setup precondition: dragging a pane dims it for the whole drag",
+        );
+
+        pane_group.update(&mut app, |pane_group, ctx| pane_group.cancel_drag(ctx));
+
+        assert!(
+            !pane_view.read(&app, |pane_view, _| pane_view.is_being_dragged()),
+            "a cancelled drag has to take the dim back off, or the pane reads as empty",
+        );
+    });
+}
+
 // Ensures that we always show the pane header for terminal panes, regardless of split state.
 #[test]
 fn test_terminal_pane_headers() {

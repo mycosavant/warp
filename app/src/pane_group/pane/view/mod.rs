@@ -272,6 +272,22 @@ impl<P: BackingView> PaneView<P> {
                     header.open_shared_session_qr_code(*source, ctx);
                 });
             }
+            PaneConfigurationEvent::DragCancelled => {
+                // The dim is the whole reason this arm exists. `is_being_dragged`
+                // paints an opaque `surface_2` over the pane's contents, and it
+                // is cleared only by the three *drop* events — so a cancelled
+                // drag left the pane looking empty, with no way back short of a
+                // second, completed drag. T8.2 introduced the exposure by
+                // setting the flag on every drop-preview change, to keep the
+                // pane dimmed for the whole drag rather than only at the moment
+                // it committed; before that a cancel had almost nothing to undo.
+                // Reported after manual testing, 2026-08-23 (`.fork/TASKS.md`
+                // T9.4).
+                self.is_being_dragged = false;
+                self.header
+                    .update(ctx, |header, ctx| header.cancel_drag(ctx));
+                ctx.notify();
+            }
             _ => {}
         }
     }
