@@ -7,11 +7,14 @@ Claude subscription, API keys, and local models.
 Licensing note: AGPL obligations attach on **distribution**, not personal use.
 If this fork is ever published as a binary, source must ship with it.
 
-**The five files.** `../CLAUDE.md` is the cold start: the method, the
+**The six files.** `../CLAUDE.md` is the cold start: the method, the
 invariants, and where fork behaviour lives. `README.md` (this one) is how to
 *use* what exists. `TASKS.md` is the board and the "as built" record of how
 each item actually went. `SPEC.md` is the original de-telemetry/de-account
 reasoning. `IDEAS.md` is the holding pen in front of the board.
+`CONSOLIDATION.md` is why this fork is the product rather than one of three,
+and it carries the licensing analysis — read it before deciding where a
+capability lives, or before publishing anything.
 
 ## What is in this file
 
