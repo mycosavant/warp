@@ -304,6 +304,56 @@ assuming — and note the fork already opened Warp's remote-development server
 may not cover the same need. **These are different things** — one is
 remote *development*, the other is remote *observation of a running session*.
 
+### 4.1 Ratified migration decision (2026-08-24)
+
+Settled after a survey of the five feature-mining sessions in `tusk/docs/` — 57
+tickets across `GB-` (grok-build), `OC-` (opencode), `TR-` (traycer), `WB-`
+(warp-borrow) and `ZB-` (zenith) — each run through a "look for the gate first"
+pass against this fork.
+
+**The inversion that shrinks the job.** The `WB-` set was mined *from Warp into
+Tusk*. Moving onto this substrate makes it a no-op. Verified present:
+`WB-SAFELOG` is `crates/warp_core/src/assertions.rs`, `WB-BROKER` is
+`app/src/local_control/{auth,bridge}.rs`, `WB-FLAGLADDER` is the channel ladder
+in `crates/warp_core/src/channel/`. `WB-SLEEP` (inhibit sleep for the duration
+of a run) is the one real gap.
+
+**Tier 1 — migrates, in this order.**
+
+| | what | why, and why here |
+|---|---|---|
+| 1 | `TR-EVENTS` structured event taxonomy (+ `-B` stable per-call id, `-C` structured `file_change`) | the observability substrate. Ordered **first**: an SSE stream with nothing structured on it is a pipe with no protocol |
+| 2 | `OC-SHARE` / D-WEB read-only HTTP + SSE, token-gated, loopback default | onto `warpctrl`, **not** onto 9282 — see `TASKS.md` T10.2 |
+| 3 | `GB-APPROVE` + `GB-GRANTS` remote approval, remembered grants | the one write capability with a bounded blast radius; two independent products landed on it as the killer control feature |
+| 4 | `ZB-PLAN` sealed-subgraph guard, `ZB-CONTRACT` per-assertion verdicts | as validators over `graph.rs`'s TOML — §5's "migrate toward the file, not the schema" |
+| 5 | `ZB-REVIEW` independent completion-review gate | |
+| 6 | the planning taxonomy — 3 horizons, 4 buckets, the 7-part ticket format | already live as `**Horizon:** / **Bucket:**` headers in those docs; costs nothing to adopt |
+
+**Tier 2 — the substrate greps positive; verify before building anything.**
+Cost/usage accounting, checkpoints, notifications, worktrees, retrieval memory,
+OS sandbox, split-pane tiling. **These are leads, not verifications** — a
+matching symbol is not a working feature, and §1 of this file is what happens
+when a measurement is trusted unrun.
+
+**Tier 3 — stays in kode-rs.** `GB-SUBAGENT`, `GB-SYMBOLS`, `GB-CRASH`,
+`GB-MONITOR` are engine internals. They reach the fork through the adapter
+contract, never by being copied in — copying them *is* §7's named anti-goal.
+
+**`GB-ACP` / `OC-ACP` resolve differently, and better.** ACP is not in this fork:
+the only hits are `CLIAgent::Vibe => &["vibe", "vibe-acp"]`, which is binary-name
+*recognition*, not protocol support. But the slot exists twice — `CLIAgent` (16
+variants, terminal-level, with a regex-matched `Unknown`) and `Harness` (`Oz |
+Claude | OpenCode | Gemini | Codex | Unknown`, delegation) — and the protocol
+ships an **Apache-2.0** Rust crate (`agent-client-protocol`, with an
+`example_client.rs`) that an AGPL work may depend on.
+
+So the move is not "add ACP to kode-rs, then integrate kode-rs". It is: **the
+fork speaks ACP as the client (editor) side, kode-rs speaks the agent side, they
+meet in the middle, and every other ACP agent — Gemini CLI, Claude Code via
+Zed's adapter — arrives for free.** That makes ACP *the* adapter contract §7 asks
+for, rather than one this project invents and then has to keep honest with a
+lint. Filed as a **decide**, not yet a build.
+
 ### The licensing structure that preserves optionality
 
 Tusk and kode-rs are both `MIT OR Apache-2.0`. Permissive code may flow into an
@@ -445,16 +495,22 @@ multi-engine story degrades one notch, silently, and no test fails.
 Detection: grep the fork for adapter-identity branches. A rule with no detector is
 a wish — if you keep this one, give it a lint.
 
-### The three questions to answer explicitly
+### The three questions, answered (2026-08-24)
 
-1. **Is terminal `kode` (the TUI) still a product?** The fork now occupies the
-   harness tier. If `kode` stays first-class, say what it is *for* — that answer
-   used to be "the terminal-native harness," and the fork now does that better.
-   The honest answer may be that `kode-rs` becomes an engine repo plus a
-   permissive logic library, and the TUI becomes how you dogfood the engine.
-2. **Does Tusk survive as an app?** §4 says probably not, with the web surface as
-   the open question.
-3. **What is the migration order?** See §10.
+1. **Is terminal `kode` (the TUI) still a product?** **No.** `kode-rs` becomes
+   one harness among several the fork drives — the maintainer's own words: *"just
+   another harness that warp can host, similar to claude code, opencode, etc."*
+   The engine keeps its value; the TUI becomes how the engine is dogfooded.
+2. **Does Tusk survive as an app?** **No** — and the open question closed with
+   it. The web surface is what the maintainer wanted from Tusk, and §4.1 migrates
+   it onto `warpctrl` rather than preserving the app that hosted it.
+3. **What is the migration order?** §4.1's Tier 1, observability first.
+
+**Why the cockpit was at the wrong altitude**, in the maintainer's own diagnosis:
+*"wrapping the terminal is the right surface, and having a top-of-class composer
+is non-negotiable."* A cockpit beside the terminal is a context switch whose
+value is capped by how deep it can reach into a harness it does not own. This
+substrate removes the cap by being the surface.
 
 ---
 

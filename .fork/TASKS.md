@@ -5295,7 +5295,7 @@ directory present: **18m 48s**, 351,897,600 bytes. Corrected in the script.
 
 ---
 
-## T10 — Staying current  ← ACTIVE
+## T10 — Staying current  ← ONGOING
 
 > Decided 2026-08-24: **this stays a soft fork.** The rename is deferred, and
 > the reason is measurable rather than aesthetic — renaming every `warp-oss`,
@@ -5363,7 +5363,83 @@ target never compiles.
 
 ---
 
+## T11 — Observability first, then the surface  ← ACTIVE
+
+> Ratified 2026-08-24. The goal, in the maintainer's words: a project you can
+> *"spin up, check in on, fire a session from my phone and keep things moving
+> semi-autonomously"* — in the pilot's seat rather than the labourer's.
+>
+> **The ordering is load-bearing and has two independent reasons.**
+> `tusk/docs/handoffs/remote-control-feature-mining.md` argues read-only-first
+> because nearly all the *value* is in the read path and nearly all the *risk* is
+> in the write path — the engine spawns agents and runs tools, so the write path
+> is RCE. This fork adds a second: the failure that cost the maintainer a month
+> of kode-rs work was a **silent** one — a swarm of agents running without
+> permissions, nothing surfacing it, features implemented but never wired, and
+> docs written as though they were. An event taxonomy is the detector for exactly
+> that class, and a stream with nothing structured on it is a pipe with no
+> protocol. So events come before the surface that carries them.
+>
+> Migration tiers and their reasoning: `CONSOLIDATION.md` §4.1.
+
+- [ ] **T11.1** A structured event taxonomy (`TR-EVENTS`, with `-B`'s stable
+      per-call id and `-C`'s structured `file_change`). Look for the gate first:
+      `BlocklistAIHistoryEvent` already exists and T8.3 extended it, and
+      `orchestration_events.rs` already builds lifecycle events. The question is
+      whether an append-only per-run *file* (`CONSOLIDATION.md` §5) is a
+      projection of what is already emitted, or a new thing.
+- [ ] **T11.2** The first slice of the read surface, end to end and deliberately
+      small: **one** `GET` route on `warpctrl` returning current agent/task
+      state, **one** SSE endpoint carrying T11.1's events, still bound to
+      `127.0.0.1`. No LAN bind, no QR pairing, no web page. It proves transport,
+      auth and fan-out against a running app; everything after it is additive.
+- [ ] **T11.3** Constant-time token comparison — **prerequisite for any bind
+      wider than loopback.** `AuthToken(String)` in
+      `crates/local_control/src/auth.rs` uses `#[derive(PartialEq)]`, so
+      `verify_authorization_header` short-circuits on the first differing byte.
+      Entropy is fine (`OsRng`), and on loopback behind the peer-UID broker the
+      severity is low — but the LAN bind T11.4 needs turns it into a timing
+      oracle on a token that authorises 109 actions, several of which run
+      commands. Read from the source, **not** demonstrated by an exploit.
+- [ ] **T11.4** LAN bind behind an explicit flag, plus QR pairing. `warpctrl`
+      hardcodes `[127, 0, 0, 1], 0` today. Ship the mining doc's must-haves in
+      the box, not as documentation: fail closed on an ambiguous config, refuse a
+      wide bind without a strong token, never log the token, CORS allowlist and
+      never `*`. The stated anti-pattern is vibe-kanban — localhost-only with no
+      built-in auth, so the moment a user sets `HOST=0.0.0.0` for their phone,
+      anyone on the network has agent execution.
+- [ ] **T11.5** `GB-APPROVE` + `GB-GRANTS` — answer a waiting-input approval
+      remotely, with remembered grants. The first *write* capability, chosen
+      because its blast radius is bounded and because it is what turns "watch"
+      into "unblock from the couch".
+
+**Filed as decides, not builds:** ACP as the adapter contract
+(`CONSOLIDATION.md` §4.1 — the fork as client, kode-rs as agent), and `WB-SLEEP`
+(inhibit system sleep for the duration of a run), the one `WB-` ticket this
+substrate does not already answer.
+
+---
+
 ## Decisions on record
+
+- **This fork is the product, and it stays a soft fork** (2026-08-24). Tusk
+  retires as an app, `kode-rs` becomes one harness among several the fork drives,
+  and the rename that would make this a *hard* fork is deferred — every
+  `warp-oss`/`WARP_*`/`WarpOss`/`warpctrl` symbol renamed converts ground shared
+  with upstream into permanent conflict. Merge cadence instead: T10.
+  Reasoning and the corrected divergence measurement in `CONSOLIDATION.md` §1.
+
+- **Observability precedes the remote surface** (2026-08-24, T11). Two
+  independent reasons, and the second is the one that decided it: read-only-first
+  because the value is in the read path and the risk is in the write path; and
+  events-first because the failure that cost a month of kode-rs work was
+  *silent*, and an event taxonomy is the detector for that class. A stream with
+  nothing structured on it is a pipe with no protocol.
+
+- **The web surface goes on `warpctrl`, never on 9282** (2026-08-24, T10.2).
+  Upstream's `crates/http_server` answers unauthenticated and is ungated by fork
+  policy. `warpctrl` is the server with `auth.rs`, the credential broker and the
+  peer-UID check.
 
 - **Claude subscription auth: do not reimplement Anthropic's OAuth.**
   `crates/ai/src/grok_subscription/oauth.rs` proves the pattern works and is
