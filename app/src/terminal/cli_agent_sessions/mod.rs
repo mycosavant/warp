@@ -476,7 +476,15 @@ impl CLIAgentSessionsModel {
         event: &CLIAgentEvent,
         ctx: &mut ModelContext<Self>,
     ) {
-        if !self.sessions.contains_key(&terminal_view_id) {
+        let applied = self.sessions.contains_key(&terminal_view_id);
+
+        // Fork (T11.1): recorded *before* the drop below, not after. An event
+        // that arrives for a terminal with no session is exactly the silent
+        // case the log exists to make visible, and a log containing only what
+        // succeeded cannot show the one that did not.
+        crate::event_log::record(event, applied);
+
+        if !applied {
             return;
         }
 

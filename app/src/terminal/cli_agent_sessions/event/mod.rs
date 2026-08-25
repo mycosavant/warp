@@ -24,6 +24,31 @@ pub enum CLIAgentEventType {
     Unknown(String),
 }
 
+impl CLIAgentEventType {
+    /// The string this event carries on the wire.
+    ///
+    /// The inverse of `v1::parse`'s match, and it lives here rather than beside
+    /// that table because the table is per-version while these names are the
+    /// vocabulary itself: a new protocol version may add a spelling, but
+    /// renaming one would break every plugin. `Unknown` round-trips the string
+    /// it was given, so an event from a newer plugin still reads as itself in a
+    /// log written by an older Warp.
+    pub fn wire_name(&self) -> &str {
+        match self {
+            Self::SessionStart => "session_start",
+            Self::PromptSubmit => "prompt_submit",
+            Self::ToolComplete => "tool_complete",
+            Self::Stop => "stop",
+            Self::StopFailure => "stop_failure",
+            Self::PermissionRequest => "permission_request",
+            Self::PermissionReplied => "permission_replied",
+            Self::QuestionAsked => "question_asked",
+            Self::IdlePrompt => "idle_prompt",
+            Self::Unknown(raw) => raw,
+        }
+    }
+}
+
 /// How a CLI agent event reached Warp.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CLIAgentEventSource {

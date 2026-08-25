@@ -121,8 +121,10 @@ fork regression), `WARP_FORK_LOCAL_AGENT`, `WARP_FORK_AGENT_SPAWN_DEPTH`,
 defaults **on** — set it off to get upstream's terminal in the hotkey window),
 `WARP_FORK_FRAME_LOG` (`on`, or a threshold in ms — slow-frame accounting to
 the local log; **reach for this before theorising about why something feels
-slow**). Tab→pane drag has no variable of its own; `WARP_FORK_POLICY=0` puts
-the tab's horizontal-only drag axis back.
+slow**), `WARP_FORK_EVENT_LOG` (`on`, or a directory — one JSONL file per
+CLI-agent session, appended as events arrive; **reach for this before
+theorising about what an agent did**). Tab→pane drag has no variable of its
+own; `WARP_FORK_POLICY=0` puts the tab's horizontal-only drag axis back.
 
 ---
 
@@ -202,6 +204,25 @@ two new upstream TUI files matching exhaustively over `BlocklistAIHistoryEvent`
 in `crates/persistence` missing T8.3's `settled`. The persistence one **was
 already red before the merge** — T8.3 shipped a required field without ever
 compiling that crate's tests. A clean `cargo build` proves nothing here.
+
+**Never share `CARGO_TARGET_DIR` between two checkouts of this workspace.**
+Measured 2026-08-24: running a baseline in a `git worktree` with the main tree's
+target directory (to save disk) left artifacts that did not match either tree,
+and the damage was *silent* — the next build failed with
+`no variant or associated item named CtrlCCancelsThirdPartyHarness found` and
+`no field 'inviteLink' on the GraphQL type 'Team'`, both pointing at source that
+was correct on disk. Worse, it invalidates verification done before it: a
+`cargo check --workspace --all-targets` that passed only proved the *cache* was
+consistent. Give the worktree its own target directory and accept the disk, or
+measure the baseline by stashing in place.
+
+**A build script that reads a file it does not `rerun-if-changed` is a merge
+trap.** `crates/graphql/build.rs` registers a schema from
+`../warp_graphql_schema/api/schema.graphql` and watched only itself, so an
+upstream merge that changed the queries *and* the schema together left a stale
+registration in `OUT_DIR` and failed with "no field X on type Y" against a schema
+that has the field. Fixed in both graphql build scripts (T11.1). If you add one,
+declare every input.
 
 **Merging upstream: watch the overlap, not the divergence.** `git merge-base
 upstream/master dev` computed, never pasted (see *Method*), then the file sets

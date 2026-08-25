@@ -5382,8 +5382,9 @@ target never compiles.
 >
 > Migration tiers and their reasoning: `CONSOLIDATION.md` §4.1.
 
-- [ ] **T11.1** A structured event taxonomy (`TR-EVENTS`). **Gate check done —
-      see below. The taxonomy exists; the persistence does not.**
+- [x] **T11.1** A structured event taxonomy (`TR-EVENTS`). The taxonomy already
+      existed; what was missing was anywhere to keep it. Built as a projection:
+      `WARP_FORK_EVENT_LOG`, one JSONL file per session.
 - [ ] **T11.2** The first slice of the read surface, end to end and deliberately
       small: **one** `GET` route on `warpctrl` returning current agent/task
       state, **one** SSE endpoint carrying T11.1's events, still bound to
@@ -5468,6 +5469,80 @@ backward-compatible under `skip_serializing_none`:
   mechanism is present and the run-scoped use is not. The earlier "not found"
   was a malformed grep (`-i` glued to the pattern), which is the same class of
   error as §1.1: the command ran and reported honestly about the wrong question.
+
+### T11.1 — as built
+
+`app/src/event_log.rs`, ~200 lines, plus one call at the single choke point.
+Off unless `WARP_FORK_EVENT_LOG` asks: `on` writes under `fork::state_dir()`,
+anything else is taken as the directory, so a run can be pointed at a scratch
+path. Policy in `fork::event_log_dir`, mechanism in the module, per the same
+split as `WARP_FORK_FRAME_LOG`.
+
+**The hook is `CLIAgentSessionsModel::update_from_event`, and it records
+*before* the early return, not after.** That function drops any event arriving
+for a terminal it has no session for. Logging after the drop would produce a
+file containing only what succeeded, which cannot show the one that did not —
+so the record carries `applied: false` instead and the event survives.
+
+**One flat JSON object per line.** Not an envelope wrapping the event: every
+reader of this file is a filter, and `jq 'select(.event=="permission_request")'`
+should not have to know which fields live a level down. A test asserts no field
+nests.
+
+**Warp's clock, not the agent's.** The protocol carries no timestamp and the
+agent's clock is not ours to trust; `ts` answers "when did Warp know". `seq` is
+process-global rather than per-file, so ordering can be reconstructed *across*
+concurrent sessions and a gap in one file is visibly an event that went to
+another.
+
+**Verified by running** (Linux/X11, 2026-08-24), by emitting the real OSC 777
+form a plugin uses — `ESC]777;notify;warp://cli-agent;{json}BEL` — from a shell
+inside a Warp pane, through Warp's own parser:
+
+```
+{"ts":"2026-08-25T02:24:10.367Z","seq":0,"v":1,"agent":"claude",
+ "event":"permission_request","source":"rich_plugin","session_id":"probe-1",
+ "cwd":"/tmp","tool_name":"Bash","tool_input_preview":"rm -rf /","applied":true}
+```
+
+Three properties were driven rather than asserted:
+
+* **A plugin cannot choose where Warp writes.** `session_id` becomes a
+  filename, and the agent supplies it. `"../../../../../../tmp/pwned"` produced
+  `___________tmp_pwned.jsonl` *inside* the log directory; nothing appeared at
+  `/tmp/pwned`. The unit test for this **failed first**: the sanitizer stopped
+  traversal (no separator survives) but left `..` in the name, which the test
+  called a traversal segment. The test's intent was right and the code was
+  weaker than it, so the code changed.
+* **An event from a newer plugin reads as itself.** `subagent_spawned`, a type
+  this build has never heard of, is recorded under its own name rather than as
+  "unknown", because `CLIAgentEventType::Unknown` round-trips its string.
+* **`seq` shows the gap.** The three surviving lines are `seq` 0, 2, 3 — number
+  1 is the traversal event, in the other file.
+
+**Two bugs found on the way, both upstream, both fixed:**
+
+* **`crates/graphql/build.rs` and `crates/warp_graphql_schema/build.rs` read a
+  schema they never declared as an input.** Only `rerun-if-changed=build.rs`,
+  so an upstream merge that changes the queries *and* `schema.graphql` together
+  leaves a stale registration in `OUT_DIR`, and every query in the crate is
+  validated against the old schema. It fails as "no field `inviteLink` on the
+  GraphQL type `Team`", pointing at Rust that is correct, about a schema on disk
+  that already has the field. Verified fixed by touching the schema and watching
+  both crates rebuild, which before the fix they did not.
+* Not a code bug but worth the same weight: **sharing `CARGO_TARGET_DIR`
+  between two checkouts silently corrupts it.** T10.1's baseline was measured in
+  a worktree pointed at the main target directory to save disk, and the artifacts
+  left behind matched neither tree. It also retroactively weakens the
+  verification that preceded it — a `cargo check --workspace --all-targets` that
+  passes against a poisoned cache has proved nothing. Recorded in `CLAUDE.md`.
+
+**Not done here, and deliberately:** world 1 (`BlocklistAIHistoryEvent`, Warp's
+own agent) is not yet projected into the log. The mapping exists as a reference
+in `crates/warp_tui/src/cli_agent_osc_event_publisher.rs`; wiring it is T11.1b.
+Also still open from the gate check: **no per-call id**, so a `tool_complete`
+cannot be tied to the `permission_request` before it (`TR-EVENTS-B`). That one
+needs a protocol version bump, because the id has to come from the plugin.
 
 **Filed as decides, not builds:** ACP as the adapter contract
 (`CONSOLIDATION.md` §4.1 — the fork as client, kode-rs as agent), and `WB-SLEEP`

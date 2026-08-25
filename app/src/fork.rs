@@ -345,6 +345,49 @@ fn slow_frame_threshold_from(value: Option<&str>) -> Option<Duration> {
     }
 }
 
+const EVENT_LOG_ENV_VAR: &str = "WARP_FORK_EVENT_LOG";
+
+/// Where structured agent events are appended, or `None` to keep them in memory
+/// as upstream does (T11.1).
+///
+/// **This exists because of an asymmetry, not a missing feature.** Warp already
+/// has a good CLI-agent event protocol — versioned over OSC 777, negotiated on
+/// the PTY, with `PermissionRequest`/`PermissionReplied` as first-class types.
+/// What it has no answer for is *keeping* one: `CLIAgentSessionsModel` holds
+/// three in-memory `HashMap`s, so an event is parsed, paints the UI, and is
+/// gone. Warp's own agent history persists to SQLite; the agents it merely
+/// *hosts* do not persist at all.
+///
+/// That gap is the whole of the fork's stated goal. A run you check on from
+/// somewhere else needs a record that outlives the frame it painted, and the
+/// failure worth catching — an agent blocked on a permission nobody surfaced —
+/// is already a *recorded event* here. It just had nowhere to be recorded.
+///
+/// Off by default: a log with no reader is a cost. `WARP_FORK_EVENT_LOG=on`
+/// writes under [`state_dir`]; any other value is taken as the directory to
+/// write in, so a run can be pointed at a scratch path without touching the
+/// rest of the fork's state. `off`/`0`/`false`/empty is the same as unset.
+pub fn event_log_dir() -> Option<std::path::PathBuf> {
+    if !is_active() {
+        return None;
+    }
+    event_log_dir_from(std::env::var(EVENT_LOG_ENV_VAR).ok().as_deref())
+}
+
+/// Split from the environment so the decision can be asserted without setting a
+/// process-global variable from a test that runs beside others.
+fn event_log_dir_from(value: Option<&str>) -> Option<std::path::PathBuf> {
+    match value.map(str::trim) {
+        None | Some("") | Some("0") | Some("off") | Some("false") => None,
+        Some("on") | Some("true") => Some(state_dir().join("events")),
+        // Unlike the frame log, an unrecognised value here is a *path*, not a
+        // typo to be forgiven: "log somewhere I chose" is the second thing
+        // anyone wants from this, and guessing the default instead would write
+        // the run's history to a directory the caller did not name.
+        Some(path) => Some(std::path::PathBuf::from(path)),
+    }
+}
+
 /// Whether a tab can be dragged into the pane area to split a pane (T8.2).
 ///
 /// **The gate was an axis.** Upstream wraps each tab in a `Draggable` pinned to

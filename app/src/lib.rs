@@ -33,6 +33,7 @@ mod drive;
 #[cfg(windows)]
 mod dynamic_libraries;
 mod env_vars;
+mod event_log;
 mod experiments;
 mod external_secrets;
 #[cfg(target_family = "wasm")]

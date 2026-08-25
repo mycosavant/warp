@@ -1852,6 +1852,51 @@ per frame and no clock is taken.
 > the number to compare a `--release` build against before blaming any
 > particular feature for feeling slow.
 
+## What an agent actually did
+
+Warp watches the CLI agents you run in its panes — `claude`, `opencode`,
+`codex`, `gemini` and a dozen more — through a versioned protocol they emit as
+OSC 777 on the PTY. It is a good protocol, and `permission_request` /
+`permission_replied` are first-class events in it. Upstream keeps the result in
+memory: an event updates a session, paints a status, and is gone.
+
+This writes it down instead (T11.1).
+
+```bash
+WARP_FORK_EVENT_LOG=on ./target/release/warp-oss
+# or point it somewhere of your own
+WARP_FORK_EVENT_LOG=/tmp/run-42 ./target/release/warp-oss
+```
+
+`on` writes under the fork's state directory; **any other value is taken as the
+directory**, so a run can be logged somewhere disposable without touching the
+rest of the fork's state. Unset, `0`, `off` and `false` all mean off, which is
+the default, and `WARP_FORK_POLICY=0` switches it off with everything else.
+
+One file per session, one JSON object per line:
+
+```console
+$ cat ~/.local/state/warp-oss/fork/events/*.jsonl | jq -c 'select(.event|startswith("permission"))'
+{"ts":"...","seq":0,"agent":"claude","event":"permission_request","tool_name":"Bash","applied":true}
+{"ts":"...","seq":3,"agent":"claude","event":"permission_replied","applied":true}
+```
+
+Three things about the format are deliberate and worth knowing before you write
+a query against it:
+
+- **Every record is flat.** No nesting, so a filter never has to know which
+  level a field lives on. A test enforces it.
+- **`seq` is process-global, not per file.** Ordering can be reconstructed
+  across concurrently running agents, and a gap in one file means the missing
+  event went to another.
+- **`applied: false` means Warp threw the event away** — it arrived for a
+  terminal with no session. That is recorded rather than filtered, because an
+  event that vanished is exactly what you came to this file to find.
+
+The directory is created on the first event, not at startup, so an empty
+directory means nothing arrived rather than that logging is off. The line
+`fork event log: writing to …` in the ordinary log confirms the other case.
+
 ## Voice input, transcribed on this machine
 
 Upstream sends your voice to `api.warp.dev`. The provider setting
