@@ -17,14 +17,12 @@ fn event(kind: CLIAgentEventType) -> CLIAgentEvent {
     }
 }
 
+/// Renders through the same adapter `record_cli_agent` uses, so world 2's
+/// mapping is covered rather than only the writer beneath it.
 fn parsed(event: &CLIAgentEvent, applied: bool) -> Value {
-    serde_json::from_str(&line(
-        7,
-        "2026-08-24T12:00:00.000Z".to_string(),
-        event,
-        applied,
-    ))
-    .expect("a record must be valid JSON")
+    let entry = hosted_agent_entry(event, applied);
+    serde_json::from_str(&line(7, "2026-08-24T12:00:00.000Z".to_string(), entry))
+        .expect("a record must be valid JSON")
 }
 
 /// The line is flat and self-describing, because every reader of this file is a

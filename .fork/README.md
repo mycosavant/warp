@@ -1860,7 +1860,9 @@ OSC 777 on the PTY. It is a good protocol, and `permission_request` /
 `permission_replied` are first-class events in it. Upstream keeps the result in
 memory: an event updates a session, paints a status, and is gone.
 
-This writes it down instead (T11.1).
+This writes it down instead (T11.1) — and writes down **Warp's own agent in the
+same vocabulary** (T11.1b), so one filter answers for every agent in the window
+rather than only for the ones Warp is hosting.
 
 ```bash
 WARP_FORK_EVENT_LOG=on ./target/release/warp-oss
@@ -1881,7 +1883,7 @@ $ cat ~/.local/state/warp-oss/fork/events/*.jsonl | jq -c 'select(.event|startsw
 {"ts":"...","seq":3,"agent":"claude","event":"permission_replied","applied":true}
 ```
 
-Three things about the format are deliberate and worth knowing before you write
+Five things about the format are deliberate and worth knowing before you write
 a query against it:
 
 - **Every record is flat.** No nesting, so a filter never has to know which
@@ -1892,6 +1894,32 @@ a query against it:
 - **`applied: false` means Warp threw the event away** — it arrived for a
   terminal with no session. That is recorded rather than filtered, because an
   event that vanished is exactly what you came to this file to find.
+- **`source` says which agent world a line came from**, and it is the only
+  field that does. `rich_plugin` and `codex_osc9_fallback` are agents running in
+  your panes; `in_process` is Warp's own agent. `agent` cannot tell you: Warp's
+  in-app agent and its headless TUI both call themselves `warp`.
+- **`v` is present only on lines that crossed the wire.** A hosted agent's
+  events carry the protocol version they were parsed under; Warp's own agent has
+  no protocol and so no `v`, rather than a made-up `1`.
+
+Warp's own agent also carries **`call_id`**, a stable id for one tool call, so
+`permission_request` → `tool_start` → `tool_complete` can be joined:
+
+```console
+$ jq -c 'select(.call_id=="…")' events/*.jsonl
+```
+
+A `tool_start` whose `call_id` matches no preceding `permission_request` is an
+action that ran without being asked about — which is the question this file
+exists to answer. Hosted agents do not have this yet; their protocol carries no
+per-call id, and adding one needs a version bump because it has to come from the
+plugin.
+
+**One honest gap.** With `WARP_FORK_LOCAL_AGENT=1` — the fork's headline path,
+where the `claude` CLI answers — the log records the turn (`session_start`,
+`prompt_submit`, `stop`) and **not the tools**. Claude runs its own tools and
+Warp deliberately never re-runs them, and the CLI is spawned on a pipe rather
+than a Warp PTY, so neither event world sees them. Closing that is T11.1c.
 
 The directory is created on the first event, not at startup, so an empty
 directory means nothing arrived rather than that logging is off. The line

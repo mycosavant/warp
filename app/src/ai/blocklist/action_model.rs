@@ -560,6 +560,45 @@ impl BlocklistAIActionModel {
             .find(|action| &action.id == action_id)
     }
 
+    /// Fork (T11.1b): the conversation an action belongs to.
+    ///
+    /// `BlocklistAIActionEvent` carries a bare `AIAgentActionId` for everything
+    /// except `FinishedAction`, so an observer that wants to file an event under
+    /// the run it happened in has no way to ask. This answers for actions that
+    /// are still pending confirmation and for actions the model is tracking as
+    /// running; a purely synchronous action is in neither, having been executed
+    /// and finished inside one call.
+    pub fn conversation_id_for_action(
+        &self,
+        action_id: &AIAgentActionId,
+    ) -> Option<AIConversationId> {
+        if let Some((conversation_id, _)) = self
+            .pending_actions
+            .iter()
+            .find(|(_, queue)| queue.iter().any(|action| &action.id == action_id))
+        {
+            return Some(*conversation_id);
+        }
+        self.running_actions
+            .iter()
+            .find(|(_, running)| running.action_ids.contains(action_id))
+            .map(|(conversation_id, _)| *conversation_id)
+    }
+
+    /// Fork (T11.1b): the action itself, while Warp still holds it.
+    ///
+    /// Pending actions live here; asynchronously executing ones live in the
+    /// executor. A synchronous action is in neither by the time anyone can
+    /// observe it — see [`Self::conversation_id_for_action`].
+    pub fn in_flight_action<'a>(
+        &'a self,
+        action_id: &AIAgentActionId,
+        app: &'a AppContext,
+    ) -> Option<&'a AIAgentAction> {
+        self.get_pending_action_by_id(action_id)
+            .or_else(|| self.executor.as_ref(app).async_executing_action(action_id))
+    }
+
     /// Returns the next pending or running action ID, for the active conversation, if any.
     pub fn get_pending_or_running_action_id<'a>(
         &'a self,

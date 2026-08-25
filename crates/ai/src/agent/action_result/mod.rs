@@ -7,6 +7,7 @@ use std::time::{Duration, SystemTime};
 use chrono::{DateTime, Local};
 use itertools::Itertools as _;
 use serde::{Deserialize, Serialize};
+use strum_macros::EnumDiscriminants;
 use warp_core::command::ExitCode;
 use warp_multi_agent_api::apply_file_diffs_result::success::UpdatedFileContent;
 use warp_terminal::model::BlockId;
@@ -14,7 +15,11 @@ use warp_terminal::model::BlockId;
 use crate::agent::FileLocations;
 use crate::document::{AIDocumentId, AIDocumentVersion};
 
-#[derive(Debug, Clone, PartialEq)]
+/// Fork (T11.1b): `EnumDiscriminants` mirrors what `AIAgentActionType` already
+/// derives, and for the same reason — the variant name is the only part of a
+/// result that is safe to name in a log. The payloads carry command output and
+/// file contents.
+#[derive(Debug, Clone, PartialEq, EnumDiscriminants)]
 pub enum AIAgentActionResultType {
     /// The output of a requested command.
     RequestCommandOutput(RequestCommandOutputResult),

@@ -482,7 +482,7 @@ impl CLIAgentSessionsModel {
         // that arrives for a terminal with no session is exactly the silent
         // case the log exists to make visible, and a log containing only what
         // succeeded cannot show the one that did not.
-        crate::event_log::record(event, applied);
+        crate::event_log::record_cli_agent(event, applied);
 
         if !applied {
             return;

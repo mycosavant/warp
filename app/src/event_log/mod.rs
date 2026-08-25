@@ -9,9 +9,18 @@
 //! history persists to SQLite; the agents it merely hosts do not persist at all.
 //!
 //! So this module is a **projection, not a taxonomy** — the smallest thing that
-//! is still the idea. It subscribes to nothing and decides nothing; it is handed
-//! events that were already parsed and already understood, and appends them to a
-//! file. Policy lives in [`crate::fork::event_log_dir`].
+//! is still the idea. It decides nothing about what an event *means*; it is
+//! handed events that were already understood and appends them to a file. Policy
+//! lives in [`crate::fork::event_log_dir`].
+//!
+//! **Two sources, one vocabulary.** Warp has two event worlds and they do not
+//! meet anywhere else: `CLIAgentEventType` for the agents Warp merely *hosts*
+//! (this file's original caller, world 2), and `BlocklistAIHistoryEvent` /
+//! `BlocklistAIActionEvent` for Warp's own agent (world 1, projected by
+//! [`warp_agent`] as T11.1b). They arrive as an [`Entry`], which is the only
+//! shape this module writes, so a reader filtering for `permission_request` gets
+//! every agent's answer without knowing there were ever two enums. The `source`
+//! field says which world a line came from; nothing else needs to.
 //!
 //! **One line per event, JSON, one file per session.** JSONL because the reader
 //! is `tail -f`, `jq`, and eventually an SSE endpoint that re-broadcasts lines
@@ -37,6 +46,8 @@ use serde_with::skip_serializing_none;
 
 use crate::terminal::cli_agent_sessions::event::{CLIAgentEvent, CLIAgentEventSource};
 
+pub(crate) mod warp_agent;
+
 /// Longest session id accepted as a filename stem. Long enough for a UUID and
 /// then some; short enough that no `PATH_MAX` on any platform is in play.
 const MAX_KEY_LEN: usize = 64;
@@ -44,10 +55,62 @@ const MAX_KEY_LEN: usize = 64;
 /// Where events for a session with no id are collected.
 const UNKEYED: &str = "unkeyed";
 
-/// One record. Flat rather than an envelope wrapping the event, because every
+/// One event, as its source describes it. Everything a caller supplies; `ts` and
+/// `seq` are the writer's and are stamped in [`record`].
+///
+/// Borrowed throughout, because every field already exists somewhere the caller
+/// is holding — this type is an argument list with names, not a value anyone
+/// keeps.
+#[skip_serializing_none]
+#[derive(Debug, Serialize, PartialEq, Eq)]
+pub(crate) struct Entry<'a> {
+    /// Protocol version the event was parsed under, when it came off a wire.
+    ///
+    /// **Absent means it did not.** Warp's own agent emits in-process and has no
+    /// protocol version; inventing a `1` for it would claim a compatibility
+    /// guarantee that does not exist. So `v` present is exactly "this line
+    /// crossed the OSC 777 boundary".
+    pub v: Option<u32>,
+    pub agent: &'a str,
+    pub event: &'a str,
+    /// How the event reached the log: `rich_plugin` or `codex_osc9_fallback`
+    /// for a hosted agent, `in_process` for Warp's own.
+    ///
+    /// Worth keeping for the first two, because a session silently running on
+    /// the degraded fallback path explains a lot of missing detail downstream —
+    /// and worth keeping for the third, because `agent` alone cannot separate
+    /// Warp's in-app agent from its headless TUI, which announces itself over
+    /// the wire under the same name.
+    pub source: &'a str,
+    pub session_id: Option<&'a str>,
+    /// A stable id for the tool call this event belongs to, so a `tool_complete`
+    /// can be tied to the `permission_request` that preceded it.
+    ///
+    /// Present for Warp's own agent, which has always had one
+    /// (`AIAgentActionId`), and absent for hosted agents, whose protocol carries
+    /// no such field — that half is `TR-EVENTS-B` and needs a version bump,
+    /// because the id has to come from the plugin.
+    pub call_id: Option<&'a str>,
+    pub cwd: Option<&'a str>,
+    pub project: Option<&'a str>,
+    pub tool_name: Option<&'a str>,
+    pub tool_input_preview: Option<&'a str>,
+    pub summary: Option<&'a str>,
+    pub error_type: Option<&'a str>,
+    pub plugin_version: Option<&'a str>,
+    /// Whether Warp acted on the event rather than discarding it. False when a
+    /// hosted agent's event arrived for a terminal the sessions model has no
+    /// session for.
+    ///
+    /// **Recorded rather than filtered, deliberately.** A dropped event is
+    /// exactly the silent failure this phase exists to catch, and a log that
+    /// only contains what succeeded cannot show you the one that did not.
+    pub applied: bool,
+}
+
+/// One line. Flat rather than an envelope wrapping the entry, because every
 /// reader of this file is a filter — `jq 'select(.event=="permission_request")'`
 /// should not have to know which fields live one level down.
-#[skip_serializing_none]
 #[derive(Debug, Serialize, PartialEq, Eq)]
 struct Record<'a> {
     /// Warp's clock at the moment the event was understood, not the agent's.
@@ -57,29 +120,8 @@ struct Record<'a> {
     /// Monotonic across the process, so two events in the same millisecond
     /// still have an order, and a gap is visible as a gap.
     seq: u64,
-    /// Protocol version the event was parsed under.
-    v: u32,
-    agent: &'a str,
-    event: &'a str,
-    /// `rich_plugin` or `codex_osc9_fallback` — worth keeping, because a
-    /// session silently running on the degraded fallback path explains a lot of
-    /// missing detail downstream.
-    source: &'a str,
-    session_id: Option<&'a str>,
-    cwd: Option<&'a str>,
-    project: Option<&'a str>,
-    tool_name: Option<&'a str>,
-    tool_input_preview: Option<&'a str>,
-    summary: Option<&'a str>,
-    error_type: Option<&'a str>,
-    plugin_version: Option<&'a str>,
-    /// False when the event arrived for a terminal the sessions model has no
-    /// session for, and was therefore dropped.
-    ///
-    /// **Recorded rather than filtered, deliberately.** A dropped event is
-    /// exactly the silent failure this phase exists to catch, and a log that
-    /// only contains what succeeded cannot show you the one that did not.
-    applied: bool,
+    #[serde(flatten)]
+    entry: Entry<'a>,
 }
 
 /// Open files, keyed by sanitized session key, plus the sequence source.
@@ -108,23 +150,70 @@ fn sink() -> Option<&'static Sink> {
     .as_ref()
 }
 
-/// Appends one event. A no-op unless `WARP_FORK_EVENT_LOG` asked for a log.
+/// Whether anything is being logged at all.
 ///
-/// `applied` is whether the sessions model acted on the event; see
-/// [`Record::applied`].
-pub(crate) fn record(event: &CLIAgentEvent, applied: bool) {
+/// For callers that would do work to build an [`Entry`] — the world-1
+/// projection looks conversations up in the history model — and should not do
+/// it when the answer goes nowhere.
+pub(crate) fn is_enabled() -> bool {
+    sink().is_some()
+}
+
+/// Appends one event. A no-op unless `WARP_FORK_EVENT_LOG` asked for a log.
+pub(crate) fn record(entry: Entry<'_>) {
     let Some(sink) = sink() else {
         return;
     };
     let seq = sink.seq.fetch_add(1, Ordering::Relaxed);
     let now = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
-    let line = line(seq, now, event, applied);
-    let key = session_key(event.session_id.as_deref());
+    let key = session_key(entry.session_id);
+    let line = line(seq, now, entry);
 
     if let Err(err) = sink.append(&key, &line) {
         // Warn once per failure rather than reporting: a full disk should not
         // turn observability into a second outage on top of the first.
         log::warn!("fork event log: append to {key} failed: {err}");
+    }
+}
+
+/// Appends an event from an agent Warp is hosting (world 2).
+///
+/// `applied` is whether the sessions model acted on the event; see
+/// [`Entry::applied`].
+pub(crate) fn record_cli_agent(event: &CLIAgentEvent, applied: bool) {
+    if !is_enabled() {
+        return;
+    }
+    record(hosted_agent_entry(event, applied));
+}
+
+/// The world-2 adapter, split from the writing so it can be asserted without a
+/// filesystem.
+fn hosted_agent_entry(event: &CLIAgentEvent, applied: bool) -> Entry<'_> {
+    let payload = &event.payload;
+    Entry {
+        v: Some(event.v),
+        agent: event
+            .agent
+            .command_prefixes()
+            .first()
+            .copied()
+            .unwrap_or("?"),
+        event: event.event.wire_name(),
+        source: match event.source {
+            CLIAgentEventSource::RichPlugin => "rich_plugin",
+            CLIAgentEventSource::CodexOsc9Fallback => "codex_osc9_fallback",
+        },
+        session_id: event.session_id.as_deref(),
+        call_id: None,
+        cwd: event.cwd.as_deref(),
+        project: event.project.as_deref(),
+        tool_name: payload.tool_name.as_deref(),
+        tool_input_preview: payload.tool_input_preview.as_deref(),
+        summary: payload.summary.as_deref(),
+        error_type: payload.error_type.as_deref(),
+        plugin_version: payload.plugin_version.as_deref(),
+        applied,
     }
 }
 
@@ -149,33 +238,8 @@ impl Sink {
 ///
 /// Split out from the writing so the format can be asserted without a
 /// filesystem, which is most of what is worth testing here.
-fn line(seq: u64, ts: String, event: &CLIAgentEvent, applied: bool) -> String {
-    let payload = &event.payload;
-    let record = Record {
-        ts,
-        seq,
-        v: event.v,
-        agent: event
-            .agent
-            .command_prefixes()
-            .first()
-            .copied()
-            .unwrap_or("?"),
-        event: event.event.wire_name(),
-        source: match event.source {
-            CLIAgentEventSource::RichPlugin => "rich_plugin",
-            CLIAgentEventSource::CodexOsc9Fallback => "codex_osc9_fallback",
-        },
-        session_id: event.session_id.as_deref(),
-        cwd: event.cwd.as_deref(),
-        project: event.project.as_deref(),
-        tool_name: payload.tool_name.as_deref(),
-        tool_input_preview: payload.tool_input_preview.as_deref(),
-        summary: payload.summary.as_deref(),
-        error_type: payload.error_type.as_deref(),
-        plugin_version: payload.plugin_version.as_deref(),
-        applied,
-    };
+fn line(seq: u64, ts: String, entry: Entry<'_>) -> String {
+    let record = Record { ts, seq, entry };
     // A record that cannot be serialized is a bug in this file, not a runtime
     // condition, but it must not take the session down to prove it.
     serde_json::to_string(&record).unwrap_or_else(|err| {
@@ -189,6 +253,10 @@ fn line(seq: u64, ts: String, event: &CLIAgentEvent, applied: bool) -> String {
 /// been made one: anything outside `[A-Za-z0-9._-]` is replaced, leading dots
 /// are stripped, and the result is truncated. Without that, a `session_id` of
 /// `../../.bashrc` is a plugin choosing where Warp writes.
+///
+/// World 1's ids are Warp's own — a `AIConversationId` is a UUID — so nothing
+/// here can fire on them. It exists for world 2, where the string crosses a
+/// process boundary before Warp sees it.
 fn session_key(session_id: Option<&str>) -> String {
     let Some(raw) = session_id else {
         return UNKEYED.to_string();
@@ -226,5 +294,5 @@ pub(crate) fn path_for(dir: &Path, session_id: Option<&str>) -> PathBuf {
 }
 
 #[cfg(test)]
-#[path = "event_log_tests.rs"]
+#[path = "mod_tests.rs"]
 mod tests;

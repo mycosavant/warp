@@ -461,6 +461,19 @@ impl BlocklistAIController {
         ctx: &mut ModelContext<Self>,
     ) -> Self {
         let team_context_resolver = UserWorkspaces::team_context_resolver(terminal_surface);
+
+        // Fork (T11.1b): project this surface's Warp-agent activity into the
+        // event log, so it lands in the same JSONL as the CLI agents Warp hosts.
+        // Here because this is the one place per terminal surface that already
+        // holds both the action model and the session; the projection itself
+        // keeps no state and adds no entity.
+        crate::event_log::warp_agent::subscribe(
+            &action_model,
+            active_session.clone(),
+            terminal_surface_id,
+            ctx,
+        );
+
         ctx.subscribe_to_model(&action_model, move |me, _, event, ctx| {
             let BlocklistAIActionEvent::FinishedAction {
                 conversation_id,
