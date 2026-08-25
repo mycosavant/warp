@@ -13,10 +13,10 @@ use clap::{Args, CommandFactory, FromArgMatches, Parser, Subcommand, ValueEnum};
 use clap_complete::aot::Shell;
 use commands::{
     run_action_catalog_command, run_agent_command, run_app_command, run_appearance_command,
-    run_capability_command, run_drive_command, run_file_command, run_input_command,
-    run_instance_command, run_keybinding_command, run_pane_command, run_remote_command,
-    run_session_command, run_setting_command, run_slash_command, run_surface_command,
-    run_tab_command, run_theme_command, run_window_command,
+    run_capability_command, run_drive_command, run_events_command, run_file_command,
+    run_input_command, run_instance_command, run_keybinding_command, run_pane_command,
+    run_remote_command, run_session_command, run_setting_command, run_slash_command,
+    run_surface_command, run_tab_command, run_theme_command, run_window_command,
 };
 use completions::generate_completions_to_stdout;
 use output::write_control_error;
@@ -219,6 +219,10 @@ pub enum ControlCommand {
     /// Run Warp's slash commands — `/compact`, `/plan`, `/fork-and-compact`.
     #[command(subcommand)]
     Slash(SlashCommand),
+
+    /// Watch what agents are doing, live.
+    #[command(subcommand)]
+    Events(EventsCommand),
 
     /// Inspect remote-development targets on this machine.
     #[command(subcommand)]
@@ -1077,6 +1081,28 @@ pub struct RemoteWslConnectArgs {
 }
 
 #[derive(Debug, Clone, Subcommand)]
+pub enum EventsCommand {
+    /// Print where the live event stream is, and when this credential expires.
+    ///
+    /// The stream itself is server-sent events over `GET`, which is not a shape
+    /// this request/response CLI can hold open — so this answers the URL and
+    /// leaves the reading to `curl -N` or anything else that speaks SSE. The
+    /// bearer token is not printed: it is already in the caller's hands, and a
+    /// secret echoed to a terminal is a secret in a scrollback.
+    Subscribe(TargetArgs),
+
+    /// Follow the live event stream, printing one JSON line per event.
+    ///
+    /// The `tail -f` of what agents are doing. Runs until the credential
+    /// expires — five minutes — or you interrupt it; the bearer token never
+    /// leaves the process, so there is nothing to paste and nothing to leak.
+    ///
+    /// Note that subscribing is itself what turns the log on: events flow to a
+    /// subscriber whether or not `WARP_FORK_EVENT_LOG` named a directory.
+    Tail(TargetArgs),
+}
+
+#[derive(Debug, Clone, Subcommand)]
 pub enum SlashCommand {
     /// List Warp's slash commands.
     ///
@@ -1497,6 +1523,7 @@ fn run_inner(args: ControlArgs) -> Result<(), local_control::protocol::ControlEr
         ControlCommand::Agent(command) => run_agent_command(command, output_format),
         ControlCommand::Graph(command) => graph::run_graph_command(command, output_format),
         ControlCommand::Slash(command) => run_slash_command(command, output_format),
+        ControlCommand::Events(command) => run_events_command(command, output_format),
         ControlCommand::Remote(command) => run_remote_command(command, output_format),
         ControlCommand::Surface(command) => run_surface_command(command, output_format),
         ControlCommand::Completions { shell } => generate_completions_to_stdout(shell),

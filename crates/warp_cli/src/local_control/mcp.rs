@@ -239,6 +239,7 @@ fn scope_label(scope: TargetScope) -> &'static str {
         TargetScope::Drive => "drive",
         TargetScope::Agent => "agent",
         TargetScope::Slash => "slash",
+        TargetScope::Events => "events",
     }
 }
 

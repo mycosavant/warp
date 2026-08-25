@@ -7,7 +7,7 @@ use local_control::protocol::{
     AgentRevealParams, AgentRevealTarget, AgentSettleParams, AgentSpawnParams, BindingNameParams,
     BooleanValueParams, ColorValueParams, ControlError, DirectionParams, DriveObjectCreateParams,
     DriveObjectGetParams, DriveObjectListParams, DriveObjectTrashParams, EmptyParams, ErrorCode,
-    FileOpenParams, KeyParams, KeyValueParams, PageQueryParams, QueryParams,
+    EventStreamResult, FileOpenParams, KeyParams, KeyValueParams, PageQueryParams, QueryParams,
     RemoteWslConnectParams, RenameParams, RequestEnvelope, ResizeParams, SettingListParams,
     SlashRunParams, TabActivateParams, TabActivationMode, TabCloseMode, TabCloseParams,
     TabCreateParams, TextParams, ThemeNameParams,
@@ -21,12 +21,12 @@ use crate::local_control::output::{write_json, write_json_line};
 use crate::local_control::selectors::{instance_selector, target_selector};
 use crate::local_control::{
     ActionCatalogCommand, AgentCommand, AppCommand, AppearanceCommand, CapabilityCommand,
-    CliRevealTarget, DriveCommand, DriveObjectCommand, FileCommand, InputCommand, InstanceCommand,
-    KeybindingCommand, PaneCommand, PaneMainCommand, RemoteCommand, RemoteWslCommand,
-    SessionCommand, SettingCommand, SlashCommand, SurfaceCommand, SurfaceOpenCommand,
-    SurfaceOpenToggleCommand, SurfaceQueryCommand, SurfaceSettingsCommand, SurfaceToggleCommand,
-    TabActivateArgs, TabCloseArgs, TabColorCommand, TabCommand, TargetArgs, ThemeCommand,
-    WindowCommand, WindowVisorCommand,
+    CliRevealTarget, DriveCommand, DriveObjectCommand, EventsCommand, FileCommand, InputCommand,
+    InstanceCommand, KeybindingCommand, PaneCommand, PaneMainCommand, RemoteCommand,
+    RemoteWslCommand, SessionCommand, SettingCommand, SlashCommand, SurfaceCommand,
+    SurfaceOpenCommand, SurfaceOpenToggleCommand, SurfaceQueryCommand, SurfaceSettingsCommand,
+    SurfaceToggleCommand, TabActivateArgs, TabCloseArgs, TabColorCommand, TabCommand, TargetArgs,
+    ThemeCommand, WindowCommand, WindowVisorCommand,
 };
 
 pub(super) fn run_surface_command(
@@ -827,6 +827,96 @@ pub(super) fn run_remote_command(
             output_format,
         ),
     }
+}
+
+pub(super) fn run_events_command(
+    command: EventsCommand,
+    output_format: OutputFormat,
+) -> Result<(), ControlError> {
+    match command {
+        EventsCommand::Subscribe(args) => run_action_with_params(
+            args,
+            ActionKind::EventsSubscribe,
+            EmptyParams {},
+            output_format,
+        ),
+        EventsCommand::Tail(args) => run_events_tail(args, output_format),
+    }
+}
+
+/// Follows the live stream, printing one line per event.
+///
+/// The URL comes from `events.subscribe` rather than being assembled here, so
+/// the CLI discovers the endpoint exactly the way any other client would — which
+/// is also what keeps this honest as a demonstration that the advertised URL
+/// works.
+fn run_events_tail(args: TargetArgs, output_format: OutputFormat) -> Result<(), ControlError> {
+    let data = send_action(&args, ActionKind::EventsSubscribe, EmptyParams {})?;
+    let stream: EventStreamResult = serde_json::from_value(data).map_err(|err| {
+        ControlError::with_details(
+            ErrorCode::Internal,
+            "events.subscribe returned an unexpected result",
+            err.to_string(),
+        )
+    })?;
+    let records = local_control::discovery::list_instances(&ChannelState::channel().to_string());
+    let instance = select_instance(&records, &instance_selector(&args))?;
+    local_control::client::stream_events(&instance, &stream.url, |event| {
+        match event.name {
+            // Stream-level frames go to stderr, so `warpctrl events tail | jq`
+            // sees only event lines and a lag notice cannot be mistaken for one.
+            Some("expired") => eprintln!("credential expired; re-run to reconnect"),
+            Some("lagged") => {
+                eprintln!(
+                    "warning: dropped {} events; this reader fell behind",
+                    event.data
+                )
+            }
+            Some(other) => eprintln!("warning: unrecognized stream event {other:?}"),
+            None => match output_format {
+                OutputFormat::Pretty | OutputFormat::Text => {
+                    println!("{}", render_event_line(event.data))
+                }
+                // Already one JSON object per line — the format this asks for.
+                OutputFormat::Json | OutputFormat::Ndjson => println!("{}", event.data),
+            },
+        }
+        true
+    })
+}
+
+/// Renders one event line for a person rather than for `jq`.
+///
+/// Falls back to the raw line when it does not parse, because a line this does
+/// not understand is exactly the one worth seeing verbatim.
+fn render_event_line(data: &str) -> String {
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(data) else {
+        return data.to_owned();
+    };
+    let field = |key: &str| {
+        value
+            .get(key)
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("-")
+            .to_owned()
+    };
+    let mut line = format!(
+        "{}  {:<12} {:<10} {}",
+        field("ts"),
+        field("source"),
+        field("agent"),
+        field("event")
+    );
+    if let Some(tool) = value.get("tool_name").and_then(serde_json::Value::as_str) {
+        line.push_str(&format!("  {tool}"));
+    }
+    if let Some(preview) = value
+        .get("tool_input_preview")
+        .and_then(serde_json::Value::as_str)
+    {
+        line.push_str(&format!("  {preview}"));
+    }
+    line
 }
 
 pub(super) fn run_slash_command(

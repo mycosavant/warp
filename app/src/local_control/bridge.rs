@@ -10,8 +10,8 @@ use ::local_control::{
 use warpui::{Entity, ModelContext, SingletonEntity};
 
 use crate::local_control::handlers::{
-    agent, app_state, close, drive_objects, drive_sync, main_pane, metadata, metadata_config,
-    remote_wsl, settings_surfaces, visor,
+    agent, app_state, close, drive_objects, drive_sync, events, main_pane, metadata,
+    metadata_config, remote_wsl, settings_surfaces, visor,
 };
 use crate::local_control::permissions::{
     ensure_action_allowed, ensure_feature_enabled, ensure_protocol_version,
@@ -21,6 +21,12 @@ use crate::local_control::resolver::{validate_action_params, validate_action_tar
 /// WarpUI model that executes already-authenticated local-control actions.
 pub struct LocalControlBridge {
     instance_id: Option<InstanceId>,
+    /// `host:port` this instance's control server is answering on.
+    ///
+    /// Held so `events.subscribe` can hand a client an absolute URL rather than
+    /// have it reassemble one from a discovery record (T11.2). Set from the same
+    /// place as `instance_id`, where both are already known.
+    control_origin: Option<String>,
 }
 
 impl Entity for LocalControlBridge {
@@ -31,11 +37,18 @@ impl SingletonEntity for LocalControlBridge {}
 
 impl LocalControlBridge {
     pub fn new(_ctx: &mut ModelContext<Self>) -> Self {
-        Self { instance_id: None }
+        Self {
+            instance_id: None,
+            control_origin: None,
+        }
     }
 
     pub(super) fn set_instance_id(&mut self, instance_id: InstanceId) {
         self.instance_id = Some(instance_id);
+    }
+
+    pub(super) fn set_control_origin(&mut self, origin: String) {
+        self.control_origin = Some(origin);
     }
 
     pub(super) fn handle_request(
@@ -174,6 +187,12 @@ impl LocalControlBridge {
                 &request.target,
                 ctx,
             ),
+            // Fork-local: the read surface (`.fork/TASKS.md` T11.2). Answers
+            // *where* the stream is; the stream itself is a GET route, because
+            // SSE is not a request/response shape and this envelope is.
+            ActionKind::EventsSubscribe => {
+                events::events_subscribe(self.control_origin.as_deref(), &grant)
+            }
             ActionKind::SlashList => agent::slash_list(&self.instance_id, &request.target, ctx),
             ActionKind::SlashRun => agent::slash_run(
                 &self.instance_id,

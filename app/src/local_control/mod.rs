@@ -83,7 +83,7 @@ use axum::extract::State;
 use axum::http::header::{AUTHORIZATION, HOST, ORIGIN};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
-use axum::routing::post;
+use axum::routing::{get, post};
 use axum::{Json, Router};
 pub use bridge::LocalControlBridge;
 #[cfg(any(unix, windows, test))]
@@ -98,6 +98,21 @@ use warpui::{Entity, ModelContext, ModelSpawner, SingletonEntity};
 
 #[cfg(any(unix, windows, test))]
 const MAX_ACTIVE_CREDENTIALS: usize = 128;
+
+/// Path of the live event stream (T11.2). Shared with the `events.subscribe`
+/// handler, which hands clients an absolute URL built from it — one definition,
+/// so the advertised URL cannot disagree with the route that serves it.
+pub(crate) const EVENT_STREAM_PATH: &str = "/v1/events";
+
+/// Path of the state snapshot (T11.2).
+const STATE_PATH: &str = "/v1/state";
+
+/// How often an idle event stream wakes up.
+///
+/// Two jobs: notice an expired credential without waiting for the next event,
+/// and emit a comment frame so a quiet connection is not mistaken for a dead
+/// one. Short enough that expiry is prompt, long enough to be free.
+const EVENT_STREAM_TICK: std::time::Duration = std::time::Duration::from_secs(15);
 
 /// App-owned authority shared by one instance's broker and HTTP listener.
 ///
@@ -201,6 +216,13 @@ impl LocalControlServer {
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .worker_threads(1)
             .enable_io()
+            // T11.2: the event stream's keepalive is a `tokio::time::interval`,
+            // and a Tokio runtime without the time driver does not fail to build
+            // or fail to compile — it panics on the first timer, inside the
+            // connection task, where it surfaces to the client as a dropped
+            // connection with no status. Found by running it; every check up to
+            // that point was green.
+            .enable_time()
             .build()
             .map_err(|err| {
                 ControlError::with_details(
@@ -231,8 +253,10 @@ impl LocalControlServer {
         let control_endpoint = ControlEndpoint::localhost(port.port());
         let record = discovery_record_for_settings(ctx, control_endpoint.clone());
         let instance_id = record.instance_id.clone();
+        let control_origin = format!("{}:{}", control_endpoint.host, control_endpoint.port);
         let bridge_spawner = LocalControlBridge::handle(ctx).update(ctx, |bridge, ctx| {
             bridge.set_instance_id(instance_id.clone());
+            bridge.set_control_origin(control_origin.clone());
             ctx.spawner()
         });
         let registered_instance = RegisteredInstance::register(record)?;
@@ -262,6 +286,11 @@ impl LocalControlServer {
         };
         let router = Router::new()
             .route("/v1/control", post(handle_control_request))
+            // The read surface (T11.2). Both are `GET` so a client that can only
+            // fetch and subscribe needs no envelope, and both take the same
+            // scoped credentials as `/v1/control`.
+            .route(STATE_PATH, get(handle_state_request))
+            .route(EVENT_STREAM_PATH, get(handle_event_stream))
             .with_state(state.clone());
         runtime.spawn(async move {
             if let Err(err) = axum::serve(listener, router).await {
@@ -771,55 +800,9 @@ async fn handle_control_request(
     headers: HeaderMap,
     payload: Bytes,
 ) -> Response {
-    if let Err(error) = validate_loopback_headers(&headers, &state.expected_host) {
-        return (
-            StatusCode::FORBIDDEN,
-            Json(ErrorResponseEnvelope::new(error)),
-        )
-            .into_response();
-    }
-    if let Err(error) = ensure_feature_enabled() {
-        return (
-            StatusCode::FORBIDDEN,
-            Json(ErrorResponseEnvelope::new(error)),
-        )
-            .into_response();
-    }
-    let auth_header = headers
-        .get(AUTHORIZATION)
-        .and_then(|value| value.to_str().ok());
-    let auth_token = match AuthToken::from_authorization_header(auth_header) {
-        Ok(token) => token,
-        Err(error) => {
-            return (
-                StatusCode::UNAUTHORIZED,
-                Json(ErrorResponseEnvelope::new(error)),
-            )
-                .into_response();
-        }
-    };
-    let grant = match state.credentials.lock() {
-        Ok(mut credentials) => lookup_credential(&mut credentials, &auth_token, &state.instance_id),
-        Err(_) => {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponseEnvelope::new(ControlError::new(
-                    ErrorCode::Internal,
-                    "local-control credential broker is unavailable",
-                ))),
-            )
-                .into_response();
-        }
-    };
-    let grant = match grant {
+    let grant = match authenticate(&state, &headers) {
         Ok(grant) => grant,
-        Err(error) => {
-            return (
-                StatusCode::UNAUTHORIZED,
-                Json(ErrorResponseEnvelope::new(error)),
-            )
-                .into_response();
-        }
+        Err(response) => return response,
     };
     let request = match serde_json::from_slice::<RequestEnvelope>(&payload) {
         Ok(request) => request,
@@ -874,6 +857,180 @@ fn insert_credential(
         }
     }
     credentials.insert(secret, grant);
+}
+
+/// Answers `GET /v1/state` — the snapshot a client primes itself with before
+/// subscribing (T11.2).
+///
+/// The body is exactly what `agent.list` returns over `POST /v1/control`, and
+/// the credential it requires is an `agent.list` one, because it *is*
+/// `agent.list`: this route exists so a browser can fetch it without composing a
+/// request envelope, not to expose anything new.
+async fn handle_state_request(
+    State(state): State<ControlServerState>,
+    headers: HeaderMap,
+) -> Response {
+    let grant = match authenticate(&state, &headers) {
+        Ok(grant) => grant,
+        Err(response) => return response,
+    };
+    if let Err(error) = require_action(&grant, ActionKind::AgentList) {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(ErrorResponseEnvelope::new(error)),
+        )
+            .into_response();
+    }
+    let request = RequestEnvelope::new(::local_control::Action::new(ActionKind::AgentList));
+    let request_id = request.request_id;
+    let response = match state
+        .bridge_spawner
+        .spawn(move |bridge, ctx| bridge.handle_request(request, grant, ctx))
+        .await
+    {
+        Ok(response) => response,
+        Err(_) => ResponseEnvelope::error(
+            request_id,
+            ControlError::new(
+                ErrorCode::BridgeUnavailable,
+                "local-control app bridge is unavailable",
+            ),
+        ),
+    };
+    let status = match &response.response {
+        ControlResponse::Ok { .. } => StatusCode::OK,
+        ControlResponse::Error { .. } => StatusCode::BAD_REQUEST,
+    };
+    (status, Json(response)).into_response()
+}
+
+/// Answers `GET /v1/events` — the live stream (T11.2).
+///
+/// Each SSE `data:` frame is one line of the event log, forwarded verbatim: the
+/// same string that was written to disk, so a subscriber re-broadcasts bytes it
+/// never parsed and cannot drift from the on-disk format.
+///
+/// **The stream ends when the grant does.** A credential is good for five
+/// minutes, and a connection authorized once at open would outlive its own
+/// authority — which is exactly the "localhost, therefore fine" reasoning T11.4
+/// exists to avoid. Expiry is re-checked before every frame and on a tick, so an
+/// idle stream closes on time rather than at the next event. Clients are
+/// expected to obtain a fresh credential and reconnect; `events.subscribe`
+/// returns `expires_at` so they can do it before being cut off.
+async fn handle_event_stream(
+    State(state): State<ControlServerState>,
+    headers: HeaderMap,
+) -> Response {
+    let grant = match authenticate(&state, &headers) {
+        Ok(grant) => grant,
+        Err(response) => return response,
+    };
+    if let Err(error) = require_action(&grant, ActionKind::EventsSubscribe) {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(ErrorResponseEnvelope::new(error)),
+        )
+            .into_response();
+    }
+    // Subscribe before returning: a receiver is what makes `event_log::record`
+    // start producing when no file sink is configured, and taking it here rather
+    // than inside the stream closes the window where events between the
+    // handshake and the first poll would be missed.
+    let receiver = crate::event_log::subscribe();
+    let stream = async_stream::stream! {
+        let mut receiver = receiver;
+        // Cheap heartbeat so an idle stream still notices expiry, and so
+        // intermediaries do not decide a quiet connection is a dead one.
+        let mut tick = tokio::time::interval(EVENT_STREAM_TICK);
+        tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        loop {
+            if grant.is_expired() {
+                yield Ok::<_, std::convert::Infallible>(
+                    axum::response::sse::Event::default()
+                        .event("expired")
+                        .data("credential expired; obtain a new one and reconnect"),
+                );
+                break;
+            }
+            tokio::select! {
+                received = receiver.recv() => match received {
+                    Ok(line) => yield Ok(axum::response::sse::Event::default().data(line)),
+                    // The subscriber fell behind the bounded channel. Say so
+                    // rather than silently skipping: a reader that does not know
+                    // it has a gap will draw the wrong conclusion from one.
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(missed)) => {
+                        yield Ok(axum::response::sse::Event::default()
+                            .event("lagged")
+                            .data(missed.to_string()));
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                },
+                _ = tick.tick() => {
+                    yield Ok(axum::response::sse::Event::default().comment("keepalive"));
+                }
+            }
+        }
+    };
+    axum::response::Sse::new(stream).into_response()
+}
+
+/// Rejects a credential minted for some other action.
+///
+/// The grant already proved it belongs to this instance and has not expired;
+/// this is the exact-action half, stated separately because the `GET` routes
+/// name their action rather than carrying it in a request envelope.
+fn require_action(grant: &CredentialGrant, expected: ActionKind) -> Result<(), ControlError> {
+    if grant.action != expected {
+        return Err(ControlError::new(
+            ErrorCode::InsufficientPermissions,
+            format!(
+                "credential for {} cannot open {}",
+                grant.action.as_str(),
+                expected.as_str()
+            ),
+        ));
+    }
+    Ok(())
+}
+
+/// The authentication preamble every route shares.
+///
+/// Factored out when T11.2 added the two `GET` routes, and deliberately *not*
+/// duplicated for them: header hardening, the feature gate, bearer parsing and
+/// the process-local credential lookup are the whole of this server's
+/// authorization boundary, and two copies of a boundary is one copy that drifts.
+///
+/// The error half is already an HTTP response, because each failure has its own
+/// status and callers should not have to re-derive which.
+fn authenticate(
+    state: &ControlServerState,
+    headers: &HeaderMap,
+) -> Result<CredentialGrant, Response> {
+    let reject = |status: StatusCode, error: ControlError| -> Response {
+        (status, Json(ErrorResponseEnvelope::new(error))).into_response()
+    };
+    if let Err(error) = validate_loopback_headers(headers, &state.expected_host) {
+        return Err(reject(StatusCode::FORBIDDEN, error));
+    }
+    if let Err(error) = ensure_feature_enabled() {
+        return Err(reject(StatusCode::FORBIDDEN, error));
+    }
+    let auth_header = headers
+        .get(AUTHORIZATION)
+        .and_then(|value| value.to_str().ok());
+    let auth_token = AuthToken::from_authorization_header(auth_header)
+        .map_err(|error| reject(StatusCode::UNAUTHORIZED, error))?;
+    let mut credentials = state.credentials.lock().map_err(|_| {
+        reject(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            ControlError::new(
+                ErrorCode::Internal,
+                "local-control credential broker is unavailable",
+            ),
+        )
+    })?;
+    lookup_credential(&mut credentials, &auth_token, &state.instance_id)
+        .map_err(|error| reject(StatusCode::UNAUTHORIZED, error))
 }
 
 /// Resolves an unexpired bearer token issued by this exact running instance.

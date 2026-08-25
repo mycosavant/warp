@@ -200,7 +200,7 @@ fn the_drive_object_actions_this_fork_implements_do_parse() {
 }
 
 #[test]
-fn catalog_has_exactly_109_retained_actions() {
+fn catalog_has_exactly_110_retained_actions() {
     // 84 upstream actions, plus the fork's `input.submit`, the three
     // `drive.sync.*` actions, the eight that let an agent drive an agent
     // (`agent.list`, `agent.prompt`, `slash.list` and `slash.run` from T6.5,
@@ -217,8 +217,11 @@ fn catalog_has_exactly_109_retained_actions() {
     // only be reached by a global keyboard shortcut (`window.visor.toggle`
     // and `.status`, T8.1), and `tab.merge`, which folds a tab into the active
     // one as a split — the scriptable form of a pane drag, and the only way
-    // that operation can be checked without a mouse (T8.2).
-    assert_eq!(ActionKind::ALL.len(), 109);
+    // that operation can be checked without a mouse (T8.2), and
+    // `events.subscribe`, the read surface's own authority — deliberately not
+    // folded into `agent.list`, because the stream carries tool names, input
+    // previews and working directories that `agent.list` does not (T11.2).
+    assert_eq!(ActionKind::ALL.len(), 110);
 }
 
 #[test]

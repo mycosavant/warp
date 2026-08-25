@@ -43,6 +43,7 @@ use std::sync::{Mutex, OnceLock};
 
 use serde::Serialize;
 use serde_with::skip_serializing_none;
+use tokio::sync::broadcast;
 
 use crate::terminal::cli_agent_sessions::event::{CLIAgentEvent, CLIAgentEventSource};
 
@@ -124,14 +125,44 @@ struct Record<'a> {
     entry: Entry<'a>,
 }
 
-/// Open files, keyed by sanitized session key, plus the sequence source.
+/// Open files, keyed by sanitized session key.
 struct Sink {
     dir: PathBuf,
-    seq: AtomicU64,
     files: Mutex<HashMap<String, File>>,
 }
 
 static SINK: OnceLock<Option<Sink>> = OnceLock::new();
+
+/// The sequence source.
+///
+/// Process-global rather than a field of [`Sink`], because a subscriber
+/// (T11.2) is a consumer with no file behind it, and `seq` is documented as
+/// process-global — it should not quietly restart or vanish depending on
+/// whether `WARP_FORK_EVENT_LOG` named a directory.
+static SEQ: AtomicU64 = AtomicU64::new(0);
+
+/// Live fan-out of rendered lines, for the SSE endpoint (T11.2).
+///
+/// Carries the **same string** that goes to the file, so a subscriber
+/// re-broadcasts bytes it never had to parse and cannot drift from the on-disk
+/// format. Capacity is bounded: a subscriber that stops reading is lagged and
+/// told so by `RecvError::Lagged` rather than being allowed to grow the buffer
+/// without limit. Dropping events for a slow reader is the correct trade here —
+/// the file is the durable record, and this channel is the live view.
+static BROADCAST: OnceLock<broadcast::Sender<String>> = OnceLock::new();
+
+/// Capacity in events. Sized for a burst of tool calls, not for a backlog:
+/// anything that falls this far behind wants the file, not the stream.
+const BROADCAST_CAPACITY: usize = 256;
+
+fn broadcast() -> &'static broadcast::Sender<String> {
+    BROADCAST.get_or_init(|| broadcast::channel(BROADCAST_CAPACITY).0)
+}
+
+/// Subscribes to live events. Every subscriber makes [`is_enabled`] true.
+pub(crate) fn subscribe() -> broadcast::Receiver<String> {
+    broadcast().subscribe()
+}
 
 fn sink() -> Option<&'static Sink> {
     SINK.get_or_init(|| {
@@ -143,36 +174,55 @@ fn sink() -> Option<&'static Sink> {
         log::info!("fork event log: writing to {}", dir.display());
         Some(Sink {
             dir,
-            seq: AtomicU64::new(0),
             files: Mutex::new(HashMap::new()),
         })
     })
     .as_ref()
 }
 
-/// Whether anything is being logged at all.
+/// Whether anything is listening at all — a file, a live subscriber, or both.
 ///
 /// For callers that would do work to build an [`Entry`] — the world-1
 /// projection looks conversations up in the history model — and should not do
 /// it when the answer goes nowhere.
+///
+/// **This is now dynamic.** Before T11.2 it meant "`WARP_FORK_EVENT_LOG` named a
+/// directory" and was fixed for the life of the process. An SSE subscriber can
+/// arrive and leave at any time, so it can flip either way, and a caller must
+/// not cache it.
 pub(crate) fn is_enabled() -> bool {
-    sink().is_some()
+    sink().is_some() || broadcast().receiver_count() > 0
 }
 
-/// Appends one event. A no-op unless `WARP_FORK_EVENT_LOG` asked for a log.
+/// Appends one event to the file, and hands it to any live subscriber.
+///
+/// A no-op unless `WARP_FORK_EVENT_LOG` asked for a log or something is
+/// subscribed — checked again here rather than trusted from the caller, because
+/// the last subscriber can leave between their [`is_enabled`] and this call.
 pub(crate) fn record(entry: Entry<'_>) {
-    let Some(sink) = sink() else {
+    let sink = sink();
+    let live = broadcast().receiver_count() > 0;
+    if sink.is_none() && !live {
         return;
-    };
-    let seq = sink.seq.fetch_add(1, Ordering::Relaxed);
+    }
+    // Stamped once and shared, so the line a subscriber sees is byte-identical
+    // to the line on disk — including `seq`.
+    let seq = SEQ.fetch_add(1, Ordering::Relaxed);
     let now = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
     let key = session_key(entry.session_id);
     let line = line(seq, now, entry);
 
-    if let Err(err) = sink.append(&key, &line) {
-        // Warn once per failure rather than reporting: a full disk should not
-        // turn observability into a second outage on top of the first.
-        log::warn!("fork event log: append to {key} failed: {err}");
+    if let Some(sink) = sink {
+        if let Err(err) = sink.append(&key, &line) {
+            // Warn once per failure rather than reporting: a full disk should not
+            // turn observability into a second outage on top of the first.
+            log::warn!("fork event log: append to {key} failed: {err}");
+        }
+    }
+    if live {
+        // The only error is "no receivers left", which is not one: the race
+        // between the check above and here is expected and means nobody cared.
+        let _ = broadcast().send(line);
     }
 }
 

@@ -1925,6 +1925,42 @@ The directory is created on the first event, not at startup, so an empty
 directory means nothing arrived rather than that logging is off. The line
 `fork event log: writing to …` in the ordinary log confirms the other case.
 
+### Watching it live, instead of tailing a file
+
+`warpctrl` serves the same events over HTTP (T11.2), still on `127.0.0.1`:
+
+```console
+$ warpctrl events tail
+2026-08-25T20:54:38.733Z  in_process   warp       session_start
+2026-08-25T20:54:42.527Z  in_process   warp       stop_failure
+```
+
+`--output-format json` prints the raw line instead, which is the same JSON the
+file gets — pipe it to `jq`. Stream-level notices (`credential expired`, a lag
+warning) go to **stderr**, so a `| jq` sees only events and cannot mistake a
+warning for one.
+
+**Subscribing is itself enough to turn the log on.** Events flow to a subscriber
+whether or not `WARP_FORK_EVENT_LOG` named a directory — the variable controls
+the *file*, not the stream. Use it when you want a durable record too.
+
+**A tail stops after five minutes**, because that is how long its credential
+lasts, and a connection is not allowed to outlive its own authority. Re-run it.
+The two routes underneath, for anything that is not this CLI:
+
+| route | credential it needs | what it is |
+|---|---|---|
+| `GET /v1/state` | `agent.list` | the snapshot — byte-for-byte what `warpctrl agent list` returns |
+| `GET /v1/events` | `events.subscribe` | the SSE stream |
+
+`warpctrl events subscribe` prints the stream URL and the credential's expiry.
+It deliberately does **not** print the bearer token, which is why `events tail`
+exists: a token echoed for a `curl` to pick up is a token in your shell history.
+The two credentials are not interchangeable in either direction — an
+`agent.list` grant is refused by `/v1/events` and vice versa — because the stream
+carries tool names, input previews and working directories that `agent.list`
+does not.
+
 ## Voice input, transcribed on this machine
 
 Upstream sends your voice to `api.warp.dev`. The provider setting

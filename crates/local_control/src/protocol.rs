@@ -1,4 +1,5 @@
 //! Wire protocol envelopes and error types for Warp local control.
+use chrono::{DateTime, Utc};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -466,6 +467,24 @@ pub struct AgentReadResult {
     /// be gone. Reported so a caller can tell "no tools were used" from "the
     /// tool results were not reachable".
     pub included_tool_results: bool,
+}
+
+/// Result of `events.subscribe` (T11.2): where the stream is, and how long the
+/// credential that opens it is good for.
+///
+/// The bearer token is deliberately **not** echoed here. The caller already has
+/// it — it is what authorized this call — and a token that appears in a result
+/// is a token that ends up in a shell scrollback.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EventStreamResult {
+    /// Absolute URL of the SSE endpoint, on the same loopback origin as this
+    /// request. Given rather than assembled, so a client never has to know the
+    /// port convention.
+    pub url: String,
+    /// When the credential expires. The stream closes at this point and the
+    /// client must obtain a new credential and reconnect; it is stated here so
+    /// a client can schedule that rather than discover it as a disconnect.
+    pub expires_at: DateTime<Utc>,
 }
 
 /// Result of `agent.settle` (T8.3).

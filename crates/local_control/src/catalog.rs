@@ -23,6 +23,10 @@ pub enum TargetScope {
     Drive,
     Agent,
     Slash,
+    /// The event stream itself (T11.2). Not `Agent`: an `Agent` target names one
+    /// conversation or one pane, and the stream is neither — it is every agent
+    /// in the instance, including ones with no pane open.
+    Events,
 }
 
 /// Whether an action has an app-side implementation in this stack layer.
@@ -109,6 +113,7 @@ pub enum ActionResultSpec {
     RemoteWslConnectStarted,
     MainPane,
     VisorStatus,
+    EventStream,
 }
 
 /// Discoverable metadata describing one local-control action.
@@ -388,6 +393,23 @@ define_action_catalog! {
     slash {
         SlashList => { name: "slash.list", status: Implemented, target: Slash, params: None, result: SlashCommandList },
         SlashRun => { name: "slash.run", status: Implemented, target: Slash, params: SlashRun, result: Acknowledgement },
+    }
+
+    // Fork-local (T11.2). The read surface's authority, kept as its own action
+    // rather than folded into `agent.list`.
+    //
+    // It would have been cheaper to let an `agent.list` credential open the
+    // stream, and wrong: `agent.list` returns titles and busy flags, while the
+    // stream carries tool names, input previews and working directories for
+    // every agent in the instance. Granting the second because someone asked
+    // for the first is the scope-conflation T11.4 is explicitly trying not to
+    // ship.
+    //
+    // The POST form returns *where the stream is*, so a client discovers the
+    // endpoint with the same credential it will present to it, rather than
+    // assembling a URL out of a discovery record by hand.
+    events {
+        EventsSubscribe => { name: "events.subscribe", status: Implemented, target: Events, params: None, result: EventStream },
     }
 
     // Fork-local (`.fork/IDEAS.md`, I16). Warp's remote-development stack has

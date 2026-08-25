@@ -88,6 +88,104 @@ pub fn send_request(
     ))
 }
 
+/// Opens the live event stream and hands each event to `on_event` (T11.2).
+///
+/// Same credential flow as [`send_request`] — a broker-issued grant, scoped to
+/// `events.subscribe` — but the response body is read incrementally instead of
+/// to EOF, because it does not end until the server or the caller says so.
+///
+/// **The bearer token stays inside this function.** That is the reason this
+/// exists rather than a `--print-token` flag on `events subscribe`: a secret
+/// printed for a `curl` to pick up is a secret in a shell history, a scrollback
+/// and possibly a `ps` listing.
+///
+/// Blocks until the stream ends: the credential expires (the server sends an
+/// `expired` event and closes), Warp exits, or `on_event` returns `false`.
+#[cfg(not(target_family = "wasm"))]
+pub fn stream_events(
+    instance: &InstanceRecord,
+    stream_url: &str,
+    mut on_event: impl FnMut(StreamEvent<'_>) -> bool,
+) -> Result<(), ControlError> {
+    use std::io::BufRead as _;
+
+    instance.validate_local_control_authority()?;
+    let credential = request_credential(instance, ActionKind::EventsSubscribe)?;
+    let response = reqwest::blocking::Client::builder()
+        // The point of this request is that it never finishes. A read timeout
+        // would end a healthy but quiet stream.
+        .timeout(None)
+        .build()
+        .and_then(|client| {
+            client
+                .get(stream_url)
+                .header("Authorization", credential.authorization_value())
+                .header("Accept", "text/event-stream")
+                .send()
+        })
+        .map_err(|err| {
+            ControlError::with_details(
+                ErrorCode::TransportUnavailable,
+                "failed to open the local-control event stream",
+                err.to_string(),
+            )
+        })?;
+    if !response.status().is_success() {
+        let status = response.status();
+        let text = response.text().unwrap_or_default();
+        if let Ok(envelope) = serde_json::from_str::<ErrorResponseEnvelope>(&text) {
+            return Err(envelope.error);
+        }
+        return Err(ControlError::with_details(
+            ErrorCode::TransportUnavailable,
+            format!("event stream refused with HTTP {status}"),
+            text,
+        ));
+    }
+    // Minimal SSE: this endpoint emits one `data:` per event, optionally named
+    // by an `event:` line, and comment lines as keepalives. Enough of the
+    // grammar to read exactly what the server is defined to write, and no
+    // dependency for the rest of a spec neither side uses.
+    let mut name: Option<String> = None;
+    for line in std::io::BufReader::new(response).lines() {
+        let line = line.map_err(|err| {
+            ControlError::with_details(
+                ErrorCode::TransportUnavailable,
+                "event stream ended unexpectedly",
+                err.to_string(),
+            )
+        })?;
+        if line.is_empty() || line.starts_with(':') {
+            continue;
+        }
+        if let Some(rest) = line.strip_prefix("event:") {
+            name = Some(rest.trim().to_owned());
+        } else if let Some(rest) = line.strip_prefix("data:") {
+            let keep_going = on_event(StreamEvent {
+                name: name.as_deref(),
+                data: rest.trim_start(),
+            });
+            name = None;
+            if !keep_going {
+                break;
+            }
+        }
+    }
+    Ok(())
+}
+
+/// One frame from the event stream.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StreamEvent<'a> {
+    /// The server's `event:` name, when it sent one.
+    ///
+    /// `None` is the ordinary case — an agent event, whose `data` is a log line.
+    /// `Some("expired")` and `Some("lagged")` are the two the server names, and
+    /// both are about the stream rather than about an agent.
+    pub name: Option<&'a str>,
+    pub data: &'a str,
+}
+
 /// Fails closed on platforms without a native local-control HTTP transport.
 #[cfg(target_family = "wasm")]
 pub fn send_request(

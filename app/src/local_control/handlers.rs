@@ -7,6 +7,7 @@ pub(super) mod app_state;
 pub(super) mod close;
 pub(super) mod drive_objects;
 pub(super) mod drive_sync;
+pub(super) mod events;
 pub(super) mod layout;
 pub(super) mod main_pane;
 pub(super) mod metadata;

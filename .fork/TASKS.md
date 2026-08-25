@@ -5392,7 +5392,7 @@ target never compiles.
       T11.1b, not planned**: on this fork's primary agent path the log carries
       the turn frame and no tools at all, because neither world sees them. See
       the T11.1b as-built for why, and for the one piece of plumbing it needs.
-- [ ] **T11.2** The first slice of the read surface, end to end and deliberately
+- [x] **T11.2** The first slice of the read surface, end to end and deliberately
       small: **one** `GET` route on `warpctrl` returning current agent/task
       state, **one** SSE endpoint carrying T11.1's events, still bound to
       `127.0.0.1`. No LAN bind, no QR pairing, no web page. It proves transport,
@@ -5723,6 +5723,117 @@ quietly disagreeing with the derived one it replaced, and that is what is held.
 iterating every credential and `ct_eq`-ing each. It is not obviously wrong to
 want that before T11.4, but the `HashMap` does not leak a prefix today, so it
 was left alone rather than changed on speculation.
+
+### T11.2 — as built
+
+Two `GET` routes on the existing `warpctrl` server, one new catalog action, and
+a `tokio::sync::broadcast` fan-out in `event_log`. Catalog goes 109 → **110**;
+both count pins updated, and the first one caught the omission exactly as it is
+supposed to.
+
+| | |
+|---|---|
+| `GET /v1/state` | the snapshot. Body is verbatim `agent.list`, and it requires an `agent.list` credential, because it *is* `agent.list` — the route exists so a browser need not compose a request envelope, not to expose anything new. |
+| `GET /v1/events` | the stream. One SSE `data:` frame per event log line. |
+| `events.subscribe` | the new action. Its `POST` form answers *where* the stream is and when the credential dies. |
+| `warpctrl events tail` | the reader. |
+
+**The new action is not bureaucracy, and this is the one design argument worth
+keeping.** It would have been cheaper to let an `agent.list` credential open the
+stream. It would also have been wrong: `agent.list` returns titles and busy
+flags, while the stream carries tool names, input previews and working
+directories for *every* agent in the instance. Granting the second because
+someone asked for the first is precisely the scope-conflation T11.4 exists to
+avoid. Both directions are now refused, and that was checked rather than
+assumed — see the runs below.
+
+**`is_enabled()` stopped being a constant.** Before this it meant
+"`WARP_FORK_EVENT_LOG` named a directory", fixed for the life of the process.
+A subscriber is a consumer with no file behind it, so it now means "a file **or**
+a live subscriber" and can flip either way at any moment — callers must not cache
+it. `seq` moved out of `Sink` and became a process-global static for the same
+reason: it is documented as process-global and should not restart or vanish
+depending on whether a directory was named. Subscribing is therefore enough to
+turn the log on; you do not also have to set the environment variable.
+
+**The stream ends when the grant does.** A credential is good for five minutes,
+and a connection authorized once at open would outlive its own authority — the
+"localhost, therefore fine" reasoning this phase is trying not to ship. Expiry
+is re-checked before every frame and on a 15-second tick, so an idle stream
+closes on time rather than at the next event.
+
+**No token ever leaves the process.** `events subscribe` deliberately does not
+echo the bearer, which left the stream unreadable by anything — a gap the
+design created and the first run exposed. `warpctrl events tail` is the answer:
+it fetches the URL, opens the stream and prints lines, keeping the secret
+internal. The alternative, a `--print-token` flag, puts a credential in a shell
+history, a scrollback and a `ps` listing.
+
+#### Found by running it: a Tokio runtime with no clock
+
+The keepalive is a `tokio::time::interval`, and the local-control runtime is
+built `.enable_io()` — **no `.enable_time()`**. That combination does not fail to
+compile and does not fail to build the runtime. It panics on the first timer,
+*inside the connection task*, where axum swallows it and the client sees a
+dropped connection with no status:
+
+```
+error: transport_unavailable: failed to open the local-control event stream
+details: error sending request for url (http://127.0.0.1:43477/v1/events)
+```
+
+Every check up to that point was green: `cargo check --workspace
+--all-targets`, 272 `warp_cli` tests, four new handler tests, a clean release
+build. The real message was only in Warp's own log — `A Tokio 1.x context was
+found, but timers are disabled`. Fixed by enabling the time driver, and worth
+recording because the *shape* of it recurs: a runtime feature flag is not a
+compile-time contract, and a panic inside a spawned connection task reaches the
+client as a transport error rather than as a panic.
+
+Two smaller traps for whoever runs this next. `tokio`'s `sync` and `time`
+features had to be added to `app/Cargo.toml`, and the code compiled without them
+because another workspace crate enables them and cargo unifies features — so the
+app crate's own manifest was wrong while everything built. And the scratch
+`XDG_CONFIG_HOME` recipe in the T11.1b notes is subtly incomplete: the
+preferences file is `{"prefs": {...}}`, so a flat
+`{"HasCompletedOnboarding":"true"}` is silently discarded and the window sits on
+onboarding with `has_workspace: false`. Patch the key *inside* `prefs`.
+
+#### Verified by running (Linux/X11)
+
+Live app, scratch config, `WARP_FORK_LOCAL_AGENT=1`. The stream received the
+turn as it happened:
+
+```
+{"ts":"...T20:54:38.733Z","seq":0,"agent":"warp","event":"session_start","source":"in_process",...}
+{"ts":"...T20:54:42.527Z","seq":1,"agent":"warp","event":"stop_failure","source":"in_process",...}
+```
+
+**Byte-identical to the file log**, which is the point of broadcasting the
+rendered line rather than re-serializing: a subscriber re-broadcasts bytes it
+never parsed and cannot drift from the on-disk format.
+
+The authorization boundary, driven with `curl` against credentials obtained
+from the broker socket the way any client obtains them:
+
+| request | answer |
+|---|---|
+| `/v1/state` + `agent.list` credential | **200**, real conversation state |
+| `/v1/state`, no credential | 401 `unauthorized_local_client` |
+| `/v1/state` + `events.subscribe` credential | 403 `credential for events.subscribe cannot open agent.list` |
+| `/v1/events` + `agent.list` credential | 403 `credential for agent.list cannot open events.subscribe` |
+| `/v1/state` + forged token | 401 `local-control credential is invalid` |
+| `/v1/state` + browser `Origin` | 403 `browser-origin ... not allowed` |
+
+Expiry was waited out rather than reasoned about: a tail opened at `20:56:47`
+was still live at `20:57:58` and had closed with `credential expired; re-run to
+reconnect` by `21:03:14` — the five-minute grant plus at most one 15-second
+tick, and the stream does not outlive its own authority.
+
+**Not verified by running:** the `lagged` frame. It needs a subscriber that
+stops reading while 256 events go past, which no natural run produces; it is
+held by construction and by the bounded channel's own contract, and that is
+stated rather than implied.
 
 ---
 

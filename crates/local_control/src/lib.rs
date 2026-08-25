@@ -20,7 +20,7 @@ pub use discovery::{
     discovery_dir,
 };
 pub use protocol::{
-    Action, ControlError, ControlResponse, ErrorCode, ErrorResponseEnvelope, PROTOCOL_VERSION,
-    RequestEnvelope, ResponseEnvelope,
+    Action, ControlError, ControlResponse, ErrorCode, ErrorResponseEnvelope, EventStreamResult,
+    PROTOCOL_VERSION, RequestEnvelope, ResponseEnvelope,
 };
 pub use selectors::{PaneSelector, SessionSelector, TabSelector, TargetSelector, WindowSelector};

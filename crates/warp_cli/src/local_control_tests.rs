@@ -724,6 +724,10 @@ fn retained_action_examples() -> Vec<(ActionKind, Vec<&'static str>)> {
         ),
         (ActionKind::SlashList, vec!["warpctrl", "slash", "list"]),
         (
+            ActionKind::EventsSubscribe,
+            vec!["warpctrl", "events", "subscribe"],
+        ),
+        (
             ActionKind::SlashRun,
             vec!["warpctrl", "slash", "run", "compact"],
         ),
@@ -914,6 +918,11 @@ fn parsed_action_kind(command: &ControlCommand) -> Option<ActionKind> {
         ControlCommand::Slash(command) => match command {
             SlashCommand::List(_) => Some(ActionKind::SlashList),
             SlashCommand::Run(_) => Some(ActionKind::SlashRun),
+        },
+        ControlCommand::Events(command) => match command {
+            EventsCommand::Subscribe(_) | EventsCommand::Tail(_) => {
+                Some(ActionKind::EventsSubscribe)
+            }
         },
         ControlCommand::Remote(command) => match command {
             RemoteCommand::Wsl(RemoteWslCommand::List(_)) => Some(ActionKind::RemoteWslList),

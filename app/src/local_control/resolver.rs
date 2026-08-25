@@ -83,12 +83,17 @@ pub(crate) fn validate_action_target(
         // app-wide, so a window or pane selector would be meaningless rather
         // than merely ignored, and silently ignoring it would let a caller
         // believe it had scoped an export.
+        // `Events` joins these for the same reason `Drive` does: the stream is
+        // instance-wide, so a pane selector would be a filter the server does
+        // not apply, and accepting one would let a caller believe it had
+        // narrowed what it was about to receive.
         TargetScope::Appearance
         | TargetScope::Settings
         | TargetScope::Keybinding
         | TargetScope::Action
         | TargetScope::Capability
-        | TargetScope::Drive => true,
+        | TargetScope::Drive
+        | TargetScope::Events => true,
         TargetScope::Window
         | TargetScope::Tab
         | TargetScope::Pane
