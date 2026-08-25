@@ -30,6 +30,18 @@ the project is built on, and it is stated here because it keeps paying:
 When something here has only been read, say so. `.fork/IDEAS.md` marks its
 unverified claims at the top of the file; keep that habit.
 
+**…but running it does not save you if you guessed one of its inputs. Name the
+inputs you did not verify.** Measured 2026-08-24: the fork's divergence from
+upstream was published as 1168 files and 515 commits when it is 204 and 141 —
+wrong by 5x, because the base handed to `git diff <base>...dev` was an upstream
+commit `dev` already contained. The command ran perfectly and reported honestly;
+the error was one step upstream of it, in a value assumed rather than computed.
+`git diff A...B` is *supposed* to protect against a stale base, but when `A` is
+an ancestor of `B` the merge-base is `A` itself and the three-dot form silently
+degrades to a plain two-dot diff — no warning, no protection. Compute bases
+(`$(git merge-base upstream/master dev)`); never paste them. Full account in
+`.fork/CONSOLIDATION.md` §1.1.
+
 **GUI gestures are runnable now, so "needs a person" needs an argument.**
 `use_computer drag` (T9.1) performs press-move-release against one window and
 photographs the frame *before* the release, which is the only moment a drop
@@ -163,6 +175,24 @@ red, and shipped — because `cargo test -p local_control` takes a second and th
 app crate does not. `crates/warp_cli` holds two more guardrails: an
 exhaustive `match` over the CLI enum and a list requiring every action to have a
 parseable example.
+
+**Widening a shared type — or merging upstream — is gated by `cargo check
+--workspace --all-targets`, not by the binary build.** Same failure mode as
+above, one level up. When the fork adds a variant to an enum or a field to a
+struct that upstream also constructs, the compiler finds every site *it
+compiles* — and `--bin warp-oss` compiles neither test code nor `warp_tui`.
+T10.1's merge landed three such breaks that git had merged perfectly cleanly:
+two new upstream TUI files matching exhaustively over `BlocklistAIHistoryEvent`
+(T8.3's `ConversationSettledChanged`), and six `AgentConversationData` literals
+in `crates/persistence` missing T8.3's `settled`. The persistence one **was
+already red before the merge** — T8.3 shipped a required field without ever
+compiling that crate's tests. A clean `cargo build` proves nothing here.
+
+**Merging upstream: watch the overlap, not the divergence.** `git merge-base
+upstream/master dev` computed, never pasted (see *Method*), then the file sets
+intersected — 39 of the fork's 204 files on 2026-08-24, of which 4 conflicted.
+That number is the early warning, and it is what makes a soft fork cheap; the
+cost is not paid when divergence is incurred but when a merge is deferred.
 
 **Formatting: run `./script/format`, and disregard `AGENTS.md` on this point.**
 Measured 2026-08-21: `cargo fmt` with the project's config wants to change **11

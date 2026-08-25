@@ -30,37 +30,77 @@ Stated directly, so you do not re-litigate settled things:
 
 ---
 
-## 1. Measured state of the fork (2026-08-24, `mycosavant/warp` `dev`)
+## 1. Measured state of the fork (corrected 2026-08-24)
 
-Verify before citing; every figure has its command.
+**The figures first published here were wrong by roughly 5x, and the error is
+worth more than the numbers were.** They are corrected below; §1.1 records how it
+happened, because the failure mode is silent and will recur.
+
+Verify before citing; every figure has its command — and note that the base is
+now *computed*, not pasted.
 
 ```bash
 cd warp
-git diff --stat <upstream-base>...origin/dev | tail -3
-git diff --name-status <upstream-base>...origin/dev | awk '{print $1}' | sort | uniq -c
-git diff --name-status <upstream-base>...origin/dev | awk '$1=="M"{print $2}' | cut -d/ -f1-2 | sort | uniq -c | sort -rn
+MB=$(git merge-base upstream/master dev)
+git diff --shortstat $MB...dev
+git diff --name-status $MB...dev | awk '{print $1}' | sort | uniq -c
+git diff --name-status $MB...dev | awk '$1=="M"{print $2}' | cut -d/ -f1-2 | sort | uniq -c | sort -rn
 ```
 
-| | |
-|---|---|
-| Divergence from upstream | **1168 files, +168,895 / −23,492**, 515 commits |
-| Split | **888 modified**, 271 added, 5 deleted |
-| Where the modifications land | `app/src` **509** · `warp_tui` 104 · `warpui_core` 38 · `ai` 27 |
-| `.fork/` documentation | 10,712 lines across 4 files |
+| | published | **measured** |
+|---|---|---|
+| Divergence from upstream | 1168 files, +168,895 / -23,492 | **204 files, +39,670 / -316** |
+| Commits | 515 | **141** |
+| Split | 888 M / 271 A / 5 D | **127 M / 77 A / 0 D** |
+| `app/src` modifications | 509 | **96** |
+| `warp_tui` modifications | 104 | **0** — the fork has never touched the TUI |
+| `.fork/` documentation | 10,712 lines, 4 files | 11,318 lines, 5 files |
 
-**The finding that matters: this is not a patch series and cannot become one.**
-The original plan was to keep fork behavior in `.fork/` and carry patches to stay
-syncable with upstream. 888 modified files — 509 of them in `app/src`, the
-busiest directory in the repo — says that plan is already over.
+**The line that carries the argument is -316.** The fork adds 39,670 lines and
+deletes 316 — 125:1. That is not the signature of a rewrite. It is the signature
+of additive work: new files, plus hooks into existing ones.
 
-That is not a failure. The changes wanted are *behavioral* (no account, no
-telemetry, a different agent in Oz's seat), and behavior cannot be bolted on
-beside an app. `.fork/` succeeded at what it can do — holding the reasoning — and
-the code was always going to live in Warp's files.
+**So the original conclusion — "this is not a patch series and cannot become
+one" — is withdrawn.** It was inferred from 888 modified files that were mostly
+Warp's own. The direct test says the opposite: the fork's 204 files overlap 8
+days of upstream (110 commits, 465 files) in **39**, of which **4** conflicted,
+and that merge was completed the same day (T10.1). Syncability here was never a
+prediction — `dev` had already absorbed 75 upstream commits before anyone asked
+the question.
 
-**Consequence for this session:** stop planning around upstream syncability.
-Cherry-picking specific upstream commits stays possible and worthwhile; merging
-upstream wholesale does not. Decide the cadence deliberately (§4).
+**What is true is that the cost compounds, and the rename is what ends it.**
+Divergence is not paid when it is incurred. Merging weekly keeps it near zero;
+letting it lapse a quarter is what makes it impossible. And a rename — every
+`warp-oss`, `WARP_*`, `WarpOss` and `warpctrl` symbol — converts shared ground
+into permanent conflict, which is the act that actually makes this a hard fork.
+**Decision, 2026-08-24: the rename is deferred. This stays a soft fork on a
+merge cadence** (see `TASKS.md` T10).
+
+### 1.1 How the measurement went wrong
+
+`git diff A...B` resolves to `git diff $(git merge-base A B) B`. **If `A` is an
+ancestor of `B`, the merge-base is `A` itself, and the three-dot form silently
+degrades to a plain two-dot diff.** The syntax that exists to protect against
+precisely this mistake offers no protection and no warning.
+
+The base used was `06eedd6fc` — an upstream commit from 2026-07-23, a month
+before the fork's first commit — chosen because it was the HEAD of a branch that
+happened to be checked out, and assumed to be the fork point. 373 commits of
+Warp's own work sat between it and the real merge-base, and every one was
+attributed to the fork. The reproduction is exact: `git diff 06eedd6fc...dev`
+gives 1169 files, +169,352 / -23,488.
+
+The one-line guard:
+
+```bash
+git merge-base --is-ancestor "$BASE" dev && echo "BASE IS INSIDE DEV - diff includes upstream"
+```
+
+**The lesson generalises past git.** `CLAUDE.md`'s method is "run it, don't read
+it", and the command here *was* run — it executed perfectly and reported
+honestly. The error sat upstream of the command, in an input assumed rather than
+checked. So: **running it does not save you if you guessed one of its inputs.
+Name the inputs you did not verify.**
 
 ---
 
@@ -71,20 +111,40 @@ one question worth paying counsel for is named at the end.*
 
 ### 2.1 The actual split
 
-| License | Scope | Rust LOC |
-|---|---|---|
-| **MIT** | `warpui_core` + `warpui` only | 120,918 |
-| **AGPLv3** | everything else — `app/`, `ai/`, `warp_tui`, 76 other crates | 362,408 |
+Corrected 2026-08-24: the original denominator counted `crates/` only while
+listing `app/` on the AGPL side — internally inconsistent, and it *overstated*
+MIT's share by more than three times. The conclusion is unchanged and in fact
+stronger.
+
+| License | Scope | Rust LOC | share |
+|---|---|---|---|
+| **MIT** | `crates/warpui` + `crates/warpui_core` only | 125,304 | **7.3%** |
+| **AGPLv3** | everything else — `app/` (1,172,616), `warp_tui`, 76 other crates | 1,595,177 | 92.7% |
 
 ```bash
-find crates/warpui crates/warpui_core -name '*.rs' | xargs cat | wc -l
-find crates -name '*.rs' | xargs cat | wc -l
+find crates/warpui crates/warpui_core -name '*.rs' | xargs cat | wc -l   # MIT
+find crates -name '*.rs' | xargs cat | wc -l                             # crates total
+find app    -name '*.rs' | xargs cat | wc -l                             # app/ — do not omit
 ```
 
 MIT covers the *UI framework* — the general-purpose GPUI-like layer Warp wants
-reused elsewhere. The product is AGPL, and 509 of the fork's modified files are
-on the AGPL side. **Treat the fork as AGPLv3 with an MIT subsystem**, not as
-"mixed." Nothing about this fork's actual work is MIT.
+reused elsewhere. The product is AGPL, and 96 of the fork's 127 modified files
+sit in `app/src` alone. **Treat the fork as AGPLv3 with an MIT subsystem.**
+
+**Correction: "nothing about this fork's actual work is MIT" was false.** The
+fork touches eight files on the MIT side, four of them new:
+
+| | |
+|---|---|
+| added | `warpui/src/frame_log.rs` + tests (`WARP_FORK_FRAME_LOG`) |
+| added | `warpui_core/.../drag/in_flight.rs` + tests (T8.2 drag cancellation) |
+| modified | `warpui/src/lib.rs`, `warpui/src/windowing/winit/event_loop/mod.rs` |
+| modified | `warpui_core/.../drag/draggable.rs`, `.../drag/mod.rs` |
+
+That is an asset, not a footnote: **this code is MIT and can flow into
+permissively-licensed crates of your own.** §4's "extract before you migrate"
+applies to it too — the drag-cancellation and frame-logging work is portable in
+a way the other 96% is not.
 
 ### 2.2 What Warp's own FAQ establishes
 
@@ -583,7 +643,8 @@ violated once.
 
 ## 13. Current state
 
-- **warp fork** `mycosavant/warp` `dev` — 515 commits ahead, measurements in §1.
+- **warp fork** `mycosavant/warp` `dev` — 141 commits of fork work on top of
+  upstream, last merged `6696954c6` (2026-08-24). Measurements in §1.
   `.fork/` has README (operating manual), SPEC (de-telemetry reasoning), TASKS
   (board + as-built), IDEAS (holding pen). `CLAUDE.md` is the cold start.
 - **kode-rs** `dev` at `83bb71d`, CI green on three jobs (ubuntu fmt+clippy+test,
