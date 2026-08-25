@@ -12,6 +12,7 @@ chrono.workspace = true
 rand.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
+subtle.workspace = true
 thiserror.workspace = true
 uuid.workspace = true
 [target.'cfg(not(target_family = "wasm"))'.dependencies]

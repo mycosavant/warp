@@ -5385,19 +5385,37 @@ target never compiles.
 - [x] **T11.1** A structured event taxonomy (`TR-EVENTS`). The taxonomy already
       existed; what was missing was anywhere to keep it. Built as a projection:
       `WARP_FORK_EVENT_LOG`, one JSONL file per session.
+- [x] **T11.1b** Warp's own agent into the same log. World 1
+      (`BlocklistAIHistoryEvent` / `BlocklistAIActionEvent`) projected onto the
+      same vocabulary, so one `jq` filter answers for every agent in the window.
+- [ ] **T11.1c** The local agent's tools into the log. **Found by running
+      T11.1b, not planned**: on this fork's primary agent path the log carries
+      the turn frame and no tools at all, because neither world sees them. See
+      the T11.1b as-built for why, and for the one piece of plumbing it needs.
 - [ ] **T11.2** The first slice of the read surface, end to end and deliberately
       small: **one** `GET` route on `warpctrl` returning current agent/task
       state, **one** SSE endpoint carrying T11.1's events, still bound to
       `127.0.0.1`. No LAN bind, no QR pairing, no web page. It proves transport,
       auth and fan-out against a running app; everything after it is additive.
-- [ ] **T11.3** Constant-time token comparison — **prerequisite for any bind
-      wider than loopback.** `AuthToken(String)` in
-      `crates/local_control/src/auth.rs` uses `#[derive(PartialEq)]`, so
-      `verify_authorization_header` short-circuits on the first differing byte.
-      Entropy is fine (`OsRng`), and on loopback behind the peer-UID broker the
-      severity is low — but the LAN bind T11.4 needs turns it into a timing
-      oracle on a token that authorises 109 actions, several of which run
-      commands. Read from the source, **not** demonstrated by an exploit.
+- [x] **T11.3** Constant-time token comparison — filed as a **prerequisite for
+      any bind wider than loopback**, and **the reason given for it was wrong**.
+      As filed: `AuthToken(String)` derives `PartialEq`, so
+      `verify_authorization_header` short-circuits on the first differing byte
+      and leaks a prefix. Two things were assumed rather than checked, and both
+      failed:
+      - **`verify_authorization_header` has no production callers.** It is
+        exercised only by `auth_tests.rs`. The live path is
+        `app/src/local_control/mod.rs::lookup_credential`, a
+        `HashMap<String, CredentialGrant>::get(secret)`.
+      - **A hash lookup is not a prefix oracle.** `RandomState` seeds SipHash
+        per process, so a near-miss hashes to somewhere unrelated and reveals
+        nothing about how many leading bytes were right. `String == String` is
+        not a byte loop either; it lowers to `bcmp`.
+
+      Done anyway, and the entry is corrected rather than dropped, because the
+      function is public crate API named exactly what an auth check is named,
+      and T11.2 and T11.4 are precisely when someone reaches for it. See the
+      as-built for what the test does and does not pin.
 - [ ] **T11.4** LAN bind behind an explicit flag, plus QR pairing. `warpctrl`
       hardcodes `[127, 0, 0, 1], 0` today. Ship the mining doc's must-haves in
       the box, not as documentation: fail closed on an ambiguous config, refuse a
@@ -5548,6 +5566,163 @@ needs a protocol version bump, because the id has to come from the plugin.
 (`CONSOLIDATION.md` §4.1 — the fork as client, kode-rs as agent), and `WB-SLEEP`
 (inhibit system sleep for the duration of a run), the one `WB-` ticket this
 substrate does not already answer.
+
+### T11.1b — as built
+
+`app/src/event_log/warp_agent.rs`, plus one call in `BlocklistAIController::new`
+and two small accessors on `BlocklistAIActionModel`. `event_log.rs` became
+`event_log/mod.rs`; the record shape gained a caller-supplied `Entry` so both
+worlds go through one writer and produce one vocabulary.
+
+**Two fields changed meaning, and both are deliberate.**
+
+* **`v` is now optional, and absent means "did not come off a wire".** World 1
+  has no protocol version; stamping `1` on it would claim a compatibility
+  guarantee that does not exist. Verified in the live log: the world-2 line
+  carries `"v":1` and the world-1 lines carry no `v` at all.
+* **`call_id` is new, and it is half of `TR-EVENTS-B` delivered for free.**
+  Warp's own agent has always had a stable per-action id (`AIAgentActionId`), so
+  `permission_request` → `tool_start` → `tool_complete` join on it — and a
+  `tool_start` sharing no id with any ask *is* an action that ran unasked. The
+  hosted-agent half still needs the protocol bump, because there the id has to
+  come from the plugin.
+
+**`tool_start` is added to the vocabulary.** Not in the wire protocol, and
+needed: without it an action that begins and never returns leaves no trace, and
+"started and never finished" is the shape of the failure this phase is for.
+`CLIAgentEventType::Unknown(String)` already round-trips names Warp does not
+know, so the log was always a superset of the protocol.
+
+**Where it departs from the TUI reference, and why.**
+`cli_agent_osc_event_publisher.rs` maps the same two worlds already, so it is
+the starting point — but it feeds a *notification* and this feeds a *log*, which
+want opposite things. It reports only the selected conversation; this reports
+every one, because orchestrated children are never selected and are the case the
+fork cares most about. It emits `tool_complete` only for `AskUserQuestion`,
+because the rest would be noise; noise is what a log is for.
+
+#### Three things running it corrected
+
+**1. A bug found by reading, before the run: `Changed` does not mean changed.**
+`AIConversation::update_status_with_error` emits unconditionally, and
+`update_conversation_in_progress_status` calls it as *every action starts*. The
+first draft mapped `InProgress → InProgress` to `prompt_submit`, so a single busy
+turn would have written a long run of lines claiming a person was typing
+throughout a turn nobody was watching. Now guarded on `prev != new`, which also
+kills a duplicate `stop` for one ending, and pinned by a test.
+
+**2. An assumption in a comment that was simply false.** The draft excluded
+`session_start` from the query lookup, with a confident comment that it "fires
+before anything has been asked". Running it showed the first turn producing
+`session_start` and `stop` and **no `prompt_submit` at all** — because
+`AIConversation::new` starts at `InProgress`, so the first request's status write
+is the no-op above. The fix was to stop asserting and measure: the query *is*
+available at `session_start`. It now carries it, five seconds before the turn
+ended rather than after:
+
+```
+{"ts":"…:36:14.864Z","seq":0,"agent":"warp","event":"session_start","source":"in_process",
+ "session_id":"af35bf30-…","cwd":"/home/effatha","project":"effatha",
+ "summary":"Reply with exactly the word: marker-one","applied":true}
+{"ts":"…:36:19.853Z","seq":1,"agent":"warp","event":"stop", … same summary … }
+```
+
+So turn 1 is marked by `session_start` and every later turn by `prompt_submit`,
+both carrying what was asked. A second turn in the same conversation was driven
+to confirm the `prompt_submit` path independently.
+
+**3. The claim that the two worlds meet on the primary path was wrong, twice
+over.** A doc comment asserted that a local-agent turn's tool detail arrives as
+world 2 "into the same file, under the same session". Neither half survives:
+
+* Warp's action model sees nothing, because `translate.rs` turns a `tool_use`
+  block into *text* rather than a `ToolCall` — deliberately, since a ToolCall is
+  an instruction and Warp would run the command a second time.
+* The plugin's OSC 777 does not arrive either. `local_agent` spawns `claude`
+  with `Stdio::piped()` and reads its JSON directly, so there is no Warp PTY and
+  nothing reaches the terminal parser world 2 hangs off.
+
+**Hence T11.1c, which is a real gap and not a design.** On the fork's primary
+agent path the log carries the turn frame and no tools. The stream that has them
+is already being parsed — `ContentBlock::ToolUse` in `translate.rs` — but filing
+those lines under the *run* needs Warp's `AIConversationId`, and `RequestParams`
+carries only Claude's session token. That plumbing is the whole of T11.1c. It
+was scoped rather than half-built.
+
+#### Verified by running (Linux/X11)
+
+Driven with `warpctrl agent prompt` against a scratch `XDG_CONFIG_HOME`, with
+`WARP_FORK_LOCAL_AGENT=1` so the turn is answered by the `claude` CLI. Both
+worlds landed in one directory, on one vocabulary, sharing one process-global
+`seq`:
+
+```
+in_process   warp   session_start                  Reply with exactly the word: marker-one
+in_process   warp   stop                           Reply with exactly the word: marker-one
+in_process   warp   prompt_submit                  Now reply with exactly: ping
+in_process   warp   stop                           Now reply with exactly: ping
+in_process   warp   stop_failure                   (error_type: error)
+rich_plugin  claude permission_request  Bash       rm -rf /
+```
+
+**The action half was not driven, and is held by unit tests instead.** It is
+reached only by Warp's own server-backed agent, which this fork has no account
+for — the first attempt errored with `missing authentication credentials`, which
+is itself the honest demonstration. The decision table is split into a pure
+`action_event` for exactly that reason: a test is the only thing that can hold
+it. Said plainly rather than implied.
+
+**Two notes for whoever runs this next.** A scratch `XDG_CONFIG_HOME` means
+first-run onboarding, and the window sits on "Welcome to Warp" with
+`has_workspace: false` until it is dismissed — `warpctrl` answers
+`missing_target` and it looks like a control-plane fault. Seed
+`HasCompletedOnboarding` = `"true"` in
+`$XDG_CONFIG_HOME/warp-oss/user_preferences.json` instead. And on WSLg a
+root-window screenshot is **black**: capture the window id from
+`xwininfo -root -children` and use `import -window <id>`.
+
+### T11.3 — as built
+
+`AuthToken` now hand-writes `PartialEq` over `subtle::ConstantTimeEq` instead of
+deriving it. `subtle` was already in the lockfile transitively, so this adds an
+edge rather than a build. The change is four lines; **the finding is the
+entry**.
+
+**What the ticket got wrong, found by grepping for the callers instead of
+trusting the name.** T11.3 said the derived `PartialEq` made
+`verify_authorization_header` a timing oracle on the request path. That function
+is not on the request path — it has **no production callers**, only tests.
+Control requests authenticate in `lookup_credential`, which is a `HashMap` lookup
+keyed by the secret, and that is not a prefix oracle: SipHash is seeded per
+process by `RandomState`, so a near-miss hashes somewhere unrelated. The premise
+that made this a *prerequisite* for T11.4 does not hold, and the ticket has been
+corrected in place.
+
+**Why it still shipped.** `verify_authorization_header` is public API of
+`local_control`, it is named exactly what an auth check is named, and the next
+two tasks are a new read route and a bind wider than loopback — the moment
+someone reaches for the function that looks like the answer. Cheap now,
+load-bearing later.
+
+**A second overclaim, caught while writing the doc comment.** The first draft
+said the derived comparison "returns at the first difference". It does not:
+`String == String` lowers to `bcmp`, and a `bcmp` over 43 bytes may be a single
+vectorised compare with no data-dependent timing at all. The real argument is
+narrower — nothing *guarantees* that, it is a property of the libc and codegen
+on the day, and the failure would be silent.
+
+**What the test pins, and what it does not.**
+`a_token_equals_itself_and_nothing_else` checks that the hand-written comparison
+is still equality — first-byte, last-byte, prefix and suffix mismatches all
+reject. It does **not** pin constant time, and does not claim to: that needs a
+statistical timing measurement, which would be flaky in exactly the way that
+gets a test deleted. The likelier regression is a hand-rolled comparison
+quietly disagreeing with the derived one it replaced, and that is what is held.
+
+**Not done:** `lookup_credential` itself. A constant-time lookup would mean
+iterating every credential and `ct_eq`-ing each. It is not obviously wrong to
+want that before T11.4, but the `HashMap` does not leak a prefix today, so it
+was left alone rather than changed on speculation.
 
 ---
 

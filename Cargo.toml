@@ -287,6 +287,11 @@ smol_str = "0.2.2"
 strsim = "0.11"
 strum = "0.27"
 strum_macros = "0.27"
+# Fork (T11.3): constant-time comparison for local-control bearer tokens.
+# Already in the lockfile transitively, so this adds an edge rather than a
+# build. Preferred over six hand-rolled lines because the hazard being defended
+# against is the optimiser, and `subtle` is the crate that argues with it.
+subtle = "2.6"
 tempfile = "3.8.0"
 thiserror = "2.0.17"
 tokio = "1.47.1"
