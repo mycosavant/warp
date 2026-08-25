@@ -5382,12 +5382,8 @@ target never compiles.
 >
 > Migration tiers and their reasoning: `CONSOLIDATION.md` §4.1.
 
-- [ ] **T11.1** A structured event taxonomy (`TR-EVENTS`, with `-B`'s stable
-      per-call id and `-C`'s structured `file_change`). Look for the gate first:
-      `BlocklistAIHistoryEvent` already exists and T8.3 extended it, and
-      `orchestration_events.rs` already builds lifecycle events. The question is
-      whether an append-only per-run *file* (`CONSOLIDATION.md` §5) is a
-      projection of what is already emitted, or a new thing.
+- [ ] **T11.1** A structured event taxonomy (`TR-EVENTS`). **Gate check done —
+      see below. The taxonomy exists; the persistence does not.**
 - [ ] **T11.2** The first slice of the read surface, end to end and deliberately
       small: **one** `GET` route on `warpctrl` returning current agent/task
       state, **one** SSE endpoint carrying T11.1's events, still bound to
@@ -5412,6 +5408,66 @@ target never compiles.
       remotely, with remembered grants. The first *write* capability, chosen
       because its blast radius is bounded and because it is what turns "watch"
       into "unblock from the couch".
+
+### T11.1 — the gate check (2026-08-24)
+
+Read, not run, except where noted. **Warp already has a structured, versioned
+CLI-agent event protocol. What it does not have is anywhere to keep it.**
+
+**There are two event worlds, and only one of them survives a restart.**
+
+| | world 1 — Warp's own agent | world 2 — third-party CLI agents |
+|---|---|---|
+| type | `BlocklistAIHistoryEvent`, **26** variants | `CLIAgentEventType`, 10 variants |
+| transport | in-process `ctx.emit` | **OSC 777** on the PTY, sentinel-gated (OSC 9 fallback for Codex) |
+| wire type | — | `warp_core::cli_agent_protocol::CLIAgentNotification` (`Serialize + Deserialize`, `skip_serializing_none`) |
+| versioning | Rust enum | `v` field + `VERSIONED_PARSERS` array; `current_protocol_version()` is derived from its length, and the PTY exports `WARP_CLI_AGENT_PROTOCOL_VERSION` so plugins negotiate |
+| unknown values | `#[serde(other)]` on `Harness` | `CLIAgentEventType::Unknown(String)`, and an unsupported `v` is a `report_error!` rather than a panic |
+| **persisted?** | **yes** — SQLite, via `AgentConversationData` (the blob T8.3 added `settled` to) | **no** — `CLIAgentSessionsModel` is three in-memory `HashMap`s |
+
+World 2 is the one that matters for driving other people's agents, and it is
+**ephemeral**: an event is parsed from the PTY, updates a `HashMap`, paints the
+UI, and is gone. Nothing survives a restart, nothing can be replayed, and
+nothing can be handed to a second client that connected later — which is exactly
+what an SSE subscriber is.
+
+**The taxonomy is better than the one `TR-EVENTS` proposed building**, and in
+the place that matters most here: `PermissionRequest` and `PermissionReplied`
+are first-class event types. The kode-rs incident this phase exists to prevent —
+a swarm running without permissions and nothing surfacing it — is a *recorded
+event* in this protocol. It just is not recorded anywhere durable.
+
+**And the projection already has a reference implementation.**
+`crates/warp_tui/src/cli_agent_osc_event_publisher.rs` maps world 1 →
+world 2's wire format: Warp's own headless TUI publishes `BlocklistAIHistoryEvent`
+as OSC 777 notifications, so a mapping from the rich internal enum onto the
+serializable one is already written and shipping.
+
+**So T11.1 is a projection, not a taxonomy.** The smallest thing that is still
+the idea: subscribe to events that are already emitted and append them to a
+per-run file, reusing `CLIAgentNotification` as the line format.
+
+**Two gaps in the wire type for use as a log**, both additive and both
+backward-compatible under `skip_serializing_none`:
+
+* **no timestamp** — an append-only log whose entries cannot be placed in time is
+  most of the way to useless.
+* **no per-event or per-call id** — this is `TR-EVENTS-B` exactly. `session_id`
+  exists; a stable id per tool call does not, so a `tool_complete` cannot be tied
+  to the `permission_request` that preceded it.
+
+**Also checked, and recorded so it is not re-checked:**
+
+* **`crates/warp_web_event_bus` is not a candidate surface.** It is
+  `#![cfg(target_family = "wasm")]`, five variants, and emits to a host
+  JavaScript app whose type lives in `warpdotdev/warp-server`. The wasm build is
+  a client of Warp's server, not an observer of a local session.
+* **`WB-SLEEP` was wrongly recorded as absent in `CONSOLIDATION.md` §4.1.**
+  `crates/prevent_sleep` exists with mac/windows/noop backends and **is** wired —
+  but only in `crates/http_client`, guarding HTTP requests and streams. So the
+  mechanism is present and the run-scoped use is not. The earlier "not found"
+  was a malformed grep (`-i` glued to the pattern), which is the same class of
+  error as §1.1: the command ran and reported honestly about the wrong question.
 
 **Filed as decides, not builds:** ACP as the adapter contract
 (`CONSOLIDATION.md` §4.1 — the fork as client, kode-rs as agent), and `WB-SLEEP`
