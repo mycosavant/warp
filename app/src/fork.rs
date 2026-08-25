@@ -627,8 +627,10 @@ pub fn forced_local_harnesses() -> &'static [Harness] {
 ///
 /// * `settings::ai::AISettings::is_any_ai_enabled` — the master switch. With
 ///   this false, no agent, no model picker, no harness selection.
-/// * `workspaces::user_workspaces::UserWorkspaces::is_byo_api_key_enabled`
-/// * `workspaces::user_workspaces::UserWorkspaces::is_custom_inference_enabled`
+/// * `workspaces::user_workspaces::billing_workspace_settings::is_byo_api_key_enabled`
+/// * `workspaces::user_workspaces::billing_workspace_settings::is_byo_endpoint_enabled`
+///   (upstream `8cbb01d45` split `user_workspaces.rs` into a module and renamed
+///   `is_custom_inference_enabled`; both bypasses moved with them.)
 ///
 /// Bypassing them is coherent only because Warp's own settings UI states that
 /// **"API keys added here are stored only on this device, not on Warp's

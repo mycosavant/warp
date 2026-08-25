@@ -340,7 +340,9 @@ impl TuiTranscriptView {
             | BlocklistAIHistoryEvent::NewConversationRequestComplete { .. }
             | BlocklistAIHistoryEvent::OrchestrationConfigUpdated { .. }
             | BlocklistAIHistoryEvent::ConversationUsageMetadataUpdated { .. }
-            | BlocklistAIHistoryEvent::LocalSharedSessionEstablished { .. } => {}
+            | BlocklistAIHistoryEvent::LocalSharedSessionEstablished { .. }
+            // Fork (T8.3): settling changes inbox placement, not transcript content.
+            | BlocklistAIHistoryEvent::ConversationSettledChanged { .. } => {}
         }
     }
 

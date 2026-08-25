@@ -203,7 +203,10 @@ impl TuiOrchestrationModel {
                 | BlocklistAIHistoryEvent::NewConversationRequestComplete { .. }
                 | BlocklistAIHistoryEvent::OrchestrationConfigUpdated { .. }
                 | BlocklistAIHistoryEvent::ConversationUsageMetadataUpdated { .. }
-                | BlocklistAIHistoryEvent::LocalSharedSessionEstablished { .. } => false,
+                | BlocklistAIHistoryEvent::LocalSharedSessionEstablished { .. }
+                // Fork (T8.3): settling moves a row between sections of the GUI
+                // inbox. The TUI has no such sectioning, so no topology changes.
+                | BlocklistAIHistoryEvent::ConversationSettledChanged { .. } => false,
             };
 
             if topology_changed {
