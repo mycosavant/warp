@@ -133,20 +133,35 @@ the tab's horizontal-only drag axis back.
 control plane this fork exists to open is simply absent from the binary.
 
 **Stop a running Warp with `warpctrl window close`** (`CloseMainWindow` on
-Windows). Killing the process leaves a stale discovery record, and a
-crash-recovery sibling re-binds `127.0.0.1:9282` so the next launch fails.
-Ordinary shutdown cleans both up.
+Windows). Killing the process leaves a stale discovery record and a
+crash-recovery sibling holding the ports, so the next launch fails. Ordinary
+shutdown cleans both up.
 
-**…but not one you launched with `WARP_FORK_POLICY=0`, which is a trap,
-because the same file tells you to use that flag to A/B a regression.**
-Observed 2026-08-22: a policy-off instance ran with a visible window and held
-`127.0.0.1:9282`, while the discovery directory stayed **empty** — so
-`warpctrl window close` answered `no_instance` and there was no sanctioned way
-to stop it. The discovery record carries the credential, so no record means no
-client can authenticate, not merely that it cannot be found. **Which gate does
-this is not established** — `WarpControlCli` is a `FORCE_ENABLED` entry that
-policy-off stops applying, but that does not by itself explain a bound port.
-Plan the shutdown before you start a policy-off run.
+**A GUI Warp binds two loopback ports, and only one of them is this fork's.**
+Measured 2026-08-24 with `ss -ltnp` against a running instance:
+
+| port | owner |
+|---|---|
+| `127.0.0.1:9282` | **upstream's** `crates/http_server` — `PORT_BASE` 9277 plus the channel offset, and Oss is +5 |
+| ephemeral (e.g. `:34969`) | `warpctrl`, which binds port **0** and publishes whatever it gets in the discovery record |
+
+**This corrects a claim that stood here for two days: `warpctrl` never used
+9282.** It also settles the open question below. Upstream's server is started by
+`LaunchMode::should_start_local_http_server`, which is `!self.is_headless()` —
+no feature flag, no channel gate, nothing fork policy touches. It serves the
+routers listed at `app/src/lib.rs:2611` and answers **unauthenticated**: its CORS
+layer restricts browsers to `warp.dev` origins and stops nothing else. Do not
+put anything sensitive behind it; `warpctrl`'s server is the one with `auth.rs`,
+the credential broker and the peer-UID check.
+
+**…and `WARP_FORK_POLICY=0` is still a trap, because the same file tells you to
+use that flag to A/B a regression.** Observed 2026-08-22: a policy-off instance
+ran with a visible window and held a port, while the discovery directory stayed
+**empty** — so `warpctrl window close` answered `no_instance` and there was no
+sanctioned way to stop it. The discovery record carries the credential, so no
+record means no client can authenticate, not merely that it cannot be found.
+The port was upstream's 9282, ungated by policy; the empty directory was
+`warpctrl` correctly staying off. Plan the shutdown before a policy-off run.
 
 **…and often you do not need one.** `--warpctrl` runs `init_feature_flags`
 before it dispatches, so `WARP_FORK_POLICY=0 warp-oss --warpctrl instance list`
