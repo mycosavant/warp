@@ -2090,17 +2090,108 @@ envelope's authority check to check:
 | `POST /v1/pair/credential` | the device token + one action | a scoped credential |
 
 Then `GET /v1/state` and `GET /v1/events` as above. The code rides in the URL's
-**fragment** (`…/v1/pair#<code>`), which is the one part of a URL never sent to a
-server — so the half anything would log is inert. Stated honestly: the page that
-would make a browser enforce that does not exist yet, so today it is a convention
-the client follows rather than something guaranteed.
+**fragment**, which is the one part of a URL never sent to a server — so the half
+anything would log is inert. **Since T12.1 that is a browser guarantee rather
+than a convention**, because there is now a page to hold it: the QR points at
+`http://<address>/#<code>`, the console reads the fragment once and erases it
+from the address bar before it draws anything, and the code is POSTed to
+`/v1/pair` by the script. Until T12.1 the QR pointed at `/v1/pair` itself, which
+is `POST`-only — scanning it got you a `405`.
 
-**No CORS allowlist, deliberately.** The must-have list said "a CORS allowlist
-and never `*`"; this ships something stricter and it should not later be
-"fixed" into the weaker thing. Any request carrying `Origin` is refused
-outright — the empty allowlist. An allowlist would be a *widening*, and today it
-would have nothing to widen to, because there is no page. When one exists, the
-allowlist belongs in the same commit, naming the exact origin it serves.
+**The CORS allowlist is one entry, added by T12.1 and no wider.** T11.4 shipped
+something stricter than the "a CORS allowlist and never `*`" it was asked for —
+any request carrying `Origin` refused outright, the empty allowlist — and said
+the allowlist belonged in the same commit as the page, naming the exact origin it
+serves. That commit is T12.1, and the entry is one per address this instance
+bound. Two things keep it from being the widening it looks like: **no
+`Access-Control-Allow-Origin` is sent by any route**, so nothing cross-origin can
+read a response whatever the check decides; and the scheme is compared with the
+authority, so `https://127.0.0.1:<port>` and `Origin: null` both fail. What
+actually changed is that a browser sends `Origin` on a *same-origin* `POST` too —
+so before T12.1 the console's own `fetch` would have been refused by the server
+that served it.
+
+### The console — the page a scan actually lands on
+
+Scan the QR and you get a page. Before T12.1 you got a `405`, because the QR
+pointed at `/v1/pair`, which only answers `POST`.
+
+```console
+$ warpctrl pair show          # on the machine running Warp
+```
+
+Two routes, both served by `warpctrl`'s own listener — loopback and wide alike,
+for the same reason the pairing routes are on both:
+
+| route | what it is |
+|---|---|
+| `GET /` | the console: one HTML document, no build step, no framework |
+| `GET /console.js` | its script, as a separate route so the policy can say `script-src 'self'` |
+
+**Both are unauthenticated, and both are constants.** A browser following a QR
+cannot send a bearer, so the document has to be free to fetch; that is safe
+because it is two `include_str!`s with no interpolation and no secret in them —
+pinned by `the_console_is_a_constant_and_names_no_secret`. Everything with
+authority happens in `fetch` calls the script makes afterwards, each carrying a
+five-minute action-scoped credential it minted from the device token.
+
+What it shows today (T12.1 is read-only):
+
+* **Warp conversations**, from `/v1/state`, refreshed every five seconds.
+* **Live events**, from `/v1/events`, newest first, streamed with `fetch` rather
+  than `EventSource` — `EventSource` cannot set an `Authorization` header, and
+  the workaround it pushes people towards is a token in the query string, which
+  is the one place a secret is guaranteed to be written down by something else.
+
+**The empty list is the honest one, and the page says so.** `/v1/state` is
+`agent.list`, which reports Warp's *own* conversations. A `claude` running in a
+pane has none — T11.5's finding — so the console prints *"none — note this
+counts Warp's own agent threads, not CLI agents running in panes"* rather than an
+empty list that reads as "nothing is running". Measured, with four live CLI-agent
+events on screen at the same time:
+
+```
+Warp conversations  0     none — …not CLI agents running in panes.
+live events         4
+  22:27:30  claude tool_complete       done
+  22:27:29  claude permission_request  Wants to run Bash: …
+  22:27:28  claude prompt_submit
+  22:27:27  claude session_start
+```
+
+`agent.approvals` is the half that sees the rest, and putting it on the page is
+T12.2.
+
+**The security policy, and why each line is there.** Served on both documents:
+
+```
+default-src 'none'; script-src 'self'; style-src 'unsafe-inline';
+connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
+```
+
+plus `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`,
+`Referrer-Policy: no-referrer` and `Cache-Control: no-store`.
+
+* `default-src 'none'` **first**, so anything not named below is denied rather
+  than defaulted — including `img-src`, the usual way an injected stylesheet
+  talks to the outside world.
+* `connect-src 'self'` means a page that somehow ran hostile code still could
+  not post what it read anywhere. What it can read is a live agent transcript,
+  so this matters more here than on an ordinary site.
+* `script-src 'self'` is the reason the script is a second route. The page
+  renders text agents and tools authored — attacker-influenced by construction —
+  and the script never assigns `innerHTML`. `script-src 'self'` is what makes
+  that discipline survive somebody forgetting it once; `the_script_never_assigns_markup`
+  is what makes it survive review.
+* `no-store` because a phone showing a back/forward-cached view of "is anything
+  waiting on me" is worse than a phone showing nothing.
+
+**Where the secret lives.** The pairing code is in the fragment, the console
+reads it once and calls `history.replaceState` before drawing anything, and the
+device token goes in `sessionStorage` — per tab, deliberately. A device token is
+a bearer for a control plane and lives twelve hours; `localStorage` would put it
+on the disk of a phone that may not be only yours, to save re-scanning a QR that
+takes two seconds to display.
 
 ### Answering from the couch — `agent approvals`, `approve`, `deny`
 

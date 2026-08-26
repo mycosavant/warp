@@ -111,6 +111,7 @@ upstream and rebasable.
 | `app/src/ai/local_agent/` | a local implementation of the one agent-transport function, answering from the `claude` CLI. |
 | `app/src/drive/local_sync/` | account-free Warp Drive: snapshot, apply, git-backed sync. |
 | `app/src/ai/mcp/tool_digest.rs` | what each MCP server's tools claimed to be, hashed at connect. The tool rug-pull warning rests on this. |
+| `app/src/local_control/console.{rs,html,js}` | the console (T12.1) — the fork's **only** browser-reachable surface. Two unauthenticated routes serving two constants, under `default-src 'none'; script-src 'self'`. The script never assigns `innerHTML` and a test pins that; keep it that way, because everything it draws was authored by an agent. |
 | `app/src/local_control/`, `crates/local_control/`, `crates/warp_cli/src/local_control/` | the `warpctrl` control plane, 109 actions. The count is pinned by **two** tests in different crates — update both, and never loosen either. |
 | `app/src/remote_server/wsl_transport.rs`, `crates/remote_server/src/wsl.rs` | the second `RemoteTransport`: Warp's remote-development server, in a WSL distro instead of over SSH. |
 
@@ -185,6 +186,23 @@ used for. Save the GUI run for A/B-ing behaviour. (Put any probe **after**
 **Leave the user's `settings.toml` alone.** For any run that needs different
 settings, point `XDG_CONFIG_HOME`/`XDG_STATE_HOME` at a scratch directory —
 noting that this relocates every other XDG-config tool too, `gh` included.
+
+**…and a scratch profile means first-run onboarding, which looks exactly like a
+broken control plane.** The window sits on "Welcome to Warp", so `window list`
+reports `has_workspace: false`, `pane list` is empty, and `tab.create` answers
+`missing_target`. Seed it instead:
+
+```
+$XDG_CONFIG_HOME/warp-oss/user_preferences.json   →   {"prefs": {"HasCompletedOnboarding": "true"}}
+```
+
+Both halves are load-bearing and each has burned a session on its own: the
+directory is **`warp-oss`**, not `warp-terminal` — a file in the wrong one is
+never read — and the key goes **inside `prefs`**, because a flat
+`{"HasCompletedOnboarding":"true"}` is silently discarded. Launch once first if
+the file does not exist, then merge the key into what Warp wrote; it has real
+content. This recipe has cost three sessions a restart while being correctly
+recorded in `.fork/TASKS.md` each time, which is why it is here.
 
 **Diff test-failure membership, not counts.** Measure a same-session baseline on
 a stashed tree and compare *which* tests failed. There is a known pre-existing

@@ -22,7 +22,7 @@ board supersedes it from Phase 5 on, and renumbers nothing.
 > * **"Decisions on record"** and **"Open questions"**, near the bottom — live,
 >   and the first place to look before re-opening something.
 >
-> **T8 is the current phase.** `IDEAS.md` is the queue in front of it.
+> **T12 is the current phase.** `IDEAS.md` is the queue in front of it.
 > `../CLAUDE.md` is the cold-start summary of the method and the invariants.
 
 ---
@@ -5438,6 +5438,223 @@ target never compiles.
       `approve` does not without `WARP_FORK_REMOTE_APPROVE`.
       **`GB-GRANTS` was not built, and the as-built argues it should not be.**
 
+**T11 is closed.** All five items shipped and the phase's own framing —
+*observability first, then the surface* — has had its first half delivered and
+its second half only half-built: there are routes and there is no client.
+That is what T12 is.
+
+---
+
+## T12 — The console: the client T11 was built for  ← ACTIVE
+
+> Scoped 2026-08-26. **The argument for doing this before anything else is the
+> fork's own anti-goal.** T11 shipped an event log, a state snapshot, an SSE
+> stream, a LAN listener, QR pairing and remote approve/deny. Every one of them
+> is reachable only by `curl`. The failure this fork was started over — recorded
+> in `CONSOLIDATION.md` and restated in T11's framing — is *"features
+> implemented but never wired, and docs written as though they were."* T11 is
+> currently in exactly that state, and it is the one state this phase exists to
+> detect. Five tickets deliver none of the ratified goal until something renders
+> them.
+>
+> **The second reason is that rendering is a test.** Whether `/v1/state` carries
+> the right fields is not answerable by reading it; it is answerable by trying to
+> draw a screen from it and finding out what is missing. Expect T12 to send work
+> back into T11's shape, and expect that to be the valuable part.
+
+**Gate check, run 2026-08-26 before scoping.** `include_str!(*.html)`, `Html(`,
+`ServeDir` and `text/html` across `app/src`, `crates/local_control` and
+`crates/http_server` return exactly one hit — a MIME-extension table in
+`app/src/ai/artifact_download.rs`. **Nothing serves a page anywhere in this
+fork.** Unusually for this board, the answer is "not already built". `axum` is
+already a workspace dependency of `app`, so the route itself costs nothing.
+
+**And the web-surface question from `CONSOLIDATION.md` §10 step 3 is hereby
+settled, by reading both.** They are different needs and neither covers the
+other: Warp's remote-development server (`wsl_transport.rs`) puts a *shell* on
+another machine, while `tusk/engine/src/serve.rs` puts a *view of a running
+session* on a phone. The fork now has the second one's entire backend and no
+front end. Tusk's front end is also the precedent for the size: a 162-line
+`serve_index.html` served as an embedded fallback, with an optional built Svelte
+client behind `--web-dir`. **Take the 162-line half and not the Svelte half** —
+a build step in this tree would be a new toolchain for one page.
+
+- [x] **T12.1** One route, one embedded page, read-only. `GET /` on `warpctrl`'s
+      listener returning a single self-contained HTML file: no build step, no
+      npm, no framework, no external fetch. It primes from `/v1/state` and then
+      follows `/v1/events`. **The hard part is not the page, it is that this is
+      the first browser-reachable surface on the authenticated control plane** —
+      so the design questions to answer *before* writing markup are: where the
+      device token lives (fragment, never the query string, which lands in logs
+      and referrers), what the CORS and origin policy is, and what escaping rule
+      applies to agent-authored text, which is attacker-influenced by
+      construction.
+- [ ] **T12.2** Approvals on the page. Render `agent.approvals`, and wire the
+      two answers with the asymmetry T11.5 established: `deny` is pairable and
+      always present, `approve` appears only when the instance advertises it.
+      The page must learn that from the server rather than assuming it — a
+      button that 403s is worse than a button that is absent.
+- [ ] **T12.3** Installable, and the QR points at it. A manifest and an icon so
+      it is a home-screen app rather than a tab, and `control.pair`'s QR encodes
+      the *page* URL rather than a bare token — pairing that ends at a page a
+      person can use is the difference between a demo and a tool.
+
+## T13 — The run gate (ratified Tier 1, items 4 and 5)
+
+> `CONSOLIDATION.md` §4.1 orders these fourth and fifth, and they are the other
+> half of the maintainer's sentence: T12 delivers *"check in on"*, T13 delivers
+> *"keep things moving semi-autonomously"*. They land as validators over
+> `crates/warp_cli/src/local_control/graph.rs`'s TOML — §5's *"migrate toward
+> the file, not the schema"* — because that file is already the fork's best
+> expression of the smallest-thing rule and it added zero app surface.
+>
+> **Constraint carried from §12: write these fresh, do not copy Tusk's.**
+> Migrating a *concept* is free; migrating Tusk source into an AGPL tree before
+> the §10-step-1 extraction is the one-way door that step exists to hold open.
+
+- [ ] **T13.1** `ZB-PLAN` — the sealed-subgraph guard, as `warpctrl graph check`
+      over an existing plan file.
+- [ ] **T13.2** `ZB-CONTRACT` — per-assertion verdicts. A node declares what
+      must hold after it, and the runner records a verdict *per assertion*
+      rather than one pass/fail per node. This is the same detector T11.1 built
+      for events, applied to work instead of to activity.
+- [ ] **T13.3** `ZB-REVIEW` — an independent completion-review gate: the agent
+      that checks is not the agent that did the work.
+
+## T14 — ACP as the adapter contract (a decide, not yet a build)
+
+> Filed as a decide in §4.1 and still one. The reasoning there is strong enough
+> to be worth re-reading before scoping: the fork speaks the *client* side, and
+> every ACP agent — Gemini CLI, Claude Code via Zed's adapter — arrives without
+> a per-agent integration. The crate is Apache-2.0, which an AGPL work may
+> depend on, and it is already on this machine at
+> `~/git/agent-client-protocol-main`. The slots exist twice (`CLIAgent`,
+> `Harness`). **Unverified:** that the crate's client side is complete enough to
+> drive an agent, which is a reading job before it is a building one.
+
+## T15 — Loose ends carried, not forgotten
+
+- [ ] **Re-check `ALLOW_VERIFIED_AGENTS` against a real prompt** (from T11.5).
+      The named unverified input: the permission prompt that proved the path was
+      synthesised, so the claim that Return means yes rests on Claude Code's
+      documentation rather than on this fork having watched one. The cheapest
+      check is answering one real prompt with `warpctrl agent approve`.
+- [ ] **The discovery record that outlives the process.** Across three clean
+      `warpctrl window close` shutdowns during T11.5 the discovery record and
+      broker socket were left in the scratch directory with no process alive —
+      which contradicts `CLAUDE.md`'s claim that ordinary shutdown cleans both.
+      Unbisected. Nothing in T11.5 touches discovery.
+- [ ] **`kode-engine` and Tusk's pure cores extracted as MIT/Apache crates**
+      (§10 step 1). Not work in this repo, but a *dependency* of T13 and of any
+      later migration, and §12 forbids the migration until it is done.
+
+### T12.1 — as built
+
+**The gate check came back "no", which is unusual for this board.** `Html(`,
+`ServeDir`, `include_str!(*.html)` and `text/html` across `app/src`,
+`crates/local_control` and `crates/http_server` return one hit, and it is a MIME
+table in `artifact_download.rs`. Nothing in this fork or upstream's control plane
+serves a page. `axum` was already a workspace dependency of `app`, so the route
+cost nothing.
+
+**And T11.4 had already written the ticket.** The doc comment on
+`validate_endpoint_headers` said, in the commit that shipped the wide listener:
+*"When a page does exist, the allowlist belongs in the same commit as the page,
+with the exact origin it serves from."* So did `pair_url`'s, about the fragment
+being a convention until a page enforced it. Both are discharged here. Finding
+the ticket already written by the previous task is the cheapest form of the
+gate check and it is worth doing deliberately.
+
+**Two findings, both from running it.**
+
+**1. The QR was never scannable.** `control.pair` built its URL from `PAIR_PATH`,
+so a phone following it arrived at `POST /v1/pair` with a `GET` and got `405`.
+Nobody had noticed because nobody had scanned one — every T11.4 verification
+drove the routes with `curl`, which never follows the URL it was handed. Fixed
+by pointing the QR at `CONSOLE_PATH`; the code still ends up POSTed to
+`/v1/pair`, by the page, from the fragment. **This is the second time in two
+tasks that "the backend works" and "a person can use it" came apart**, and both
+times the gap was invisible to the tool used to verify.
+
+**2. The first origin rule was `Origin ∈ expected_hosts`, and probing it live
+showed why it should be `Origin == Host`.** With two listeners bound, the wide
+one accepted `Origin: http://127.0.0.1:<loopback port>` — an address this server
+had bound, so it passed the list. Nothing could exploit it: both origins are
+ours, no `Access-Control-Allow-Origin` is ever sent so neither can read a reply,
+and a JSON `POST` would need a preflight this server does not answer. But the
+rule was then "an origin we serve" when the property wanted is "the origin that
+served this page". Comparing to `Host` — already checked for membership one line
+earlier — is stricter, shorter, and needs no list. The unit test carries the case
+that found it.
+
+**What the origin change actually is, stated so it is not later "fixed" into
+something weaker or something wider.** No route sends any CORS response header.
+A cross-origin page therefore cannot read a response no matter what this check
+decides. The only thing that changed is that a **same-origin** request stopped
+being collateral damage — browsers send `Origin` on same-origin `POST` too, so
+before this commit the console's own `fetch` to `/v1/control` would have been
+refused by the server that served it.
+
+**Deliberately not built.** A feature gate. The page is a constant with no
+secret, reachable only by whoever can already reach the listener, and it does
+nothing at all without a credential. A `WARP_FORK_CONSOLE` variable would be
+ceremony around a static string, and one more thing to be off when someone needs
+it. What is disclosed by serving it is that this machine runs the fork — and a
+port that answered `403` to everything disclosed that too.
+
+**Verified by running, 2026-08-26.** Release build, WSLg, scratch
+`XDG_CONFIG_HOME`, `WARP_FORK_CONTROL_BIND=172.22.45.116`,
+`WARP_FORK_EVENT_LOG=/tmp/t121/events`.
+
+| | result |
+|---|---|
+| `GET /` and `GET /console.js`, both listeners | `200`, correct content types, full policy on both |
+| every security header | CSP, `X-Frame-Options: DENY`, `nosniff`, `no-referrer`, `no-store` |
+| `warpctrl pair show` | URL is now `http://172.22.45.116:45319/#<code>` |
+| unpaired boot | *"run `warpctrl pair show` … then scan the QR"* — and the wording was **wrong first**, saying `warpctrl control pair`, which is not a command |
+| paired boot | code redeemed, device token stored, credentials minted for `agent.list` and `events.subscribe`, badge `live` |
+| `/v1/state` | rendered `0` with the CLI-agent note |
+| `/v1/events` | four live OSC 777 events rendered newest-first with timestamps |
+| origin: none / same / other listener / `evil.example` / `https:` / `null` / other port / suffix | `401` (reached auth) / `401` / **`403`** / `403` / `403` / `403` / `403` / `403` |
+| shutdown | `warpctrl window close`, no surviving process |
+
+**How the script was run, and what that does not prove.** There is no browser on
+this machine, so `console.js` was executed by `node` against the live server with
+a ~90-line DOM shim (`/tmp/t121/harness.js`, not committed) providing the dozen
+DOM calls the file actually makes. That exercises the real file — pairing,
+credential minting, state rendering, SSE frame parsing, reconnect — against a
+real Warp.
+
+**It does not prove the escaping.** One event carried
+`<img src=x onerror=alert(1)>` as its summary and the harness reported it
+verbatim, which looks like a demonstration and is not one: the shim has no HTML
+parser, so it could not have rendered that string any other way. The escaping
+rests on `textContent` semantics, on `the_script_never_assigns_markup`, and on
+`script-src 'self'` — not on that run. **Named as the unverified input: no phone
+browser, and no browser at all, has loaded this page.** The cheapest check is to
+open it on a phone once.
+
+Also unproven for the same reason: that a `<meta viewport>` layout reads well on
+a small screen, and that `sessionStorage` per-tab is tolerable rather than
+annoying in daily use. Both want a person, not a capture.
+
+**A method note, and it is about this session rather than about the code.** The
+scratch-profile launch cost a restart because `HasCompletedOnboarding` was
+written to `$XDG_CONFIG_HOME/warp-terminal/user_preferences.json`, which nothing
+reads — the directory is `warp-oss`. The symptom was the documented one:
+`has_workspace: false`, empty `pane list`, `tab.create requires a workspace`.
+
+**The correction that nearly got written here was that T11.5 recorded the wrong
+path. It did not.** T11.5's as-built names `$XDG_CONFIG_HOME/warp-oss/…`
+correctly, and T11.1c's notes add the other half — the file is `{"prefs": {…}}`,
+so a flat key is silently discarded. Both were right; the path used this session
+came from memory instead of from the file. Writing that up as a doc bug would
+have turned two true lines into false ones, which `CONSOLIDATION.md` §11 names
+as worse than leaving an error alone, because the next reader has no reason to
+doubt a fresh line. **Recorded as what it is: the recipe has now cost three
+sessions a restart while being correctly written down each time**, which is an
+argument for it living somewhere a cold start reads — it is now in `CLAUDE.md`.
+
 ### T11.1 — the gate check (2026-08-24)
 
 Read, not run, except where noted. **Warp already has a structured, versioned
@@ -6387,11 +6604,19 @@ an app that ignored `HTTP_PROXY` could not evade it, and `state all` includes
     7918 poll samples, ~25 minutes of uptime
 
     every socket warp-oss held, for the entire run:
-      LISTEN 127.0.0.1:9282    local control
-      LISTEN 127.0.0.1:33711   local control
+      LISTEN 127.0.0.1:9282    upstream's http_server
+      LISTEN 127.0.0.1:33711   warpctrl
 
 **Two loopback listeners. Zero outbound TCP. Zero UDP** — so not even a DNS
 lookup: warp-oss never resolved a hostname, let alone contacted one.
+
+*Both were labelled "local control" here until 2026-08-26, and only one is.*
+9282 is upstream's `crates/http_server` (`PORT_BASE` 9277 + the Oss channel
+offset), started ungated by fork policy and answering unauthenticated; the
+ephemeral port is `warpctrl`, which binds 0 and publishes what it gets. The
+egress finding is unaffected — the count and the direction are what it rests
+on — but the attribution mattered enough to correct, because T12 puts a page
+on one of these two and picking the wrong one would undo T10.2.
 
 *The control that makes that negative mean something.* A poller that detects
 nothing is worthless unless it can detect something, so the same poll was run

@@ -14,8 +14,8 @@
 use ::local_control::{ControlError, ErrorCode};
 
 use crate::drive::sharing::qr_code::{QUIET_ZONE_MODULES, qr_matrix_for_url};
-use crate::local_control::PAIR_PATH;
 use crate::local_control::bridge::PairingContext;
+use crate::local_control::console::CONSOLE_PATH;
 use crate::local_control::pairing::{pair_url, pairable_actions};
 
 /// Answers `control.pair`.
@@ -36,7 +36,11 @@ pub fn control_pair(pairing: Option<&PairingContext>) -> Result<serde_json::Valu
         })?;
         pairings.issue_code(chrono::Utc::now())
     };
-    let url = pair_url(&pairing.origin, PAIR_PATH, &issued.code);
+    // **The QR points at the console, not at `/v1/pair` (T12.1).** It pointed at
+    // the route until a page existed, and that URL was never scannable: `/v1/pair`
+    // is `POST`-only, so a phone following it got `405` and a person got a dead
+    // QR. The code still ends up POSTed there — by the page, from the fragment.
+    let url = pair_url(&pairing.origin, CONSOLE_PATH, &issued.code);
     let result = ::local_control::PairingResult {
         qr: render_qr(&url)?,
         url,

@@ -58,6 +58,7 @@
 //! Discovery records never include raw bearer tokens: discovery only exposes
 //! endpoint metadata and credential broker references while Scripting is enabled.
 mod bridge;
+pub(crate) mod console;
 mod handlers;
 pub(crate) mod pairing;
 mod permissions;
@@ -369,6 +370,15 @@ impl LocalControlServer {
             // either way.
             .route(PAIR_PATH, post(handle_pair_request))
             .route(PAIR_CREDENTIAL_PATH, post(handle_pair_credential_request))
+            // The console (T12.1). Unauthenticated, because a browser following
+            // a QR cannot send a bearer — and safe to be, because both bodies
+            // are constants with no secret and no interpolation. See
+            // `console.rs`.
+            .route(console::CONSOLE_PATH, get(console::handle_console_request))
+            .route(
+                console::CONSOLE_SCRIPT_PATH,
+                get(console::handle_console_script_request),
+            )
             .with_state(state.clone());
         runtime.spawn({
             let router = router.clone();
@@ -1371,23 +1381,38 @@ fn local_control_publication_supported() -> bool {
 /// **T11.4 was told to ship "a CORS allowlist and never `*`", and did not — it
 /// kept something stricter, which is worth writing down so it is not later
 /// "fixed" into the weaker thing.** The requirement assumes a server that
-/// answers browsers and must decide *which*. This one answers no browser at
-/// all: any request carrying `Origin` is refused outright, which is the empty
-/// allowlist. An allowlist would be a widening, and today it would have nothing
-/// to widen *to*, because there is no page — the pairing client is a fetch from
-/// something holding a device token, not a document with an origin. When a page
-/// does exist, the allowlist belongs in the same commit as the page, with the
-/// exact origin it serves from.
+/// answers browsers and must decide *which*. That one answered no browser at
+/// all: any request carrying `Origin` was refused outright, which is the empty
+/// allowlist. It also said the allowlist belonged in the same commit as the
+/// page, with the exact origin it serves from.
+///
+/// **T12.1 is that commit, and the allowlist has exactly one entry: this
+/// request's own `Host`.** Three things about it are worth being precise on,
+/// because they are what keep it from being the widening it looks like:
+///
+/// * **It grants nothing.** No `Access-Control-Allow-Origin` is ever sent, so no
+///   cross-origin page can read a response — the browser refuses it whatever
+///   this function decides. What changed is only that a *same-origin* request
+///   from the console is no longer collateral damage; `Origin` is sent on a
+///   same-origin `POST`, so before T12.1 the page's own `fetch` would have been
+///   rejected by its own server.
+/// * **The scheme is checked with the authority.** Bare-authority comparison
+///   would accept `https://<host>` from a page this plaintext server could not
+///   have served, and `Origin: null` — a sandboxed frame or a `file://`
+///   document — fails the prefix rather than matching an empty host.
+/// * **It is `Origin == Host`, not `Origin ∈ expected_hosts`.** The first draft
+///   was the second, and probing it live showed what that costs: an instance
+///   with two listeners accepted its *loopback* origin on requests to its *wide*
+///   one, because both are addresses this server bound. Nothing could exploit it
+///   — both origins are ours and neither can read a response — but the rule was
+///   then "an origin we serve" when the property wanted is "the origin that
+///   served this page". Comparing against `Host` is both stricter and shorter,
+///   and it needs no list: `Host` has already been checked for membership by the
+///   time `Origin` is compared to it.
 pub(crate) fn validate_endpoint_headers(
     headers: &HeaderMap,
     expected_hosts: &[String],
 ) -> Result<(), ControlError> {
-    if headers.contains_key(ORIGIN) {
-        return Err(ControlError::new(
-            ErrorCode::UnauthorizedLocalClient,
-            "browser-origin local-control requests are not allowed",
-        ));
-    }
     let host = headers
         .get(HOST)
         .and_then(|value| value.to_str().ok())
@@ -1406,6 +1431,22 @@ pub(crate) fn validate_endpoint_headers(
             ErrorCode::UnauthorizedLocalClient,
             "Host header does not match the selected local-control endpoint",
         ));
+    }
+    // Checked after `Host` and against it, so this is literally "same origin"
+    // (T12.1). A request with no `Origin` at all is not a browser and is left
+    // alone — that is every existing `warpctrl` client.
+    if let Some(origin) = headers.get(ORIGIN) {
+        let same_origin = origin
+            .to_str()
+            .ok()
+            .and_then(|origin| origin.strip_prefix("http://"))
+            .is_some_and(|authority| authority == host);
+        if !same_origin {
+            return Err(ControlError::new(
+                ErrorCode::UnauthorizedLocalClient,
+                "browser-origin local-control requests are allowed only from this instance's own console",
+            ));
+        }
     }
     Ok(())
 }

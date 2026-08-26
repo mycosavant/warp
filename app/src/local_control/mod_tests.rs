@@ -243,6 +243,93 @@ fn the_host_check_accepts_the_addresses_bound_and_no_others() {
     }
 }
 
+/// The widening T12.1 makes, and its exact limit.
+///
+/// Before the console existed the rule was "any `Origin` at all is refused",
+/// which had a consequence nobody had to think about until there was a page:
+/// a browser sends `Origin` on a **same-origin** `POST` too, so the console's
+/// own `fetch` to `/v1/control` would have been rejected by the server that
+/// served it.
+///
+/// What is *not* granted is the part worth pinning. No
+/// `Access-Control-Allow-Origin` is sent by any route, so nothing cross-origin
+/// can read a response regardless of what this check decides; the allowlist
+/// only stops a same-origin request from being collateral damage.
+#[test]
+fn the_origin_check_accepts_this_instances_own_console_and_no_others() {
+    let expected_hosts = vec!["127.0.0.1:1234".to_owned(), "192.168.1.5:5678".to_owned()];
+    let request = |host: &'static str, origin: &'static str| {
+        let mut headers = HeaderMap::new();
+        headers.insert(HOST, HeaderValue::from_static(host));
+        headers.insert(ORIGIN, HeaderValue::from_static(origin));
+        headers
+    };
+
+    for (host, origin) in [
+        ("127.0.0.1:1234", "http://127.0.0.1:1234"),
+        ("192.168.1.5:5678", "http://192.168.1.5:5678"),
+    ] {
+        assert!(
+            validate_endpoint_headers(&request(host, origin), &expected_hosts).is_ok(),
+            "{origin} is a page this server served"
+        );
+    }
+
+    // Found by probing the running server, not by reading the code. The first
+    // draft matched `Origin` against the whole `expected_hosts` list, so an
+    // instance with two listeners accepted its loopback origin on a request to
+    // its wide one. Harmless — both origins are this server's, and neither could
+    // read a reply — but the property wanted is "the origin that served this
+    // page", and `Origin == Host` says that without a list.
+    assert!(
+        validate_endpoint_headers(
+            &request("192.168.1.5:5678", "http://127.0.0.1:1234"),
+            &expected_hosts,
+        )
+        .is_err(),
+        "our own other listener is still not this request's origin"
+    );
+
+    for origin in [
+        // The ordinary cross-site attacker.
+        "http://evil.example",
+        // A scheme this plaintext server cannot have served from, so a page
+        // claiming it was served by us was not. Bare-authority comparison —
+        // the obvious shortcut — would have accepted this.
+        "https://127.0.0.1:1234",
+        // A sandboxed iframe or a `file://` document. Not an empty host: it
+        // fails the scheme prefix outright.
+        "null",
+        // Right address, wrong port: another program on this machine.
+        "http://127.0.0.1:9282",
+        // Prefix and suffix games against a value that is accepted.
+        "http://127.0.0.1:1234.evil.example",
+        "http://evil.example/http://127.0.0.1:1234",
+        // Right port, wrong address — the relaxation that would be the easy
+        // way to support two listeners, and the same trap the `Host` check has.
+        "http://10.0.0.7:5678",
+    ] {
+        let mut headers = HeaderMap::new();
+        headers.insert(HOST, HeaderValue::from_static("127.0.0.1:1234"));
+        headers.insert(ORIGIN, HeaderValue::from_str(origin).expect("ascii"));
+        let err = validate_endpoint_headers(&headers, &expected_hosts)
+            .expect_err("only this instance's own origins are accepted");
+        assert_eq!(err.code, ErrorCode::UnauthorizedLocalClient, "{origin}");
+    }
+}
+
+/// The non-browser path is unchanged, and this is the regression that would
+/// matter most: `warpctrl` sends no `Origin` at all, and a rewrite of the check
+/// that started *requiring* one would break every existing client at once while
+/// the new console kept working.
+#[test]
+fn a_client_that_is_not_a_browser_still_needs_no_origin() {
+    let expected_hosts = vec!["127.0.0.1:1234".to_owned()];
+    let mut headers = HeaderMap::new();
+    headers.insert(HOST, HeaderValue::from_static("127.0.0.1:1234"));
+    validate_endpoint_headers(&headers, &expected_hosts).expect("no Origin is the CLI's shape");
+}
+
 #[test]
 fn scripting_mode_controls_local_control() {
     assert!(!settings_with_mode(LocalControlMode::Disabled).is_enabled());
