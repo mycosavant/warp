@@ -166,12 +166,12 @@ fn capabilities_advertises_the_complete_catalog() {
     // `events.subscribe`, the read surface's own authority (T11.2).
     //
     // **This is the second count pin, and it is easy to miss.** Its twin is
-    // `catalog_has_exactly_111_retained_actions` in
+    // `catalog_has_exactly_114_retained_actions` in
     // `crates/local_control/src/protocol_tests.rs`, which asserts the same
     // number about `ActionKind::ALL`. T8.6 updated that one and left this one
     // red, because `cargo test -p local_control` is quick and this lives in the
     // app crate. Change both together, and run `-p warp --lib local_control`.
-    assert_eq!(capabilities().len(), 111);
+    assert_eq!(capabilities().len(), 114);
 }
 
 #[test]

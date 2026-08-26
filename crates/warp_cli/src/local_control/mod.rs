@@ -851,6 +851,32 @@ pub enum AgentCommand {
     /// the pane that spawned it, which is the only target that adds a surface
     /// rather than taking one over.
     Reveal(AgentRevealArgs),
+
+    /// List CLI agents that are waiting on you right now.
+    ///
+    /// A different population from `agent list`, which reports Warp's own
+    /// conversations. This reports the `claude`, `codex` or `gemini` processes
+    /// running in panes — what each one wants to do, in which directory, and
+    /// the `digest` you hand back to answer it.
+    ///
+    /// Empty output means nothing is blocked, not that nothing is running.
+    Approvals(TargetArgs),
+
+    /// Say yes: press Return on the agent's prompt.
+    ///
+    /// Return takes the *highlighted* option, so this only works for agents
+    /// whose prompt this fork has actually watched — Claude Code today. It is
+    /// refused by name for the rest rather than guessed at.
+    ///
+    /// Whether the agent acted on the keystroke is answered by running
+    /// `agent approvals` again, not by this command's output.
+    Approve(AgentApproveArgs),
+
+    /// Say no: press Escape on the agent's prompt.
+    ///
+    /// The safe direction, and the only one of the two a paired device gets
+    /// without `WARP_FORK_REMOTE_APPROVE`.
+    Deny(AgentApproveArgs),
 }
 
 #[derive(Debug, Clone, Args)]
@@ -996,6 +1022,28 @@ pub struct AgentSpawnArgs {
 pub struct AgentCancelArgs {
     /// The conversation to stop, from `warpctrl agent list`.
     pub conversation: String,
+
+    #[command(flatten)]
+    pub target: TargetArgs,
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct AgentApproveArgs {
+    /// The `approval_id` from `warpctrl agent approvals`.
+    ///
+    /// It is a pane id, and it is not spelled `--pane` because that flag
+    /// already means "which pane to address this request to" for every other
+    /// command. This is the subject, not the route.
+    pub approval: String,
+
+    /// The `digest` that `agent approvals` reported for this request.
+    ///
+    /// Required, and there is no flag to skip it. Without it the command means
+    /// "press a key on whatever that pane is asking now", and between reading a
+    /// request and answering it the agent may have been answered at the
+    /// keyboard and moved on to something else.
+    #[arg(long)]
+    pub digest: String,
 
     #[command(flatten)]
     pub target: TargetArgs,

@@ -30,28 +30,77 @@
 //! `slash.run` and `remote.wsl.connect`. A pairing path that could mint a
 //! credential for any of them would be remote code execution reachable by
 //! scanning a QR code — precisely the failure this phase was ordered to avoid.
-//! A device token therefore mints from [`PAIRABLE_ACTIONS`] and nothing else.
+//! A device token therefore mints from [`pairable_actions`] and nothing else.
 //! The local broker keeps the whole catalog, because it has a kernel UID check
-//! to justify it; a QR scan is not that, and the write half is T11.5's to argue
-//! for deliberately.
+//! to justify it; a QR scan is not that.
+//!
+//! **T11.5 made the argument this file asked for, and it came out asymmetric.**
+//! The write half was expected to be one decision. It turned out to be two, with
+//! different answers: `agent.deny` presses Escape on an agent that is *already*
+//! waiting, so the worst a stolen device token achieves is that something the
+//! agent proposed does not happen — that is on the list. `agent.approve` presses
+//! Return, which through a CLI agent's own permission prompt is arbitrary code,
+//! and no mechanism here makes it safe; it is a choice, so it is one the
+//! machine's owner makes with `WARP_FORK_REMOTE_APPROVE` and defaults to no.
+//! Splitting one verb into two actions is what made that expressible at all,
+//! since what a device holds is a list of *actions*.
 use ::local_control::auth::AuthToken;
 use ::local_control::{ActionKind, ControlError, ErrorCode};
 use chrono::{DateTime, Duration, Utc};
 
-/// What a paired device may obtain a credential for.
+/// What a paired device may obtain a credential for, always.
 ///
 /// The read surface T11.2 built, plus the liveness probe a client needs to tell
-/// "the instance went away" from "my network went away". Every one of these is a
-/// question; none of them is an instruction.
+/// "the instance went away" from "my network went away", plus (T11.5) the two
+/// halves of noticing an agent is stuck and stopping it.
 ///
 /// **This list is the security boundary of the whole feature.** Adding to it is
 /// a deliberate act with an argument attached, not a convenience — see the
-/// module docs for what is in the catalog next to it.
+/// module docs for what is in the catalog next to it. The two T11.5 additions
+/// come with theirs:
+///
+/// * `agent.approvals` is a read, and it reports strictly *less* than
+///   `events.subscribe` already does — the stream carries tool names, input
+///   previews and working directories for every agent in the instance, which is
+///   the same material, live. Withholding the snapshot while granting the stream
+///   would only mean a phone that connected late could not see what it had
+///   already been entitled to watch arrive.
+/// * `agent.deny` is the first *write* on this list, and it earns the place by
+///   being monotone: it presses Escape on an agent that Warp's own state says is
+///   already waiting, so the most it can cause is that something proposed does
+///   not happen. There is no argument in which a stolen device token doing this
+///   is worse than the agent proceeding.
 pub(super) const PAIRABLE_ACTIONS: &[ActionKind] = &[
     ActionKind::AppPing,
     ActionKind::AgentList,
     ActionKind::EventsSubscribe,
+    ActionKind::AgentApprovals,
+    ActionKind::AgentDeny,
 ];
+
+/// What a paired device may obtain a credential for only when the machine's
+/// owner has said so — see [`crate::fork::remote_approve_enabled`].
+///
+/// `agent.approve` presses Enter on whatever the agent proposed, and through a
+/// CLI agent's permission prompt that is arbitrary code. The digest check binds
+/// a yes to the exact request it was shown; it does not make that request safe.
+/// T11.4's as-built asked that any widening of this list carry an argument, and
+/// the honest one is that this widening cannot be made safe by mechanism — only
+/// chosen — so it is chosen per machine and defaults to no.
+const REMOTE_APPROVE_ACTION: ActionKind = ActionKind::AgentApprove;
+
+/// The pairable set as it stands right now.
+///
+/// A function rather than a second constant because the answer depends on the
+/// environment, and a client asking "what may I do?" should be told what is true
+/// for this instance rather than what is true in general.
+pub(super) fn pairable_actions() -> Vec<ActionKind> {
+    let mut actions = PAIRABLE_ACTIONS.to_vec();
+    if crate::fork::remote_approve_enabled() {
+        actions.push(REMOTE_APPROVE_ACTION);
+    }
+    actions
+}
 
 /// How long a displayed pairing code stays spendable.
 ///
@@ -198,21 +247,31 @@ impl Pairings {
 /// entries and grows; the failure mode of forgetting is a new action silently
 /// becoming remotely reachable.
 pub(super) fn ensure_pairable(action: ActionKind) -> Result<(), ControlError> {
-    if PAIRABLE_ACTIONS.contains(&action) {
+    let allowed = pairable_actions();
+    if allowed.contains(&action) {
         return Ok(());
+    }
+    let mut message = format!(
+        "{} is not available to a paired device; a paired device may only use: {}",
+        action.as_str(),
+        allowed
+            .iter()
+            .map(|action| action.as_str())
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
+    // Named rather than left as a flat refusal, because this is the one entry
+    // on the list whose absence is a *choice someone made on this machine*, and
+    // a client author debugging it would otherwise go looking for a bug.
+    if action == REMOTE_APPROVE_ACTION {
+        message.push_str(
+            ". Saying yes from another device is off unless WARP_FORK_REMOTE_APPROVE is set; \
+             agent.deny needs no such switch",
+        );
     }
     Err(ControlError::new(
         ErrorCode::InsufficientPermissions,
-        format!(
-            "{} is not available to a paired device; \
-             a paired device may only use: {}",
-            action.as_str(),
-            PAIRABLE_ACTIONS
-                .iter()
-                .map(|action| action.as_str())
-                .collect::<Vec<_>>()
-                .join(", ")
-        ),
+        message,
     ))
 }
 

@@ -729,6 +729,18 @@ fn retained_action_examples() -> Vec<(ActionKind, Vec<&'static str>)> {
         ),
         (ActionKind::ControlPair, vec!["warpctrl", "pair", "show"]),
         (
+            ActionKind::AgentApprovals,
+            vec!["warpctrl", "agent", "approvals"],
+        ),
+        (
+            ActionKind::AgentApprove,
+            vec!["warpctrl", "agent", "approve", "7", "--digest", "abc"],
+        ),
+        (
+            ActionKind::AgentDeny,
+            vec!["warpctrl", "agent", "deny", "7", "--digest", "abc"],
+        ),
+        (
             ActionKind::SlashRun,
             vec!["warpctrl", "slash", "run", "compact"],
         ),
@@ -915,6 +927,9 @@ fn parsed_action_kind(command: &ControlCommand) -> Option<ActionKind> {
             AgentCommand::Cancel(_) => Some(ActionKind::AgentCancel),
             AgentCommand::Settle(_) => Some(ActionKind::AgentSettle),
             AgentCommand::Reveal(_) => Some(ActionKind::AgentReveal),
+            AgentCommand::Approvals(_) => Some(ActionKind::AgentApprovals),
+            AgentCommand::Approve(_) => Some(ActionKind::AgentApprove),
+            AgentCommand::Deny(_) => Some(ActionKind::AgentDeny),
         },
         ControlCommand::Slash(command) => match command {
             SlashCommand::List(_) => Some(ActionKind::SlashList),

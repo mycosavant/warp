@@ -5426,10 +5426,17 @@ target never compiles.
       the important one: the catalog contains `input.submit` and `agent.prompt`,
       so a pairing path that mints any credential *is* the RCE the ticket was
       trying to prevent. A paired device gets three read actions.
-- [ ] **T11.5** `GB-APPROVE` + `GB-GRANTS` — answer a waiting-input approval
-      remotely, with remembered grants. The first *write* capability, chosen
-      because its blast radius is bounded and because it is what turns "watch"
-      into "unblock from the couch".
+- [x] **T11.5** `GB-APPROVE` — answer a waiting-input approval remotely. The
+      first *write* capability. Two findings reshaped it. **The approval that
+      matters was invisible**: `agent.list` reports Warp's own conversations, and
+      on this fork the agent a person actually blocks on is a `claude` in a pane,
+      which has none — so `agent.approvals` had to reach a different map
+      entirely. **And approval here is a keystroke, not a verdict**: Warp has no
+      channel to tell a CLI agent "yes", so `agent.approve` presses Return and
+      `agent.deny` presses Escape, which is why they are two actions — a paired
+      device holds a list of actions, and `deny` travels to a phone while
+      `approve` does not without `WARP_FORK_REMOTE_APPROVE`.
+      **`GB-GRANTS` was not built, and the as-built argues it should not be.**
 
 ### T11.1 — the gate check (2026-08-24)
 
@@ -5795,6 +5802,205 @@ and dropping the parent threading fails exactly
 frame of its own — no `session_start`/`stop` per child — because Claude does not
 emit one and Warp does not know a child exists. `parent_call_id` gives
 containment, not lifetime.
+
+### T11.5 — as built
+
+Three catalog actions (111 → **114**), one new terminal-view seam, one env var,
+and two things the ticket got wrong that only running found.
+
+#### The gate check: the seam exists, and it is unreachable
+
+`BlocklistAIActionModel` has exactly the API `GB-APPROVE` describes:
+`execute_action(action_id, conversation_id, ctx)` accepts and
+`cancel_action_with_id(…, ManuallyCancelled, ctx)` rejects, and
+`crates/warp_tui/src/tui_permission_prompt.rs` already drives both from a
+yes/no selector. `ConversationStatus::Blocked { blocked_action }` already
+exists, `agent.list` already reports it, and T11.1b already projects
+`ActionBlockedOnUserConfirmation` into the event log.
+
+**And none of it can happen on this fork.** The agent panel is served by
+`ai::local_agent`, whose own module docs say it: *"Claude runs its own tools.
+Tool activity is reported to Warp as text, never as a `ToolCall` message — a
+ToolCall is an instruction, and Warp's action model would execute a tool Claude
+had already run."* No `ToolCall` → no queued action → no confirmation → the
+whole path is dead code on the fork's primary agent. Upstream's other producer
+of `ToolCall`s is the account-backed server this fork removes.
+
+So the branch was **not** built. Wiring it would have produced the exact
+artefact the maintainer lost a month to: a feature that exists, is tested, is
+documented, and is never reached. This is recorded rather than silently skipped
+because the next person will find `execute_action` and assume it was an
+oversight.
+
+#### The finding: `warpctrl` could not see the thing that blocks
+
+A `claude` running in a Warp pane is not an `AIConversation`. It is tracked in
+`CLIAgentSessionsModel` — a different map, keyed by terminal view, holding
+`status`, `tool_name`, `tool_input_preview`, `summary`, `cwd`. Nothing in
+`warpctrl` read it. Measured on a live instance with a blocked agent in a
+visible pane:
+
+```
+$ warpctrl agent list       → "conversations": []
+$ warpctrl agent approvals  → the blocked claude, with the command it wants to run
+```
+
+That is the T11 failure mode by construction — an agent blocked on a permission
+nobody surfaced — and it survived T11.2 *and* T11.4 because both of them
+answered `agent.list`. The live event stream did carry the
+`permission_request`, so a phone already watching saw it arrive; a phone that
+connected afterwards primed itself from `/v1/state` and saw nothing waiting.
+
+#### The second finding: approval is a keystroke
+
+There is no way to tell a CLI agent "approved". It drew a prompt on its own
+terminal and reads its own stdin. So the write half is
+`TerminalView::press_key_for_local_control`, writing `\r` for approve and
+`\x1b` for deny through `write_user_bytes_to_pty` — chosen over `write_to_pty`
+for the check it carries: a block under Warp's own agent control returns
+`false`, which is reported as a failure instead of a success nobody can verify.
+The result reports `"keystroke": "enter"` / `"escape"` and never claims the
+agent acted; confirming that is a second `agent.approvals`.
+
+Consequences, both of which are the shape of the feature rather than caveats:
+
+- **`agent.approve` is refused for agents whose prompt was not watched.** Return
+  takes the *highlighted* option, which is a fact about someone else's TUI.
+  `ALLOW_VERIFIED_AGENTS` is one entry and the refusal names the agent.
+  `agent.deny` is allowed for all of them: Escape's worst case is that nothing
+  happens, and the caller can see that nothing happened.
+- **Two actions, not one with a `decision` field.** A paired device is granted a
+  *list of actions*, so a field would have put yes and no behind one grant. The
+  split is what makes the pairing line expressible at all.
+
+#### The bug the digest did not catch until it was run
+
+Every approval carries a SHA-256 over what was displayed, length-prefixed
+per field, and both answering actions require it back — so an answer that
+arrives after the agent moved on is refused rather than misapplied.
+
+The first live run found the digest hashing a field that goes stale underneath
+it. `question_asked` sets `Blocked` **without** calling
+`clear_permission_scoped_state`, which only runs on `tool_complete`,
+`permission_replied`, `prompt_submit` and `stop`. Observed:
+
+```
+after permission_request  → permission | Wants to run Bash: rm -rf build/ | rm -rf build/ | 97b73f56…
+after question_asked      → permission | Wants to run Bash: rm -rf build/ | rm -rf build/ | 97b73f56…
+```
+
+The agent was asking "which database should I use?" and a remote yes taken from
+the first screen would have been **accepted**, because the digest had not moved.
+Fixed by reading the summary from `Blocked { message }` — set by whatever caused
+the *current* wait — and reporting the retained tool fields only when they agree
+with it. After:
+
+```
+after question_asked      → question | Which database should I use? | (no tool) | b1d4b8d3…
+```
+
+Pinned by `a_question_after_a_permission_does_not_inherit_the_command`, and its
+mirror `a_permission_with_no_summary_still_reports_its_command`, because the
+check compares `Option`s rather than testing for presence: a permission request
+may genuinely carry no summary, and `None == None` has to stay a match.
+
+#### The pairing argument T11.4 asked for, and it came out asymmetric
+
+T11.4's as-built required any widening of `PAIRABLE_ACTIONS` to arrive with an
+argument. The write half was expected to be one decision; it is two.
+
+| | pairable | argument |
+|---|---|---|
+| `agent.approvals` | yes | a read reporting strictly less than `events.subscribe` already streams live — withholding the snapshot while granting the stream only punishes a client that connected late |
+| `agent.deny` | yes | monotone: Escape on an agent already waiting, so the most a stolen device token achieves is that something proposed does not happen |
+| `agent.approve` | `WARP_FORK_REMOTE_APPROVE` only | a yes to whatever the agent thought of, which through a permission prompt is arbitrary code. The digest binds it to the request it was shown; it does not make that request safe |
+
+The honest position on the third is that it **cannot be made safe by
+mechanism — only chosen**, so it is chosen per machine and defaults to no. Its
+parser is deliberately the opposite shape to `control_bind_from`: there an
+unparseable value must be refused loudly because it would otherwise silently
+mean something, here anything that is not an affirmative word is simply not
+consent, and the safe side and the default side coincide.
+
+#### `GB-GRANTS`: not built, and the argument against it
+
+"Remembered grants" means Warp pressing Return on the user's behalf when a
+matching request arrives. Four reasons that is the wrong thing here, three of
+them checkable without running anything:
+
+1. **The mechanism cannot be made to key on the request.**
+   `tool_input_preview` takes `command` **or** `file_path` out of the tool
+   input and drops everything else (`event/v1.rs`). For `Bash` that is the whole
+   command; for `Write` it is the path and *not the contents*. A grant keyed on
+   "the same request" would re-approve writing entirely different bytes to the
+   same file. Sound for one tool and unsound for the rest is a footgun with a
+   reassuring name.
+2. **It would race the repaint.** A person pressing Return has seen the prompt.
+   An auto-press fires on the OSC notification, and nothing tells Warp whether
+   the agent's TUI has drawn its selector yet. A stray `\r` into a prompt that
+   is not there goes into the agent's *message* input.
+3. **It rebuilds the failure this phase exists to detect.** The stated burn was
+   a swarm of agents running without permissions and nothing surfacing it. An
+   auto-approver is that by construction; logging every auto-grant is the
+   mitigation, and the *value* of a grant is that you stop reading the log.
+4. **The gate rule points the other way.** Claude Code already has
+   `--permission-mode`, `permissions.allow` rules in its settings, and a "don't
+   ask again" option in the prompt itself — all keyed on the real tool input and
+   applied by the process that knows what it is about to do. A coarser
+   re-implementation one layer up is strictly worse than the thing that exists.
+
+The tempting middle path — send `2` for the prompt's own "yes, and don't ask
+again" — fails the same test that refuses `approve` for Gemini: option 2 is
+"don't ask again" for `Bash`, "allow all edits this session" for `Write`, and on
+a two-option prompt it is *No*. Pressing a digit whose meaning varies by tool is
+precisely what this task declined to do everywhere else.
+
+**If a future task wants grants, the place to put them is Claude's own settings,
+not Warp's memory** — and the useful `warpctrl` verb would be one that *shows*
+what the agent has already been granted, not one that grants.
+
+#### Verified by running it
+
+Linux/X11, scratch `XDG_CONFIG_HOME`/`XDG_STATE_HOME`/`XDG_RUNTIME_DIR`/
+`WARP_LOCAL_CONTROL_DISCOVERY_DIR`. The agent was simulated by a script emitting
+the same OSC 777 `permission_request` a real plugin does, and reading one raw
+byte back — chosen over a real `claude` deliberately: it records the exact byte
+that reached the PTY, and it does not touch the user's `~/.claude`.
+
+| | |
+|---|---|
+| a blocked CLI agent, reported with its command, cwd and session id | yes; `agent list` reported `[]` for the same instance |
+| two agents in two panes, attributed and ordered stably | yes — `claude` and `gemini` side by side |
+| stale digest | refused, naming the fix |
+| unknown pane / nothing waiting | refused, naming `agent.approvals` |
+| `deny` | pane read byte `1b` |
+| `approve` | pane read byte `0d` |
+| `approve` on an unwatched agent (`gemini`) | refused by name; `deny` still worked (`1b`) |
+| `question_asked` after `permission_request` | tool fields dropped, digest moved (the bug above) |
+| pairing offer, switch off | `app.ping, agent.list, events.subscribe, agent.approvals, agent.deny` |
+| paired credential for `agent.approve`, switch off | refused, naming `WARP_FORK_REMOTE_APPROVE` |
+| paired credential for `agent.prompt` / `input.submit` | refused |
+| `agent.approvals` then `agent.deny` over `172.22.45.116` as a paired device | worked; pane read `1b` |
+| `agent.approve` over the LAN with `WARP_FORK_REMOTE_APPROVE=1` | worked; pane read `0d` |
+| device token anywhere under the scratch state dir, `warp.sqlite` included | 0 files |
+| the only new log line | `local-control wide listener started at 172.22.45.116:42917` — an address, no secret |
+
+**Inputs not verified, named rather than glossed.** The permission prompt was
+*synthesised*, not produced by a real `claude`, so what is proven is that Warp's
+session model, the approvals surface, the digest and the PTY write all behave —
+not that a real Claude Code prompt accepts `\r` as yes. `ALLOW_VERIFIED_AGENTS`
+therefore rests on Claude Code's documented prompt (option 1, *Yes*, highlighted;
+Escape labelled on the reject option), not on this fork having watched one.
+**That is the claim to re-check first**, and the cheapest way is to answer one
+real prompt with `warpctrl agent approve` and see whether the tool runs.
+`172.22.45.116` is also WSL2's NAT address, not a physical LAN, and the client
+was `curl` on the same host.
+
+**Unrelated observation, not bisected:** across three clean `warpctrl window
+close` shutdowns the discovery record and broker socket were left behind in the
+scratch directory, though no process survived. `CLAUDE.md` says ordinary
+shutdown cleans both. Nothing in T11.5 touches discovery, so this is either
+pre-existing or environmental; recorded here rather than acted on.
 
 ### T11.4 — as built
 

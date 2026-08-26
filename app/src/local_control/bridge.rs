@@ -10,7 +10,7 @@ use ::local_control::{
 use warpui::{Entity, ModelContext, SingletonEntity};
 
 use crate::local_control::handlers::{
-    agent, app_state, close, drive_objects, drive_sync, events, main_pane, metadata,
+    agent, app_state, approvals, close, drive_objects, drive_sync, events, main_pane, metadata,
     metadata_config, pairing, remote_wsl, settings_surfaces, visor,
 };
 use crate::local_control::permissions::{
@@ -219,6 +219,21 @@ impl LocalControlBridge {
                 &self.instance_id,
                 &request.action.params,
                 &request.target,
+                ctx,
+            ),
+            // Fork-local: the CLI agents in panes, which `agent.list` has never
+            // been able to see (`.fork/TASKS.md` T11.5).
+            ActionKind::AgentApprovals => approvals::agent_approvals(&self.instance_id, ctx),
+            ActionKind::AgentApprove => approvals::agent_answer(
+                &self.instance_id,
+                approvals::Decision::Allow,
+                &request.action.params,
+                ctx,
+            ),
+            ActionKind::AgentDeny => approvals::agent_answer(
+                &self.instance_id,
+                approvals::Decision::Deny,
+                &request.action.params,
                 ctx,
             ),
             // Fork-local: the read surface (`.fork/TASKS.md` T11.2). Answers

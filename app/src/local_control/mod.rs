@@ -1140,7 +1140,7 @@ async fn handle_pair_request(
         Json(::local_control::PairedDeviceResult {
             device_token: issued.token.secret().to_owned(),
             expires_at: issued.expires_at,
-            actions: pairing::PAIRABLE_ACTIONS
+            actions: pairing::pairable_actions()
                 .iter()
                 .map(|action| action.as_str().to_owned())
                 .collect(),

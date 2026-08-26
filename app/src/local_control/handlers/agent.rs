@@ -110,11 +110,11 @@ pub fn slash_command_is_orchestration(kind: SlashCommandKind) -> bool {
 /// conversation can be in are not restricted to the window the caller targeted
 /// — an orchestrator's children can be scattered across tabs, and a hidden one
 /// is in a tab nobody is looking at.
-struct SurfaceLocation {
-    pane_id: PaneId,
-    tab_id: String,
+pub(super) struct SurfaceLocation {
+    pub(super) pane_id: PaneId,
+    pub(super) tab_id: String,
     is_hidden: bool,
-    terminal_view: ViewHandle<TerminalView>,
+    pub(super) terminal_view: ViewHandle<TerminalView>,
     pane_group: ViewHandle<PaneGroup>,
 }
 
@@ -125,7 +125,7 @@ struct SurfaceLocation {
 /// conversation — and for a background child agent the answer is a real pane
 /// that happens to be hidden. Hence `pane_ids()`, which is every pane in the
 /// group, with visibility reported as a field instead of a filter.
-fn surface_locations(
+pub(super) fn surface_locations(
     ctx: &mut ModelContext<LocalControlBridge>,
 ) -> HashMap<EntityId, SurfaceLocation> {
     let mut locations = HashMap::new();

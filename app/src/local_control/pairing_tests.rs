@@ -121,20 +121,50 @@ fn a_paired_device_cannot_reach_the_actions_that_execute() {
 /// Deliberately a change-detector. Widening what a scanned QR grants is exactly
 /// the change that should not pass unnoticed, so the list is pinned and this
 /// test is the place the next person states why they grew it.
+///
+/// T11.5 grew it by two. `agent.approvals` is a read that reports strictly less
+/// than the already-pairable `events.subscribe` carries live. `agent.deny` is
+/// the first write here and earns it by being monotone — Escape on an agent
+/// that is already waiting, so the most it can cause is that something proposed
+/// does not happen.
 #[test]
-fn a_paired_device_gets_the_read_surface_and_nothing_else() {
+fn a_paired_device_gets_the_read_surface_and_the_safe_half_of_answering() {
     assert_eq!(
         PAIRABLE_ACTIONS,
         [
             ActionKind::AppPing,
             ActionKind::AgentList,
             ActionKind::EventsSubscribe,
+            ActionKind::AgentApprovals,
+            ActionKind::AgentDeny,
         ]
         .as_slice()
     );
     for action in PAIRABLE_ACTIONS {
         assert!(ensure_pairable(*action).is_ok());
     }
+}
+
+/// The asymmetry T11.5 was built around, pinned from the outside: saying no
+/// travels to a phone and saying yes does not, unless the machine's owner sets
+/// `WARP_FORK_REMOTE_APPROVE`.
+///
+/// Asserted against the *default* environment rather than by setting the
+/// variable, because `remote_approve_enabled` reads a process-global and this
+/// test runs beside others. What that leaves untested here is the switched-on
+/// branch; `fork::a_paired_device_says_yes_only_when_the_owner_says_so` covers
+/// the decision itself without a process-global.
+#[test]
+fn saying_yes_does_not_travel_by_default_and_saying_no_does() {
+    assert!(ensure_pairable(ActionKind::AgentDeny).is_ok());
+
+    let error = ensure_pairable(ActionKind::AgentApprove).expect_err("refused by default");
+    assert!(error.message.contains("agent.approve"));
+    assert!(
+        error.message.contains("WARP_FORK_REMOTE_APPROVE"),
+        "the one refusal that is a local choice must say so: {}",
+        error.message
+    );
 }
 
 /// The refusal names what *is* allowed, because the alternative is a client

@@ -16,7 +16,7 @@ use ::local_control::{ControlError, ErrorCode};
 use crate::drive::sharing::qr_code::{QUIET_ZONE_MODULES, qr_matrix_for_url};
 use crate::local_control::PAIR_PATH;
 use crate::local_control::bridge::PairingContext;
-use crate::local_control::pairing::{PAIRABLE_ACTIONS, pair_url};
+use crate::local_control::pairing::{pair_url, pairable_actions};
 
 /// Answers `control.pair`.
 pub fn control_pair(pairing: Option<&PairingContext>) -> Result<serde_json::Value, ControlError> {
@@ -41,7 +41,7 @@ pub fn control_pair(pairing: Option<&PairingContext>) -> Result<serde_json::Valu
         qr: render_qr(&url)?,
         url,
         expires_at: issued.expires_at,
-        actions: PAIRABLE_ACTIONS
+        actions: pairable_actions()
             .iter()
             .map(|action| action.as_str().to_owned())
             .collect(),

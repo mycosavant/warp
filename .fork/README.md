@@ -2062,21 +2062,23 @@ long-lived secret was never on screen.
 Unavoidable — a code has to be readable to be scanned — and bounded by the two
 minutes.
 
-**What a scan buys is the read surface and nothing else:**
+**What a scan buys:**
 
 ```
-app.ping   agent.list   events.subscribe
+app.ping   agent.list   events.subscribe   agent.approvals   agent.deny
 ```
+
+…plus `agent.approve`, but only if this machine's owner set
+`WARP_FORK_REMOTE_APPROVE` (see *Answering from the couch* below).
 
 This is an allowlist, not a denylist, and it is the security boundary of the
 feature. The catalog next to it contains `input.insert`, `input.submit`,
 `agent.prompt`, `slash.run` and `remote.wsl.connect` — a pairing path that could
 mint credentials for those would be remote code execution reachable by
 photographing a screen. The local Unix broker keeps the whole catalog because it
-has a kernel peer-UID check to justify it; a QR scan is not that. Widening the
-list is T11.5's argument to make, and
-`a_paired_device_cannot_reach_the_actions_that_execute` is where it has to be
-made.
+has a kernel peer-UID check to justify it; a QR scan is not that.
+`a_paired_device_cannot_reach_the_actions_that_execute` is where any widening
+has to be argued.
 
 The routes a device uses, neither of which is a catalog action — a device
 offering a pairing code has no credential, so there is nothing for the request
@@ -2099,6 +2101,103 @@ and never `*`"; this ships something stricter and it should not later be
 outright — the empty allowlist. An allowlist would be a *widening*, and today it
 would have nothing to widen to, because there is no page. When one exists, the
 allowlist belongs in the same commit, naming the exact origin it serves.
+
+### Answering from the couch — `agent approvals`, `approve`, `deny`
+
+The agent most likely to be waiting on you is a `claude` running in a pane, and
+until T11.5 `warpctrl` could not see one at all. `agent list` walks Warp's own
+conversations; a CLI agent has none. Measured on a live instance: `agent list`
+reported `conversations: []` while a `claude` sat blocked on a permission
+request in a visible pane.
+
+```console
+$ warpctrl agent approvals
+{
+  "approvals": [
+    {
+      "approval_id": "Pane Pane Terminal (3026)",
+      "agent": "claude",
+      "kind": "permission",
+      "summary": "Wants to run Bash: rm -rf build/",
+      "tool_name": "Bash",
+      "tool_input": "rm -rf build/",
+      "cwd": "/home/you/git/warp",
+      "session_id": "…",
+      "digest": "17a0ecda7583…"
+    }
+  ]
+}
+$ warpctrl agent deny 'Pane Pane Terminal (3026)' --digest 17a0ecda7583…
+```
+
+`approval_id` is a **pane id**, the same string `pane list` prints, because a
+CLI agent has no conversation id to be addressed by. It is passed positionally
+rather than as `--pane`, which already means "which pane to send this request
+to" everywhere else.
+
+**These commands press a key. That is the whole mechanism, and the result says
+so.** Warp has no channel that tells a CLI agent "approved" — the agent drew a
+prompt on its own terminal and is reading its own stdin. So `approve` writes
+`\r` and `deny` writes `\x1b`, and the response reports `"keystroke": "enter"`
+or `"escape"`. It does **not** report that the agent acted. Confirm that by
+reading `agent approvals` again: an answer that landed makes the entry vanish.
+Verified by instrumenting a pane to record the raw byte it read — `0d` after
+`approve`, `1b` after `deny`.
+
+**`approve` is refused for agents whose prompt this fork has not watched.**
+Return takes the *highlighted* option, and which option that is, is a fact about
+someone else's TUI:
+
+```console
+$ warpctrl agent approve 'Pane Pane Terminal (2660)' --digest …
+error: insufficient_permissions: `allow` presses Enter, and this fork has not
+verified what Gemini highlights by default; answer it at the keyboard, or use
+`deny`, which presses Escape
+```
+
+`deny` works for every agent, because Escape's worst case is that nothing
+happens and you can see that it did not.
+
+#### The digest, and the bug it did not catch until it was run
+
+Every approval carries a SHA-256 of exactly what was shown, and both answering
+commands require it back. Between your phone rendering a request and your thumb
+landing, the agent may have been answered at the keyboard and moved on; without
+the digest the yes lands on whatever is there now.
+
+The first live run found a hole in that. A `question_asked` blocks the session
+**without clearing** the `tool_name` and `tool_input` a previous
+`permission_request` left behind, so the agent that had asked to run
+`rm -rf build/` and then asked "which database should I use?" was reported as
+still asking to run `rm -rf build/` — *with an unchanged digest*, so a stale yes
+would have been accepted onto the wrong question. Fixed by taking the summary
+from the block (`Blocked { message }`, set by whatever caused the current wait)
+and trusting the retained tool fields only when they agree with it. After the
+fix, the same sequence reports `question | Which database should I use? | (no
+tool)` and the digest moves.
+
+#### Saying yes from another device is off by default
+
+| | pairable | why |
+|---|---|---|
+| `agent.approvals` | yes | a read, and strictly less than `events.subscribe` already streams |
+| `agent.deny` | yes | monotone — the most it can cause is that something proposed does not happen |
+| `agent.approve` | only with `WARP_FORK_REMOTE_APPROVE=1` | a yes to whatever the agent thought of, which through a permission prompt is arbitrary code |
+
+They are two actions rather than one with a `decision` field precisely so this
+line can be drawn: a paired device holds a list of *actions*, so a field would
+have put both behind one grant.
+
+```console
+$ # without the switch, from a paired device:
+agent.approve is not available to a paired device; a paired device may only
+use: app.ping, agent.list, events.subscribe, agent.approvals, agent.deny.
+Saying yes from another device is off unless WARP_FORK_REMOTE_APPROVE is set;
+agent.deny needs no such switch
+```
+
+Only `1`, `on`, `true` or `yes` turn it on. `enabled`, `allow` and `y` do not —
+the cost of a missed opt-in is a walk to your desk.
 
 ## Voice input, transcribed on this machine
 

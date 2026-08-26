@@ -465,6 +465,41 @@ fn control_bind_from(value: Option<&str>) -> ControlBind {
     ControlBind::Additional(address)
 }
 
+/// Set to `1`, `on` or `true` to let a paired device say *yes* as well as *no*.
+const REMOTE_APPROVE_ENV_VAR: &str = "WARP_FORK_REMOTE_APPROVE";
+
+/// Whether a device that scanned a QR may run `agent.approve` (T11.5).
+///
+/// **Off by default, and the asymmetry is the point.** T11.5 split answering an
+/// agent into two actions so this switch could exist: `agent.deny` presses
+/// Escape and can only ever make less happen, so it is pairable unconditionally.
+/// `agent.approve` presses Enter on whatever the agent thought of — which,
+/// through a CLI agent's own permission prompt, is arbitrary code. The digest
+/// check means a remote yes can only land on the exact request it was shown, but
+/// it does not make that request safe, and a device token is good for twelve
+/// hours.
+///
+/// So the capability exists and the default does not assume it is wanted. This
+/// is the same shape as [`control_bind`], for the same reason: reaching further
+/// than this machine is a decision the machine's owner makes per machine, not
+/// one a fork makes for them.
+///
+/// Unlike `WARP_FORK_CONTROL_BIND` there is nothing to fail closed *about* — an
+/// unparseable value is simply not one of the affirmative words, so it is off,
+/// which is the safe side.
+pub fn remote_approve_enabled() -> bool {
+    is_active() && remote_approve_from(std::env::var(REMOTE_APPROVE_ENV_VAR).ok().as_deref())
+}
+
+/// Split from the environment so the decision can be asserted without setting a
+/// process-global variable from a test that runs beside others.
+fn remote_approve_from(value: Option<&str>) -> bool {
+    matches!(
+        value.map(str::trim),
+        Some("1") | Some("on") | Some("true") | Some("yes")
+    )
+}
+
 /// Whether a tab can be dragged into the pane area to split a pane (T8.2).
 ///
 /// **The gate was an axis.** Upstream wraps each tab in a `Draggable` pinned to

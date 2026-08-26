@@ -66,6 +66,7 @@ pub enum ActionParameterSpec {
     AgentCancel,
     AgentSettle,
     AgentReveal,
+    AgentApprove,
     SlashRun,
     DriveObjectList,
     DriveObjectGet,
@@ -104,6 +105,8 @@ pub enum ActionResultSpec {
     AgentCancellation,
     AgentSettled,
     AgentRevelation,
+    ApprovalList,
+    ApprovalAnswered,
     SlashCommandList,
     DriveObjectList,
     DriveObject,
@@ -384,6 +387,21 @@ define_action_catalog! {
         // `Agent` rather than `Instance`: `swap` replaces the contents of a
         // pane, so which pane is part of the request.
         AgentReveal => { name: "agent.reveal", status: Implemented, target: Agent, params: AgentReveal, result: AgentRevelation },
+        // Fork-local (T11.5). These two are about a *different population* from
+        // the six above: a CLI agent running in a pane has no `AIConversation`
+        // and never appears in `agent.list`, so the thing most likely to be
+        // waiting on a person is the thing `warpctrl` could not see at all.
+        //
+        // `Instance` for both — the pane is in the params, and an approval
+        // outlives whichever window the caller happened to target.
+        AgentApprovals => { name: "agent.approvals", status: Implemented, target: Instance, params: None, result: ApprovalList },
+        // Two actions and not one `decision` parameter, because a paired device
+        // is granted *actions*: saying no can only ever make less happen and
+        // travels to a phone, saying yes is a yes to whatever the agent thought
+        // of and does not, unless the machine's owner says otherwise. A field
+        // would have put both behind one grant.
+        AgentApprove => { name: "agent.approve", status: Implemented, target: Instance, params: AgentApprove, result: ApprovalAnswered },
+        AgentDeny => { name: "agent.deny", status: Implemented, target: Instance, params: AgentApprove, result: ApprovalAnswered },
     }
 
     // Fork-local. The slash-command registry is where Warp keeps the verbs an

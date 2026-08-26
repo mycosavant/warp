@@ -126,7 +126,13 @@ CLI-agent session, appended as events arrive; **reach for this before
 theorising about what an agent did**), `WARP_FORK_CONTROL_BIND` (**the only one
 that reaches off the machine** — one literal IP address and nothing else; a
 hostname, a wildcard, or a typo leaves the wide listener shut and loopback
-serving, because refusing to start would take out `warpctrl window close`).
+serving, because refusing to start would take out `warpctrl window close`),
+`WARP_FORK_REMOTE_APPROVE` (lets a *paired* device run `agent.approve` — say
+**yes** to a CLI agent's permission prompt from a phone. Off unless it is
+literally `1`/`on`/`true`/`yes`; `agent.deny` needs no switch, because saying no
+can only ever make less happen. Note the opposite parser shape to
+`WARP_FORK_CONTROL_BIND`: there a typo must be *refused loudly* because it would
+otherwise silently mean something, here a typo is simply not consent).
 Tab→pane drag has no variable of its own; `WARP_FORK_POLICY=0` puts the tab's
 horizontal-only drag axis back.
 

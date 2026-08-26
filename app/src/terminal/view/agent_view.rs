@@ -165,6 +165,29 @@ impl TerminalView {
         ctx.emit(Event::StopAgentConversation { conversation_id });
     }
 
+    /// Presses one key on the CLI agent running in this pane, on behalf of
+    /// `warpctrl agent approve` (T11.5).
+    ///
+    /// **This is a keystroke, not a verdict.** Warp has no channel that tells a
+    /// CLI agent "approved" — the agent is a process drawing a prompt on a PTY,
+    /// and the only thing a person sitting here could do is press a key. So that
+    /// is what this does, and the caller is told which key so the result never
+    /// reads as more than it was.
+    ///
+    /// Goes through [`TerminalView::write_user_bytes_to_pty`] rather than
+    /// `write_to_pty` for the check it carries: a block under Warp's *own* agent
+    /// control refuses the write and returns `false`, which is reported as a
+    /// failure rather than swallowed. A caller told "denied" about a keystroke
+    /// that never left the process is the silent failure this whole phase exists
+    /// to catch.
+    pub(crate) fn press_key_for_local_control(
+        &mut self,
+        bytes: &'static [u8],
+        ctx: &mut ViewContext<Self>,
+    ) -> bool {
+        self.write_user_bytes_to_pty(bytes, ctx)
+    }
+
     /// Puts a conversation on screen, on behalf of `warpctrl agent reveal`.
     ///
     /// All three targets already exist as events, because the 3-dot menu on a

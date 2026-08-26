@@ -650,6 +650,30 @@ fn add_parameter_properties(
                 }),
             );
         }
+        ActionParameterSpec::AgentApprove => {
+            require(
+                "approval_id",
+                json!({
+                    "type": "string",
+                    "description": "Pane whose CLI agent is waiting, from warp_agent_approvals.",
+                }),
+            );
+            require(
+                "digest",
+                json!({
+                    "type": "string",
+                    "description": "The digest warp_agent_approvals reported for this request, unchanged. An answer whose digest no longer matches is refused rather than applied to whatever the agent is asking now.",
+                }),
+            );
+            require(
+                "decision",
+                json!({
+                    "type": "string",
+                    "enum": ["allow", "deny"],
+                    "description": "allow presses Enter on the agent's prompt; deny presses Escape.",
+                }),
+            );
+        }
         ActionParameterSpec::SlashRun => {
             require(
                 "command",

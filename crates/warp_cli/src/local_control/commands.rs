@@ -3,14 +3,14 @@ use std::path::Path;
 
 use local_control::discovery::InstanceRecord;
 use local_control::protocol::{
-    Action, ActionKind, ActionNameParams, AgentCancelParams, AgentPromptParams, AgentReadParams,
-    AgentRevealParams, AgentRevealTarget, AgentSettleParams, AgentSpawnParams, BindingNameParams,
-    BooleanValueParams, ColorValueParams, ControlError, DirectionParams, DriveObjectCreateParams,
-    DriveObjectGetParams, DriveObjectListParams, DriveObjectTrashParams, EmptyParams, ErrorCode,
-    EventStreamResult, FileOpenParams, KeyParams, KeyValueParams, PageQueryParams, QueryParams,
-    RemoteWslConnectParams, RenameParams, RequestEnvelope, ResizeParams, SettingListParams,
-    SlashRunParams, TabActivateParams, TabActivationMode, TabCloseMode, TabCloseParams,
-    TabCreateParams, TextParams, ThemeNameParams,
+    Action, ActionKind, ActionNameParams, AgentApproveParams, AgentCancelParams, AgentPromptParams,
+    AgentReadParams, AgentRevealParams, AgentRevealTarget, AgentSettleParams, AgentSpawnParams,
+    BindingNameParams, BooleanValueParams, ColorValueParams, ControlError, DirectionParams,
+    DriveObjectCreateParams, DriveObjectGetParams, DriveObjectListParams, DriveObjectTrashParams,
+    EmptyParams, ErrorCode, EventStreamResult, FileOpenParams, KeyParams, KeyValueParams,
+    PageQueryParams, QueryParams, RemoteWslConnectParams, RenameParams, RequestEnvelope,
+    ResizeParams, SettingListParams, SlashRunParams, TabActivateParams, TabActivationMode,
+    TabCloseMode, TabCloseParams, TabCreateParams, TextParams, ThemeNameParams,
 };
 use local_control::selection::select_instance;
 use serde::Serialize;
@@ -798,6 +798,30 @@ pub(super) fn run_agent_command(
                     CliRevealTarget::Tab => AgentRevealTarget::Tab,
                     CliRevealTarget::Swap => AgentRevealTarget::Swap,
                 },
+            },
+            output_format,
+        ),
+        AgentCommand::Approvals(args) => run_action_with_params(
+            args,
+            ActionKind::AgentApprovals,
+            EmptyParams {},
+            output_format,
+        ),
+        AgentCommand::Approve(args) => run_action_with_params(
+            args.target,
+            ActionKind::AgentApprove,
+            AgentApproveParams {
+                approval_id: args.approval,
+                digest: args.digest,
+            },
+            output_format,
+        ),
+        AgentCommand::Deny(args) => run_action_with_params(
+            args.target,
+            ActionKind::AgentDeny,
+            AgentApproveParams {
+                approval_id: args.approval,
+                digest: args.digest,
             },
             output_format,
         ),

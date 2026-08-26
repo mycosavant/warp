@@ -291,6 +291,103 @@ fn default_true() -> bool {
     true
 }
 
+/// One thing an agent is waiting on a person for, as `agent.approvals` reports
+/// it (T11.5).
+///
+/// **Every field above `digest` is what a person is being asked to decide on**,
+/// and `digest` is a hash over exactly those fields. `agent.approve` requires the
+/// digest back, so an answer can only ever land on the request it was shown —
+/// see [`AgentApproveParams::digest`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PendingApproval {
+    /// The pane the agent is running in — the same id `pane.list` reports.
+    ///
+    /// A pane rather than a conversation id, because a CLI agent is a *process
+    /// in a terminal*: it has no `AIConversation` and nothing in Warp's history
+    /// model. The pane is the only handle both ends already share.
+    pub approval_id: String,
+    /// Which CLI agent is asking: `claude`, `codex`, `gemini`, …
+    pub agent: String,
+    /// `permission` when a tool is named, `question` otherwise.
+    ///
+    /// **A derivation, not something the agent said.** A permission request and
+    /// an "ask the user" both arrive as the same blocked state; the only thing
+    /// that tells them apart afterwards is whether a tool name came with it.
+    /// Both are answerable, because both are a prompt with a highlighted default
+    /// — but "allow" on a `question` means "take the first option", not "yes".
+    pub kind: String,
+    /// The agent's own one-line description of what it wants to do.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub summary: Option<String>,
+    /// The tool being requested — `Bash`, `Write`, `Edit`, …
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_name: Option<String>,
+    /// The command for `Bash`, the path for a file tool. Complete, not
+    /// truncated — but it is the *only* part of the tool input the OSC
+    /// notification carries, so for `Write` it names the file and says nothing
+    /// about the contents.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_input: Option<String>,
+    /// Where the agent is working.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cwd: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project: Option<String>,
+    /// The agent's own session id, which is what ties this to the lines
+    /// `WARP_FORK_EVENT_LOG` wrote for the same session.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tab_id: Option<String>,
+    /// SHA-256 over the fields above, hex. Hand it back to `agent.approve`.
+    pub digest: String,
+}
+
+/// Result of `agent.approvals`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AgentApprovalsResult {
+    pub approvals: Vec<PendingApproval>,
+}
+
+/// Parameters for `agent.approve` and `agent.deny` (T11.5).
+///
+/// **The decision is the action name, not a field here**, and that is a security
+/// decision rather than a stylistic one. A paired device is granted a *list of
+/// actions*, so anything that needs its own grant has to be its own action:
+/// `agent.deny` can only ever make less happen and is pairable, while
+/// `agent.approve` is a yes to whatever the agent proposed and is not — unless
+/// the machine's owner turns it on. Folding both into a `decision` field would
+/// have made that boundary unexpressible in the mechanism T11.4 built.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AgentApproveParams {
+    /// From [`PendingApproval::approval_id`].
+    pub approval_id: String,
+    /// From [`PendingApproval::digest`], unchanged.
+    ///
+    /// **Required, with no way to opt out.** Without it this action means "press
+    /// a key on whatever that pane is asking now", and the thing being answered
+    /// could have changed between the phone rendering it and the thumb landing.
+    /// With it, an answer that arrives late is refused instead of applied to the
+    /// wrong question.
+    pub digest: String,
+}
+
+/// The result of `agent.approve` / `agent.deny`: what was sent, and where.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AgentApproveResult {
+    pub approval_id: String,
+    pub decision: String,
+    pub agent: String,
+    /// The keystroke written to the agent's terminal — `enter` or `escape`.
+    ///
+    /// Reported because it is the whole mechanism, and hiding it would overstate
+    /// what happened: Warp does not tell the agent "approved", it presses the
+    /// key a person sitting there would have pressed. Whether the agent acted on
+    /// it is answered by reading `agent.approvals` again, not by this field.
+    pub keystroke: String,
+}
+
 /// Where `agent.reveal` should put a conversation.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

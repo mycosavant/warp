@@ -866,3 +866,39 @@ fn a_bind_wider_than_loopback_has_to_be_named_exactly() {
         );
     }
 }
+
+/// Letting a phone say *yes* to an agent is opt-in, and everything that is not
+/// an explicit yes is a no (T11.5).
+///
+/// The contrast with [`a_bind_wider_than_loopback_has_to_be_named_exactly`] is
+/// deliberate and is why this parser is a different shape. There, an
+/// unparseable value has to be *refused loudly*, because a typo would otherwise
+/// silently mean something. Here there is nothing to mis-read: a value that is
+/// not one of the affirmative words is simply not consent, and the safe side and
+/// the default side are the same side.
+///
+/// Asserted against the parser rather than by setting the variable, because env
+/// vars are process-wide and a test that sets one races every test beside it.
+#[test]
+fn a_paired_device_says_yes_only_when_the_owner_says_so() {
+    for affirmative in ["1", "on", "true", "yes", "  on  "] {
+        assert!(
+            remote_approve_from(Some(affirmative)),
+            "{affirmative:?} should turn it on"
+        );
+    }
+
+    for otherwise in [None, Some(""), Some("0"), Some("off"), Some("false")] {
+        assert!(!remote_approve_from(otherwise));
+    }
+
+    // A typo is not consent. Notably `"enabled"` and `"allow"` read like a yes
+    // and are not one, which is the right way round: the cost of a missed opt-in
+    // is that a person walks to their desk.
+    for typo in ["enabled", "allow", "y", "ON!", "2"] {
+        assert!(
+            !remote_approve_from(Some(typo)),
+            "{typo:?} should not be read as consent"
+        );
+    }
+}

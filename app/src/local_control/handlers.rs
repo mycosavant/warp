@@ -4,6 +4,7 @@ use serde_json::json;
 
 pub(super) mod agent;
 pub(super) mod app_state;
+pub(super) mod approvals;
 pub(super) mod close;
 pub(super) mod drive_objects;
 pub(super) mod drive_sync;
