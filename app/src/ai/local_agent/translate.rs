@@ -3,6 +3,13 @@
 //! Pure functions over strings: one JSON line in, zero or more
 //! [`api::ResponseEvent`] out. No process, no clock, no network — which is what
 //! makes the interesting half of this feature testable without either end.
+//!
+//! It also produces a second, smaller output: [`ToolEvent`], the tool calls
+//! Claude ran, for the fork's event log (T11.1c). Those are *accumulated*, not
+//! written — the caller drains them — because a file here would cost this file
+//! the property in the paragraph above.
+
+use std::collections::HashMap;
 
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
@@ -36,9 +43,20 @@ enum ClaudeEvent {
     #[serde(rename = "system")]
     System(SystemEvent),
     #[serde(rename = "assistant")]
-    Assistant { message: AssistantMessage },
+    Assistant {
+        message: AssistantMessage,
+        /// The `tool_use.id` of the call this message was produced *inside*, so
+        /// non-null means a subagent. Lives on the event rather than on the
+        /// block, which is why it has to be carried down by hand.
+        #[serde(default)]
+        parent_tool_use_id: Option<String>,
+    },
     #[serde(rename = "user")]
-    User { message: UserMessage },
+    User {
+        message: UserMessage,
+        #[serde(default)]
+        parent_tool_use_id: Option<String>,
+    },
     #[serde(rename = "result")]
     Result(ResultEvent),
     #[serde(other)]
@@ -137,9 +155,87 @@ enum ContentBlock {
     #[serde(rename = "thinking")]
     Thinking { thinking: String },
     #[serde(rename = "tool_use")]
-    ToolUse { name: String },
+    ToolUse {
+        /// Claude's per-call id, which is what ties this to the `tool_result`
+        /// that answers it. It becomes the log's `call_id`.
+        #[serde(default)]
+        id: String,
+        #[serde(default)]
+        name: String,
+        /// Whatever the tool's schema says, so deliberately untyped — see
+        /// [`input_preview`].
+        #[serde(default)]
+        input: serde_json::Value,
+    },
+    /// The answer to a `tool_use`, which arrives on a `user` message rather
+    /// than an assistant one. Warp renders nothing for it — Claude has already
+    /// said in prose whatever the result meant — but it is the only place the
+    /// stream says a tool *finished*, so the log needs it.
+    #[serde(rename = "tool_result")]
+    ToolResult {
+        #[serde(default)]
+        tool_use_id: String,
+        /// Absent on success in some versions of the CLI and `false` in others;
+        /// both were observed on 2026-08-25 from the same binary. Defaulting is
+        /// not defensive here, it is required.
+        #[serde(default)]
+        is_error: bool,
+    },
     #[serde(other)]
     Ignored,
+}
+
+/// A tool call as Claude reported it, on its way to the fork's event log.
+///
+/// Data, not an action: the translator accumulates these and the caller writes
+/// them, which is what keeps a filesystem out of this file. The log's own
+/// vocabulary — event names, truncation — belongs to
+/// `event_log::local_agent`, not here; this says only what Claude said.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum ToolEvent {
+    Started {
+        call_id: String,
+        /// The call this one ran inside, i.e. `parent_tool_use_id`. `Some` means
+        /// a subagent is doing the work — verified against a real `Task` turn on
+        /// 2026-08-25, where the nested `Read` named the `Agent` call that
+        /// spawned it.
+        parent_call_id: Option<String>,
+        name: String,
+        input_preview: Option<String>,
+    },
+    Completed {
+        call_id: String,
+        parent_call_id: Option<String>,
+        /// The name carried by the matching [`ToolEvent::Started`].
+        ///
+        /// `None` means no `tool_use` with this id was seen on this stream. It
+        /// is not an error — a turn can be resumed part-way through one — but
+        /// it is worth being able to see, so the result is recorded without a
+        /// name rather than dropped.
+        name: Option<String>,
+        failed: bool,
+    },
+}
+
+/// The part of a tool's input worth putting in the log's `tool_input_preview`.
+///
+/// Two keys and not the whole object, matching what Warp's own agent puts there
+/// (`event_log::warp_agent::tool_input_preview`): a reader greps this field for
+/// what was *run*, and widening it to every argument would make that grep
+/// unreliable across sources as well as putting more of a tool's payload —
+/// which is where its secrets are — in a file.
+///
+/// Untyped on purpose, which a struct would say better. `input` is whatever the
+/// tool's schema declares, so `command` is a string for `Bash` and could be any
+/// shape at all for an MCP tool — and a deserialize failure here would take the
+/// **whole assistant message** with it, because [`Translator::on_line`] drops a
+/// line it cannot parse. A missing preview is worth far less than a missing
+/// answer.
+fn input_preview(input: &serde_json::Value) -> Option<String> {
+    ["command", "file_path"]
+        .into_iter()
+        .find_map(|key| input.get(key).and_then(serde_json::Value::as_str))
+        .map(str::to_owned)
 }
 
 #[derive(Debug, Deserialize)]
@@ -222,6 +318,14 @@ pub(super) struct Translator {
     boundary: Option<CompactMetadata>,
     /// When the turn started, stamped onto every message.
     started_at: DateTime<Utc>,
+    /// Tool calls seen since the caller last drained them (T11.1c).
+    tool_events: Vec<ToolEvent>,
+    /// `tool_use.id` → tool name, so a `tool_result` can say *what* finished
+    /// rather than only that something with that id did.
+    ///
+    /// Bounded by the calls in flight, not by the turn: an entry is removed by
+    /// the result that answers it.
+    tool_names: HashMap<String, String>,
 }
 
 impl Translator {
@@ -242,7 +346,20 @@ impl Translator {
             opened: false,
             boundary: None,
             started_at,
+            tool_events: Vec::new(),
+            tool_names: HashMap::new(),
         }
+    }
+
+    /// Takes the tool calls seen since the last call.
+    ///
+    /// Drained rather than returned from [`Self::on_line`] because they are a
+    /// different audience: `ResponseEvent`s are for the client's task model and
+    /// these are for the log, and threading a second return value through every
+    /// arm would have made the interesting code harder to read to save one
+    /// call site.
+    pub(super) fn take_tool_events(&mut self) -> Vec<ToolEvent> {
+        std::mem::take(&mut self.tool_events)
     }
 
     /// Whether Claude reported the turn finished.
@@ -309,12 +426,53 @@ impl Translator {
                 events.push(self.add(vec![query]));
                 events
             }
-            ClaudeEvent::Assistant { message } => self.assistant(message),
+            ClaudeEvent::Assistant {
+                message,
+                parent_tool_use_id,
+            } => self.assistant(message, parent_tool_use_id.as_deref()),
             ClaudeEvent::Result(result) => {
                 self.saw_result = true;
                 vec![self.finished(result)]
             }
-            ClaudeEvent::System(_) | ClaudeEvent::User { .. } | ClaudeEvent::Ignored => Vec::new(),
+            // A user message on a query is Claude feeding itself a tool result.
+            // Warp renders nothing for it — this arm returns no events, as it
+            // always has — but it is where the stream says a tool finished, so
+            // it is no longer *ignored*.
+            ClaudeEvent::User {
+                message,
+                parent_tool_use_id,
+            } => {
+                self.observe(&message.content, parent_tool_use_id.as_deref());
+                Vec::new()
+            }
+            ClaudeEvent::System(_) | ClaudeEvent::Ignored => Vec::new(),
+        }
+    }
+
+    /// Records the tool results in a user message, and nothing else.
+    ///
+    /// Takes the whole [`UserContent`] rather than the blocks so the two shapes
+    /// it can arrive in stay this function's problem: a compaction summary is a
+    /// bare string and carries no tool results, which is the correct answer
+    /// rather than a case to handle.
+    fn observe(&mut self, content: &UserContent, parent_call_id: Option<&str>) {
+        let UserContent::Blocks(blocks) = content else {
+            return;
+        };
+        for block in blocks {
+            let ContentBlock::ToolResult {
+                tool_use_id,
+                is_error,
+            } = block
+            else {
+                continue;
+            };
+            self.tool_events.push(ToolEvent::Completed {
+                name: self.tool_names.remove(tool_use_id),
+                call_id: tool_use_id.clone(),
+                parent_call_id: parent_call_id.map(str::to_owned),
+                failed: *is_error,
+            });
         }
     }
 
@@ -347,13 +505,24 @@ impl Translator {
                     self.boundary = Some(metadata);
                 }
             }
-            ClaudeEvent::User { message } => {
+            ClaudeEvent::User {
+                message,
+                parent_tool_use_id,
+            } => {
+                // A compaction is not supposed to run tools, and in practice it
+                // does not. Observed anyway rather than assumed not to happen:
+                // the cost is one match and the alternative is a silence that
+                // would be indistinguishable from the gap this task closed.
+                self.observe(&message.content, parent_tool_use_id.as_deref());
                 if let Some(metadata) = self.boundary.take() {
                     let summary = self.summarization(&message.content.text(), &metadata);
                     events.push(self.add(vec![summary]));
                 }
             }
-            ClaudeEvent::Assistant { message } => events.extend(self.assistant(message)),
+            ClaudeEvent::Assistant {
+                message,
+                parent_tool_use_id,
+            } => events.extend(self.assistant(message, parent_tool_use_id.as_deref())),
             ClaudeEvent::Result(result) => {
                 self.saw_result = true;
                 events.push(self.finished(result));
@@ -411,11 +580,15 @@ impl Translator {
         }
     }
 
-    fn assistant(&mut self, message: AssistantMessage) -> Vec<api::ResponseEvent> {
+    fn assistant(
+        &mut self,
+        message: AssistantMessage,
+        parent_call_id: Option<&str>,
+    ) -> Vec<api::ResponseEvent> {
         let messages: Vec<api::Message> = message
             .content
             .into_iter()
-            .filter_map(|block| self.content_block(block))
+            .filter_map(|block| self.content_block(block, parent_call_id))
             .collect();
         if messages.is_empty() {
             return Vec::new();
@@ -488,7 +661,11 @@ impl Translator {
         self.message(body)
     }
 
-    fn content_block(&mut self, block: ContentBlock) -> Option<api::Message> {
+    fn content_block(
+        &mut self,
+        block: ContentBlock,
+        parent_call_id: Option<&str>,
+    ) -> Option<api::Message> {
         let body = match block {
             ContentBlock::Text { text } if !text.trim().is_empty() => {
                 api::message::Message::AgentOutput(api::message::AgentOutput { text })
@@ -504,12 +681,30 @@ impl Translator {
             // result. Claude has already run this tool itself, so emitting one
             // would run it a second time. Reporting it as text says what
             // happened without asking for it to happen again.
-            ContentBlock::ToolUse { name } => {
+            //
+            // That decision is also why the log needs this line: because no
+            // `ToolCall` is emitted, Warp's action model never sees the call,
+            // so `event_log::warp_agent` — which watches that model — cannot
+            // report it either. T11.1c.
+            ContentBlock::ToolUse { id, name, input } => {
+                self.tool_events.push(ToolEvent::Started {
+                    call_id: id.clone(),
+                    parent_call_id: parent_call_id.map(str::to_owned),
+                    name: name.clone(),
+                    input_preview: input_preview(&input),
+                });
+                self.tool_names.insert(id, name.clone());
                 api::message::Message::AgentOutput(api::message::AgentOutput {
                     text: format!("`{name}`"),
                 })
             }
-            ContentBlock::Text { .. } | ContentBlock::Thinking { .. } | ContentBlock::Ignored => {
+            // Only ever arrives on a `user` message, where [`Self::observe`]
+            // has it. Listed rather than folded into the catch-all so that it
+            // is visibly decided about.
+            ContentBlock::ToolResult { .. }
+            | ContentBlock::Text { .. }
+            | ContentBlock::Thinking { .. }
+            | ContentBlock::Ignored => {
                 return None;
             }
         };

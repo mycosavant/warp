@@ -618,3 +618,218 @@ fn only_a_recognized_preamble_is_stripped() {
         "What we did.\nSummary:\nNot a preamble."
     );
 }
+
+// ---- tool events for the log (T11.1c) ---------------------------------------
+//
+// Every fixture below is a real line from
+// `claude --print --output-format stream-json --verbose`, captured 2026-08-25
+// and trimmed to the fields this fork reads. Two of them exist because the
+// capture contradicted what would otherwise have been written from memory:
+// `is_error` is *absent* on some successful results and `false` on others from
+// the same binary, and a `tool_use` block carries a `caller` object that no
+// remembered version of this shape had.
+
+const TOOL_USE: &str = r#"{"type":"tool_use","id":"toolu_01QQ7Nn3ZtF8tjGwhmWf7K1Y","name":"Read","input":{"file_path":"/tmp/t111c/sample.txt"},"caller":{"type":"direct"}}"#;
+
+fn tool_result(body: &str) -> String {
+    format!(
+        r#"{{"type":"user","message":{{"role":"user","content":[{body}]}},"parent_tool_use_id":null,"session_id":"eb60ccee"}}"#
+    )
+}
+
+/// The join the log is for: both halves of one call carry Claude's
+/// `tool_use.id`, so a `tool_start` with no `tool_complete` is a call that hung.
+#[test]
+fn a_tool_call_and_its_result_are_recorded_as_a_matched_pair() {
+    let mut translator = continuing_translator();
+
+    translator.on_line(&assistant(TOOL_USE));
+    assert_eq!(
+        translator.take_tool_events(),
+        vec![ToolEvent::Started {
+            call_id: "toolu_01QQ7Nn3ZtF8tjGwhmWf7K1Y".to_owned(),
+            parent_call_id: None,
+            name: "Read".to_owned(),
+            input_preview: Some("/tmp/t111c/sample.txt".to_owned()),
+        }]
+    );
+
+    let events = translator.on_line(&tool_result(
+        r#"{"tool_use_id":"toolu_01QQ7Nn3ZtF8tjGwhmWf7K1Y","type":"tool_result","content":"1\thello\n"}"#,
+    ));
+    assert!(
+        events.is_empty(),
+        "a tool result still renders nothing: Claude has already said in prose what it meant"
+    );
+    assert_eq!(
+        translator.take_tool_events(),
+        vec![ToolEvent::Completed {
+            call_id: "toolu_01QQ7Nn3ZtF8tjGwhmWf7K1Y".to_owned(),
+            parent_call_id: None,
+            name: Some("Read".to_owned()),
+            failed: false,
+        }],
+        "the completion carries the name its `tool_use` had"
+    );
+}
+
+/// Absent `is_error` and `"is_error":false` were both observed from the same
+/// CLI build, so defaulting is required rather than defensive.
+#[test]
+fn a_missing_is_error_is_a_success() {
+    let mut translator = continuing_translator();
+    translator.on_line(&tool_result(
+        r#"{"tool_use_id":"toolu_1","type":"tool_result","content":"ok"}"#,
+    ));
+
+    assert_eq!(
+        translator.take_tool_events(),
+        vec![ToolEvent::Completed {
+            call_id: "toolu_1".to_owned(),
+            parent_call_id: None,
+            name: None,
+            failed: false,
+        }]
+    );
+}
+
+#[test]
+fn a_failed_tool_result_is_recorded_as_failed() {
+    let mut translator = continuing_translator();
+    translator.on_line(&tool_result(
+        r#"{"type":"tool_result","content":"File does not exist.","is_error":true,"tool_use_id":"toolu_01WNT6kU9hUQ9WWPUoS3wZjG"}"#,
+    ));
+
+    assert_eq!(
+        translator.take_tool_events(),
+        vec![ToolEvent::Completed {
+            call_id: "toolu_01WNT6kU9hUQ9WWPUoS3wZjG".to_owned(),
+            parent_call_id: None,
+            name: None,
+            failed: true,
+        }]
+    );
+}
+
+/// The preview answers "what ran", the same question Warp's own agent's does,
+/// so it is those two keys and not the whole input object — which is also where
+/// a tool's secrets are.
+#[test]
+fn the_preview_is_the_command_or_the_file_path_and_nothing_else() {
+    let mut translator = continuing_translator();
+    translator.on_line(&assistant(
+        r#"{"type":"tool_use","id":"a","name":"Bash","input":{"command":"rm -rf build","description":"Clean"}},
+           {"type":"tool_use","id":"b","name":"Grep","input":{"pattern":"secret","path":"/etc"}}"#,
+    ));
+
+    let previews: Vec<Option<String>> = translator
+        .take_tool_events()
+        .into_iter()
+        .map(|event| match event {
+            ToolEvent::Started { input_preview, .. } => input_preview,
+            other => panic!("expected two starts, got {other:?}"),
+        })
+        .collect();
+    assert_eq!(
+        previews,
+        vec![Some("rm -rf build".to_owned()), None],
+        "`description` and `pattern` are not what was run"
+    );
+}
+
+/// `input` is whatever a tool's schema says, and an MCP server can declare
+/// `command` as any shape at all. A typed field here would fail the whole
+/// `ClaudeEvent`, and `on_line` drops a line it cannot parse — so an
+/// unrecognized input would have cost the **answer**, not just the preview.
+#[test]
+fn an_input_of_an_unexpected_shape_costs_the_preview_and_not_the_message() {
+    let mut translator = continuing_translator();
+    let events = translator.on_line(&assistant(
+        r#"{"type":"tool_use","id":"a","name":"mcp__thing__run","input":{"command":["sh","-c","ls"]}}"#,
+    ));
+
+    assert_eq!(
+        messages(&events[0]).len(),
+        1,
+        "the tool is still reported to the conversation"
+    );
+    assert_eq!(
+        translator.take_tool_events(),
+        vec![ToolEvent::Started {
+            call_id: "a".to_owned(),
+            parent_call_id: None,
+            name: "mcp__thing__run".to_owned(),
+            input_preview: None,
+        }]
+    );
+}
+
+/// Drained, not accumulated: the caller writes each batch as it arrives, and a
+/// second read must not write the same lines again.
+#[test]
+fn taking_the_tool_events_empties_them() {
+    let mut translator = continuing_translator();
+    translator.on_line(&assistant(TOOL_USE));
+
+    assert_eq!(translator.take_tool_events().len(), 1);
+    assert!(translator.take_tool_events().is_empty());
+}
+
+/// A compaction summary's content is a bare string rather than blocks. It
+/// carries no tool results, and asking it for some must not be an error.
+#[test]
+fn a_summary_is_not_mistaken_for_a_tool_result() {
+    let mut compactor = compactor();
+    compactor.on_line(BOUNDARY);
+    compactor.on_line(SUMMARY);
+
+    assert!(compactor.take_tool_events().is_empty());
+}
+
+/// Captured 2026-08-25 from a real `Task` turn. The nested `Read` names the
+/// `Agent` call that spawned it; the `Agent` call itself names nothing.
+///
+/// Found by running the rest of T11.1c, not planned: without this the only
+/// evidence of containment is that a subagent's tools fall *between* the
+/// parent's start and completion, and that stops being evidence the moment two
+/// subagents run at once.
+#[test]
+fn a_subagents_tools_name_the_call_that_spawned_them() {
+    let mut translator = continuing_translator();
+
+    translator.on_line(
+        r#"{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_outer","name":"Agent","input":{}}]},"parent_tool_use_id":null,"session_id":"s"}"#,
+    );
+    translator.on_line(
+        r#"{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_inner","name":"Read","input":{"file_path":"/tmp/x"}}]},"parent_tool_use_id":"toolu_outer","session_id":"s"}"#,
+    );
+    translator.on_line(
+        r#"{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"toolu_inner","content":"ok"}]},"parent_tool_use_id":"toolu_outer","session_id":"s"}"#,
+    );
+
+    let parents: Vec<(String, Option<String>)> = translator
+        .take_tool_events()
+        .into_iter()
+        .map(|event| match event {
+            ToolEvent::Started {
+                call_id,
+                parent_call_id,
+                ..
+            }
+            | ToolEvent::Completed {
+                call_id,
+                parent_call_id,
+                ..
+            } => (call_id, parent_call_id),
+        })
+        .collect();
+
+    assert_eq!(
+        parents,
+        vec![
+            ("toolu_outer".to_owned(), None),
+            ("toolu_inner".to_owned(), Some("toolu_outer".to_owned())),
+            ("toolu_inner".to_owned(), Some("toolu_outer".to_owned())),
+        ]
+    );
+}

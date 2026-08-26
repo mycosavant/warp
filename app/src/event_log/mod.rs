@@ -47,11 +47,23 @@ use tokio::sync::broadcast;
 
 use crate::terminal::cli_agent_sessions::event::{CLIAgentEvent, CLIAgentEventSource};
 
+// Spawns a local `claude`, so it follows `ai::local_agent`'s own gate.
+#[cfg(not(target_family = "wasm"))]
+pub(crate) mod local_agent;
 pub(crate) mod warp_agent;
 
 /// Longest session id accepted as a filename stem. Long enough for a UUID and
 /// then some; short enough that no `PATH_MAX` on any platform is in play.
 const MAX_KEY_LEN: usize = 64;
+
+/// Longest free text kept on a line. The wire protocol's own limit is 320
+/// characters (`MAX_NOTIFICATION_DESCRIPTION_CHARS` in the TUI publisher) and
+/// matching it keeps summaries comparable between the worlds.
+///
+/// Shared by every adapter rather than owned by one: three sources whose
+/// `tool_input_preview` truncated at three different lengths would make the
+/// field useless for exactly the comparison it exists to support.
+const MAX_TEXT_LEN: usize = 320;
 
 /// Where events for a session with no id are collected.
 const UNKEYED: &str = "unkeyed";
@@ -92,6 +104,19 @@ pub(crate) struct Entry<'a> {
     /// no such field — that half is `TR-EVENTS-B` and needs a version bump,
     /// because the id has to come from the plugin.
     pub call_id: Option<&'a str>,
+    /// The `call_id` of the tool call this one ran *inside*, when it ran inside
+    /// one. A subagent's work, in other words.
+    ///
+    /// **Present only for `local_agent` lines** (T11.1c), because Claude's
+    /// stream is the only one of the three sources that says so
+    /// (`parent_tool_use_id`). Warp's own agent has no nesting to report and
+    /// the hosted-agent protocol carries no such field.
+    ///
+    /// Without it, containment is only inferable from interleaving — a
+    /// subagent's tools happen to fall between its own `tool_start` and
+    /// `tool_complete` — and that inference stops working the moment two
+    /// subagents run at once, which is the case this fork most wants to watch.
+    pub parent_call_id: Option<&'a str>,
     pub cwd: Option<&'a str>,
     pub project: Option<&'a str>,
     pub tool_name: Option<&'a str>,
@@ -256,6 +281,7 @@ fn hosted_agent_entry(event: &CLIAgentEvent, applied: bool) -> Entry<'_> {
         },
         session_id: event.session_id.as_deref(),
         call_id: None,
+        parent_call_id: None,
         cwd: event.cwd.as_deref(),
         project: event.project.as_deref(),
         tool_name: payload.tool_name.as_deref(),
@@ -335,6 +361,29 @@ fn session_key(session_id: Option<&str>) -> String {
     } else {
         cleaned
     }
+}
+
+/// The working directory's last component, matching what the TUI publisher puts
+/// in `project`.
+fn project_name(cwd: &str) -> Option<&str> {
+    std::path::Path::new(cwd)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.is_empty())
+}
+
+/// Collapses whitespace and truncates, so one line stays one line.
+///
+/// A raw command or query can contain newlines, and a newline in a JSONL record
+/// would be escaped rather than break the file — but the escaping is what a
+/// person reading `tail -f` would have to undo, so it is removed here instead.
+fn excerpt(text: &str) -> String {
+    let normalized = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    let mut excerpt: String = normalized.chars().take(MAX_TEXT_LEN).collect();
+    if normalized.chars().count() > MAX_TEXT_LEN {
+        excerpt.push('…');
+    }
+    excerpt
 }
 
 /// Where a session's file lands, for callers that want to read one back.

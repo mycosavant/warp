@@ -121,6 +121,16 @@ impl TryFrom<ServerConversationToken>
 #[derive(Debug, Clone)]
 pub struct RequestParams {
     pub input: Vec<AIAgentInput>,
+    /// Warp's own id for the conversation this request belongs to.
+    ///
+    /// **Fork (T11.1c).** Upstream drops it: [`Self::new`] is handed the whole
+    /// [`ConversationData`] and keeps only the fields the server needs, and the
+    /// server does not need this one — it knows a conversation by
+    /// [`Self::conversation_token`]. The fork's local agent does need it,
+    /// because the token on that path is *Claude's* session id, and events filed
+    /// under it would land in a different file from the turn frame
+    /// `event_log::warp_agent` writes under this one.
+    pub conversation_id: AIConversationId,
     pub conversation_token: Option<ServerConversationToken>,
     pub forked_from_conversation_token: Option<ServerConversationToken>,
     pub ambient_agent_task_id: Option<AmbientAgentTaskId>,
@@ -195,6 +205,7 @@ impl RequestParams {
     pub fn new_for_test() -> Self {
         Self {
             input: vec![],
+            conversation_id: AIConversationId::new(),
             conversation_token: None,
             forked_from_conversation_token: None,
             ambient_agent_task_id: None,
@@ -397,6 +408,7 @@ impl RequestParams {
 
         Self {
             input: request_input.all_inputs().cloned().collect(),
+            conversation_id: conversation.id,
             conversation_token: conversation.server_conversation_token,
             forked_from_conversation_token: conversation.forked_from_conversation_token,
             ambient_agent_task_id: conversation.ambient_agent_task_id,

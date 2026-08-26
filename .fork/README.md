@@ -1896,8 +1896,10 @@ a query against it:
   event that vanished is exactly what you came to this file to find.
 - **`source` says which agent world a line came from**, and it is the only
   field that does. `rich_plugin` and `codex_osc9_fallback` are agents running in
-  your panes; `in_process` is Warp's own agent. `agent` cannot tell you: Warp's
-  in-app agent and its headless TUI both call themselves `warp`.
+  your panes; `in_process` is Warp's own agent; `local_agent` is the `claude`
+  CLI answering a Warp turn on a pipe. `agent` cannot tell you: Warp's in-app
+  agent and its headless TUI both call themselves `warp`, and the CLI is
+  `claude` whether you ran it or Warp did.
 - **`v` is present only on lines that crossed the wire.** A hosted agent's
   events carry the protocol version they were parsed under; Warp's own agent has
   no protocol and so no `v`, rather than a made-up `1`.
@@ -1915,11 +1917,46 @@ exists to answer. Hosted agents do not have this yet; their protocol carries no
 per-call id, and adding one needs a version bump because it has to come from the
 plugin.
 
-**One honest gap.** With `WARP_FORK_LOCAL_AGENT=1` — the fork's headline path,
-where the `claude` CLI answers — the log records the turn (`session_start`,
-`prompt_submit`, `stop`) and **not the tools**. Claude runs its own tools and
-Warp deliberately never re-runs them, and the CLI is spawned on a pipe rather
-than a Warp PTY, so neither event world sees them. Closing that is T11.1c.
+**`WARP_FORK_LOCAL_AGENT=1` turns are covered too** (T11.1c). On that path —
+the fork's headline one, where the `claude` CLI answers — Claude runs its own
+tools and Warp deliberately never re-runs them, so neither of the two event
+worlds above sees a thing. The tools are read off Claude's own `stream-json`
+instead and filed under **Warp's** conversation id, so a turn's frame and its
+tools are one file:
+
+```console
+$ jq -r '[.seq,.source,.event,.tool_name//"",.tool_input_preview//""]|@tsv' events/*.jsonl
+0  in_process    session_start
+1  local_agent   tool_start     Read   /tmp/notes.md
+2  local_agent   tool_complete  Read
+3  in_process    stop
+```
+
+`call_id` here is Claude's `tool_use.id`, so the same join works — but there is
+no `permission_request` to join *to*. Claude in `--print` mode does not report
+one: a refused tool comes back as an ordinary result with `is_error`,
+indistinguishable on the wire from a tool that ran and failed. Both appear as
+`tool_complete` with `error_type: "error"`, which is what the stream said.
+
+These lines also carry **`parent_call_id`**, which no other source can: when a
+turn spawns subagents, each child's tools name the `Task` call they ran inside.
+Position alone will not tell you — two subagents running at once interleave, and
+finish in whatever order they finish:
+
+```console
+$ jq -r '[.event,.tool_name,.call_id[0:12],(.parent_call_id//"-")[0:12]]|@tsv' events/*.jsonl
+tool_start     Agent  toolu_013dvF  -
+tool_start     Agent  toolu_0152hY  -
+tool_start     Read   toolu_015hja  toolu_013dvF
+tool_complete  Read   toolu_015hja  toolu_013dvF
+tool_start     Read   toolu_011UBW  toolu_0152hY
+tool_complete  Read   toolu_011UBW  toolu_0152hY
+tool_complete  Agent  toolu_0152hY  -
+tool_complete  Agent  toolu_013dvF  -
+```
+
+What it does *not* give you is a per-child turn frame: there is no
+`session_start`/`stop` for a subagent, because Claude does not emit one.
 
 The directory is created on the first event, not at startup, so an empty
 directory means nothing arrived rather than that logging is off. The line

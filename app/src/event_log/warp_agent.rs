@@ -42,14 +42,13 @@
 //!   with `Stdio::piped()` and reads its JSON directly; there is no Warp PTY in
 //!   that path, so nothing reaches the terminal parser world 2 hangs off.
 //!
-//! **So on the primary path the log currently carries the frame and not the
-//! tools, and that is a gap rather than a design.** Closing it means projecting
-//! the stream `translate.rs` is already parsing — it sees every `tool_use`
-//! block — but filing those lines under the *run* needs Warp's
-//! `AIConversationId`, and `RequestParams` carries only Claude's session token.
-//! That plumbing is T11.1c; it was scoped rather than half-built. World 2
-//! meanwhile remains what it always was: a CLI agent a person ran in a Warp
-//! pane, under its own session id and so its own file.
+//! Both still hold. What no longer holds is the conclusion drawn from them: for
+//! two commits this file said the log therefore carried the frame and not the
+//! tools. **[`super::local_agent`] now supplies the tools** by projecting the
+//! stream `translate.rs` was already parsing, under the same
+//! `AIConversationId` this module files the frame under, so one turn is one
+//! file (T11.1c). World 2 meanwhile remains what it always was: a CLI agent a
+//! person ran in a Warp pane, under its own session id and so its own file.
 //!
 //! The action table below is reached by Warp's own server-backed agent, which
 //! this fork has no account for. It is held by unit tests instead, and that is
@@ -65,7 +64,7 @@
 
 use warpui::{AppContext, Entity, EntityId, ModelContext, ModelHandle, SingletonEntity as _};
 
-use super::Entry;
+use super::{Entry, excerpt, project_name};
 use crate::ai::agent::conversation::ConversationStatus;
 use crate::ai::agent::{
     AIAgentActionResultTypeDiscriminants, AIAgentActionType, AIAgentActionTypeDiscriminants,
@@ -87,11 +86,6 @@ const AGENT: &str = "warp";
 /// The `source` value on every line this module writes: these events never
 /// crossed a process boundary.
 const SOURCE: &str = "in_process";
-
-/// Longest free text kept on a line. The wire protocol's own limit is 320
-/// characters (`MAX_NOTIFICATION_DESCRIPTION_CHARS` in the TUI publisher) and
-/// matching it keeps summaries comparable between the two worlds.
-const MAX_TEXT_LEN: usize = 320;
 
 /// Starts recording this terminal surface's Warp-agent activity.
 ///
@@ -206,6 +200,7 @@ fn record_action_event(
         source: SOURCE,
         session_id: session_id.as_deref(),
         call_id: Some(&call_id),
+        parent_call_id: None,
         cwd: cwd.as_deref(),
         project: cwd.as_deref().and_then(project_name),
         tool_name: tool_name.as_deref(),
@@ -295,6 +290,7 @@ fn record_history_event(
         source: SOURCE,
         session_id: Some(&session_id),
         call_id: None,
+        parent_call_id: None,
         cwd: cwd.as_deref(),
         project: cwd.as_deref().and_then(project_name),
         tool_name: None,
@@ -429,29 +425,6 @@ fn tool_input_preview(action: &AIAgentActionType) -> Option<String> {
         }
         _ => None,
     }
-}
-
-/// The working directory's last component, matching what the TUI publisher puts
-/// in `project`.
-fn project_name(cwd: &str) -> Option<&str> {
-    std::path::Path::new(cwd)
-        .file_name()
-        .and_then(|name| name.to_str())
-        .filter(|name| !name.is_empty())
-}
-
-/// Collapses whitespace and truncates, so one line stays one line.
-///
-/// A raw command or query can contain newlines, and a newline in a JSONL record
-/// would be escaped rather than break the file — but the escaping is what a
-/// person reading `tail -f` would have to undo, so it is removed here instead.
-fn excerpt(text: &str) -> String {
-    let normalized = text.split_whitespace().collect::<Vec<_>>().join(" ");
-    let mut excerpt: String = normalized.chars().take(MAX_TEXT_LEN).collect();
-    if normalized.chars().count() > MAX_TEXT_LEN {
-        excerpt.push('…');
-    }
-    excerpt
 }
 
 #[cfg(test)]

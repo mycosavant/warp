@@ -48,6 +48,13 @@
 //! in needs `--input-format stream-json` so results can be fed back mid-turn,
 //! and is the next step rather than part of the spike.
 //!
+//! It does mean nothing else in Warp observes those tools, which is why they are
+//! projected to the fork's event log from here instead (T11.1c): `translate.rs`
+//! accumulates a [`ToolEvent`] per `tool_use` and per `tool_result`, and the
+//! stream below drains them into `event_log::local_agent` under Warp's own
+//! conversation id. That is a record, not participation — nothing in the app
+//! reads it.
+//!
 //! Also not done: model selection (Claude Code picks its own), attachments,
 //! MCP context, and every input type other than a user query and a `/compact`
 //! — those fall through to upstream untouched.
@@ -69,9 +76,11 @@ use futures_lite::{AsyncBufReadExt as _, AsyncReadExt as _, AsyncWriteExt as _};
 use uuid::Uuid;
 use warp_terminal::shell::ShellLaunchData;
 
+pub(crate) use self::translate::ToolEvent;
 use self::translate::{Mode, Translator};
 use crate::ai::agent::AIAgentInput;
 use crate::ai::agent::api::{Event, RequestParams, ResponseStream};
+use crate::event_log::local_agent::TurnContext;
 use crate::server::server_api::AIApiError;
 
 /// Whether this request is one the local agent handles.
@@ -167,6 +176,12 @@ pub(crate) struct Turn {
     /// The Claude session to continue, i.e. Warp's conversation token. `None`
     /// starts a new one.
     session: Option<String>,
+    /// Warp's own id for this conversation, which is *not* [`Self::session`].
+    ///
+    /// Carried only for the event log (T11.1c): it is the key the turn's frame
+    /// is already filed under, so tool events filed under it land in the same
+    /// file rather than in one named after Claude's session.
+    conversation_id: String,
     task_id: String,
     task_needs_announcing: bool,
     working_directory: Option<String>,
@@ -219,6 +234,7 @@ impl Turn {
         Ok(Self {
             ask,
             session,
+            conversation_id: params.conversation_id.to_string(),
             task_id,
             task_needs_announcing,
             working_directory: params.session_context.current_working_directory().clone(),
@@ -303,12 +319,14 @@ async fn run(turn: Turn) -> anyhow::Result<impl Stream<Item = Event> + Send + us
     let Turn {
         ask,
         session,
+        conversation_id,
         task_id,
         task_needs_announcing,
         working_directory,
         distro,
         allowed_tools,
     } = turn;
+    let log = TurnContext::new(conversation_id, working_directory.clone());
     let prompt = ask.prompt();
     let request_id = Uuid::new_v4().to_string();
     let started_at = Utc::now();
@@ -388,6 +406,7 @@ async fn run(turn: Turn) -> anyhow::Result<impl Stream<Item = Event> + Send + us
         lines: Box::pin(BufReader::new(stdout).lines()),
         stderr: Box::pin(stderr),
         translator: Translator::new(task_id, task_needs_announcing, request_id, mode, started_at),
+        log,
         pending: VecDeque::new(),
         ended: false,
     }))
@@ -403,6 +422,8 @@ struct TurnState<C> {
     lines: Pin<Box<dyn Stream<Item = std::io::Result<String>> + Send>>,
     stderr: Pin<Box<dyn futures_lite::AsyncRead + Send>>,
     translator: Translator,
+    /// What every event-log line of this turn shares (T11.1c).
+    log: TurnContext,
     /// One line can carry several messages, and the stream yields one event at
     /// a time.
     pending: VecDeque<Event>,
@@ -424,6 +445,13 @@ fn events<C: Send + 'static>(state: TurnState<C>) -> impl Stream<Item = Event> +
                     state
                         .pending
                         .extend(state.translator.on_line(&line).into_iter().map(Ok));
+                    // Drained here rather than written by the translator, so
+                    // that file stays free of a filesystem. The log is a
+                    // no-op unless something asked for one, and these events
+                    // are tool-call paced, so this costs nothing when off.
+                    for event in state.translator.take_tool_events() {
+                        crate::event_log::local_agent::record(&state.log, &event);
+                    }
                 }
                 Some(Err(error)) => {
                     state.ended = true;

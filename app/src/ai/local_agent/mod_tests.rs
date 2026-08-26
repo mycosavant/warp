@@ -19,6 +19,7 @@ fn turn(prompt: &str, session: Option<String>) -> Turn {
     Turn {
         ask: Ask::Query(prompt.to_owned()),
         session,
+        conversation_id: "conversation-1".to_owned(),
         task_id: "task-1".to_owned(),
         task_needs_announcing: true,
         working_directory: None,

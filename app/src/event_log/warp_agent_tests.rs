@@ -1,6 +1,9 @@
 use super::*;
 use crate::ai::agent::AIAgentActionId;
 use crate::ai::agent::conversation::AIConversationId;
+// Lives on `event_log` rather than here since T11.1c: three adapters truncating
+// at three lengths would defeat the field.
+use crate::event_log::MAX_TEXT_LEN;
 
 fn command_action(command: &str) -> AIAgentActionType {
     AIAgentActionType::RequestCommandOutput {

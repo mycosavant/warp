@@ -5388,10 +5388,13 @@ target never compiles.
 - [x] **T11.1b** Warp's own agent into the same log. World 1
       (`BlocklistAIHistoryEvent` / `BlocklistAIActionEvent`) projected onto the
       same vocabulary, so one `jq` filter answers for every agent in the window.
-- [ ] **T11.1c** The local agent's tools into the log. **Found by running
-      T11.1b, not planned**: on this fork's primary agent path the log carries
-      the turn frame and no tools at all, because neither world sees them. See
-      the T11.1b as-built for why, and for the one piece of plumbing it needs.
+- [x] **T11.1c** The local agent's tools into the log. **Found by running
+      T11.1b, not planned**: on this fork's primary agent path the log carried
+      the turn frame and no tools at all, because neither world sees them. Built
+      as a third source — `source: "local_agent"` — read off the `stream-json`
+      `translate.rs` was already parsing, filed under Warp's conversation id so
+      a turn's frame and its tools are one file. It carries `parent_call_id`,
+      which no other source can: subagent nesting, also found by running it.
 - [x] **T11.2** The first slice of the read surface, end to end and deliberately
       small: **one** `GET` route on `warpctrl` returning current agent/task
       state, **one** SSE endpoint carrying T11.1's events, still bound to
@@ -5680,6 +5683,118 @@ first-run onboarding, and the window sits on "Welcome to Warp" with
 `$XDG_CONFIG_HOME/warp-oss/user_preferences.json` instead. And on WSLg a
 root-window screenshot is **black**: capture the window id from
 `xwininfo -root -children` and use `import -window <id>`.
+
+### T11.1c — as built
+
+`app/src/event_log/local_agent.rs` plus tool-event accumulation in
+`translate.rs`, and **one field of plumbing**: `RequestParams` now carries
+`conversation_id`. Upstream had it in hand the whole time — `RequestParams::new`
+is handed the entire `ConversationData` and keeps only what the *server* needs,
+and the server does not need this one, because it knows a conversation by its
+token. On the local path that token is Claude's session id, so filing tool
+events under it would have put a turn's tools in a different file from its
+frame. Three lines, and the reason T11.1b scoped this rather than half-building
+it.
+
+**A third `source`, not a third vocabulary.** `local_agent` sits next to
+`in_process` and `rich_plugin`; `agent` is `claude` and `event` is `tool_start`
+/ `tool_complete` exactly as everywhere else, so the queries written for the
+other two work unchanged. `v` is absent, which now means what it always claimed
+to mean: this did not cross the OSC 777 wire.
+
+**The translator accumulates, the caller writes.** `translate.rs` opens with a
+promise — "no process, no clock, no network" — and calling the log from it would
+have cost that. So it pushes a `ToolEvent` per `tool_use` and per `tool_result`
+and `run()`'s stream drains them. A `HashMap<call_id, name>` in the translator
+lets a `tool_complete` say *what* finished; it is not decoration, because Claude
+issues parallel tool calls and the starts interleave with the completions
+(measured: `seq` 11, 12, 13, 14 on one turn — two starts, then two completions
+in order). A single "last tool" slot would have mis-attributed every one of them.
+
+**`input_preview` is untyped on purpose, and this is the interesting bug that
+was avoided rather than fixed.** `input` is whatever a tool's schema declares,
+so a typed `command: Option<String>` would fail to deserialize the moment an MCP
+server declared `command` as an array — and because `on_line` drops any line it
+cannot parse, that failure would have taken **the whole assistant message**, not
+just the preview. The answer to the user would have vanished to log a field
+nobody asked for. Pinned by
+`an_input_of_an_unexpected_shape_costs_the_preview_and_not_the_message`.
+
+Which two keys? `command` and `file_path`, matching `warp_agent`'s rule exactly:
+the field is grepped for what *ran*, and widening it to every argument makes
+that grep unreliable across sources as well as putting more of a tool's payload
+— which is where its secrets are — on disk. `excerpt`, `project_name` and
+`MAX_TEXT_LEN` moved up to `event_log/mod.rs` for the same reason: three
+adapters truncating at three lengths would defeat the comparison the field
+exists for.
+
+#### `parent_call_id`, found by running it
+
+Not planned. The first `Task` turn driven through the finished feature produced
+this, which *looks* complete:
+
+```
+21 local_agent tool_start    Agent toolu_01K1rS…
+22 local_agent tool_start    Read  toolu_01Nhnd…
+23 local_agent tool_complete Read  toolu_01Nhnd…
+24 local_agent tool_complete Agent toolu_01K1rS…
+```
+
+The nesting is there, and it is *entirely an inference from interleaving* — the
+subagent's `Read` happens to fall between its parent's two lines. Claude's
+stream carries `parent_tool_use_id` on the event and it was being thrown away.
+
+Driving two subagents concurrently showed why the inference is not good enough:
+
+```
+1 tool_start    Agent toolu_013dvFLd  parent -
+2 tool_start    Agent toolu_0152hYmB  parent -
+3 tool_start    Read  toolu_015hja3e  parent toolu_013dvFLd  …/f1.txt
+4 tool_complete Read  toolu_015hja3e  parent toolu_013dvFLd
+5 tool_start    Read  toolu_011UBWMh  parent toolu_0152hYmB  …/f2.txt
+6 tool_complete Read  toolu_011UBWMh  parent toolu_0152hYmB
+7 tool_complete Agent toolu_0152hYmB  parent -
+8 tool_complete Agent toolu_013dvFLd  parent -
+```
+
+Both parents are open across the whole middle, and they finish in the **opposite
+order** they started. Position says nothing; the field says everything. Fan-out
+is the case this fork most wants to watch, so the field is recorded rather than
+inferred — and `local_agent` is the only one of the three sources that can, since
+world 1 has no nesting and world 2's protocol has no such field.
+
+**What it deliberately does not claim.** There is no `permission_request` on this
+path. Claude in `--print` mode does not report one: a refused tool comes back as
+an ordinary `tool_result` with `is_error`, indistinguishable on the wire from a
+tool that ran and failed. Both are `tool_complete` with `error_type: "error"`,
+which is what the stream said. Driven both ways — a successful `Read`, and a
+`Read` of a file that does not exist.
+
+Also measured, and worth writing down because it would otherwise be guessed
+wrong: **`is_error` is absent on some successful results and `false` on others,
+from the same CLI build.** `#[serde(default)]` there is required, not defensive.
+Every fixture in `translate_tests.rs` is a captured line for this reason; the
+`tool_use` block also carries a `caller` object that no remembered version of the
+shape had.
+
+**Verified by running** (Linux/X11, 2026-08-25/26), with `WARP_FORK_LOCAL_AGENT=1`
+against a scratch `XDG_CONFIG_HOME` — and this time a scratch `XDG_RUNTIME_DIR`
+too, which the T11.1b recipe omitted, so those test instances published into the
+*shared* discovery registry. Four turns: one tool, one failing tool, three
+parallel tools in a follow-up turn, and two concurrent subagents. Frame and
+tools landed in one file under one conversation id, and the same lines arrived
+over T11.2's SSE stream (`warpctrl events tail`) with no extra work, since the
+fan-out is downstream of `record`.
+
+Both new assertions were mutation-tested: replacing the `call_id` → name lookup
+with `None` fails exactly `a_tool_call_and_its_result_are_recorded_as_a_matched_pair`,
+and dropping the parent threading fails exactly
+`a_subagents_tools_name_the_call_that_spawned_them`.
+
+**Still open, and now the only gap on this path:** a subagent's *turn* has no
+frame of its own — no `session_start`/`stop` per child — because Claude does not
+emit one and Warp does not know a child exists. `parent_call_id` gives
+containment, not lifetime.
 
 ### T11.3 — as built
 
