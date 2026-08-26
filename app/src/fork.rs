@@ -388,6 +388,83 @@ fn event_log_dir_from(value: Option<&str>) -> Option<std::path::PathBuf> {
     }
 }
 
+const CONTROL_BIND_ENV_VAR: &str = "WARP_FORK_CONTROL_BIND";
+
+/// What `WARP_FORK_CONTROL_BIND` asked the control server to listen on (T11.4).
+///
+/// The variable names **one exact IP address**, never a mode and never a
+/// hostname, and that is the whole of the design. `HOST=0.0.0.0` is the stated
+/// anti-pattern this task exists to avoid, and the reason it is an anti-pattern
+/// is not that a wildcard is dangerous in itself — it is that a wildcard is
+/// *unanswerable*. You cannot tell from it which networks you just joined, and
+/// the server cannot tell a client which `Host` to present, so the header check
+/// that stops DNS rebinding has nothing to check against. An address you had to
+/// type is a decision; a wildcard is a shrug.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ControlBind {
+    /// Loopback only — what `warpctrl` has done since T1, and the default.
+    LoopbackOnly,
+    /// Loopback *plus* a second listener on exactly this address.
+    Additional(std::net::IpAddr),
+    /// The value could not be honoured, with the reason to log. Loopback still
+    /// listens; see [`control_bind`] for why that is the fail-closed answer and
+    /// not a half-measure.
+    Refused(&'static str),
+}
+
+/// Where the `warpctrl` server listens (T11.4).
+///
+/// Off by default and off under `WARP_FORK_POLICY=0`: a bind wider than
+/// loopback is the one thing in this fork that can hand agent state to another
+/// machine, so it is reachable only by naming an address on purpose.
+///
+/// **[`ControlBind::Refused`] leaves loopback listening, and that is the
+/// fail-closed reading rather than a softening of it.** The dangerous thing here
+/// is the *wide* listener, so the closed state is "do not open it" — refusing to
+/// start the server at all would instead take out `warpctrl window close`, which
+/// is the only sanctioned way to stop a running Warp. This fork has already
+/// been bitten by exactly that: a `WARP_FORK_POLICY=0` instance published no
+/// discovery record, so it held a window and a port with no client able to
+/// authenticate to it and no way to shut it down. A typo in an environment
+/// variable must not be able to produce that.
+pub fn control_bind() -> ControlBind {
+    if !is_active() {
+        return ControlBind::LoopbackOnly;
+    }
+    control_bind_from(std::env::var(CONTROL_BIND_ENV_VAR).ok().as_deref())
+}
+
+/// Split from the environment so the decision can be asserted without setting a
+/// process-global variable from a test that runs beside others.
+fn control_bind_from(value: Option<&str>) -> ControlBind {
+    let value = match value.map(str::trim) {
+        None | Some("") | Some("0") | Some("off") | Some("false") => {
+            return ControlBind::LoopbackOnly;
+        }
+        Some(value) => value,
+    };
+    let Ok(address) = value.parse::<std::net::IpAddr>() else {
+        // Deliberately not resolved as a hostname. What a name points at is
+        // decided elsewhere and can change between the check and the bind, and
+        // "fail closed on an ambiguous config" is the requirement.
+        return ControlBind::Refused(
+            "WARP_FORK_CONTROL_BIND must be a literal IP address; the wide listener is not open",
+        );
+    };
+    if address.is_unspecified() {
+        return ControlBind::Refused(
+            "WARP_FORK_CONTROL_BIND must name one address, not a wildcard; \
+             the wide listener is not open",
+        );
+    }
+    if address.is_loopback() {
+        // Not an error and not wide: loopback is already bound, and asking for
+        // it again is a request for what is already true.
+        return ControlBind::LoopbackOnly;
+    }
+    ControlBind::Additional(address)
+}
+
 /// Whether a tab can be dragged into the pane area to split a pane (T8.2).
 ///
 /// **The gate was an axis.** Upstream wraps each tab in a `Draggable` pinned to

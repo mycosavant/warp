@@ -1998,6 +1998,108 @@ The two credentials are not interchangeable in either direction — an
 carries tool names, input previews and working directories that `agent.list`
 does not.
 
+### Letting a phone watch — the wide bind, and pairing
+
+Everything above is `127.0.0.1`. T11.4 adds a second listener, and it is off
+unless you name an address:
+
+```console
+$ WARP_FORK_CONTROL_BIND=192.168.1.5 warp-oss   # plus the usual launch recipe
+```
+
+**The variable takes one literal IP address and nothing else.** Not a hostname,
+not `0.0.0.0`, not "lan". Anything it cannot honour leaves the wide listener
+shut and logs why:
+
+| value | what happens |
+|---|---|
+| unset, `off`, `0`, `false` | loopback only — the default |
+| `127.0.0.1`, `::1` | loopback only; you asked for what was already true |
+| `192.168.1.5`, `fd00::1` | loopback **plus** that address |
+| `0.0.0.0`, `::` | **refused**, loopback keeps serving |
+| `lan`, `my-box.local`, `192.168.1.5:8080` | **refused**, loopback keeps serving |
+
+Refusing `0.0.0.0` is the point rather than an omission. The anti-pattern this
+task exists to avoid is `HOST=0.0.0.0`, and what makes it one is not that a
+wildcard is broad — it is that a wildcard is *unanswerable*. Nothing can say
+which networks you just joined, and the server cannot tell a client which `Host`
+to present, so the header check that stops a name you never chose has nothing to
+check against. An address you had to type is a decision.
+
+**A refusal leaves loopback serving on purpose.** Refusing to start would take
+out `warpctrl window close`, which is the only sanctioned way to stop a running
+Warp — the exact trap a `WARP_FORK_POLICY=0` run already sprang once, leaving a
+window and a port with no client able to authenticate to it. A typo must not be
+able to produce that.
+
+The wide address is **never written to the discovery record.** Local clients
+still find the instance at `127.0.0.1`, which is what
+`validate_local_control_authority` insists on, so nothing about local discovery
+changes and the check that stops a record redirecting a client elsewhere is
+untouched.
+
+#### Pairing
+
+```console
+$ warpctrl pair show
+```
+
+prints a QR code, the URL behind it, and what scanning it buys. Three steps, and
+the split is the whole design:
+
+| | lifetime | where it appears |
+|---|---|---|
+| **pairing code** | 2 minutes, spendable **once** | the QR — the only secret ever displayed |
+| **device token** | 12 hours | returned once, to the device that spent the code |
+| **credential** | 5 minutes, one action | same as every local client's |
+
+A single long-lived bearer would have had to be *in* the QR, which means also in
+whatever scrollback, screenshot or photograph the QR appeared in — and stay
+valid. Splitting them means the only thing shown is dead in two minutes, and the
+long-lived secret was never on screen.
+
+**`warpctrl pair show` is the one command in `warpctrl` that prints a secret.**
+Unavoidable — a code has to be readable to be scanned — and bounded by the two
+minutes.
+
+**What a scan buys is the read surface and nothing else:**
+
+```
+app.ping   agent.list   events.subscribe
+```
+
+This is an allowlist, not a denylist, and it is the security boundary of the
+feature. The catalog next to it contains `input.insert`, `input.submit`,
+`agent.prompt`, `slash.run` and `remote.wsl.connect` — a pairing path that could
+mint credentials for those would be remote code execution reachable by
+photographing a screen. The local Unix broker keeps the whole catalog because it
+has a kernel peer-UID check to justify it; a QR scan is not that. Widening the
+list is T11.5's argument to make, and
+`a_paired_device_cannot_reach_the_actions_that_execute` is where it has to be
+made.
+
+The routes a device uses, neither of which is a catalog action — a device
+offering a pairing code has no credential, so there is nothing for the request
+envelope's authority check to check:
+
+| route | what it takes | what it returns |
+|---|---|---|
+| `POST /v1/pair` | the pairing code as a bearer | a device token |
+| `POST /v1/pair/credential` | the device token + one action | a scoped credential |
+
+Then `GET /v1/state` and `GET /v1/events` as above. The code rides in the URL's
+**fragment** (`…/v1/pair#<code>`), which is the one part of a URL never sent to a
+server — so the half anything would log is inert. Stated honestly: the page that
+would make a browser enforce that does not exist yet, so today it is a convention
+the client follows rather than something guaranteed.
+
+**No CORS allowlist, deliberately.** The must-have list said "a CORS allowlist
+and never `*`"; this ships something stricter and it should not later be
+"fixed" into the weaker thing. Any request carrying `Origin` is refused
+outright — the empty allowlist. An allowlist would be a *widening*, and today it
+would have nothing to widen to, because there is no page. When one exists, the
+allowlist belongs in the same commit, naming the exact origin it serves.
+
 ## Voice input, transcribed on this machine
 
 Upstream sends your voice to `api.warp.dev`. The provider setting

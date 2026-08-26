@@ -814,3 +814,55 @@ fn dragging_a_tab_out_of_the_strip_depends_on_a_forced_flag() {
         "both tab strips lock their drag axis unless this flag is on"
     );
 }
+
+/// The wide bind is off unless an address is named, and a value that cannot be
+/// honoured is refused rather than guessed at.
+///
+/// Asserted against the parser rather than by setting the variable, for the
+/// same reason as [`the_frame_log_is_off_until_it_is_asked_for`]: env vars are
+/// process-wide and a test that sets one races every test beside it.
+#[test]
+fn a_bind_wider_than_loopback_has_to_be_named_exactly() {
+    // Absent is the ordinary case and must cost nothing.
+    for absent in [None, Some(""), Some("0"), Some("off"), Some("false")] {
+        assert_eq!(control_bind_from(absent), ControlBind::LoopbackOnly);
+    }
+
+    assert_eq!(
+        control_bind_from(Some("192.168.1.5")),
+        ControlBind::Additional("192.168.1.5".parse().expect("a v4 address"))
+    );
+    assert_eq!(
+        control_bind_from(Some("  fd00::1  ")),
+        ControlBind::Additional("fd00::1".parse().expect("a v6 address"))
+    );
+
+    // Asking for loopback is asking for what is already true, which is not an
+    // error and is not a *wide* bind — the caller gets no second listener.
+    assert_eq!(
+        control_bind_from(Some("127.0.0.1")),
+        ControlBind::LoopbackOnly
+    );
+    assert_eq!(control_bind_from(Some("::1")), ControlBind::LoopbackOnly);
+
+    // The named anti-pattern. `HOST=0.0.0.0` is refused because it is
+    // unanswerable, not merely because it is broad: nothing can say which
+    // networks it joined, and no `Host` can be pinned for clients to present.
+    assert!(matches!(
+        control_bind_from(Some("0.0.0.0")),
+        ControlBind::Refused(_)
+    ));
+    assert!(matches!(
+        control_bind_from(Some("::")),
+        ControlBind::Refused(_)
+    ));
+
+    // Fail closed on an ambiguous config, and a hostname is ambiguous: what it
+    // resolves to is decided elsewhere and can change between check and bind.
+    for ambiguous in ["lan", "my-laptop.local", "192.168.1.5:8080", "on"] {
+        assert!(
+            matches!(control_bind_from(Some(ambiguous)), ControlBind::Refused(_)),
+            "{ambiguous:?} should be refused rather than interpreted"
+        );
+    }
+}

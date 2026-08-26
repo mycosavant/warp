@@ -5419,13 +5419,13 @@ target never compiles.
       function is public crate API named exactly what an auth check is named,
       and T11.2 and T11.4 are precisely when someone reaches for it. See the
       as-built for what the test does and does not pin.
-- [ ] **T11.4** LAN bind behind an explicit flag, plus QR pairing. `warpctrl`
-      hardcodes `[127, 0, 0, 1], 0` today. Ship the mining doc's must-haves in
-      the box, not as documentation: fail closed on an ambiguous config, refuse a
-      wide bind without a strong token, never log the token, CORS allowlist and
-      never `*`. The stated anti-pattern is vibe-kanban — localhost-only with no
-      built-in auth, so the moment a user sets `HOST=0.0.0.0` for their phone,
-      anyone on the network has agent execution.
+- [x] **T11.4** LAN bind behind an explicit flag, plus QR pairing. `warpctrl`
+      hardcoded `[127, 0, 0, 1], 0`. Built as a **second** listener rather than a
+      moved one, and as a three-step pairing flow whose only displayed secret
+      lives two minutes. The must-have that was not on the list turned out to be
+      the important one: the catalog contains `input.submit` and `agent.prompt`,
+      so a pairing path that mints any credential *is* the RCE the ticket was
+      trying to prevent. A paired device gets three read actions.
 - [ ] **T11.5** `GB-APPROVE` + `GB-GRANTS` — answer a waiting-input approval
       remotely, with remembered grants. The first *write* capability, chosen
       because its blast radius is bounded and because it is what turns "watch"
@@ -5795,6 +5795,166 @@ and dropping the parent threading fails exactly
 frame of its own — no `session_start`/`stop` per child — because Claude does not
 emit one and Warp does not know a child exists. `parent_call_id` gives
 containment, not lifetime.
+
+### T11.4 — as built
+
+A second listener, three secrets with different lifetimes, one new catalog
+action (110 → **111**), and an allowlist that is the actual security boundary.
+
+**The gate check paid off twice, in opposite directions.** `qrcode` is already an
+`app` dependency and `drive::sharing::qr_code` already encodes an arbitrary URL
+to a matrix *and* a PNG — built for Warp Drive share links, generic, tested. The
+QR half of this ticket needed one word (`mod` → `pub(crate) mod`) and a
+half-block renderer. But the *bind* half had no gate at all: `[127, 0, 0, 1], 0`
+is a literal in `LocalControlServer::start`, ungated by anything. Worth recording
+that the rule has a failure mode — "look for the gate first" found a whole
+subsystem in one half of the task and nothing in the other, and the second half
+is where the design work was.
+
+**The ticket's four must-haves, and the one it did not list.**
+
+| asked for | shipped |
+|---|---|
+| fail closed on an ambiguous config | `WARP_FORK_CONTROL_BIND` takes one literal IP; a hostname, a wildcard, or a typo leaves the wide listener shut |
+| refuse a wide bind without a strong token | the pairing state only exists when a wide listener does, and a device gets nothing without spending a 32-byte `OsRng` code |
+| never log the token | the only `log::` line names the address; the code reaches a person through `warpctrl pair show` and the QR |
+| CORS allowlist, never `*` | **deliberately not done** — see below |
+| — | **a paired device may reach three actions**, and this is the one that mattered |
+
+**The must-have that was missing is the one the catalog forced.** The four listed
+above are all about *reaching* the server. None of them constrains what a client
+does once it is in, and `ActionKind` has 111 entries including `input.insert`,
+`input.submit`, `agent.prompt`, `agent.spawn`, `slash.run` and
+`remote.wsl.connect`. `input.insert` followed by `input.submit` is typing a
+command into a terminal and pressing return. A pairing path that could mint a
+credential for any implemented action would therefore have satisfied every stated
+requirement and still been remote code execution reachable by photographing a
+screen — which is *precisely* the vibe-kanban failure the ticket names, arrived at
+through the front door instead of the back. So `PAIRABLE_ACTIONS` is
+`app.ping`, `agent.list`, `events.subscribe`, checked before `issue_credential`
+is even called, and stated as an allowlist because a denylist is a promise to
+remember every future catalog entry.
+
+**Refusing the CORS allowlist, on purpose.** The requirement assumes a server
+that answers browsers and must choose which. This one answers none: any request
+carrying `Origin` is refused outright, which *is* the empty allowlist. Adding an
+allowlist now would be a widening with nothing to widen to, since there is no
+page — the pairing client is a fetch from something holding a device token, not
+a document with an origin. Recorded here and in the renamed function's doc
+comment so it is not later "fixed" into the weaker thing.
+
+**Two listeners, not one moved one, and the discovery record is why.**
+`InstanceRecord::validate_local_control_authority` requires `endpoint.host ==
+"127.0.0.1"` and every client calls it. Moving the listener to a LAN address
+would have made the instance invisible to `warpctrl` *on the machine running
+it* — including `warpctrl window close`. Keeping loopback also means the wide
+address is never written to the filesystem at all, so the check that stops a
+record from redirecting a client somewhere else keeps its full strength rather
+than being relaxed to accommodate this feature.
+
+**`0.0.0.0` is refused, and the reason is narrower than "wildcards are
+dangerous".** A wildcard is *unanswerable*: nothing can say which networks it
+joined, and the server cannot name a `Host` for clients to present, so the
+header check degrades exactly when it starts mattering. `expected_host: String`
+became `expected_hosts: Arc<Vec<String>>` — still exact string membership over a
+two-entry, server-chosen list. The obvious way to make two listeners work would
+have been to compare ports and ignore the address, and
+`the_host_check_accepts_the_addresses_bound_and_no_others` refuses that
+explicitly.
+
+**A refusal leaves loopback serving, which is the fail-closed reading and not a
+softening of it.** The dangerous thing is the wide listener, so the closed state
+is "do not open it". Refusing to start the server outright would take out
+`warpctrl window close` — and this fork has already been bitten by exactly that
+shape, when a `WARP_FORK_POLICY=0` instance published no discovery record and
+held a window and a port that nothing could authenticate to. A mistyped
+environment variable must not be able to produce an instance nothing can stop.
+
+**Three secrets rather than one, because of where the QR ends up.** A single
+long-lived bearer would have to be *in* the QR, therefore also in the scrollback,
+screenshot or photograph the QR appeared in, and stay valid. Split: a pairing
+code (2 minutes, single-use, the only thing displayed), a device token (12 hours,
+returned once over the connection that spent the code), and ordinary 5-minute
+action-scoped credentials minted through the *same* `issue_credential` a local
+client uses. `warpctrl pair show` is the one command in the CLI that prints a
+secret, and that is now a stated property rather than an accident.
+
+**A bug found while writing the renderer, not by a test.** `QrMatrix::is_dark`
+indexes `y * width + x` into a flat `Vec`, so an `x` past the right edge does not
+read out of bounds and return `false` — it **wraps into the next row**. The quiet
+zone, drawn by asking for coordinates outside the matrix, would have been a strip
+of the following row's modules printed where the margin belongs, and no scanner
+would have read it. Caught by reading `is_dark` before trusting it;
+`the_quiet_zone_is_actually_quiet` is the assertion that now holds it, and it
+checks the *right* margin specifically because that is the one that wrapped.
+
+**Light modules are painted, not skipped.** A QR needs its light modules light,
+and a terminal background is usually dark — "leave it blank" would have produced
+a code that looks fine in a diff and does not scan at all.
+
+**Verified by running** (Linux/X11, 2026-08-26), against a scratch
+`XDG_CONFIG_HOME`, `XDG_STATE_HOME`, `XDG_RUNTIME_DIR` *and*
+`WARP_LOCAL_CONTROL_DISCOVERY_DIR` — the user's own registry was never written
+to, and `ls` confirmed it afterwards.
+
+Three listeners, which is the shape the design predicted:
+
+```
+172.22.45.116:34983   the wide listener
+127.0.0.1:41513       warpctrl's loopback listener
+127.0.0.1:9282        upstream's http_server — unrelated, and still unauthenticated
+```
+
+and the discovery record on disk said `{"host": "127.0.0.1", "port": 41513}`.
+**The wide address is not in it**, which is what leaves
+`validate_local_control_authority` at full strength.
+
+| checked | result |
+|---|---|
+| redeem the code | device token, 12h, actions `app.ping, agent.list, events.subscribe` |
+| redeem the same code twice | `unauthorized_local_client: pairing code is not valid` |
+| device token → `agent.list` | credential issued |
+| device token → `input.submit` | `insufficient_permissions`, and the message names what *is* allowed |
+| `GET /v1/state` over the LAN address | the snapshot |
+| `GET /v1/events` over the LAN address | `200`, `content-type: text/event-stream`, `: keepalive` frames |
+| an `events.subscribe` credential on `/v1/state` | refused — T11.2's scope split still holds on this path |
+| forged `Host: evil.example:34983` | refused |
+| `Origin: https://evil.example` | refused |
+| `warpctrl agent list` on loopback | unchanged |
+
+**No secret reached any log.** All three live secrets — pairing code, device
+token, credential — were grepped for across every file under the scratch state
+directory, including `warp-oss.log` and `warp.sqlite`: **zero hits each**. The
+one line the wide bind writes is
+`[INFO] local-control wide listener started at 172.22.45.116:34983`.
+
+**Both fail-closed cases run, and the important half is what still worked.**
+
+| | listeners bound | log | `warpctrl` |
+|---|---|---|---|
+| `WARP_FORK_CONTROL_BIND=0.0.0.0` | loopback only | `WARN … must name one address, not a wildcard` | `app ping` **and `window close`** both fine |
+| `WARP_FORK_CONTROL_BIND=my-laptop.local` | loopback only | `WARN … must be a literal IP address` | same |
+
+and `warpctrl pair show` answered
+`local_control_disabled: this instance has no wide listener … set
+WARP_FORK_CONTROL_BIND to the address to listen on and restart` — the error is
+the feature's discovery path, so it names the variable rather than just refusing.
+
+**One input not verified, and it is named rather than glossed.** `172.22.45.116`
+is WSL2's NAT address on `eth0`, not an address on a physical LAN, and the client
+was `curl` on the same host rather than a phone. What that exercises is every
+line of the code — a non-loopback bind, the `Host` set, the pairing exchange, the
+allowlist — and what it does not exercise is a packet that actually crossed a
+network, or a real QR scanned by a real camera. The QR *encoding* is
+`drive::sharing::qr_code`, already shipped and used by Warp Drive, so the
+untested part is the terminal rendering of it, which was eyeballed and is pinned
+by three tests but has not been photographed.
+
+**Not done, and deliberately.** No web page, so nothing consumes the pairing URL
+yet except by hand; the fragment convention is written down for when one exists.
+No revocation beyond expiry — `warpctrl pair` has `show` and nothing else, so a
+lost phone is a 12-hour window, not something you can cut short. Both belong with
+the client that would use them.
 
 ### T11.3 — as built
 

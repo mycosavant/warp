@@ -23,7 +23,7 @@ use super::{
     capabilities, ensure_feature_enabled, ensure_protocol_version, ensure_settings_allow_action,
     handle_control_request, insert_credential, issue_credential, lookup_credential,
     require_active_window_id, resolve_index_from_ids, resolve_title_from_matches,
-    validate_action_params, validate_loopback_headers, validate_request_authority,
+    validate_action_params, validate_endpoint_headers, validate_request_authority,
     validate_tab_create_target,
 };
 use crate::settings::{LocalControlMode, LocalControlModeSetting, LocalControlSettings};
@@ -166,37 +166,81 @@ fn capabilities_advertises_the_complete_catalog() {
     // `events.subscribe`, the read surface's own authority (T11.2).
     //
     // **This is the second count pin, and it is easy to miss.** Its twin is
-    // `catalog_has_exactly_110_retained_actions` in
+    // `catalog_has_exactly_111_retained_actions` in
     // `crates/local_control/src/protocol_tests.rs`, which asserts the same
     // number about `ActionKind::ALL`. T8.6 updated that one and left this one
     // red, because `cargo test -p local_control` is quick and this lives in the
     // app crate. Change both together, and run `-p warp --lib local_control`.
-    assert_eq!(capabilities().len(), 110);
+    assert_eq!(capabilities().len(), 111);
 }
 
 #[test]
 fn loopback_headers_reject_origin_and_host_mismatch() {
-    let expected_host = "127.0.0.1:1234";
+    let expected_hosts = vec!["127.0.0.1:1234".to_owned()];
     let mut headers = HeaderMap::new();
-    headers.insert(HOST, HeaderValue::from_static(expected_host));
+    headers.insert(HOST, HeaderValue::from_static("127.0.0.1:1234"));
 
-    validate_loopback_headers(&headers, expected_host).expect("matching host should be accepted");
+    validate_endpoint_headers(&headers, &expected_hosts).expect("matching host should be accepted");
 
     headers.insert(ORIGIN, HeaderValue::from_static("https://example.com"));
-    let err =
-        validate_loopback_headers(&headers, expected_host).expect_err("origin should be rejected");
+    let err = validate_endpoint_headers(&headers, &expected_hosts)
+        .expect_err("origin should be rejected");
     assert_eq!(err.code, ErrorCode::UnauthorizedLocalClient);
 
     headers.remove(ORIGIN);
     headers.insert(HOST, HeaderValue::from_static("localhost:1234"));
-    let err = validate_loopback_headers(&headers, expected_host)
+    let err = validate_endpoint_headers(&headers, &expected_hosts)
         .expect_err("host mismatch should be rejected");
     assert_eq!(err.code, ErrorCode::UnauthorizedLocalClient);
 
     let headers = HeaderMap::new();
-    let err = validate_loopback_headers(&headers, expected_host)
+    let err = validate_endpoint_headers(&headers, &expected_hosts)
         .expect_err("missing host should be rejected");
     assert_eq!(err.code, ErrorCode::UnauthorizedLocalClient);
+}
+
+/// The widening T11.4 makes to that check, and its limit. Two listeners share
+/// one router, so the server answers on two addresses and both have to be
+/// accepted — but only those two, by exact string.
+///
+/// The last case is the one that matters. Once a listener is reachable off the
+/// machine, the `Host` header is what stops a name the server never chose from
+/// reaching a route: a browser at `evil.example` that resolves to this box sends
+/// its own name, and a check relaxed to "any host on the right port" — the
+/// obvious way to make two listeners work — would wave it through.
+#[test]
+fn the_host_check_accepts_the_addresses_bound_and_no_others() {
+    let expected_hosts = vec!["127.0.0.1:1234".to_owned(), "192.168.1.5:5678".to_owned()];
+    let host = |value: &'static str| {
+        let mut headers = HeaderMap::new();
+        headers.insert(HOST, HeaderValue::from_static(value));
+        headers
+    };
+
+    for accepted in ["127.0.0.1:1234", "192.168.1.5:5678"] {
+        assert!(
+            validate_endpoint_headers(&host(accepted), &expected_hosts).is_ok(),
+            "{accepted} is an address this server bound"
+        );
+    }
+
+    for refused in [
+        // A name that resolves here is still not a name this server chose.
+        "evil.example:5678",
+        "evil.example",
+        // Right port, wrong address: the relaxation that would have been the
+        // easy way to support two listeners.
+        "10.0.0.7:5678",
+        // Right address, wrong port — another instance, or another program.
+        "192.168.1.5:9282",
+        // A suffix of one that is accepted, and a prefix of one.
+        "0.0.127.0.0.1:1234",
+        "192.168.1.5",
+    ] {
+        let err = validate_endpoint_headers(&host(refused), &expected_hosts)
+            .expect_err("only bound addresses are accepted");
+        assert_eq!(err.code, ErrorCode::UnauthorizedLocalClient, "{refused}");
+    }
 }
 
 #[test]
@@ -417,8 +461,9 @@ fn disabling_scripting_invalidates_existing_grant_and_prevents_new_grants() {
             ControlServerState {
                 bridge_spawner: ctx.spawner(),
                 instance_id: instance_id.clone(),
-                expected_host: expected_host.clone(),
+                expected_hosts: std::sync::Arc::new(vec![expected_host.clone()]),
                 credentials: Default::default(),
+                pairings: None,
             }
         });
         let credential = issue_credential(&state, CredentialRequest::new(ActionKind::AppPing))

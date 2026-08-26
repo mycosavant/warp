@@ -11,7 +11,7 @@ use warpui::{Entity, ModelContext, SingletonEntity};
 
 use crate::local_control::handlers::{
     agent, app_state, close, drive_objects, drive_sync, events, main_pane, metadata,
-    metadata_config, remote_wsl, settings_surfaces, visor,
+    metadata_config, pairing, remote_wsl, settings_surfaces, visor,
 };
 use crate::local_control::permissions::{
     ensure_action_allowed, ensure_feature_enabled, ensure_protocol_version,
@@ -27,6 +27,24 @@ pub struct LocalControlBridge {
     /// have it reassemble one from a discovery record (T11.2). Set from the same
     /// place as `instance_id`, where both are already known.
     control_origin: Option<String>,
+    /// Where `control.pair` mints into, and the address it tells a device to
+    /// come back to (T11.4).
+    ///
+    /// `None` covers two different situations that want the same answer: the
+    /// server has not started yet, and the server started with no wide listener.
+    /// Both mean "there is nothing to pair with", which is what the handler
+    /// says.
+    pairing: Option<PairingContext>,
+}
+
+/// What `control.pair` needs that only the server knows.
+#[derive(Clone)]
+pub(super) struct PairingContext {
+    pub(super) pairings: std::sync::Arc<std::sync::Mutex<super::pairing::Pairings>>,
+    /// `host:port` of the *wide* listener, not the loopback one. A pairing URL
+    /// pointing at `127.0.0.1` would be a QR that only works on the machine
+    /// displaying it.
+    pub(super) origin: String,
 }
 
 impl Entity for LocalControlBridge {
@@ -40,6 +58,7 @@ impl LocalControlBridge {
         Self {
             instance_id: None,
             control_origin: None,
+            pairing: None,
         }
     }
 
@@ -49,6 +68,21 @@ impl LocalControlBridge {
 
     pub(super) fn set_control_origin(&mut self, origin: String) {
         self.control_origin = Some(origin);
+    }
+
+    /// Installs the pairing state and wide address, or clears both (T11.4).
+    ///
+    /// Takes both halves at once because neither is usable alone: a map with no
+    /// address mints codes pointing nowhere, and an address with no map has
+    /// nothing to check what arrives.
+    pub(super) fn set_pairing(
+        &mut self,
+        pairings: Option<std::sync::Arc<std::sync::Mutex<super::pairing::Pairings>>>,
+        origin: Option<String>,
+    ) {
+        self.pairing = pairings
+            .zip(origin)
+            .map(|(pairings, origin)| PairingContext { pairings, origin });
     }
 
     pub(super) fn handle_request(
@@ -193,6 +227,10 @@ impl LocalControlBridge {
             ActionKind::EventsSubscribe => {
                 events::events_subscribe(self.control_origin.as_deref(), &grant)
             }
+            // Fork-local: the wide bind's front door (`.fork/TASKS.md` T11.4).
+            // Answers with a code to *show*; redeeming it is a route, because a
+            // device that has not paired yet cannot invoke an action.
+            ActionKind::ControlPair => pairing::control_pair(self.pairing.as_ref()),
             ActionKind::SlashList => agent::slash_list(&self.instance_id, &request.target, ctx),
             ActionKind::SlashRun => agent::slash_run(
                 &self.instance_id,

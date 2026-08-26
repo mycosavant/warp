@@ -123,8 +123,12 @@ defaults **on** — set it off to get upstream's terminal in the hotkey window),
 the local log; **reach for this before theorising about why something feels
 slow**), `WARP_FORK_EVENT_LOG` (`on`, or a directory — one JSONL file per
 CLI-agent session, appended as events arrive; **reach for this before
-theorising about what an agent did**). Tab→pane drag has no variable of its
-own; `WARP_FORK_POLICY=0` puts the tab's horizontal-only drag axis back.
+theorising about what an agent did**), `WARP_FORK_CONTROL_BIND` (**the only one
+that reaches off the machine** — one literal IP address and nothing else; a
+hostname, a wildcard, or a typo leaves the wide listener shut and loopback
+serving, because refusing to start would take out `warpctrl window close`).
+Tab→pane drag has no variable of its own; `WARP_FORK_POLICY=0` puts the tab's
+horizontal-only drag axis back.
 
 ---
 

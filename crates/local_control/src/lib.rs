@@ -21,6 +21,6 @@ pub use discovery::{
 };
 pub use protocol::{
     Action, ControlError, ControlResponse, ErrorCode, ErrorResponseEnvelope, EventStreamResult,
-    PROTOCOL_VERSION, RequestEnvelope, ResponseEnvelope,
+    PROTOCOL_VERSION, PairedDeviceResult, PairingResult, RequestEnvelope, ResponseEnvelope,
 };
 pub use selectors::{PaneSelector, SessionSelector, TabSelector, TargetSelector, WindowSelector};

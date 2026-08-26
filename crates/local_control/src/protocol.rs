@@ -487,6 +487,45 @@ pub struct EventStreamResult {
     pub expires_at: DateTime<Utc>,
 }
 
+/// Result of `control.pair` (T11.4): a code to show, and what scanning it buys.
+///
+/// **This one deliberately does the thing [`EventStreamResult`] refuses to do**
+/// — it returns a secret, which is how it ends up in a shell scrollback. That is
+/// the trade the three-step pairing flow exists to make survivable: this code is
+/// good for two minutes and for exactly one redemption, so a scrollback, a
+/// screenshot or a photograph of the QR is worth nothing shortly after it was
+/// taken. The long-lived secret, the device token, is never returned here and is
+/// never displayed anywhere.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PairingResult {
+    /// The URL to encode as a QR, with the code in its fragment so the half a
+    /// server would log carries nothing.
+    pub url: String,
+    /// The same QR rendered as text, so a terminal client can show one without
+    /// an image viewer.
+    pub qr: String,
+    /// When the code stops being spendable.
+    pub expires_at: DateTime<Utc>,
+    /// What a device that scans this will be able to ask for — stated up front,
+    /// because "which of these 110 actions does my phone get" is the first
+    /// question anyone should ask about a QR code.
+    pub actions: Vec<String>,
+}
+
+/// Result of redeeming a pairing code at `POST /v1/pair` (T11.4).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PairedDeviceResult {
+    /// The long-lived half. Returned exactly once, to the device that spent the
+    /// code, over the connection that spent it.
+    pub device_token: String,
+    /// When the pairing lapses and the device has to be shown a new code.
+    pub expires_at: DateTime<Utc>,
+    /// The actions this token may be exchanged for credentials for. Given so a
+    /// client can present a truthful capability list rather than discovering the
+    /// boundary one refusal at a time.
+    pub actions: Vec<String>,
+}
+
 /// Result of `agent.settle` (T8.3).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AgentSettleResult {

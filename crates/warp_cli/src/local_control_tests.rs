@@ -727,6 +727,7 @@ fn retained_action_examples() -> Vec<(ActionKind, Vec<&'static str>)> {
             ActionKind::EventsSubscribe,
             vec!["warpctrl", "events", "subscribe"],
         ),
+        (ActionKind::ControlPair, vec!["warpctrl", "pair", "show"]),
         (
             ActionKind::SlashRun,
             vec!["warpctrl", "slash", "run", "compact"],
@@ -918,6 +919,9 @@ fn parsed_action_kind(command: &ControlCommand) -> Option<ActionKind> {
         ControlCommand::Slash(command) => match command {
             SlashCommand::List(_) => Some(ActionKind::SlashList),
             SlashCommand::Run(_) => Some(ActionKind::SlashRun),
+        },
+        ControlCommand::Pair(command) => match command {
+            PairCommand::Show(_) => Some(ActionKind::ControlPair),
         },
         ControlCommand::Events(command) => match command {
             EventsCommand::Subscribe(_) | EventsCommand::Tail(_) => {

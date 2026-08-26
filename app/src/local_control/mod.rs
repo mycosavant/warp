@@ -59,6 +59,7 @@
 //! endpoint metadata and credential broker references while Scripting is enabled.
 mod bridge;
 mod handlers;
+pub(crate) mod pairing;
 mod permissions;
 pub(crate) mod resolver;
 
@@ -88,6 +89,7 @@ use axum::{Json, Router};
 pub use bridge::LocalControlBridge;
 #[cfg(any(unix, windows, test))]
 use chrono::Duration;
+use chrono::Utc;
 use permissions::ensure_feature_enabled;
 #[cfg(any(unix, windows, test))]
 use permissions::{ensure_action_allowed, ensure_protocol_version};
@@ -107,6 +109,23 @@ pub(crate) const EVENT_STREAM_PATH: &str = "/v1/events";
 /// Path of the state snapshot (T11.2).
 const STATE_PATH: &str = "/v1/state";
 
+/// Where a device redeems a pairing code for a device token (T11.4).
+///
+/// Shared with the `control.pair` handler, which builds the URL a QR encodes, so
+/// the advertised path cannot disagree with the route that answers it — the same
+/// reason [`EVENT_STREAM_PATH`] is a constant.
+pub(crate) const PAIR_PATH: &str = "/v1/pair";
+
+/// Where a paired device exchanges its device token for one scoped credential
+/// (T11.4).
+///
+/// This is the credential broker's job, done over HTTP for a caller that cannot
+/// reach a Unix socket. It is a separate path rather than a mode of
+/// [`PAIR_PATH`] so the two secrets can never be confused by a client that got
+/// the flow wrong: one path takes a pairing code and one takes a device token,
+/// and each refuses the other's.
+const PAIR_CREDENTIAL_PATH: &str = "/v1/pair/credential";
+
 /// How often an idle event stream wakes up.
 ///
 /// Two jobs: notice an expired credential without waiting for the next event,
@@ -123,8 +142,24 @@ const EVENT_STREAM_TICK: std::time::Duration = std::time::Duration::from_secs(15
 struct ControlServerState {
     bridge_spawner: ModelSpawner<LocalControlBridge>,
     instance_id: InstanceId,
-    expected_host: String,
+    /// Every `host:port` this instance answers on — one entry, or two once a
+    /// wide listener is open (T11.4).
+    ///
+    /// A list rather than a string because the two listeners share one router,
+    /// and each has its own address. It stays an *exact* membership test over a
+    /// short, server-chosen list: no wildcard, no port-only match, no suffix
+    /// rule. That is what keeps the `Host` check doing its job, which is to stop
+    /// a name the server never chose — `evil.example` resolved to this
+    /// machine — from reaching a route.
+    expected_hosts: Arc<Vec<String>>,
     credentials: Arc<Mutex<HashMap<String, CredentialGrant>>>,
+    /// Pairing codes and device tokens, or `None` when no wide listener is open
+    /// (T11.4).
+    ///
+    /// `None` is the ordinary case and it is load-bearing: with no wide bind
+    /// there is no device that could pair, so `control.pair` refuses rather than
+    /// minting a secret nobody can spend.
+    pairings: Option<Arc<Mutex<pairing::Pairings>>>,
 }
 /// Process-local publisher, credential broker, and HTTP server for one Warp instance.
 ///
@@ -251,6 +286,20 @@ impl LocalControlServer {
             )
         })?;
         let control_endpoint = ControlEndpoint::localhost(port.port());
+        // T11.4. Bound *in addition to* loopback, never instead of it, and the
+        // reason is the discovery record: local clients find this instance by
+        // reading a record that says `127.0.0.1`, and
+        // `InstanceRecord::validate_local_control_authority` refuses any record
+        // that says anything else. Moving the listener would therefore have made
+        // the instance invisible to `warpctrl` on the machine it is running on —
+        // including `warpctrl window close`, the sanctioned way to stop it.
+        //
+        // Keeping loopback also keeps that validation honest rather than
+        // weakened: the record still names loopback, so the check that stops a
+        // record from redirecting a client to another host is untouched. The
+        // wide address is never published to the filesystem at all. It exists in
+        // this process and in whatever QR a person chose to display.
+        let wide_listener = runtime.block_on(bind_wide_listener());
         let record = discovery_record_for_settings(ctx, control_endpoint.clone());
         let instance_id = record.instance_id.clone();
         let control_origin = format!("{}:{}", control_endpoint.host, control_endpoint.port);
@@ -278,12 +327,35 @@ impl LocalControlServer {
             drop(runtime_guard);
             (pipe_name, pipe)
         };
+        let mut expected_hosts = vec![format!(
+            "{}:{}",
+            control_endpoint.host, control_endpoint.port
+        )];
+        if let Some((_, wide_origin)) = &wide_listener {
+            expected_hosts.push(wide_origin.clone());
+        }
         let state = ControlServerState {
             bridge_spawner,
             instance_id,
-            expected_host: format!("{}:{}", control_endpoint.host, control_endpoint.port),
+            expected_hosts: Arc::new(expected_hosts),
             credentials: Arc::default(),
+            // No wide listener, no pairing. Not a convenience: a pairing code
+            // that no device could ever present is a secret displayed for
+            // nothing, and `control.pair` should say why instead of minting one.
+            pairings: wide_listener
+                .as_ref()
+                .map(|_| Arc::new(Mutex::new(pairing::Pairings::default()))),
         };
+        // `control.pair` runs on the main thread, so the bridge needs both the
+        // state to mint into and the address to build a URL from. Installed
+        // after `state` rather than beside `set_control_origin` because the
+        // pairing map is created with the state it belongs to.
+        LocalControlBridge::handle(ctx).update(ctx, |bridge, _| {
+            bridge.set_pairing(
+                state.pairings.clone(),
+                wide_listener.as_ref().map(|(_, origin)| origin.clone()),
+            );
+        });
         let router = Router::new()
             .route("/v1/control", post(handle_control_request))
             // The read surface (T11.2). Both are `GET` so a client that can only
@@ -291,12 +363,32 @@ impl LocalControlServer {
             // scoped credentials as `/v1/control`.
             .route(STATE_PATH, get(handle_state_request))
             .route(EVENT_STREAM_PATH, get(handle_event_stream))
+            // Pairing (T11.4). Present on both listeners rather than only the
+            // wide one: a route that exists on one socket and 404s on another is
+            // a debugging trap, and both are authenticated by the same secrets
+            // either way.
+            .route(PAIR_PATH, post(handle_pair_request))
+            .route(PAIR_CREDENTIAL_PATH, post(handle_pair_credential_request))
             .with_state(state.clone());
-        runtime.spawn(async move {
-            if let Err(err) = axum::serve(listener, router).await {
-                log::warn!("local-control listener stopped: {err:#}");
+        runtime.spawn({
+            let router = router.clone();
+            async move {
+                if let Err(err) = axum::serve(listener, router).await {
+                    log::warn!("local-control listener stopped: {err:#}");
+                }
             }
         });
+        if let Some((wide, wide_origin)) = wide_listener {
+            // The address, never a secret. Pairing codes and device tokens exist
+            // only in memory and in the QR a person chose to display; nothing in
+            // this module ever hands one to `log`.
+            log::info!("local-control wide listener started at {wide_origin}");
+            runtime.spawn(async move {
+                if let Err(err) = axum::serve(wide, router).await {
+                    log::warn!("local-control wide listener stopped: {err:#}");
+                }
+            });
+        }
         #[cfg(unix)]
         runtime.spawn(run_credential_broker(broker_listener, state));
         #[cfg(windows)]
@@ -323,6 +415,43 @@ impl LocalControlServer {
         record.instance_id = registered_instance.record().instance_id.clone();
         record.credential_broker = registered_instance.record().credential_broker.clone();
         registered_instance.update(record)
+    }
+}
+
+/// Binds the second listener `WARP_FORK_CONTROL_BIND` asked for, if any (T11.4).
+///
+/// Returns the listener and its `host:port`, or `None` for every case in which
+/// there should be no wide listener — including a bind that *failed*. A refusal
+/// and a failure are both logged and both leave loopback serving, because the
+/// alternative — refusing to start at all — takes out `warpctrl window close`,
+/// which is the only sanctioned way to stop a running Warp. A mistyped
+/// environment variable must not be able to produce an instance nothing can
+/// shut down.
+async fn bind_wide_listener() -> Option<(tokio::net::TcpListener, String)> {
+    let address = match crate::fork::control_bind() {
+        crate::fork::ControlBind::LoopbackOnly => return None,
+        crate::fork::ControlBind::Refused(reason) => {
+            log::warn!("local-control wide bind refused: {reason}");
+            return None;
+        }
+        crate::fork::ControlBind::Additional(address) => address,
+    };
+    // Port 0, like the loopback listener: the address is the part a person
+    // chose, and the port is this instance's to pick. Binding a *specific*
+    // address also means the kernel refuses an address this machine does not
+    // hold, so no interface enumeration is needed to validate one.
+    match tokio::net::TcpListener::bind(SocketAddr::from((address, 0))).await {
+        Ok(listener) => match listener.local_addr() {
+            Ok(bound) => Some((listener, bound.to_string())),
+            Err(err) => {
+                log::warn!("local-control wide listener address is unreadable: {err:#}");
+                None
+            }
+        },
+        Err(err) => {
+            log::warn!("local-control wide bind to {address} failed: {err:#}");
+            None
+        }
     }
 }
 
@@ -974,6 +1103,162 @@ async fn handle_event_stream(
     axum::response::Sse::new(stream).into_response()
 }
 
+/// Answers `POST /v1/pair` — a device spending its pairing code (T11.4).
+///
+/// The bearer is the pairing code from the QR's fragment; the answer is a device
+/// token. This is the only route whose *request* carries a secret a person could
+/// have read off a screen, and it is the only one that consumes what it is
+/// given: the code is spent whether or not anything after it succeeds.
+async fn handle_pair_request(
+    State(state): State<ControlServerState>,
+    headers: HeaderMap,
+) -> Response {
+    let reject = |status: StatusCode, error: ControlError| -> Response {
+        (status, Json(ErrorResponseEnvelope::new(error))).into_response()
+    };
+    let offered = match authenticate_pairing_headers(&state, &headers) {
+        Ok(token) => token,
+        Err(response) => return response,
+    };
+    let Some(pairings) = &state.pairings else {
+        return reject(StatusCode::FORBIDDEN, pairing_unavailable());
+    };
+    let issued = {
+        let Ok(mut pairings) = pairings.lock() else {
+            return reject(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                ControlError::new(ErrorCode::Internal, "local-control pairing is unavailable"),
+            );
+        };
+        match pairings.redeem(&offered, Utc::now()) {
+            Ok(issued) => issued,
+            Err(error) => return reject(StatusCode::UNAUTHORIZED, error),
+        }
+    };
+    (
+        StatusCode::OK,
+        Json(::local_control::PairedDeviceResult {
+            device_token: issued.token.secret().to_owned(),
+            expires_at: issued.expires_at,
+            actions: pairing::PAIRABLE_ACTIONS
+                .iter()
+                .map(|action| action.as_str().to_owned())
+                .collect(),
+        }),
+    )
+        .into_response()
+}
+
+/// Answers `POST /v1/pair/credential` — the broker's job, for a caller with no
+/// Unix socket (T11.4).
+///
+/// A paired device presents its device token and one action, and gets back the
+/// same short-lived, action-scoped [`ScopedCredential`] a local client gets. The
+/// difference is entirely in what it may ask for: [`pairing::ensure_pairable`]
+/// runs *before* [`issue_credential`], so a device is refused the executing half
+/// of the catalog before any policy is even consulted for it.
+#[cfg(any(unix, windows, test))]
+async fn handle_pair_credential_request(
+    State(state): State<ControlServerState>,
+    headers: HeaderMap,
+    payload: Bytes,
+) -> Response {
+    let reject = |status: StatusCode, error: ControlError| -> Response {
+        (status, Json(ErrorResponseEnvelope::new(error))).into_response()
+    };
+    let offered = match authenticate_pairing_headers(&state, &headers) {
+        Ok(token) => token,
+        Err(response) => return response,
+    };
+    let Some(pairings) = &state.pairings else {
+        return reject(StatusCode::FORBIDDEN, pairing_unavailable());
+    };
+    {
+        let Ok(mut pairings) = pairings.lock() else {
+            return reject(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                ControlError::new(ErrorCode::Internal, "local-control pairing is unavailable"),
+            );
+        };
+        if let Err(error) = pairings.verify_device(&offered, Utc::now()) {
+            return reject(StatusCode::UNAUTHORIZED, error);
+        }
+    }
+    let request = match serde_json::from_slice::<CredentialRequest>(&payload) {
+        Ok(request) => request,
+        Err(err) => {
+            return reject(
+                StatusCode::BAD_REQUEST,
+                ControlError::with_details(
+                    ErrorCode::InvalidRequest,
+                    "failed to decode local-control credential request",
+                    err.to_string(),
+                ),
+            );
+        }
+    };
+    if let Err(error) = pairing::ensure_pairable(request.action) {
+        return reject(StatusCode::FORBIDDEN, error);
+    }
+    match issue_credential(&state, request).await {
+        Ok(credential) => (StatusCode::OK, Json(credential)).into_response(),
+        Err(error) => reject(StatusCode::FORBIDDEN, error),
+    }
+}
+
+/// The `handle_pair_credential_request` a build with no broker gets.
+///
+/// [`issue_credential`] is `cfg`-gated to platforms that have a credential
+/// broker, so on any other platform this route exists and refuses rather than
+/// failing to compile — the same answer a caller would get from a build where
+/// pairing was never configured.
+#[cfg(not(any(unix, windows, test)))]
+async fn handle_pair_credential_request(
+    State(_): State<ControlServerState>,
+    _: HeaderMap,
+    _: Bytes,
+) -> Response {
+    (
+        StatusCode::FORBIDDEN,
+        Json(ErrorResponseEnvelope::new(pairing_unavailable())),
+    )
+        .into_response()
+}
+
+/// The header preamble both pairing routes share.
+///
+/// Deliberately *not* [`authenticate`]: that function's whole job is to resolve a
+/// broker-issued credential, and a device arriving here has none — obtaining one
+/// is what it came for. What the two do share is header hardening and the
+/// feature gate, and those are called here rather than reimplemented.
+fn authenticate_pairing_headers(
+    state: &ControlServerState,
+    headers: &HeaderMap,
+) -> Result<AuthToken, Response> {
+    let reject = |status: StatusCode, error: ControlError| -> Response {
+        (status, Json(ErrorResponseEnvelope::new(error))).into_response()
+    };
+    if let Err(error) = validate_endpoint_headers(headers, &state.expected_hosts) {
+        return Err(reject(StatusCode::FORBIDDEN, error));
+    }
+    if let Err(error) = ensure_feature_enabled() {
+        return Err(reject(StatusCode::FORBIDDEN, error));
+    }
+    let header = headers
+        .get(AUTHORIZATION)
+        .and_then(|value| value.to_str().ok());
+    AuthToken::from_authorization_header(header)
+        .map_err(|error| reject(StatusCode::UNAUTHORIZED, error))
+}
+
+fn pairing_unavailable() -> ControlError {
+    ControlError::new(
+        ErrorCode::LocalControlDisabled,
+        "this instance has no wide listener, so there is nothing to pair with; \
+         set WARP_FORK_CONTROL_BIND to the address to listen on",
+    )
+}
+
 /// Rejects a credential minted for some other action.
 ///
 /// The grant already proved it belongs to this instance and has not expired;
@@ -1009,7 +1294,7 @@ fn authenticate(
     let reject = |status: StatusCode, error: ControlError| -> Response {
         (status, Json(ErrorResponseEnvelope::new(error))).into_response()
     };
-    if let Err(error) = validate_loopback_headers(headers, &state.expected_host) {
+    if let Err(error) = validate_endpoint_headers(headers, &state.expected_hosts) {
         return Err(reject(StatusCode::FORBIDDEN, error));
     }
     if let Err(error) = ensure_feature_enabled() {
@@ -1077,9 +1362,25 @@ fn local_control_publication_supported() -> bool {
 /// endpoint selections, but they are not an authorization boundary. Scoped
 /// bearer credentials and grant validation remain the authority for control
 /// requests.
-pub(crate) fn validate_loopback_headers(
+///
+/// **Renamed from `validate_loopback_headers` by T11.4, because the old name
+/// stopped being true.** The listener can now be wider than loopback, and a
+/// check whose name says "loopback" is a check the next reader will assume they
+/// no longer have to think about.
+///
+/// **T11.4 was told to ship "a CORS allowlist and never `*`", and did not — it
+/// kept something stricter, which is worth writing down so it is not later
+/// "fixed" into the weaker thing.** The requirement assumes a server that
+/// answers browsers and must decide *which*. This one answers no browser at
+/// all: any request carrying `Origin` is refused outright, which is the empty
+/// allowlist. An allowlist would be a widening, and today it would have nothing
+/// to widen *to*, because there is no page — the pairing client is a fetch from
+/// something holding a device token, not a document with an origin. When a page
+/// does exist, the allowlist belongs in the same commit as the page, with the
+/// exact origin it serves from.
+pub(crate) fn validate_endpoint_headers(
     headers: &HeaderMap,
-    expected_host: &str,
+    expected_hosts: &[String],
 ) -> Result<(), ControlError> {
     if headers.contains_key(ORIGIN) {
         return Err(ControlError::new(
@@ -1096,7 +1397,11 @@ pub(crate) fn validate_loopback_headers(
                 "Host header is required for local-control requests",
             )
         })?;
-    if host != expected_host {
+    // Exact membership of a list this server built from addresses it bound. Not
+    // a suffix rule and not a port comparison: the attack this stops is a name
+    // that resolves to this machine but that the server never chose, and a
+    // relaxed match is how that name gets back in.
+    if !expected_hosts.iter().any(|expected| expected == host) {
         return Err(ControlError::new(
             ErrorCode::UnauthorizedLocalClient,
             "Host header does not match the selected local-control endpoint",

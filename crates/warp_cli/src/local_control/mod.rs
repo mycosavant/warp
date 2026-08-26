@@ -14,9 +14,9 @@ use clap_complete::aot::Shell;
 use commands::{
     run_action_catalog_command, run_agent_command, run_app_command, run_appearance_command,
     run_capability_command, run_drive_command, run_events_command, run_file_command,
-    run_input_command, run_instance_command, run_keybinding_command, run_pane_command,
-    run_remote_command, run_session_command, run_setting_command, run_slash_command,
-    run_surface_command, run_tab_command, run_theme_command, run_window_command,
+    run_input_command, run_instance_command, run_keybinding_command, run_pair_command,
+    run_pane_command, run_remote_command, run_session_command, run_setting_command,
+    run_slash_command, run_surface_command, run_tab_command, run_theme_command, run_window_command,
 };
 use completions::generate_completions_to_stdout;
 use output::write_control_error;
@@ -223,6 +223,10 @@ pub enum ControlCommand {
     /// Watch what agents are doing, live.
     #[command(subcommand)]
     Events(EventsCommand),
+
+    /// Let a device that is not this machine watch too.
+    #[command(subcommand)]
+    Pair(PairCommand),
 
     /// Inspect remote-development targets on this machine.
     #[command(subcommand)]
@@ -1103,6 +1107,24 @@ pub enum EventsCommand {
 }
 
 #[derive(Debug, Clone, Subcommand)]
+pub enum PairCommand {
+    /// Show a QR code that lets a phone on your network watch this instance.
+    ///
+    /// Off unless `WARP_FORK_CONTROL_BIND` named an address to listen on, and
+    /// this says so rather than failing quietly if it did not — a wide bind is
+    /// the one thing here that reaches off the machine, so it is never on by
+    /// accident.
+    ///
+    /// **This is the one command in `warpctrl` that prints a secret**, which is
+    /// unavoidable: the code has to be readable to be scanned. It is spendable
+    /// once and expires in two minutes, so the scrollback it lands in goes stale
+    /// almost immediately. What a scan buys is the read surface — `app.ping`,
+    /// `agent.list`, `events.subscribe` — and nothing that types, runs or
+    /// changes anything.
+    Show(TargetArgs),
+}
+
+#[derive(Debug, Clone, Subcommand)]
 pub enum SlashCommand {
     /// List Warp's slash commands.
     ///
@@ -1524,6 +1546,7 @@ fn run_inner(args: ControlArgs) -> Result<(), local_control::protocol::ControlEr
         ControlCommand::Graph(command) => graph::run_graph_command(command, output_format),
         ControlCommand::Slash(command) => run_slash_command(command, output_format),
         ControlCommand::Events(command) => run_events_command(command, output_format),
+        ControlCommand::Pair(command) => run_pair_command(command, output_format),
         ControlCommand::Remote(command) => run_remote_command(command, output_format),
         ControlCommand::Surface(command) => run_surface_command(command, output_format),
         ControlCommand::Completions { shell } => generate_completions_to_stdout(shell),

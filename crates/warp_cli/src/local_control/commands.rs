@@ -22,7 +22,7 @@ use crate::local_control::selectors::{instance_selector, target_selector};
 use crate::local_control::{
     ActionCatalogCommand, AgentCommand, AppCommand, AppearanceCommand, CapabilityCommand,
     CliRevealTarget, DriveCommand, DriveObjectCommand, EventsCommand, FileCommand, InputCommand,
-    InstanceCommand, KeybindingCommand, PaneCommand, PaneMainCommand, RemoteCommand,
+    InstanceCommand, KeybindingCommand, PairCommand, PaneCommand, PaneMainCommand, RemoteCommand,
     RemoteWslCommand, SessionCommand, SettingCommand, SlashCommand, SurfaceCommand,
     SurfaceOpenCommand, SurfaceOpenToggleCommand, SurfaceQueryCommand, SurfaceSettingsCommand,
     SurfaceToggleCommand, TabActivateArgs, TabCloseArgs, TabColorCommand, TabCommand, TargetArgs,
@@ -826,6 +826,17 @@ pub(super) fn run_remote_command(
             },
             output_format,
         ),
+    }
+}
+
+pub(super) fn run_pair_command(
+    command: PairCommand,
+    output_format: OutputFormat,
+) -> Result<(), ControlError> {
+    match command {
+        PairCommand::Show(args) => {
+            run_action_with_params(args, ActionKind::ControlPair, EmptyParams {}, output_format)
+        }
     }
 }
 

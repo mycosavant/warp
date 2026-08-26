@@ -114,6 +114,7 @@ pub enum ActionResultSpec {
     MainPane,
     VisorStatus,
     EventStream,
+    Pairing,
 }
 
 /// Discoverable metadata describing one local-control action.
@@ -410,6 +411,23 @@ define_action_catalog! {
     // assembling a URL out of a discovery record by hand.
     events {
         EventsSubscribe => { name: "events.subscribe", status: Implemented, target: Events, params: None, result: EventStream },
+    }
+
+    // Fork-local (`.fork/TASKS.md`, T11.4). Everything else in this catalog is
+    // reached by a client that already proved it is the same OS account, via a
+    // 0600 socket and a kernel peer-UID check. `control.pair` is how something
+    // that *cannot* pass that check — a phone on the LAN — is let in, and it is
+    // an action rather than a route because minting a code is itself a
+    // privileged operation: only an already-authenticated local client may ask
+    // for one.
+    //
+    // Redeeming the code is the other half and is deliberately not in this
+    // catalog. A device offering a pairing code has no credential and no grant,
+    // so there is nothing for `validate_request_authority` to check; it POSTs to
+    // `/v1/pair` instead. The split is the same one `events.subscribe` makes for
+    // a different reason.
+    control {
+        ControlPair => { name: "control.pair", status: Implemented, target: Instance, params: None, result: Pairing },
     }
 
     // Fork-local (`.fork/IDEAS.md`, I16). Warp's remote-development stack has
