@@ -5489,7 +5489,7 @@ a build step in this tree would be a new toolchain for one page.
       and referrers), what the CORS and origin policy is, and what escaping rule
       applies to agent-authored text, which is attacker-influenced by
       construction.
-- [ ] **T12.2** Approvals on the page. Render `agent.approvals`, and wire the
+- [x] **T12.2** Approvals on the page. Render `agent.approvals`, and wire the
       two answers with the asymmetry T11.5 established: `deny` is pairable and
       always present, `approve` appears only when the instance advertises it.
       The page must learn that from the server rather than assuming it — a
@@ -5547,6 +5547,87 @@ a build step in this tree would be a new toolchain for one page.
 - [ ] **`kode-engine` and Tusk's pure cores extracted as MIT/Apache crates**
       (§10 step 1). Not work in this repo, but a *dependency* of T13 and of any
       later migration, and §12 forbids the migration until it is done.
+
+### T12.2 — as built
+
+**The gate check found the ticket already written, for the third task running.**
+T12.2's requirement was *"the page must learn that from the server rather than
+assuming it — a button that 403s is worse than a button that is absent."*
+`PairedDeviceResult.actions` already exists, and T11.4's doc comment on it reads:
+*"Given so a client can present a truthful capability list rather than
+discovering the boundary one refusal at a time."* Same sentence, written eight
+days earlier. **Nothing was added server-side** — `console.js` already persisted
+the whole pairing response, so `device.actions` was in `sessionStorage` before
+anything read it.
+
+It also cannot go stale, which is worth writing down because it looks like it
+could: `pairable_actions` consults an environment variable, a process cannot
+change its own, and a restart drops the in-memory pairing map and forces a fresh
+scan. So the list is fixed for an instance's life.
+
+**`Yes` takes two taps, and that is a decision rather than a default.** The first
+tap arms the button, which says so, and disarms itself after four seconds. `No`
+stays one tap. It is the same asymmetry T11.5 argued for the pairing allowlist —
+saying no can only ever make less happen — applied one layer up, where the
+failure mode is a pocket rather than an attacker. The cost is one extra tap on
+the only action that can make something happen.
+
+**Three bugs, all found by running it, and the third is the one worth reading.**
+
+**1. "nothing is waiting on you" printed above a request that was.**
+`renderApprovals` set its note only on the empty branch, so the message from the
+last empty refresh survived into a render with one approval. The single sentence
+this page must never get wrong, wrong.
+
+**2. An answer's error was wiped by the refresh that followed it.** Answering
+and listing shared one note element, and every answer ends in a refresh, so the
+reason an answer was refused appeared for roughly one heartbeat. They now have
+separate lines with separate lifetimes, because they fail differently and are
+cleared by different things.
+
+**3. Half the server's errors were unreadable, including the one that
+matters.** With the first two fixed, a deliberately stale answer produced
+`HTTP 400` and nothing else. `describeFailure` read `ErrorResponseEnvelope`,
+which carries `error` at the top level — but a *typed action* that is accepted
+and then fails answers with a `ResponseEnvelope`, which nests it under
+`response`. Everything the console can say about an approval comes back in the
+nested shape, so the client understood exactly the errors that did not matter
+and swallowed exactly the ones that did. **The bug was inherited from T12.1 and
+survived that task's verification**, because T12.1 never provoked a typed-action
+failure — its only errors were auth and routing, which are the shape it did
+understand.
+
+The pattern across all three: each was visible only in a state the happy path
+does not reach — a non-empty list after an empty one, an error after a success,
+a refusal after a grant. `both_of_the_servers_error_shapes_are_read` and
+`an_answer_carries_the_digest_of_what_was_shown` pin the two that fail silently.
+
+**Verified by running, 2026-08-26.** Release build, WSLg, scratch XDG, wide bind,
+a fake CLI agent that emits a real `permission_request` over OSC 777 and then
+blocks on one raw byte of its PTY — so the byte it reads is the proof.
+
+| | result |
+|---|---|
+| `WARP_FORK_REMOTE_APPROVE` unset — pairing advertises | `app.ping agent.list events.subscribe agent.approvals agent.deny` |
+| …and the page draws | `No` only, plus the line naming the variable |
+| tap `No` | buttons disable, agent reads **`1b`** (Escape), list returns to 0 |
+| `WARP_FORK_REMOTE_APPROVE=1` — pairing advertises | the same five plus `agent.approve` |
+| …and the page draws | `Yes` and `No` |
+| **one** tap on `Yes` | button reads *"tap again to allow"*, **nothing sent**, agent still blocked |
+| four seconds later | button disarmed itself back to `Yes` |
+| two taps on `Yes` | agent reads **`0d`** (Return), list returns to 0 |
+| answer a request that moved | `HTTP 400: nothing is waiting on pane …; ` `agent.approvals` ` reports the requests that exist right now` — on its own line, surviving the refresh |
+| scratch state directory after all of it | no `Bearer`, no `device_token`, no `bearer_token` |
+| shutdown | `warpctrl window close`, no surviving process |
+
+**Named unverified input, unchanged from T12.1 and now larger.** There is still
+no browser on this machine; `console.js` ran under `node` with a DOM shim, which
+now also stands in for `addEventListener` and `disabled`. So the buttons were
+*invoked*, not *tapped*: nothing here proves a 2.75rem touch target is reachable
+with a thumb, that the armed state is legible at arm's length, or that a real
+browser fires these handlers in this order. **The arming behaviour in particular
+is a claim about human timing that no capture can check.** One session with a
+phone would settle all of it, and it is the same open item T12.1 filed.
 
 ### T12.1 — as built
 

@@ -137,6 +137,76 @@ async fn each_document_is_served_as_what_it_is() {
     assert!(body_of(script).await.contains("'use strict'"));
 }
 
+/// The safety property T11.5 exists for, pinned where it can be deleted by
+/// accident (T12.2).
+///
+/// Every answer carries back the digest of the request it was read from, so a
+/// yes taken from one screen cannot be applied to whatever the agent is asking
+/// by the time it arrives. Dropping `digest` from that object would not fail any
+/// other test here — the server would refuse every answer, which reads as "the
+/// buttons are broken" rather than as "the binding is gone".
+#[test]
+fn an_answer_carries_the_digest_of_what_was_shown() {
+    let answering = executable_lines_mentioning(CONSOLE_SCRIPT, "approval_id:");
+    assert_eq!(
+        answering,
+        vec!["    control(action, { approval_id: approval.approval_id, digest: approval.digest })"],
+        "there is one place an answer is composed, and it sends a digest"
+    );
+}
+
+/// The server has two error envelopes and the page has to read both (T12.2).
+///
+/// Found by running it: a stale answer was refused correctly and the page showed
+/// `HTTP 400` and nothing else, because `describeFailure` looked only at
+/// `ErrorResponseEnvelope`'s top-level `error`. A typed action that fails
+/// answers with a `ResponseEnvelope`, which nests it — and that is the one
+/// carrying the stale-digest message, the single most useful sentence this page
+/// can print. Reading one shape swallows exactly the errors that matter.
+#[test]
+fn both_of_the_servers_error_shapes_are_read() {
+    assert!(
+        CONSOLE_SCRIPT
+            .contains("var error = parsed.error || (parsed.response && parsed.response.error);"),
+        "the one place that unwraps a failed response must try both envelopes"
+    );
+    // The shape of the bug, rather than the shape of the fix: reaching straight
+    // through `parsed.error` for a message is what produced a bare `HTTP 400`.
+    // Sites that read `envelope.response.error` are fine and deliberately not
+    // matched here — they already know which envelope they hold.
+    assert!(
+        executable_lines_mentioning(CONSOLE_SCRIPT, "parsed.error.").is_empty(),
+        "a top-level-only unwrap swallows every typed action's error message"
+    );
+}
+
+/// Deliberately a change-detector, and the same shape as
+/// `only_agents_whose_prompt_was_watched_can_be_answered_yes` in
+/// `approvals_tests.rs` — for the same reason.
+///
+/// `agent.approve` reaches a paired device only when the machine's owner sets
+/// `WARP_FORK_REMOTE_APPROVE`, and the page is supposed to learn that from the
+/// action list `/v1/pair` returns rather than assume it. A button rendered
+/// unconditionally would 403 on tap, which is worse than a button that is
+/// absent: it teaches a person that the feature is unreliable rather than that
+/// it is off.
+#[test]
+fn yes_is_drawn_only_when_the_server_says_this_device_may_say_it() {
+    for guarded in ["if (can(ALLOW)) {", "if (!can(ALLOW)) {"] {
+        assert!(
+            CONSOLE_SCRIPT.contains(guarded),
+            "the Yes button and its explanation are both behind {guarded}"
+        );
+    }
+    // `No` has no such guard, and must not grow one: `agent.deny` is pairable
+    // unconditionally because saying no can only ever make less happen.
+    let denials = executable_lines_mentioning(CONSOLE_SCRIPT, "can(DENY)");
+    assert!(
+        denials.is_empty(),
+        "No is unconditional; gating it would be a regression, not a hardening"
+    );
+}
+
 /// `default-src 'none'` has to come first and `connect-src` has to be `'self'`,
 /// or a page that ran hostile code could reach off the machine with what it
 /// read — which, on this origin, is a live agent transcript.

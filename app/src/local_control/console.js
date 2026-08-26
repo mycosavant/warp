@@ -20,7 +20,20 @@
   var EVENTS = '/v1/events';
   var PAIR = '/v1/pair';
   var CREDENTIAL = '/v1/pair/credential';
+  var CONTROL = '/v1/control';
   var PROTOCOL_VERSION = 1;
+
+  // The three T11.5 actions. `APPROVALS` and `DENY` are pairable unconditionally;
+  // `ALLOW` is on the list only when the machine's owner set
+  // WARP_FORK_REMOTE_APPROVE, which is why nothing here hardcodes its presence.
+  var APPROVALS = 'agent.approvals';
+  var ALLOW = 'agent.approve';
+  var DENY = 'agent.deny';
+
+  // How long an armed Yes stays armed. Long enough to be a deliberate second
+  // tap, short enough that an armed button left on screen disarms itself rather
+  // than waiting to be pressed by a pocket.
+  var ARM_MS = 4000;
 
   // Per-tab, deliberately. A device token is a bearer secret for a control
   // plane and lives twelve hours; `localStorage` would put it on the disk of a
@@ -40,6 +53,10 @@
     clock: document.getElementById('clock'),
     pairing: document.getElementById('pairing'),
     pairingNote: document.getElementById('pairing-note'),
+    approvals: document.getElementById('approvals'),
+    waitingCount: document.getElementById('waiting-count'),
+    waitingNote: document.getElementById('waiting-note'),
+    waitingError: document.getElementById('waiting-error'),
     agents: document.getElementById('agents'),
     agentsCount: document.getElementById('agents-count'),
     agentsNote: document.getElementById('agents-note'),
@@ -51,6 +68,7 @@
   var device = null;
   var credentials = {};
   var eventCount = 0;
+  var approvalRefresh = null;
 
   // ---------------------------------------------------------------- utilities
 
@@ -94,14 +112,23 @@
   }
 
   // What the server said went wrong, preferred over what the browser inferred.
-  // Every error route here answers with an `ErrorResponseEnvelope`.
+  //
+  // **Two envelope shapes reach this page, and reading only one is how a useful
+  // message becomes "HTTP 400".** `ErrorResponseEnvelope` — a refused route, a
+  // bad bearer, an unpairable action — carries `error` at the top level.
+  // `ResponseEnvelope` — a typed action that was accepted and then failed —
+  // nests it under `response`. The second is the one carrying the sentences
+  // worth reading, including the stale-digest refusal that names what to do
+  // next, so a client that understands only the first swallows exactly the
+  // errors this page exists to show.
   function describeFailure(response, body) {
     var detail = null;
     try {
-      var parsed = JSON.parse(body);
-      if (parsed && parsed.error && parsed.error.message) {
-        detail = parsed.error.message;
-        if (parsed.error.details) detail += ' — ' + parsed.error.details;
+      var parsed = JSON.parse(body) || {};
+      var error = parsed.error || (parsed.response && parsed.response.error);
+      if (error && error.message) {
+        detail = error.message;
+        if (error.details) detail += ' — ' + error.details;
       }
     } catch (_) { /* not JSON; the status is all there is */ }
     return 'HTTP ' + response.status + (detail ? ': ' + detail : '');
@@ -202,6 +229,182 @@
     });
   }
 
+  // ---------------------------------------------------------------- approvals
+
+  // What this device may ask for, as the server told it at pairing time.
+  //
+  // `/v1/pair` returns the action list precisely so a client can "present a
+  // truthful capability list rather than discovering the boundary one refusal at
+  // a time" — T11.4's words, and exactly what is needed here. The list cannot go
+  // stale underneath us: `pairable_actions` reads an environment variable, and a
+  // process cannot change its own, so the answer is fixed for an instance's life
+  // — and a restart drops the pairing map, forcing a fresh scan anyway.
+  function can(action) {
+    return !!(device && device.actions && device.actions.indexOf(action) >= 0);
+  }
+
+  // One typed action over `POST /v1/control`, the same envelope `warpctrl` sends.
+  function control(action, params) {
+    return credentialFor(action).then(function (token) {
+      var body = JSON.stringify({
+        protocol_version: PROTOCOL_VERSION,
+        request_id: uuid4(),
+        action: { kind: action, params: params || {} }
+      });
+      return fetch(CONTROL, {
+        method: 'POST',
+        headers: Object.assign({ 'content-type': 'application/json' }, authorized(token)),
+        body: body
+      }).then(function (response) {
+        return response.text().then(function (raw) {
+          if (!response.ok) throw new Error(describeFailure(response, raw));
+          var envelope = JSON.parse(raw);
+          if (envelope.response && envelope.response.status === 'error') {
+            throw new Error(envelope.response.error.message || (action + ' failed'));
+          }
+          return envelope.response ? envelope.response.data : null;
+        });
+      });
+    });
+  }
+
+  // A tap on Yes runs a command on the machine this page is watching, so it takes
+  // two. Not a modal — a button that arms itself, says so, and disarms on its
+  // own. The cost is one extra tap on the one action that can make something
+  // happen; `No` stays a single tap, because saying no can only ever make less
+  // happen (the same asymmetry that keeps `agent.deny` pairable and
+  // `agent.approve` behind a variable).
+  function armThenRun(button, label, run) {
+    var timer = null;
+    var disarm = function () {
+      timer = null;
+      button.className = 'allow';
+      button.textContent = label;
+    };
+    button.addEventListener('click', function () {
+      if (timer) {
+        clearTimeout(timer);
+        disarm();
+        run();
+        return;
+      }
+      button.className = 'allow armed';
+      button.textContent = 'tap again to allow';
+      timer = setTimeout(disarm, ARM_MS);
+    });
+  }
+
+  // Why an answer's failure has its own line, found by running it: the refresh
+  // that follows an answer re-renders the list, and the list's own note lives
+  // there — so a shared line meant the reason an answer was refused was wiped
+  // roughly a heartbeat after it appeared. The most important message this page
+  // can show is "that yes did not land, and here is why".
+  function answerFailed(message) {
+    el.waitingError.hidden = false;
+    el.waitingError.textContent = message;
+  }
+
+  function answerSucceeded() {
+    el.waitingError.hidden = true;
+    el.waitingError.textContent = '';
+  }
+
+  function answer(approval, action, buttons) {
+    buttons.forEach(function (b) { b.disabled = true; });
+    // `digest` is not optional and not decorative: it is what binds this answer
+    // to the request that was on screen when it was read. The server refuses a
+    // stale one rather than applying it to whatever the agent is asking now.
+    control(action, { approval_id: approval.approval_id, digest: approval.digest })
+      .then(answerSucceeded)
+      .catch(function (err) { answerFailed(String(err.message || err)); })
+      // Either way, including on failure: a refused answer usually means the
+      // request moved, and the only useful next thing is what is true now.
+      .then(refreshApprovals, refreshApprovals);
+  }
+
+  function approvalRow(approval) {
+    var row = document.createElement('li');
+    row.appendChild(text(
+      'div',
+      'ask',
+      (approval.agent || '?') + ' ' +
+        (approval.kind === 'question' ? 'is asking you' : 'wants permission')
+    ));
+    if (approval.summary) row.appendChild(text('div', 'title', approval.summary));
+    if (approval.tool_name) {
+      row.appendChild(text(
+        'code',
+        'cmd',
+        approval.tool_name + (approval.tool_input ? ': ' + approval.tool_input : '')
+      ));
+    }
+    var where = [approval.project, approval.cwd].filter(Boolean);
+    if (where.length) row.appendChild(text('div', 'meta', where.join(' · ')));
+
+    var answers = text('div', 'answers');
+    var buttons = [];
+    var deny = text('button', 'deny', 'No');
+    buttons.push(deny);
+    deny.addEventListener('click', function () { answer(approval, DENY, buttons); });
+
+    if (can(ALLOW)) {
+      var allow = text('button', 'allow', 'Yes');
+      buttons.push(allow);
+      armThenRun(allow, 'Yes', function () { answer(approval, ALLOW, buttons); });
+      answers.appendChild(allow);
+    }
+    answers.appendChild(deny);
+    row.appendChild(answers);
+
+    if (!can(ALLOW)) {
+      // Said once per request rather than hidden, because a person looking at a
+      // page with only a No button needs to know that is a setting and not a bug.
+      row.appendChild(text(
+        'div',
+        'meta',
+        'Yes does not travel to a paired device unless WARP_FORK_REMOTE_APPROVE is set on the machine.'
+      ));
+    }
+    return row;
+  }
+
+  function renderApprovals(approvals) {
+    clear(el.approvals);
+    el.waitingCount.textContent = String(approvals.length);
+    el.waitingCount.className = 'badge' + (approvals.length ? ' waiting' : '');
+    approvals.forEach(function (approval) {
+      el.approvals.appendChild(approvalRow(approval));
+    });
+    // Both branches assign, and the empty one is not the only one that has to.
+    // Found by running it: setting the note only when the list was empty left
+    // "nothing is waiting on you" printed above a request that was, which is the
+    // one sentence this page must never get wrong.
+    el.waitingNote.className = 'note';
+    el.waitingNote.textContent = approvals.length ? '' : 'nothing is waiting on you.';
+  }
+
+  function refreshApprovals() {
+    return control(APPROVALS)
+      .then(function (data) { renderApprovals((data && data.approvals) || []); })
+      .catch(function (err) {
+        el.waitingNote.className = 'note bad';
+        el.waitingNote.textContent = String(err.message || err);
+      });
+  }
+
+  // Approvals are event-driven with a poll as a backstop. Any CLI-agent event can
+  // change what is waiting — a `permission_request` creates one, a
+  // `tool_complete` or a `stop` clears one — so rather than curate a list of
+  // which events matter and be wrong about one, every event schedules a refresh
+  // and the debounce absorbs a chatty agent.
+  function scheduleApprovalRefresh() {
+    if (approvalRefresh) return;
+    approvalRefresh = setTimeout(function () {
+      approvalRefresh = null;
+      refreshApprovals();
+    }, 300);
+  }
+
   // ------------------------------------------------------------------- agents
 
   function statusKind(status) {
@@ -290,6 +493,7 @@
     // gap that had closed.
     el.eventsNote.className = 'note';
     el.eventsNote.textContent = '';
+    scheduleApprovalRefresh();
   }
 
   // One SSE frame, as the wire delivers it: `event:` and `data:` lines, with a
@@ -381,7 +585,12 @@
   function start() {
     badge(el.link, 'connecting');
     el.pairing.hidden = true;
+    refreshApprovals();
     refreshState();
+    // The backstop, not the mechanism — `scheduleApprovalRefresh` on every event
+    // is what makes an approval appear promptly. This covers a stream that
+    // lagged or a frame that never arrived.
+    setInterval(refreshApprovals, 5000);
     setInterval(refreshState, 5000);
     keepStreaming();
   }

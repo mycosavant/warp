@@ -2135,8 +2135,10 @@ pinned by `the_console_is_a_constant_and_names_no_secret`. Everything with
 authority happens in `fetch` calls the script makes afterwards, each carrying a
 five-minute action-scoped credential it minted from the device token.
 
-What it shows today (T12.1 is read-only):
+What it shows:
 
+* **Waiting on you** — `agent.approvals`, with a `No` button always and a `Yes`
+  button only when this device may say it. See *Answering from the page* below.
 * **Warp conversations**, from `/v1/state`, refreshed every five seconds.
 * **Live events**, from `/v1/events`, newest first, streamed with `fetch` rather
   than `EventSource` — `EventSource` cannot set an `Authorization` header, and
@@ -2159,8 +2161,44 @@ live events         4
   22:27:27  claude session_start
 ```
 
-`agent.approvals` is the half that sees the rest, and putting it on the page is
-T12.2.
+`agent.approvals` is the half that sees the rest, and it is on the page — the
+next section.
+
+#### Answering from the page
+
+A blocked CLI agent appears at the top of the console with what it wants to run,
+the project and directory it wants to run it in, and one or two buttons.
+
+**Which buttons you get is the server's answer, not the page's guess.**
+`POST /v1/pair` returns the action list this device may mint credentials for,
+and the console renders `Yes` only if `agent.approve` is in it. With
+`WARP_FORK_REMOTE_APPROVE` unset you get `No` alone, plus a line saying so —
+because a person looking at a page with one button needs to know that is a
+setting and not a bug. A button that `403`s on tap would teach them the feature
+is unreliable rather than that it is off.
+
+**`Yes` takes two taps.** The first arms it — the button says *"tap again to
+allow"* — and it disarms itself after four seconds. `No` stays one tap, the same
+asymmetry that keeps `agent.deny` pairable while `agent.approve` needs a
+variable: a tap on `Yes` runs a command on your machine, and a pocket should not
+be able to. Measured: one tap sends nothing and the button is back to `Yes` four
+seconds later.
+
+**Every answer carries the digest of what was on screen.** That is T11.5's
+binding, and it is what makes answering from a phone safe rather than merely
+convenient: if the request moved between reading and tapping, the server refuses
+rather than applying your answer to whatever is being asked now. The page prints
+the refusal verbatim on its own line, which survives the refresh that follows:
+
+```
+HTTP 400: nothing is waiting on pane `Pane Pane Terminal (2161)`;
+`agent.approvals` reports the requests that exist right now
+```
+
+Approvals are **event-driven with a five-second poll as a backstop**: every
+CLI-agent event on the stream schedules a refresh, debounced 300ms. No list of
+"which events matter" is curated, because being wrong about one entry means a
+request that silently never appears.
 
 **The security policy, and why each line is there.** Served on both documents:
 

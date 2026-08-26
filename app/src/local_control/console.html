@@ -39,6 +39,22 @@
   .dot.busy { background:var(--busy); }
   .dot.block { background:var(--block); }
   .dot.ok { background:var(--ok); }
+  /* The reason the page exists, so it gets the only accent colour and the only
+     buttons. Touch targets are sized for a thumb, not a cursor. */
+  #waiting li { padding:.55rem 0; }
+  .ask { color:var(--hi); word-break:break-word; }
+  .cmd { display:block; margin:.35rem 0 0; padding:.4rem .5rem; background:#0d1117;
+         border:1px solid #30363d; border-radius:6px; white-space:pre-wrap; word-break:break-all; }
+  .answers { display:flex; gap:.5rem; margin-top:.55rem; }
+  .answers button {
+    font:inherit; flex:1 1 0; min-height:2.75rem; border-radius:8px; cursor:pointer;
+    background:#0d1117; color:var(--fg); border:1px solid #30363d;
+  }
+  .answers button.allow { border-color:#238636; color:var(--ok); }
+  .answers button.allow.armed { background:#238636; color:#fff; border-color:#238636; }
+  .answers button.deny { border-color:#762a26; color:var(--block); }
+  .answers button[disabled] { opacity:.45; cursor:default; }
+  #waiting h2 .badge.waiting { color:var(--block); border-color:#762a26; }
   #events li { display:grid; grid-template-columns:4.2rem 1fr; gap:.5rem; align-items:baseline; font-size:12px; }
   #events .t { color:var(--dim); font-variant-numeric:tabular-nums; }
   #events .k { color:var(--hi); }
@@ -59,6 +75,16 @@
   <section id="pairing" hidden>
     <h2>not paired</h2>
     <p class="note" id="pairing-note"></p>
+  </section>
+
+  <section id="waiting">
+    <h2>waiting on you <span class="badge" id="waiting-count">0</span></h2>
+    <ul id="approvals"></ul>
+    <p class="note" id="waiting-note">checking…</p>
+    <!-- Answering and listing fail differently and are cleared by different
+         things, so they get different lines. Sharing one meant the refresh that
+         follows a refused answer wiped the reason it was refused. -->
+    <p class="note bad" id="waiting-error" hidden></p>
   </section>
 
   <section>
