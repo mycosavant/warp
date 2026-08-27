@@ -207,6 +207,75 @@ fn yes_is_drawn_only_when_the_server_says_this_device_may_say_it() {
     );
 }
 
+/// The manifest is served, is valid JSON, and agrees with the routes that exist
+/// (T12.3).
+///
+/// A manifest whose `start_url`, `scope` or icon `src` names a path this server
+/// does not answer produces an installed app that opens a 404 — and nothing else
+/// here would catch it, because the manifest is data and the routes are code.
+#[tokio::test]
+async fn the_manifest_names_only_paths_this_server_answers() {
+    let response = handle_console_manifest_request().await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(header(&response, CONTENT_TYPE), "application/manifest+json");
+
+    let manifest: serde_json::Value =
+        serde_json::from_str(&body_of(response).await).expect("the manifest must be valid JSON");
+    assert_eq!(manifest["start_url"], CONSOLE_PATH);
+    assert_eq!(manifest["scope"], CONSOLE_PATH);
+    // `standalone` is the whole point: without it an installed icon opens a tab
+    // with browser chrome, which is a bookmark rather than an app.
+    assert_eq!(manifest["display"], "standalone");
+    let icons = manifest["icons"].as_array().expect("at least one icon");
+    assert!(!icons.is_empty());
+    for icon in icons {
+        assert_eq!(icon["src"], CONSOLE_ICON_PATH);
+        assert_eq!(icon["type"], "image/png");
+    }
+}
+
+/// The icon is a real PNG at the size the manifest claims (T12.3).
+///
+/// Checked from the bytes rather than trusted, because the file is generated —
+/// the manifest says `512x512`, and a regenerated icon at a different size would
+/// leave a manifest that lies, which a browser resolves by silently declining to
+/// use the icon.
+#[tokio::test]
+async fn the_icon_is_the_png_the_manifest_promises() {
+    let response = handle_console_icon_request().await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(header(&response, CONTENT_TYPE), "image/png");
+
+    let bytes = to_bytes(response.into_body(), 1 << 20)
+        .await
+        .expect("small");
+    assert_eq!(&bytes[..8], b"\x89PNG\r\n\x1a\n", "PNG signature");
+    // IHDR is the first chunk by specification: 8-byte signature, 4-byte length,
+    // 4-byte type, then width and height as big-endian u32.
+    assert_eq!(&bytes[12..16], b"IHDR");
+    let dimension = |at: usize| u32::from_be_bytes(bytes[at..at + 4].try_into().expect("4 bytes"));
+    assert_eq!((dimension(16), dimension(20)), (512, 512));
+
+    let manifest: serde_json::Value = serde_json::from_str(CONSOLE_MANIFEST).expect("valid JSON");
+    assert_eq!(manifest["icons"][0]["sizes"], "512x512");
+}
+
+/// The page has to *reference* the manifest, or it is a file nobody fetches
+/// (T12.3) — and iOS needs its own tags, because it reads none of it.
+#[test]
+fn the_page_asks_to_be_installed() {
+    for required in [
+        "<link rel=\"manifest\" href=\"/manifest.webmanifest\">",
+        "<link rel=\"apple-touch-icon\" href=\"/icon.png\">",
+        "<meta name=\"apple-mobile-web-app-capable\" content=\"yes\">",
+    ] {
+        assert!(
+            CONSOLE_HTML.contains(required),
+            "the page must carry {required}"
+        );
+    }
+}
+
 /// `default-src 'none'` has to come first and `connect-src` has to be `'self'`,
 /// or a page that ran hostile code could reach off the machine with what it
 /// read — which, on this origin, is a live agent transcript.

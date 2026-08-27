@@ -35,11 +35,18 @@
   // than waiting to be pressed by a pocket.
   var ARM_MS = 4000;
 
-  // Per-tab, deliberately. A device token is a bearer secret for a control
-  // plane and lives twelve hours; `localStorage` would put it on the disk of a
-  // phone that may not be only yours, to save re-scanning a QR that takes two
-  // seconds to display. If that trade turns out to be wrong in daily use, it
-  // should be changed for that measured reason and not for this guessed one.
+  // **`localStorage` since T12.3, and the reason is structural rather than a
+  // change of mind.** T12.1 chose `sessionStorage` — per tab, so a device token
+  // never touches the disk of a phone that may not be only yours — and said it
+  // should only change for a measured reason. Making the console installable is
+  // that reason, and it is not a preference: a home-screen launch is a *new*
+  // browsing context every cold start, so `sessionStorage` is empty by
+  // definition. An installed app that demands a fresh QR scan on every launch is
+  // not installed in any useful sense.
+  //
+  // What keeps the trade honest: the server bounds the token to twelve hours and
+  // `loadDevice` refuses an expired one, a 401 clears it, and `unpair` in the
+  // header lets a person end it from the device holding it.
   var DEVICE_KEY = 'warp.console.device';
 
   // How long before a credential expires we replace it. The server issues five
@@ -62,7 +69,8 @@
     agentsNote: document.getElementById('agents-note'),
     events: document.getElementById('events'),
     eventsCount: document.getElementById('events-count'),
-    eventsNote: document.getElementById('events-note')
+    eventsNote: document.getElementById('events-note'),
+    unpair: document.getElementById('unpair')
   };
 
   var device = null;
@@ -142,7 +150,7 @@
 
   function loadDevice() {
     try {
-      var raw = sessionStorage.getItem(DEVICE_KEY);
+      var raw = localStorage.getItem(DEVICE_KEY);
       if (!raw) return null;
       var saved = JSON.parse(raw);
       if (!saved || !saved.device_token) return null;
@@ -156,23 +164,29 @@
   function saveDevice(saved) {
     device = saved;
     try {
-      sessionStorage.setItem(DEVICE_KEY, JSON.stringify(saved));
+      localStorage.setItem(DEVICE_KEY, JSON.stringify(saved));
     } catch (_) {
-      // A browser refusing storage is survivable: this tab keeps the token in
-      // memory and only a reload has to re-pair.
+      // A browser refusing storage is survivable: this tab keeps the token
+      // in memory and only a reload has to re-pair.
     }
   }
 
   function forgetDevice(why) {
     device = null;
     credentials = {};
-    try { sessionStorage.removeItem(DEVICE_KEY); } catch (_) { /* see saveDevice */ }
+    try { localStorage.removeItem(DEVICE_KEY); } catch (_) { /* see saveDevice */ }
+    // Nothing on screen is true any more, and leaving the last approval drawn
+    // beside "not paired" would invite a tap that cannot land.
+    clear(el.approvals);
+    el.waitingCount.textContent = '0';
+    el.waitingNote.textContent = '';
     showPairing(why);
   }
 
   function showPairing(why) {
     el.pairing.hidden = false;
     el.pairingNote.textContent = why;
+    el.unpair.hidden = true;
     badge(el.link, 'not paired', 'warn');
   }
 
@@ -384,6 +398,10 @@
   }
 
   function refreshApprovals() {
+    // The polls outlive an unpair, so they have to check. Without this, tapping
+    // `unpair` replaces a working page with one printing "not paired" every five
+    // seconds in red, which reads as a fault rather than as what was asked for.
+    if (!device) return Promise.resolve();
     return control(APPROVALS)
       .then(function (data) { renderApprovals((data && data.approvals) || []); })
       .catch(function (err) {
@@ -443,6 +461,7 @@
   }
 
   function refreshState() {
+    if (!device) return Promise.resolve();
     return credentialFor('agent.list')
       .then(function (token) {
         return fetch(STATE, { headers: authorized(token) }).then(function (response) {
@@ -585,6 +604,7 @@
   function start() {
     badge(el.link, 'connecting');
     el.pairing.hidden = true;
+    el.unpair.hidden = false;
     refreshApprovals();
     refreshState();
     // The backstop, not the mechanism — `scheduleApprovalRefresh` on every event
@@ -598,6 +618,9 @@
   function boot() {
     tickClock();
     setInterval(tickClock, 30000);
+    el.unpair.addEventListener('click', function () {
+      forgetDevice('unpaired on this device. Run `warpctrl pair show` and scan again to come back.');
+    });
 
     // Read the fragment once and erase it before anything can render, so the
     // code is never on screen, in history, or in a `Referer`.

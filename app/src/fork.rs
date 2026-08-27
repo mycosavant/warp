@@ -404,8 +404,21 @@ const CONTROL_BIND_ENV_VAR: &str = "WARP_FORK_CONTROL_BIND";
 pub enum ControlBind {
     /// Loopback only — what `warpctrl` has done since T1, and the default.
     LoopbackOnly,
-    /// Loopback *plus* a second listener on exactly this address.
-    Additional(std::net::IpAddr),
+    /// Loopback *plus* a second listener on exactly this address, at this port.
+    ///
+    /// **Port `0` means "the kernel picks", which is what every value meant
+    /// before T12.3.** The port became worth naming when the console became
+    /// installable: a home-screen icon is a saved URL, and an ephemeral port
+    /// makes that URL dead on the next launch. Pinning one is the difference
+    /// between an icon that opens something and an icon that opens
+    /// `ERR_CONNECTION_REFUSED`.
+    ///
+    /// It is not a security widening. The reason a wildcard *address* is refused
+    /// is that it is unanswerable — nothing can say which networks it covers, so
+    /// the `Host` check has nothing to check against. A port is the opposite: it
+    /// is one number, typed on purpose, and the `Host` check compares it like
+    /// any other part of the authority.
+    Additional(std::net::IpAddr, u16),
     /// The value could not be honoured, with the reason to log. Loopback still
     /// listens; see [`control_bind`] for why that is the fail-closed answer and
     /// not a half-measure.
@@ -443,13 +456,23 @@ fn control_bind_from(value: Option<&str>) -> ControlBind {
         }
         Some(value) => value,
     };
-    let Ok(address) = value.parse::<std::net::IpAddr>() else {
-        // Deliberately not resolved as a hostname. What a name points at is
-        // decided elsewhere and can change between the check and the bind, and
-        // "fail closed on an ambiguous config" is the requirement.
-        return ControlBind::Refused(
-            "WARP_FORK_CONTROL_BIND must be a literal IP address; the wide listener is not open",
-        );
+    // `address:port` first, because an IPv6 literal contains colons and only the
+    // socket form can tell `fd00::1` from `fd00::1` at some port. Both spellings
+    // are accepted; the bare one means "any port", as it always has.
+    let (address, port) = match value.parse::<std::net::SocketAddr>() {
+        Ok(socket) => (socket.ip(), socket.port()),
+        Err(_) => match value.parse::<std::net::IpAddr>() {
+            Ok(address) => (address, 0),
+            // Deliberately not resolved as a hostname. What a name points at is
+            // decided elsewhere and can change between the check and the bind,
+            // and "fail closed on an ambiguous config" is the requirement.
+            Err(_) => {
+                return ControlBind::Refused(
+                    "WARP_FORK_CONTROL_BIND must be a literal IP address, optionally with a port; \
+                     the wide listener is not open",
+                );
+            }
+        },
     };
     if address.is_unspecified() {
         return ControlBind::Refused(
@@ -462,7 +485,7 @@ fn control_bind_from(value: Option<&str>) -> ControlBind {
         // it again is a request for what is already true.
         return ControlBind::LoopbackOnly;
     }
-    ControlBind::Additional(address)
+    ControlBind::Additional(address, port)
 }
 
 /// Set to `1`, `on` or `true` to let a paired device say *yes* as well as *no*.

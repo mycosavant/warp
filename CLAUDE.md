@@ -111,7 +111,7 @@ upstream and rebasable.
 | `app/src/ai/local_agent/` | a local implementation of the one agent-transport function, answering from the `claude` CLI. |
 | `app/src/drive/local_sync/` | account-free Warp Drive: snapshot, apply, git-backed sync. |
 | `app/src/ai/mcp/tool_digest.rs` | what each MCP server's tools claimed to be, hashed at connect. The tool rug-pull warning rests on this. |
-| `app/src/local_control/console.{rs,html,js}` | the console (T12.1) — the fork's **only** browser-reachable surface. Two unauthenticated routes serving two constants, under `default-src 'none'; script-src 'self'`. The script never assigns `innerHTML` and a test pins that; keep it that way, because everything it draws was authored by an agent. |
+| `app/src/local_control/console.*` | the console (T12) — the fork's **only** browser-reachable surface. Four unauthenticated routes serving four constants (page, script, manifest, icon), under `default-src 'none'; script-src 'self'`. The script never assigns `innerHTML` and a test pins that; keep it that way, because everything it draws was authored by an agent. |
 | `app/src/local_control/`, `crates/local_control/`, `crates/warp_cli/src/local_control/` | the `warpctrl` control plane, 109 actions. The count is pinned by **two** tests in different crates — update both, and never loosen either. |
 | `app/src/remote_server/wsl_transport.rs`, `crates/remote_server/src/wsl.rs` | the second `RemoteTransport`: Warp's remote-development server, in a WSL distro instead of over SSH. |
 
@@ -125,9 +125,12 @@ the local log; **reach for this before theorising about why something feels
 slow**), `WARP_FORK_EVENT_LOG` (`on`, or a directory — one JSONL file per
 CLI-agent session, appended as events arrive; **reach for this before
 theorising about what an agent did**), `WARP_FORK_CONTROL_BIND` (**the only one
-that reaches off the machine** — one literal IP address and nothing else; a
-hostname, a wildcard, or a typo leaves the wide listener shut and loopback
-serving, because refusing to start would take out `warpctrl window close`),
+that reaches off the machine** — one literal IP address, optionally with a port
+(`192.168.1.5:41234`, `[fd00::1]:41234`; pin one if you want the console on a
+home screen, because an ephemeral port makes a saved URL dead on the next
+launch). A hostname, a wildcard, or a typo leaves the wide listener shut and
+loopback serving, because refusing to start would take out `warpctrl window
+close`),
 `WARP_FORK_REMOTE_APPROVE` (lets a *paired* device run `agent.approve` — say
 **yes** to a CLI agent's permission prompt from a phone. Off unless it is
 literally `1`/`on`/`true`/`yes`; `agent.deny` needs no switch, because saying no

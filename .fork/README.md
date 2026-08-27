@@ -2015,9 +2015,25 @@ shut and logs why:
 |---|---|
 | unset, `off`, `0`, `false` | loopback only — the default |
 | `127.0.0.1`, `::1` | loopback only; you asked for what was already true |
-| `192.168.1.5`, `fd00::1` | loopback **plus** that address |
-| `0.0.0.0`, `::` | **refused**, loopback keeps serving |
-| `lan`, `my-box.local`, `192.168.1.5:8080` | **refused**, loopback keeps serving |
+| `192.168.1.5`, `fd00::1` | loopback **plus** that address, on a port the kernel picks |
+| `192.168.1.5:8080`, `[fd00::1]:8080` | loopback **plus** that address, on **that port** (T12.3) |
+| `0.0.0.0`, `::`, `0.0.0.0:8080` | **refused**, loopback keeps serving |
+| `lan`, `my-box.local`, `192.168.1.5:notaport` | **refused**, loopback keeps serving |
+
+**Naming the port is what makes the console installable**, and it was added by
+T12.3 for exactly that: a home-screen icon is a saved URL, and an ephemeral port
+makes that URL dead on the next launch. It is not a widening — the reason a
+wildcard *address* is refused is that it is unanswerable, and a port is one
+number typed on purpose, compared by the `Host` check like any other part of the
+authority. A named port already in use fails the bind, which is logged and leaves
+loopback serving, like any other failure here.
+
+**One thing a parser cannot catch, if you use IPv6.** `fd00::1:8080` without
+brackets is a *valid address* — `fd00:0:0:0:0:0:1:8080` — so it is accepted as an
+address with no port rather than refused. Nothing can tell what you meant.
+Brackets are the disambiguation; and if you get it wrong, this machine does not
+hold that address, so the bind fails, says so in the log, and loopback keeps
+serving.
 
 Refusing `0.0.0.0` is the point rather than an omission. The anti-pattern this
 task exists to avoid is `HOST=0.0.0.0`, and what makes it one is not that a
@@ -2226,10 +2242,37 @@ plus `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`,
 
 **Where the secret lives.** The pairing code is in the fragment, the console
 reads it once and calls `history.replaceState` before drawing anything, and the
-device token goes in `sessionStorage` — per tab, deliberately. A device token is
-a bearer for a control plane and lives twelve hours; `localStorage` would put it
-on the disk of a phone that may not be only yours, to save re-scanning a QR that
-takes two seconds to display.
+device token goes in `localStorage`, bounded by the twelve hours the server gives
+it, cleared on a 401, and endable from the phone with `unpair` in the header.
+
+*T12.1 used `sessionStorage` and T12.3 changed it, for a structural reason
+rather than a preference:* a home-screen launch is a **new** browsing context
+every cold start, so `sessionStorage` is empty by definition and an installed app
+would demand a fresh QR scan every single launch.
+
+#### Putting it on a home screen
+
+```console
+$ WARP_FORK_CONTROL_BIND=192.168.1.5:41234 warp-oss    # a fixed port, not an ephemeral one
+$ warpctrl pair show                                   # scan, then Add to Home Screen
+```
+
+**Be clear-eyed about what this gets you, because it is platform-dependent and
+the ceiling is set by HTTP.** A service worker requires a secure context, and
+`http://` at a LAN address is not one — so there is no service worker, no
+install prompt, no WebAPK, and no offline anything. What remains:
+
+| | what you get |
+|---|---|
+| **iOS Safari** | *Add to Home Screen* is a manual user action that needs neither HTTPS nor a service worker, and honours `apple-touch-icon` and `apple-mobile-web-app-capable`. A real standalone launch with the right icon. |
+| **Android Chrome** | *Add to Home screen* creates a shortcut, not an installed app. It opens in browser UI. |
+
+The fixed port is what makes the saved URL survive a restart. The **pairing**
+does not: codes and device tokens live in memory and die with the process, so
+after a Warp restart the icon opens a page that says *"run `warpctrl pair show`
+… then scan the QR"*. That is the intended behaviour and it is why the icon is
+worth having anyway — an app that tells you what to do beats a URL that refuses
+to connect.
 
 ### Answering from the couch — `agent approvals`, `approve`, `deny`
 

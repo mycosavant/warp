@@ -5494,7 +5494,7 @@ a build step in this tree would be a new toolchain for one page.
       always present, `approve` appears only when the instance advertises it.
       The page must learn that from the server rather than assuming it — a
       button that 403s is worse than a button that is absent.
-- [ ] **T12.3** Installable, and the QR points at it. A manifest and an icon so
+- [x] **T12.3** Installable, and the QR points at it. A manifest and an icon so
       it is a home-screen app rather than a tab, and `control.pair`'s QR encodes
       the *page* URL rather than a bare token — pairing that ends at a page a
       person can use is the difference between a demo and a tool.
@@ -5547,6 +5547,106 @@ a build step in this tree would be a new toolchain for one page.
 - [ ] **`kode-engine` and Tusk's pure cores extracted as MIT/Apache crates**
       (§10 step 1). Not work in this repo, but a *dependency* of T13 and of any
       later migration, and §12 forbids the migration until it is done.
+
+### T12.3 — as built
+
+**Half the ticket was already done, and the other half turned out to be two
+things the ticket did not mention.** *"`control.pair`'s QR encodes the page URL
+rather than a bare token"* landed in T12.1, because a QR pointing at a `POST`-only
+route was not a client. What was left was the manifest and the icon — and
+scoping that surfaced two problems that make the difference between an icon that
+works and an icon that is a decoration.
+
+**1. The wide listener bound port 0, so a home-screen icon died on every
+restart.** An installed app is a saved URL. The wide listener took an ephemeral
+port for the same reason the loopback one does — *"the address is the part a
+person chose, and the port is this instance's to pick"* — which is right until
+the thing being saved is the address. `WARP_FORK_CONTROL_BIND` now takes an
+optional port: `192.168.1.5:41234`, `[fd00::1]:41234`.
+
+**This reverses a case `a_bind_wider_than_loopback_has_to_be_named_exactly`
+pinned as refused.** `192.168.1.5:8080` sat in that test's ambiguous list, which
+was correct while the only ambiguous thing was an address. It is not a widening:
+a wildcard address is refused because it is *unanswerable* — nothing can say
+which networks it covers, so the `Host` check has nothing to check against — and
+a port is one number typed on purpose, compared like any other part of the
+authority. Verified live: `0.0.0.0:8080` is still refused, logs
+*"must name one address, not a wildcard"*, opens no wide listener and leaves
+nothing on 8080.
+
+**One case no parser can catch, asserted rather than papered over.**
+`fd00::1:8080` without brackets is a *valid IPv6 address* — `fd00:0:0:0:0:0:1:8080`
+— so a person who meant "fd00::1 port 8080" has typed something else that is
+real. This was found by writing it into the refusal list and watching the test
+fail. It still fails closed: the machine does not hold that address, the bind
+fails, and loopback keeps serving. Brackets are the disambiguation and that is
+what they are for.
+
+**2. `sessionStorage` and "installable" are incompatible by definition.** T12.1
+chose `sessionStorage` for the device token — per tab, so a bearer for a control
+plane never touches the disk of a phone that may not be only yours — and said it
+should change only for a *measured* reason rather than a guessed one. This is
+that reason, and it is structural rather than a matter of taste: **a home-screen
+launch is a new browsing context every cold start**, so `sessionStorage` is empty
+by definition and an installed app would demand a fresh QR scan on every single
+launch.
+
+Now `localStorage`, bounded by the twelve hours the server already gives the
+token, cleared on a 401, and endable from the device with `unpair` in the header
+— which had to come with it, because a token that outlives the tab needs a way to
+be ended other than waiting. Measured with a disk-backed store, which is the only
+way to simulate a cold launch without a phone: **launch 2, with no code in the
+URL and a fresh process, came up `live` and paired.**
+
+**A third thing `unpair` needed, found by running it.** The five-second pollers
+outlive an unpair, so without a guard the page replaced a working view with a red
+"not paired" error every five seconds — which reads as a fault rather than as
+what was just asked for. `refreshApprovals` and `refreshState` now return early
+when there is no device. Checked by snapshotting six seconds after the tap.
+
+**What installability actually buys, stated honestly because the ceiling is set
+by the transport.** A service worker requires a secure context and `http://` at a
+LAN address is not one — so no service worker, no install prompt, no WebAPK, no
+offline. **iOS Safari's *Add to Home Screen* is the one path to a standalone
+launch here**: it is a manual user action needing neither HTTPS nor a service
+worker, and it takes its icon from `apple-touch-icon`, which does not render SVG.
+That is why the icon is a PNG and not the smaller, diffable thing it would
+otherwise be. Android Chrome gets a shortcut in browser UI.
+
+**And pairing still does not survive a restart, which is fine.** Codes and device
+tokens are in memory and die with the process, so after a Warp restart the icon
+opens a page saying *"run `warpctrl pair show` … then scan the QR"*. The fixed
+port is what makes that possible at all: an app that tells you what to do beats a
+URL that refuses to connect.
+
+**Verified by running, 2026-08-27.** Release build, WSLg, scratch XDG,
+`WARP_FORK_CONTROL_BIND=172.22.45.116:41234`.
+
+| | result |
+|---|---|
+| wide listener | bound `172.22.45.116:41234` — the port it was told |
+| after `window close` and relaunch | wide still `:41234`; loopback moved `43173` → `46503` |
+| the saved icon URL across that restart | `GET /` → `200` |
+| `warpctrl pair show` | `http://172.22.45.116:41234/#<code>`, both times |
+| `GET /manifest.webmanifest` | `200 application/manifest+json`, `start_url /`, `display standalone`, icon `/icon.png` `512x512` |
+| `GET /icon.png` | `200 image/png`, decodes as 512×512 RGBA |
+| CSP on every route | now also `img-src 'self'; manifest-src 'self'` — no external host under any directive |
+| launch 1 (QR scanned) | `live`, paired, token on disk |
+| launch 2 (**no code in URL**, new process) | `live`, paired — the case `sessionStorage` could not serve |
+| tap `unpair` | token gone from disk, pairing screen shown, still clean six seconds later |
+| `WARP_FORK_CONTROL_BIND=0.0.0.0:8080` | refused, logged, no wide listener, nothing on 8080 |
+
+**Named unverified input, and T12.3 makes it the largest it has been.** Every
+claim above about *what a browser does* is read, not run: there is still no
+browser on this machine, so `console.js` executed under `node` with a DOM shim.
+Specifically unverified — **that iOS Safari installs this manifest and shows this
+icon**, that a standalone launch looks right, that the secure-context rule bites
+exactly as described on the phone in question, and everything T12.2 already
+listed about thumb reach and the arming window. The code does not depend on the
+secure-context reasoning being right: the manifest is correct either way, and if
+a service worker ever becomes possible the manifest is what would be waiting for
+it. **One session with a phone closes T12.1, T12.2 and T12.3's open items at
+once**, and it is now the highest-value hour available on this phase.
 
 ### T12.2 — as built
 

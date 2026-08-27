@@ -379,6 +379,15 @@ impl LocalControlServer {
                 console::CONSOLE_SCRIPT_PATH,
                 get(console::handle_console_script_request),
             )
+            // What makes it a home-screen app rather than a tab (T12.3).
+            .route(
+                console::CONSOLE_MANIFEST_PATH,
+                get(console::handle_console_manifest_request),
+            )
+            .route(
+                console::CONSOLE_ICON_PATH,
+                get(console::handle_console_icon_request),
+            )
             .with_state(state.clone());
         runtime.spawn({
             let router = router.clone();
@@ -438,19 +447,22 @@ impl LocalControlServer {
 /// environment variable must not be able to produce an instance nothing can
 /// shut down.
 async fn bind_wide_listener() -> Option<(tokio::net::TcpListener, String)> {
-    let address = match crate::fork::control_bind() {
+    let (address, port) = match crate::fork::control_bind() {
         crate::fork::ControlBind::LoopbackOnly => return None,
         crate::fork::ControlBind::Refused(reason) => {
             log::warn!("local-control wide bind refused: {reason}");
             return None;
         }
-        crate::fork::ControlBind::Additional(address) => address,
+        crate::fork::ControlBind::Additional(address, port) => (address, port),
     };
-    // Port 0, like the loopback listener: the address is the part a person
-    // chose, and the port is this instance's to pick. Binding a *specific*
-    // address also means the kernel refuses an address this machine does not
-    // hold, so no interface enumeration is needed to validate one.
-    match tokio::net::TcpListener::bind(SocketAddr::from((address, 0))).await {
+    // Port 0 unless one was named (T12.3), which is what every value meant
+    // before the console became something you can put on a home screen: an icon
+    // is a saved URL, and an ephemeral port makes it dead on the next launch.
+    // Binding a *specific* address also means the kernel refuses an address this
+    // machine does not hold, so no interface enumeration is needed to validate
+    // one — and a named port that is already taken fails here, which is handled
+    // exactly like any other failed bind: logged, loopback keeps serving.
+    match tokio::net::TcpListener::bind(SocketAddr::from((address, port))).await {
         Ok(listener) => match listener.local_addr() {
             Ok(bound) => Some((listener, bound.to_string())),
             Err(err) => {
@@ -459,7 +471,7 @@ async fn bind_wide_listener() -> Option<(tokio::net::TcpListener, String)> {
             }
         },
         Err(err) => {
-            log::warn!("local-control wide bind to {address} failed: {err:#}");
+            log::warn!("local-control wide bind to {address}:{port} failed: {err:#}");
             None
         }
     }

@@ -13,8 +13,8 @@
 //!
 //! A browser following a QR cannot send an `Authorization` header, so the
 //! document itself has to be free to fetch. That is safe because the document
-//! is a **constant**: two `include_str!`s, no interpolation, no template, no
-//! secret. Everything that requires authority happens in `fetch` calls the
+//! is a **constant**: four files pulled in at compile time, no interpolation, no
+//! template, no secret. Everything that requires authority happens in `fetch` calls the
 //! script makes afterwards, each carrying a scoped credential the page obtained
 //! by redeeming a pairing code.
 //!
@@ -52,8 +52,17 @@ pub(crate) const CONSOLE_PATH: &str = "/";
 /// The script, as its own route. See the module docs for why it is not inline.
 pub(crate) const CONSOLE_SCRIPT_PATH: &str = "/console.js";
 
+/// The manifest that makes the console a home-screen app rather than a tab
+/// (T12.3).
+pub(crate) const CONSOLE_MANIFEST_PATH: &str = "/manifest.webmanifest";
+
+/// The icon, referenced by both the manifest and `apple-touch-icon` (T12.3).
+pub(crate) const CONSOLE_ICON_PATH: &str = "/icon.png";
+
 const CONSOLE_HTML: &str = include_str!("console.html");
 const CONSOLE_SCRIPT: &str = include_str!("console.js");
+const CONSOLE_MANIFEST: &str = include_str!("console.webmanifest");
+const CONSOLE_ICON: &[u8] = include_bytes!("console_icon.png");
 
 /// The policy the page is served under.
 ///
@@ -65,30 +74,57 @@ const CONSOLE_SCRIPT: &str = include_str!("console.js");
 /// a page that somehow ran hostile code still could not post what it read
 /// anywhere, which matters more here than on an ordinary site because what it
 /// can read is a live agent transcript.
+///
+/// `img-src` and `manifest-src` were added by T12.3, and both are `'self'`. That
+/// is a smaller change than it looks: the exfiltration route an injected
+/// stylesheet would use is an image request to *somewhere else*, and `'self'` is
+/// still this origin only. Nothing here may name an external host under any
+/// directive.
 const POLICY: &str = "default-src 'none'; \
      script-src 'self'; \
      style-src 'unsafe-inline'; \
      connect-src 'self'; \
+     img-src 'self'; \
+     manifest-src 'self'; \
      base-uri 'none'; \
      form-action 'none'; \
      frame-ancestors 'none'";
 
 /// Answers `GET /` — the console document (T12.1).
 pub(super) async fn handle_console_request() -> Response {
-    served(CONSOLE_HTML, "text/html; charset=utf-8")
+    served(CONSOLE_HTML.as_bytes(), "text/html; charset=utf-8")
 }
 
 /// Answers `GET /console.js` — the console's script (T12.1).
 pub(super) async fn handle_console_script_request() -> Response {
-    served(CONSOLE_SCRIPT, "text/javascript; charset=utf-8")
+    served(CONSOLE_SCRIPT.as_bytes(), "text/javascript; charset=utf-8")
 }
 
-/// The headers both documents carry.
+/// Answers `GET /manifest.webmanifest` (T12.3).
+pub(super) async fn handle_console_manifest_request() -> Response {
+    served(CONSOLE_MANIFEST.as_bytes(), "application/manifest+json")
+}
+
+/// Answers `GET /icon.png` (T12.3).
+///
+/// A PNG rather than an SVG, and that is not a preference. On plain HTTP at a
+/// LAN address there is no secure context, so no service worker, so no
+/// install prompt and no WebAPK — which leaves iOS Safari's manual *Add to Home
+/// Screen* as the one path to a standalone launch, and it takes its icon from
+/// `apple-touch-icon`, which does not render SVG.
+pub(super) async fn handle_console_icon_request() -> Response {
+    served(CONSOLE_ICON, "image/png")
+}
+
+/// The headers every console document carries.
 ///
 /// `no-store` rather than a cache lifetime: a phone that keeps the console in a
 /// back/forward cache is a phone showing an agent's state from an hour ago, and
-/// a stale view of "is anything waiting on me" is worse than no view.
-fn served(body: &'static str, content_type: &'static str) -> Response {
+/// a stale view of "is anything waiting on me" is worse than no view. The icon
+/// and manifest do not need that and would not suffer from a lifetime, but they
+/// are fetched about once per install, so one header set is worth more than the
+/// bytes a second one would save.
+fn served(body: &'static [u8], content_type: &'static str) -> Response {
     let headers: [(HeaderName, &'static str); 6] = [
         (CONTENT_TYPE, content_type),
         (CONTENT_SECURITY_POLICY, POLICY),
@@ -101,7 +137,7 @@ fn served(body: &'static str, content_type: &'static str) -> Response {
         (REFERRER_POLICY, "no-referrer"),
         (CACHE_CONTROL, "no-store"),
     ];
-    let mut response = (StatusCode::OK, body).into_response();
+    let mut response = (StatusCode::OK, axum::body::Bytes::from_static(body)).into_response();
     for (name, value) in headers {
         response
             .headers_mut()

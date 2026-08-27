@@ -4,7 +4,18 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#0e1116">
 <title>Warp — console</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.png">
+<!-- iOS ignores the manifest for Add to Home Screen and reads these instead.
+     It is also the only platform where a standalone launch is achievable here:
+     plain HTTP at a LAN address is not a secure context, so there is no service
+     worker and therefore no install prompt anywhere else. -->
+<link rel="apple-touch-icon" href="/icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="warp">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <style>
   :root { color-scheme: dark; --bg:#0e1116; --panel:#161b22; --line:#21262d; --dim:#8b949e; --fg:#c9d1d9; --hi:#e6edf3; --busy:#d29922; --block:#f85149; --ok:#3fb950; }
   * { box-sizing: border-box; }
@@ -24,6 +35,7 @@
   .badge.live { color:var(--ok); border-color:#238636; }
   .badge.warn { color:var(--busy); border-color:#9e6a03; }
   .badge.bad  { color:var(--block); border-color:#762a26; }
+  button.badge { font:inherit; font-size:11px; background:transparent; cursor:pointer; }
   .spacer { flex:1 1 auto; }
   main { flex:1 1 auto; overflow:auto; -webkit-overflow-scrolling:touch; }
   section { border-bottom:1px solid var(--line); padding:.5rem .8rem .7rem; }
@@ -69,6 +81,9 @@
   <span class="badge" id="link">connecting</span>
   <span class="spacer"></span>
   <span class="badge" id="clock"></span>
+  <!-- The device token now outlives the tab, so there has to be a way to end it
+       from the device holding it, not only by waiting twelve hours. -->
+  <button class="badge" id="unpair" hidden>unpair</button>
 </header>
 
 <main>

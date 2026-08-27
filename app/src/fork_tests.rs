@@ -828,13 +828,59 @@ fn a_bind_wider_than_loopback_has_to_be_named_exactly() {
         assert_eq!(control_bind_from(absent), ControlBind::LoopbackOnly);
     }
 
+    // A bare address still means "any port", which is what every value meant
+    // before T12.3.
     assert_eq!(
         control_bind_from(Some("192.168.1.5")),
-        ControlBind::Additional("192.168.1.5".parse().expect("a v4 address"))
+        ControlBind::Additional("192.168.1.5".parse().expect("a v4 address"), 0)
     );
     assert_eq!(
         control_bind_from(Some("  fd00::1  ")),
-        ControlBind::Additional("fd00::1".parse().expect("a v6 address"))
+        ControlBind::Additional("fd00::1".parse().expect("a v6 address"), 0)
+    );
+
+    // **T12.3 accepts a port, and this reverses a case this test used to pin as
+    // refused.** `192.168.1.5:8080` sat in the ambiguous list below, which was
+    // right while the only thing that could be ambiguous was an address — and
+    // wrong once the console became installable, because a home-screen icon is a
+    // saved URL and an ephemeral port makes it dead on the next launch. A port
+    // is not a wildcard: it is one number, typed on purpose, and the `Host`
+    // check compares it like any other part of the authority.
+    assert_eq!(
+        control_bind_from(Some("192.168.1.5:8080")),
+        ControlBind::Additional("192.168.1.5".parse().expect("a v4 address"), 8080)
+    );
+    assert_eq!(
+        control_bind_from(Some("[fd00::1]:8080")),
+        ControlBind::Additional("fd00::1".parse().expect("a v6 address"), 8080)
+    );
+    // Explicit zero says what the default does, so it is honoured rather than
+    // treated as a typo — there is nothing to be ambiguous about.
+    assert_eq!(
+        control_bind_from(Some("192.168.1.5:0")),
+        ControlBind::Additional("192.168.1.5".parse().expect("a v4 address"), 0)
+    );
+    // **The one case a port cannot be disambiguated from, asserted so nobody
+    // "fixes" it into a refusal it cannot correctly make.** `fd00::1:8080` is a
+    // perfectly valid IPv6 address — `fd00:0:0:0:0:0:1:8080` — so a person who
+    // meant "fd00::1, port 8080" and omitted the brackets has typed something
+    // else that is real, and no parser can tell. Brackets are the disambiguation
+    // and that is what they are for. It still fails closed rather than binding
+    // somewhere surprising: this machine does not hold that address, so the bind
+    // fails and is logged, and loopback keeps serving.
+    assert_eq!(
+        control_bind_from(Some("fd00::1:8080")),
+        ControlBind::Additional("fd00::1:8080".parse().expect("a v6 address"), 0)
+    );
+
+    // A port does not buy a wildcard a hearing, and does not make loopback wide.
+    assert!(matches!(
+        control_bind_from(Some("0.0.0.0:8080")),
+        ControlBind::Refused(_)
+    ));
+    assert_eq!(
+        control_bind_from(Some("127.0.0.1:8080")),
+        ControlBind::LoopbackOnly
     );
 
     // Asking for loopback is asking for what is already true, which is not an
@@ -859,7 +905,15 @@ fn a_bind_wider_than_loopback_has_to_be_named_exactly() {
 
     // Fail closed on an ambiguous config, and a hostname is ambiguous: what it
     // resolves to is decided elsewhere and can change between check and bind.
-    for ambiguous in ["lan", "my-laptop.local", "192.168.1.5:8080", "on"] {
+    for ambiguous in [
+        "lan",
+        "my-laptop.local",
+        "on",
+        // A port that is not a port. Accepting the address and shrugging at the
+        // rest would bind somewhere the person did not ask for.
+        "192.168.1.5:notaport",
+        "192.168.1.5:99999",
+    ] {
         assert!(
             matches!(control_bind_from(Some(ambiguous)), ControlBind::Refused(_)),
             "{ambiguous:?} should be refused rather than interpreted"
