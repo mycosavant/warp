@@ -112,7 +112,7 @@ upstream and rebasable.
 | `app/src/drive/local_sync/` | account-free Warp Drive: snapshot, apply, git-backed sync. |
 | `app/src/ai/mcp/tool_digest.rs` | what each MCP server's tools claimed to be, hashed at connect. The tool rug-pull warning rests on this. |
 | `app/src/local_control/console.*` | the console (T12) — the fork's **only** browser-reachable surface. Four unauthenticated routes serving four constants (page, script, manifest, icon), under `default-src 'none'; script-src 'self'`. The script never assigns `innerHTML` and a test pins that; keep it that way, because everything it draws was authored by an agent. |
-| `app/src/local_control/`, `crates/local_control/`, `crates/warp_cli/src/local_control/` | the `warpctrl` control plane, 109 actions. The count is pinned by **two** tests in different crates — update both, and never loosen either. |
+| `app/src/local_control/`, `crates/local_control/`, `crates/warp_cli/src/local_control/` | the `warpctrl` control plane, 114 actions. The count is pinned by **two** tests in different crates — update both, and never loosen either. **This line said 109 for two phases**: T11.2 took it to 110, T11.4 to 111 and T11.5 to 114, and each updated the pins without updating this table. Read the count off `catalog_has_exactly_N_retained_actions`, never off prose. |
 | `app/src/remote_server/wsl_transport.rs`, `crates/remote_server/src/wsl.rs` | the second `RemoteTransport`: Warp's remote-development server, in a WSL distro instead of over SSH. |
 
 Environment variables the fork adds: `WARP_FORK_POLICY` (set `0`/`off`/`false`

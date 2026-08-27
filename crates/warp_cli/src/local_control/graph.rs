@@ -91,6 +91,15 @@ pub(super) struct Node {
     /// What must hold once this node has finished (`.fork/TASKS.md`, T13.2).
     #[serde(default, rename = "assert")]
     pub assertions: Vec<Assertion>,
+    /// This node checks the work rather than doing it (`.fork/TASKS.md`, T13.3).
+    ///
+    /// Not a different kind of node — a review is one `agent.spawn` like every
+    /// other, and the whole of `ZB-REVIEW`'s independence comes free because a
+    /// spawned child inherits no transcript. What this flag buys is a *fence*:
+    /// [`validate`] refuses the three edits that would quietly turn a reviewer
+    /// into a rubber stamp. See the section above [`review_fence`].
+    #[serde(default)]
+    pub review: bool,
 }
 
 /// One thing that must be true once a node's turn is over.
@@ -187,11 +196,20 @@ impl Node {
     }
 
     fn allow_tools(&self, defaults: &Defaults) -> Option<Vec<String>> {
+        // A reviewer reads. `[defaults]` does not reach it and it may not name
+        // its own — see `review_fence`, which refuses the latter rather than
+        // silently overriding it.
+        if self.review {
+            return Some(vec![READ_ONLY.to_owned()]);
+        }
         self.allow_tools
             .clone()
             .or_else(|| defaults.allow_tools.clone())
     }
 }
+
+/// The one preset `agent.spawn` understands, spelled once.
+const READ_ONLY: &str = "read-only";
 
 /// Where a node has got to.
 ///
@@ -304,7 +322,118 @@ pub(super) fn validate(plan: &Plan) -> Result<(), ControlError> {
         )));
     }
 
+    review_fence(plan)?;
+
     Ok(())
+}
+
+/// The whole of `ZB-REVIEW` that needed building (`.fork/TASKS.md`, T13.3).
+///
+/// # Why there is no reviewer to build
+///
+/// Tusk's version is a *run mode*: a fresh engine run with the original prompt,
+/// the worktree, a forced read-only overlay, and the prior transcript
+/// deliberately withheld. Every one of those is a thing it had to add, because
+/// its runs inherit context by default.
+///
+/// Here a review is a **node shape, not a node kind**. `agent.spawn` starts a
+/// fresh conversation with the prompt it is given and nothing else —
+/// `parent_conversation_id` is tree bookkeeping, not inheritance — so *a
+/// spawned child is transcript-free by construction*. `allow_tools =
+/// ["read-only"]` already exists. Ordering edges that hand nothing along
+/// already exist. The reviewer is therefore an ordinary node, and Tusk's whole
+/// overlay collapses into the spawn primitive.
+///
+/// **That is the third time.** T13.1's sealed-subgraph closure became a filter
+/// and T13.2's coverage invariant became a uniqueness check, both because this
+/// fork writes a relationship on the thing itself instead of in a side table.
+/// Here the thing written on itself is *context*: there is no side table of
+/// history for a child to be accidentally given.
+///
+/// # So what is left is a fence
+///
+/// A reviewer is only worth having while it stays independent, and all three
+/// ways of breaking that are silent — the plan still runs, and the gate still
+/// says yes. So they are refused before anything spawns:
+///
+/// 1. **A `pass` edge into a review node.** This is the important one. A
+///    handoff appends the upstream node's answer to the reviewer's prompt, so
+///    one `pass = "what I did"` hands the reviewer exactly the claim it exists
+///    not to see, and turns it back into a model grading a model's homework.
+/// 2. **A review node naming its own `allow_tools`.** There is one right answer
+///    and offering a choice invites the wrong one; a reviewer that can write is
+///    a reviewer that can make its own verdict true.
+/// 3. **A review that is not downstream of every working node.** Its input is
+///    the *working tree*, which is global — so a review that can start while
+///    any other node is still running reviews a workspace mid-edit, and does it
+///    non-deterministically.
+fn review_fence(plan: &Plan) -> Result<(), ControlError> {
+    let by_id: HashMap<&str, &Node> = plan
+        .nodes
+        .iter()
+        .map(|node| (node.id.as_str(), node))
+        .collect();
+
+    for node in plan.nodes.iter().filter(|node| node.review) {
+        if let Some(need) = node.needs.iter().find(|need| need.pass().is_some()) {
+            return Err(invalid(format!(
+                "review node `{}` is handed `{}`'s answer; a reviewer that is \
+                 told what was done is grading a claim rather than the work — \
+                 use `needs = [\"{}\"]` instead",
+                node.id,
+                need.node(),
+                need.node()
+            )));
+        }
+        if node.allow_tools.is_some() {
+            return Err(invalid(format!(
+                "review node `{}` names its own `allow_tools`; a review is \
+                 always `{READ_ONLY}`, because a reviewer that can write can \
+                 make its own verdict true",
+                node.id
+            )));
+        }
+
+        let upstream = upstream_closure(&by_id, &node.id);
+        if let Some(missed) = plan
+            .nodes
+            .iter()
+            .filter(|other| !other.review && !upstream.contains(other.id.as_str()))
+            .map(|other| other.id.as_str())
+            .next()
+        {
+            return Err(invalid(format!(
+                "review node `{}` does not wait for `{missed}`; a review reads \
+                 the working tree, which is one thing shared by every node, so \
+                 it has to run after all of them",
+                node.id
+            )));
+        }
+    }
+
+    Ok(())
+}
+
+/// Every node `id` transitively waits on.
+///
+/// Carries a visited set rather than trusting acyclicity, because `validate`
+/// calls this before it is finished proving there is no cycle.
+fn upstream_closure<'a>(by_id: &HashMap<&'a str, &'a Node>, id: &str) -> HashSet<&'a str> {
+    let mut seen = HashSet::new();
+    let mut queue: VecDeque<&str> = VecDeque::from([id]);
+    while let Some(current) = queue.pop_front() {
+        let Some(node) = by_id.get(current) else {
+            continue;
+        };
+        for need in &node.needs {
+            if let Some((upstream, _)) = by_id.get_key_value(need.node())
+                && seen.insert(*upstream)
+            {
+                queue.push_back(upstream);
+            }
+        }
+    }
+    seen
 }
 
 /// The nodes in a cycle, if there is one.
@@ -625,6 +754,9 @@ pub(super) fn fingerprint(plan: &Plan, node: &Node) -> String {
             assertion.run()
         ));
     }
+    // Turning the reviewer into an ordinary node is an edit to what its answer
+    // meant, and it is one word long.
+    parts.push(format!("review:{}", node.review));
 
     let mut hasher = Sha256::new();
     hasher.update(FINGERPRINT_DOMAIN.as_bytes());
@@ -885,8 +1017,35 @@ pub(super) fn newly_blocked(
 /// The handoff is appended rather than substituted into the prompt: a template
 /// with a hole in it is a second thing to get right, and an agent reading
 /// "Migrate those files" followed by a labelled list does not need one.
-pub(super) fn compose_prompt(node: &Node, states: &HashMap<String, NodeState>) -> String {
+/// `workspace` is where `graph run` was invoked, and it is appended **only to a
+/// review node**. Found by running one (`.fork/TASKS.md`, T13.3): `agent.spawn`
+/// takes no working directory, so a spawned child starts in the *pane's* cwd,
+/// which has nothing to do with the directory the plan is being run from. The
+/// first live review dutifully read the wrong tree and said so — *"There is no
+/// `./src` directory in the working tree (`/home/effatha/git/warp`)"* — and its
+/// gate failed for that reason rather than for the gap that was actually
+/// planted. A reviewer whose whole input is the workspace has to be told which
+/// one, and this is the only channel there is.
+///
+/// Not part of [`fingerprint`], deliberately: the fingerprint is about *plan
+/// edits*, and a directory is environment. An `assert = ["cargo check"]` has
+/// the same fingerprint wherever it runs too.
+pub(super) fn compose_prompt(
+    node: &Node,
+    states: &HashMap<String, NodeState>,
+    workspace: Option<&Path>,
+) -> String {
     let mut prompt = node.prompt.trim().to_owned();
+    if node.review
+        && let Some(workspace) = workspace
+    {
+        prompt.push_str(&format!(
+            "\n\n--- The workspace you are reviewing is `{}`. Read it there, by \
+             absolute path. You did not start in that directory, so a relative \
+             path will silently resolve somewhere else.",
+            workspace.display()
+        ));
+    }
     for need in &node.needs {
         let Some(pass) = need.pass() else { continue };
         let Some(NodeState::Done { output, .. }) = states.get(need.node()) else {
@@ -911,9 +1070,10 @@ pub(super) fn spawn_params(
     node: &Node,
     states: &HashMap<String, NodeState>,
     parent: Option<String>,
+    workspace: Option<&Path>,
 ) -> AgentSpawnParams {
     AgentSpawnParams {
-        prompt: compose_prompt(node, states),
+        prompt: compose_prompt(node, states, workspace),
         name: Some(node.name()),
         parent_conversation_id: parent,
         allow_tools: node.allow_tools(&plan.defaults),
@@ -995,6 +1155,9 @@ pub(super) fn run(
         })
         .collect();
     let mut verdicts = resumed.verdicts.clone();
+    // Read once. A review node is told where this is; nothing else is, because
+    // every other node's input arrives in its prompt.
+    let workspace = std::env::current_dir().ok();
     for node in &plan.nodes {
         if resumed.states.contains_key(&node.id) {
             report(Event::Reused {
@@ -1010,7 +1173,7 @@ pub(super) fn run(
             .filter(|state| matches!(state, NodeState::Running { .. }))
             .count();
         for node in ready(plan, &states, running, max_parallel) {
-            let params = spawn_params(plan, node, &states, parent.clone());
+            let params = spawn_params(plan, node, &states, parent.clone(), workspace.as_deref());
             let state = match super::commands::send_action(args, ActionKind::AgentSpawn, params) {
                 Ok(data) => match serde_json::from_value::<AgentSpawnResult>(data) {
                     Ok(spawned) => {
@@ -1294,6 +1457,49 @@ needs = [
   { node = "survey", pass = "the original list" },
   { node = "fix", pass = "what was changed" },
 ]
+
+[[node]]
+# `review = true` marks a node that checks the work instead of doing it. It is
+# an ordinary `agent.spawn` — the independence is free, because a spawned child
+# inherits no transcript and knows only the prompt below.
+#
+# Three things are refused before anything spawns, and each is a silent way to
+# gut the gate: a `pass` edge into a review (it would hand the reviewer the very
+# claim it exists not to see), its own `allow_tools` (a review is always
+# read-only; one that can write can make its verdict true), and a review that
+# does not wait for every working node (it reads the working tree, which they
+# all share).
+id = "review"
+review = true
+# State the ORIGINAL request in your own words. Do not describe the plan, and do
+# not say what anyone reported doing — that is the claim you are checking.
+#
+# One line naming the directory `graph run` was invoked from is appended to a
+# review node's prompt automatically. It has to be: `agent.spawn` takes no
+# working directory, so every child starts in the *pane's* cwd, and a reviewer
+# whose only input is the workspace would otherwise read whichever tree Warp
+# happened to be launched from.
+prompt = """
+The goal of this work was: every file under src/ calls the new API, and nothing
+still calls the old one.
+
+Read the workspace and decide whether that goal is met. You have not been told
+what was done or claimed; do not go looking for it. Report concrete gaps — what
+someone using this workspace would find missing or wrong.
+
+If and only if you find no gaps, reply with exactly: NO GAPS FOUND
+Otherwise list the gaps one per line, and do not use that phrase.
+"""
+# Ordering only. `report` already waits for `survey` and `fix`, so this waits
+# for all three.
+needs = ["report"]
+# The verdict is a T13.2 assertion like any other, so a review that finds gaps
+# is `rejected` and stops the plan.
+#
+# A review can only usefully FAIL. Its "no gaps" adds nothing that "no assertion
+# failed" did not already say — a model's answer may narrow what you accept,
+# never widen it. Treat the gaps as the product and the pass as a formality.
+assert = [{ id = "no-gaps", run = "grep -qx 'NO GAPS FOUND'" }]
 
 # Notes that are not fields:
 #

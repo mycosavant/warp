@@ -5526,8 +5526,14 @@ a build step in this tree would be a new toolchain for one page.
       string — and a node whose assertion fails is `rejected`, a fifth state.
       Tusk's two open decides are both answered by the file: the contract lives
       on the node, and nothing produces a verdict except the command itself.
-- [ ] **T13.3** `ZB-REVIEW` — an independent completion-review gate: the agent
-      that checks is not the agent that did the work.
+- [x] **T13.3** `ZB-REVIEW` — an independent completion-review gate: the agent
+      that checks is not the agent that did the work. **There was no reviewer to
+      build** — a review is a *node shape*, not a node kind, and Tusk's whole
+      no-transcript overlay collapses into `agent.spawn`, which has no other
+      mode. What was built is the fence: `review = true`, three refusals in
+      `validate`, and the recipe in the schema. The tension with T13.2 resolves
+      by demoting the verdict — **a model's answer may narrow acceptance, never
+      widen it.**
 
 ## T14 — ACP as the adapter contract (a decide, not yet a build)
 
@@ -5610,6 +5616,140 @@ used* — **Firefox on Android**, with DuckDuckGo as the Chromium fallback. The
 install rows in `README.md` were originally written around iOS Safari and Android
 *Chrome*, neither of which is this maintainer's phone; they are corrected there
 and the Firefox row is the one still open.
+
+### T13.3 — as built
+
+**The ticket asks for a reviewer and there was none to build.** Tusk's
+`ZB-REVIEW` is a *run mode*: a fresh engine run given the original prompt and
+the worktree, with a forced read-only overlay and the prior transcript
+deliberately withheld. Every one of those is a thing Tusk had to add, because
+its runs inherit context by default.
+
+Here a review is a **node shape, not a node kind**. `agent.spawn` starts a fresh
+conversation knowing only its prompt — `parent_conversation_id` writes a link in
+the parent/child index and copies nothing (`history_model.rs:583,599`), which is
+why an empty prompt is refused outright. `allow_tools = ["read-only"]` already
+exists and resolves to ten read tools, mapping on the fork's primary path to
+`--allowedTools Read,Grep,Glob --disallowedTools Bash,Write,Edit,…`. An ordering
+edge that hands nothing along already exists. **So Tusk's overlay collapses into
+the spawn primitive: the no-transcript construction it had to build and test is
+the only mode this fork's spawn has.**
+
+**Three for three.** T13.1's sealed-subgraph closure became a filter, T13.2's
+coverage invariant became a uniqueness check, and now Tusk's independence
+overlay becomes nothing at all. The common cause each time is that this fork
+writes the relationship on the thing itself rather than in a side table — and
+here the thing written on itself is *context*: there is no side table of history
+for a child to be accidentally handed.
+
+**The tension with T13.2, and how it resolves.** T13.2 ruled that asking a
+second model whether the first model's claim is true is a claim about a claim,
+and named it a non-goal. T13.3 looks like exactly that. It is not, and the
+distinguishing variable is *what the judge reads*: a reviewer denied the
+transcript has no claim in front of it, so it produces a fresh, **uncorrelated**
+claim about the world. The failure T13.2 named is correlated error — a judge
+inheriting the builder's frame — and independence severs it.
+
+What does **not** escape is that the reviewer's *verdict* is still model
+judgement rather than falsifiable evidence. So it is stripped of authority:
+
+> **A model's answer may narrow acceptance, never widen it.**
+
+The review composes with assertions as AND-only — a detector wired to an exit
+code, never an approver. Its unreliability is then asymmetric-safe: a false
+"gaps" costs one human read, and a false "complete" leaves you exactly where
+"no assertion failed" already left you. **A review can only usefully fail**, and
+its gaps — unlike its verdict — are individually falsifiable by looking. That is
+the same asymmetry the fork already ratified in T11.5, where `agent.deny` needs
+no switch because saying no can only make less happen.
+
+**So what shipped is a fence.** `review = true` on a node, read only by
+`validate`, refusing the three edits that silently turn a reviewer into a rubber
+stamp — each of which leaves a plan that still runs and a gate that still says
+yes:
+
+| refused | because |
+|---|---|
+| a `pass` edge into a review | a handoff appends the upstream answer to the prompt, so one `pass = "what I did"` hands the reviewer the exact claim it exists not to see |
+| a review naming its own `allow_tools` | there is one right answer, and a reviewer that can write can make its own verdict true |
+| a review not downstream of every working node | its input is the *working tree*, which is global, so an early review reads a workspace mid-edit and does it differently every time |
+
+`review` joins the fingerprint, because un-marking a reviewer is one word long
+and changes what its answer meant.
+
+**One deliberate divergence from the advice taken.** The recommendation was to
+refuse an allowlist *wider* than read-only; this refuses **any** `allow_tools` on
+a review, and resolves it to `read-only` regardless of `[defaults]`. Offering the
+choice is what invites the wrong one, and a plan whose `[defaults]` are wide was
+the case a fence over the node's own field would have missed. Pinned by a test
+that refuses even `allow_tools = ["read-only"]` itself.
+
+**Gap handling composes with T13.1 with no glue, and this is the good part.** A
+rejected review is not sealed, so the fix pattern is *append a node*: add the
+fix downstream, add it to the review's `needs`, `--resume`. Sealed work is
+reused, the fix runs, the review re-runs. That is Tusk's "gaps spill as proposed
+tasks" achieved as a workflow instead of an object model — the supersede/patch
+door T13.1 kept shut stays shut, nothing auto-edits the plan, and the person is
+the gap-materialiser, which is Tusk's own posture too.
+
+**Rejected:** an assertion whose command spawns an agent (wrong on scope — an
+assertion gets one node's output, a review needs the plan's intent; on budget —
+`ASSERT_TIMEOUT` is 120s and "an assertion is a check, not the work"; and on
+authority — it would let a model verdict borrow command-grade authority). A
+`warpctrl graph review` subcommand (a second runner for a one-node graph). A
+plan-level `[plan] intent` field (restating intent in the review's prompt is the
+same authoring work, and needs no new field). A `git` baseline in the run record
+(the completion question is "does the tree satisfy the requirement", which the
+tree answers alone; a baseline distinguishes "the agent did it" from "it was
+already so", and for a completion gate those are the same verdict).
+
+**Verified by running, 2026-08-27**, and the first run failed in the way that
+mattered.
+
+| | result |
+|---|---|
+| all three fence refusals | each refused by name, no Warp needed |
+| the schema's own review node | still parses, validates, and lands last in `waves` |
+| run 1 — worker claims "I migrated every file", `src/b.rs` still calls `old_api()` | **reviewer read the wrong tree** — see below |
+| run 2, after the fix | reviewer named `/tmp/t133/work/src/b.rs` exactly, gate failed, node `rejected` |
+| gap closed by hand, `--resume` | `fix` reused, review re-ran, `NO GAPS FOUND`, `done` — 16 s |
+
+**The finding, and it is the reason to run things.** `agent.spawn` takes no
+working directory (`AgentSpawnParams` is four fields), so a spawned child starts
+in the **pane's** cwd, which has nothing to do with the directory `graph run`
+was invoked from — where the assertions run. The first live review, launched
+with Warp started from the repo and the plan run from `/tmp/t133/work`, read the
+repo and said so: *"There is no `./src` directory in the working tree
+(`/home/effatha/git/warp`)"*. **Its gate failed — for the wrong reason.** A
+reviewer whose entire input is the workspace had been pointed at a different
+one, and every check still went green-then-red in a way that looked like
+success. `compose_prompt` now appends one line to a review node naming the
+absolute workspace, and the re-run found the planted gap. Nothing but running it
+would have caught this: the fence, the tests and the schema were all correct.
+
+Not in the fingerprint, deliberately — the fingerprint is about *plan* edits and
+a directory is environment, the same reason `assert = ["cargo check"]` has one
+fingerprint wherever it runs.
+
+**Named unverified inputs.** The **residual independence leak is real and is not
+fixable by `validate`**: the reviewer has read tools and `plan.toml.run.json`
+holds every node's answer verbatim, so it *can* read the claims if it goes
+looking. Independence here is structural at spawn and only instructed at
+runtime — the same residual Tusk carries, whose worktrees hold the agent's own
+notes. The mitigation is the prompt line telling it not to, plus keeping the
+record out of the reviewed tree; neither is enforcement. Also unverified: the
+sentinel is a **protocol, not a truth check** — `grep -qx 'NO GAPS FOUND'` is
+format-fragile, though it fails safe, since a mangled sentinel is a false
+rejection costing one read. And nothing here has run on Windows.
+
+**A correction this task turned up, unrelated to it.** `CLAUDE.md` and
+`.fork/README.md` both said the catalog holds **109 actions**. The pins say
+**114**: T11.2 added `events.subscribe`, T11.4 added `control.pair`, and T11.5
+added `agent.approvals`, `agent.approve` and `agent.deny` — each updating both
+count tests and neither doc. Corrected in both, and the README now separates the
+catalog size from the 109 that were actually run in the enumerated live-build
+campaign, because bumping that number would have silently extended a
+verification claim to five actions the sweep never touched.
 
 ### T13.2 — as built
 

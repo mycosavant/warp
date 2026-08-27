@@ -32,7 +32,7 @@ then each capability the fork opened.
 * [**Warp's remote server, in a WSL distribution**](#warps-remote-server-in-a-wsl-distribution) — the Zed-style split, and how to run it
 
 **What the fork opened**
-* [Driving Warp from an agent (`warpctrl`)](#driving-warp-from-an-agent-warpctrl) — 109 actions, the orchestration surface. The largest section; has its own sub-index.
+* [Driving Warp from an agent (`warpctrl`)](#driving-warp-from-an-agent-warpctrl) — 114 actions, the orchestration surface. The largest section; has its own sub-index.
 * [Warp Drive without an account](#warp-drive-without-an-account) · [Your drive as a git repository](#your-drive-as-a-git-repository)
 * [The agent, answered by your own Claude](#the-agent-answered-by-your-own-claude-experimental)
 * [Voice input, transcribed on this machine](#voice-input-transcribed-on-this-machine)
@@ -847,12 +847,17 @@ In this section: [what it can do](#what-it-can-do) ·
 
 ### What it can do
 
-**109 actions. Every one of them run against a live build — the first 92 on
+**114 actions, 109 of them run against a live build — the first 92 on
 Windows, then T6.6's four `agent` verbs and T1.12's four `drive object` verbs
 on Linux, I16's two `remote wsl` verbs back on Windows, and T8.5's three
 `pane main`, T8.1's two `window visor` verbs, T8.2's `tab merge` and T8.3's
 `agent settle` on Linux again. So this list is
 the verified surface rather than the catalog's own claim about itself.**
+**The five since that campaign were each verified in their own task rather than
+in this sweep**: `events.subscribe` (T11.2), `control.pair` (T11.4), and
+`agent.approvals`, `agent.approve` and `agent.deny` (T11.5). The count above
+stood at 109 through all three, which is why it is now taken from
+`catalog_has_exactly_N_retained_actions` rather than from memory.
 `warpctrl action list` emits the catalog as JSON with
 `parameter_spec`, `result_spec` and `target_scope` per action, so tool
 definitions can be generated from it rather than hardcoded.
@@ -1259,6 +1264,61 @@ gate says no, you fix it, you resume, and only the rejected node costs a turn.
 Editing a rejected node's assertion is *not* a guard violation — that is the fix.
 Editing a **passed** node's assertion is, because loosening a gate after the
 fact is the most invalidating edit there is.
+
+#### Review nodes — the agent that checks is not the one that did the work
+
+Assertions only check what you thought to name in advance. A **review node** is
+an ordinary node whose job is to find what you did not.
+
+```toml
+[[node]]
+id = "review"
+review = true
+prompt = """
+The goal of this work was: <restate the original request in your own words>.
+
+Read the workspace and decide whether that goal is met. You have not been told
+what was done or claimed; do not go looking for it.
+
+If and only if you find no gaps, reply with exactly: NO GAPS FOUND
+Otherwise list the gaps one per line, and do not use that phrase.
+"""
+needs = ["report"]
+assert = [{ id = "no-gaps", run = "grep -qx 'NO GAPS FOUND'" }]
+```
+
+**The independence is free.** `agent.spawn` starts a fresh conversation that
+knows only its prompt — `parent_conversation_id` is a link in the parent/child
+index, not inherited context — so a reviewer structurally cannot see what the
+worker said. An ordering edge (`needs = ["report"]`, no `pass`) hands nothing
+along. That is the whole of it; `review = true` adds a fence, not a mechanism.
+
+Three things are refused before anything spawns, because each leaves a plan that
+still runs and a gate that still says yes:
+
+| refused | why |
+|---|---|
+| a `pass` edge into a review | it appends the worker's own account to the reviewer's prompt — the one thing it must not see |
+| a review naming `allow_tools` | a review is always `read-only`; one that can write can make its verdict true |
+| a review that does not wait for every working node | it reads the working tree, which they all share |
+
+**A review can only usefully fail.** Its "no gaps" adds nothing that "no
+assertion failed" already said — treat the gaps as the product and the pass as a
+formality. A model's answer may narrow what you accept, never widen it.
+
+A rejected review is not sealed, so the fix pattern is **append a node**: add the
+fix downstream, add it to the review's `needs`, and `--resume`. Sealed work is
+reused, the fix runs, the review runs again.
+
+**One thing to know about directories.** `agent.spawn` takes no working
+directory, so a child starts in the *pane's* cwd — not the directory you ran
+`graph run` from. A review node's prompt therefore gets one line appended naming
+the absolute workspace, and the reviewer is told to use absolute paths. Nothing
+else needs it, because every other node's input arrives in its prompt.
+
+The reviewer can still *read* `plan.toml.run.json`, which holds every node's
+answer verbatim. Independence is structural at spawn and only instructed after
+that — keep the record out of the tree being reviewed if it matters to you.
 
 #### Letting an agent write the plan
 

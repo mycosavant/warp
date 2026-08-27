@@ -95,13 +95,19 @@ fn a_node_inherits_the_default_allowlist_unless_it_says_otherwise() {
     let plan = plan(SURVEY_AND_FIX);
     let states = states(&[("survey", done("src/a.rs\nsrc/b.rs"))]);
 
-    let survey = spawn_params(&plan, &plan.nodes[0], &states, None);
+    let survey = spawn_params(&plan, &plan.nodes[0], &states, None, None);
     assert_eq!(
         survey.allow_tools.as_deref(),
         Some(&["read-only".to_owned()][..])
     );
 
-    let fix = spawn_params(&plan, &plan.nodes[1], &states, Some("parent".to_owned()));
+    let fix = spawn_params(
+        &plan,
+        &plan.nodes[1],
+        &states,
+        Some("parent".to_owned()),
+        None,
+    );
     assert_eq!(
         fix.allow_tools,
         Some(vec!["read-only".to_owned(), "APPLY_FILE_DIFFS".to_owned()]),
@@ -121,7 +127,7 @@ fn an_edge_with_a_payload_appends_the_upstream_answer() {
     let plan = plan(SURVEY_AND_FIX);
     let states = states(&[("survey", done("src/a.rs\nsrc/b.rs"))]);
 
-    let prompt = compose_prompt(&plan.nodes[1], &states);
+    let prompt = compose_prompt(&plan.nodes[1], &states, None);
     assert!(prompt.starts_with("Migrate those files to the new API."));
     assert!(
         prompt.contains("--- From `survey` (the list of files):"),
@@ -146,7 +152,7 @@ fn an_ordering_edge_hands_nothing_along() {
     );
     let states = states(&[("a", done("the whole answer"))]);
 
-    assert_eq!(compose_prompt(&plan.nodes[1], &states), "second");
+    assert_eq!(compose_prompt(&plan.nodes[1], &states, None), "second");
 }
 
 /// Nothing starts until everything it needs has finished.
@@ -467,8 +473,10 @@ fn the_schema_is_a_valid_plan() {
             vec!["survey".to_owned()],
             vec!["fix".to_owned()],
             vec!["report".to_owned()],
+            vec!["review".to_owned()],
         ],
-        "the example should demonstrate edges, not three independent nodes"
+        "the example should demonstrate edges, not four independent nodes — and \
+         the reviewer has to come last, which is the fence proving itself"
     );
 }
 
@@ -875,7 +883,7 @@ fn a_resume_skips_what_finished_and_hands_its_answer_on() {
         "the survey is not spawned a second time"
     );
     assert!(
-        compose_prompt(&plan.nodes[1], &reuse.states).contains("src/a.rs\nsrc/b.rs"),
+        compose_prompt(&plan.nodes[1], &reuse.states, None).contains("src/a.rs\nsrc/b.rs"),
         "and the answer it already gave still reaches the node that needed it"
     );
 }
@@ -1335,4 +1343,275 @@ fn the_schema_documents_assertions() {
             "the schema should mention `{phrase}`"
         );
     }
+}
+
+// ---------------------------------------------------------------------------
+// The review fence (`.fork/TASKS.md`, T13.3 — `ZB-REVIEW`).
+//
+// There is no reviewer to test, because a review is an ordinary `agent.spawn`
+// and its independence is a property of that primitive rather than of anything
+// here. What is testable is the fence: the three silent ways to turn a reviewer
+// into a rubber stamp, each refused before a token is spent.
+// ---------------------------------------------------------------------------
+
+const REVIEWED: &str = r#"
+[[node]]
+id = "fix"
+prompt = "Migrate the files."
+
+[[node]]
+id = "review"
+review = true
+prompt = "Read the workspace and say whether the goal is met."
+needs = ["fix"]
+assert = [{ id = "no-gaps", run = "grep -qx 'NO GAPS FOUND'" }]
+"#;
+
+#[test]
+fn a_review_node_is_an_ordinary_node_that_waits_for_the_work() {
+    let plan = plan(REVIEWED);
+
+    validate(&plan).expect("the recipe should be a runnable plan");
+    assert!(plan.nodes[1].review);
+    assert_eq!(
+        waves(&plan),
+        vec![vec!["fix".to_owned()], vec!["review".to_owned()]]
+    );
+    assert_eq!(
+        compose_prompt(
+            &plan.nodes[1],
+            &states(&[("fix", done("I migrated everything."))]),
+            None,
+        ),
+        "Read the workspace and say whether the goal is met.",
+        "an ordering edge hands nothing along, which is the whole of the \
+         independence — the reviewer never sees what `fix` said"
+    );
+}
+
+/// The important one. A handoff would append the worker's own account of what
+/// it did to the reviewer's prompt, which is precisely the claim-about-a-claim
+/// the gate exists to avoid.
+#[test]
+fn a_review_may_not_be_handed_the_answer_it_is_reviewing() {
+    let plan = plan(&REVIEWED.replace(
+        r#"needs = ["fix"]"#,
+        r#"needs = [{ node = "fix", pass = "what I did" }]"#,
+    ));
+
+    let error = validate(&plan).expect_err("a reviewer told what was done grades a claim");
+    assert!(
+        error
+            .message
+            .contains("grading a claim rather than the work"),
+        "{}",
+        error.message
+    );
+}
+
+/// A `needs = [{ node = "fix" }]` with no `pass` is ordering, and allowed —
+/// the refusal is about the payload, not the spelling.
+#[test]
+fn the_long_spelling_of_an_ordering_edge_is_still_ordering() {
+    let plan = plan(&REVIEWED.replace(r#"needs = ["fix"]"#, r#"needs = [{ node = "fix" }]"#));
+
+    assert!(validate(&plan).is_ok());
+}
+
+/// A reviewer that can write can make its own verdict true.
+#[test]
+fn a_review_may_not_name_its_own_tools() {
+    let plan = plan(&REVIEWED.replace(
+        r#"review = true"#,
+        r#"review = true
+allow_tools = ["read-only", "APPLY_FILE_DIFFS"]"#,
+    ));
+
+    let error = validate(&plan).expect_err("a review is always read-only");
+    assert!(
+        error.message.contains("can make its own verdict true"),
+        "{}",
+        error.message
+    );
+}
+
+/// Refused rather than silently corrected, and refused even when what it names
+/// is harmless — there is one right answer, and offering the choice is what
+/// invites the wrong one.
+#[test]
+fn a_review_is_refused_even_for_naming_read_only_itself() {
+    let plan = plan(&REVIEWED.replace(
+        r#"review = true"#,
+        r#"review = true
+allow_tools = ["read-only"]"#,
+    ));
+
+    assert!(validate(&plan).is_err());
+}
+
+/// And it resolves to read-only regardless of what `[defaults]` says, which is
+/// the case a fence over `allow_tools` alone would have missed.
+#[test]
+fn a_review_ignores_a_wide_default_allowlist() {
+    let plan = plan(&format!(
+        "[defaults]\nallow_tools = [\"RUN_SHELL_COMMAND\", \"APPLY_FILE_DIFFS\"]\n{REVIEWED}"
+    ));
+
+    validate(&plan).expect("a wide default is fine for the working nodes");
+    let review = spawn_params(&plan, &plan.nodes[1], &states(&[]), None, None);
+    assert_eq!(
+        review.allow_tools,
+        Some(vec!["read-only".to_owned()]),
+        "the default reaches every node except the one that must not have it"
+    );
+    let fix = spawn_params(&plan, &plan.nodes[0], &states(&[]), None, None);
+    assert_eq!(
+        fix.allow_tools,
+        Some(vec![
+            "RUN_SHELL_COMMAND".to_owned(),
+            "APPLY_FILE_DIFFS".to_owned()
+        ])
+    );
+}
+
+/// Its input is the working tree, which every node shares — so a review that
+/// could start while anything else is still running reviews a workspace
+/// mid-edit, and does it differently every time.
+#[test]
+fn a_review_must_wait_for_every_working_node() {
+    let plan = plan(
+        r#"
+        [[node]]
+        id = "fix"
+        prompt = "Migrate the files."
+        [[node]]
+        id = "docs"
+        prompt = "Write the docs."
+        [[node]]
+        id = "review"
+        review = true
+        prompt = "Read the workspace."
+        needs = ["fix"]
+        "#,
+    );
+
+    let error = validate(&plan).expect_err("`docs` could still be writing");
+    assert!(
+        error.message.contains("does not wait for `docs`"),
+        "{}",
+        error.message
+    );
+}
+
+/// Transitively, not directly — a review at the end of a chain has waited for
+/// all of it.
+#[test]
+fn waiting_for_the_last_node_of_a_chain_is_waiting_for_the_chain() {
+    let plan = plan(&format!(
+        "{CHAIN}\n[[node]]\nid = \"review\"\nreview = true\nprompt = \"Read it.\"\nneeds = [\"c\"]\n"
+    ));
+
+    assert!(validate(&plan).is_ok());
+}
+
+/// Two reviewers with different lenses are fine, and neither has to wait for
+/// the other.
+#[test]
+fn two_reviews_may_sit_side_by_side() {
+    let plan = plan(
+        r#"
+        [[node]]
+        id = "fix"
+        prompt = "Migrate the files."
+        [[node]]
+        id = "product-review"
+        review = true
+        prompt = "Does it do what was asked?"
+        needs = ["fix"]
+        [[node]]
+        id = "test-review"
+        review = true
+        prompt = "Is it tested?"
+        needs = ["fix"]
+        "#,
+    );
+
+    validate(&plan).expect("a review need not wait for another review");
+    assert_eq!(waves(&plan).len(), 2);
+}
+
+/// Turning the reviewer into an ordinary node is one word, and it is an edit to
+/// what its answer meant — so T13.1's guard has to see it.
+#[test]
+fn unmarking_a_review_changes_the_fingerprint() {
+    let reviewed = plan(REVIEWED);
+    let plain = plan(&REVIEWED.replace("review = true\n", ""));
+
+    assert_ne!(
+        fingerprint(&reviewed, &reviewed.nodes[1]),
+        fingerprint(&plain, &plain.nodes[1])
+    );
+}
+
+/// The schema carries the recipe, because the recipe *is* the deliverable.
+#[test]
+fn the_schema_documents_the_review_recipe() {
+    for phrase in [
+        "review = true",
+        "NO GAPS FOUND",
+        "can only usefully FAIL",
+        "inherits no transcript",
+    ] {
+        assert!(
+            SCHEMA.contains(phrase),
+            "the schema should mention `{phrase}`"
+        );
+    }
+}
+
+/// A reviewer is told which tree it is reviewing, because it did not start in
+/// it.
+///
+/// Found by running one: `agent.spawn` takes no working directory, so the child
+/// starts in the *pane's* cwd. The first live review read
+/// `/home/effatha/git/warp` while the plan was being run from `/tmp/t133/work`,
+/// reported "there is no ./src directory in the working tree", and failed its
+/// gate for that instead of for the gap that had been planted for it.
+#[test]
+fn a_review_is_told_where_the_workspace_is() {
+    let plan = plan(REVIEWED);
+    let workspace = Path::new("/tmp/somewhere/else");
+
+    let review = compose_prompt(&plan.nodes[1], &states(&[]), Some(workspace));
+    assert!(
+        review.contains("`/tmp/somewhere/else`"),
+        "the reviewer's only input is the tree, so it has to be told which one: {review}"
+    );
+    assert!(
+        review.contains("a relative path will silently resolve somewhere else"),
+        "and told why, or it will use a relative one anyway: {review}"
+    );
+
+    let worker = compose_prompt(&plan.nodes[0], &states(&[]), Some(workspace));
+    assert_eq!(
+        worker, "Migrate the files.",
+        "no other node is told, because every other node's input is its prompt"
+    );
+}
+
+/// The directory is environment, not plan. Two runs of one plan from two places
+/// are the same plan, exactly as `assert = [\"cargo check\"]` is.
+#[test]
+fn the_workspace_is_not_part_of_the_fingerprint() {
+    let plan = plan(REVIEWED);
+
+    assert_eq!(
+        fingerprint(&plan, &plan.nodes[1]),
+        fingerprint(&plan, &plan.nodes[1]),
+        "nothing environmental may reach it"
+    );
+    assert!(
+        !fingerprint(&plan, &plan.nodes[1]).is_empty(),
+        "and it is still a fingerprint"
+    );
 }
