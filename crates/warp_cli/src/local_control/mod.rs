@@ -954,6 +954,14 @@ pub enum GraphCommand {
 pub struct GraphCheckArgs {
     /// Path to the plan.
     pub plan: PathBuf,
+
+    /// Check the plan against a particular run record.
+    ///
+    /// Without this, the record `graph run` writes next to the plan is used if
+    /// it is there, and the check is the plain structural one if it is not.
+    /// Naming a file that does not exist is an error — you said it was there.
+    #[arg(long = "against")]
+    pub against: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, Args)]
@@ -981,6 +989,30 @@ pub struct GraphRunArgs {
     /// unattended run.
     #[arg(long = "timeout")]
     pub timeout: Option<u64>,
+
+    /// Carry over every node a previous run of this plan finished.
+    ///
+    /// Nodes that failed or were skipped run again; nodes that succeeded are
+    /// not spawned, and their recorded answers are handed downstream as if they
+    /// had been. Safe to pass every time: with no record to resume from, this
+    /// runs the whole plan.
+    ///
+    /// Refused if the plan has changed in a way that would make a reused answer
+    /// a lie — see `graph check`.
+    #[arg(long = "resume")]
+    pub resume: bool,
+
+    /// Where to write the record of this run.
+    ///
+    /// Defaults to the plan's path with `.run.json` appended. The file holds
+    /// each finished node's answer verbatim, so it is agent-authored text on
+    /// disk and usually wants a `.gitignore` line.
+    #[arg(long = "record", conflicts_with = "no_record")]
+    pub record: Option<PathBuf>,
+
+    /// Write no record of this run.
+    #[arg(long = "no-record")]
+    pub no_record: bool,
 
     #[command(flatten)]
     pub target: TargetArgs,

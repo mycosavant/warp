@@ -483,3 +483,424 @@ fn the_schema_documents_both_kinds_of_edge() {
         "the guardrail is the field most worth spelling correctly"
     );
 }
+
+// ---------------------------------------------------------------------------
+// The run record and the sealed-plan guard (`.fork/TASKS.md`, T13.1).
+//
+// These are Tusk's `test_supersede_chain.py` cases under the fork's shape:
+// rewrite-on-edit, can't-retire-cleared, can't-retire-sealed. What is missing
+// from that list is deliberate — there is no `supersede`/`cancel` operation
+// here, because the plan is a file and the edit primitive is a text editor.
+// The guard therefore reads the edit after the fact instead of validating a
+// patch before it, and the two rules below are what that reading amounts to.
+// ---------------------------------------------------------------------------
+
+/// A three-node chain, so a reach-back can be shown travelling *through* work
+/// that is itself finished.
+const CHAIN: &str = r#"
+[[node]]
+id = "a"
+prompt = "a"
+
+[[node]]
+id = "b"
+prompt = "b"
+needs = ["a"]
+
+[[node]]
+id = "c"
+prompt = "c"
+needs = ["b"]
+"#;
+
+fn all_done(plan: &Plan) -> HashMap<String, NodeState> {
+    plan.nodes
+        .iter()
+        .map(|node| (node.id.clone(), done(&format!("{} finished", node.id))))
+        .collect()
+}
+
+fn nodes_in(violations: &[Violation]) -> Vec<&str> {
+    violations
+        .iter()
+        .map(|violation| match violation {
+            Violation::Edited { node, .. } | Violation::ReachedBack { node, .. } => node.as_str(),
+        })
+        .collect()
+}
+
+/// The record says what it is, so a file found without context can be read.
+#[test]
+fn a_record_round_trips_and_names_its_own_format() {
+    let plan = plan(SURVEY_AND_FIX);
+    let record = build_record(&plan, &all_done(&plan));
+
+    let text = serde_json::to_string(&record).expect("a record should serialize");
+    let parsed: RunRecord = serde_json::from_str(&text).expect("and parse back");
+
+    assert_eq!(parsed.record, RECORD_KIND);
+    assert_eq!(parsed.version, RECORD_VERSION);
+    assert_eq!(parsed.nodes.len(), 2);
+    assert_eq!(
+        parsed.nodes["survey"].settled,
+        done("survey finished"),
+        "a resume hands the recorded answer downstream, so it has to survive the file"
+    );
+    assert_eq!(parsed.nodes["survey"].fingerprint.len(), 64);
+}
+
+/// A node that never settled is not in the record, because there is nothing to
+/// say about it that the plan does not already say.
+#[test]
+fn only_settled_nodes_are_recorded() {
+    let plan = plan(SURVEY_AND_FIX);
+    let record = build_record(&plan, &states(&[("survey", done("one"))]));
+
+    assert_eq!(record.nodes.keys().collect::<Vec<_>>(), vec!["survey"]);
+}
+
+/// The ordinary case: nothing was touched, so nothing is wrong.
+#[test]
+fn an_untouched_plan_agrees_with_its_own_record() {
+    let plan = plan(SURVEY_AND_FIX);
+    let record = build_record(&plan, &all_done(&plan));
+
+    assert_eq!(sealed(&plan, &record), vec!["fix", "survey"]);
+    assert!(violations(&plan, &record).is_empty());
+}
+
+/// Rule 1. The answer on file was produced by a different prompt.
+#[test]
+fn editing_a_finished_node_is_refused_and_names_who_was_handed_its_answer() {
+    let before = plan(SURVEY_AND_FIX);
+    let record = build_record(&before, &all_done(&before));
+    let after = plan(&SURVEY_AND_FIX.replace(
+        "List every file under src/ that still calls the old API.",
+        "List every file under src/, including the tests.",
+    ));
+
+    assert_eq!(
+        violations(&after, &record),
+        vec![Violation::Edited {
+            node: "survey".to_owned(),
+            consumed_by: vec!["fix".to_owned()],
+        }]
+    );
+}
+
+/// The guard's actual advice, stated as a test: **edit the failure, not the
+/// evidence.** A node that failed produced nothing to invalidate, and rewriting
+/// it is the entire reason you came back to the plan.
+#[test]
+fn editing_a_failed_node_is_the_whole_point_of_coming_back() {
+    let before = plan(SURVEY_AND_FIX);
+    let record = build_record(
+        &before,
+        &states(&[
+            ("survey", done("src/a.rs")),
+            (
+                "fix",
+                NodeState::Failed {
+                    conversation_id: "c-2".to_owned(),
+                    reason: "the conversation ended `error`".to_owned(),
+                },
+            ),
+        ]),
+    );
+    let after = plan(&SURVEY_AND_FIX.replace(
+        "Migrate those files to the new API.",
+        "Migrate those files to the new API. Do them one at a time.",
+    ));
+
+    assert!(
+        violations(&after, &record).is_empty(),
+        "a failed node is not evidence"
+    );
+    assert_eq!(sealed(&after, &record), vec!["survey"]);
+}
+
+/// Rule 2, and the reason the upstream walk exists at all: `b` and `c` are
+/// untouched — their own definitions did not change — but the plan now runs
+/// something in front of them that never ran, and a resume would skip them.
+#[test]
+fn a_node_inserted_upstream_of_finished_work_is_refused() {
+    let before = plan(CHAIN);
+    let record = build_record(&before, &all_done(&before));
+    let after = plan(
+        r#"
+        [[node]]
+        id = "x"
+        prompt = "x"
+        [[node]]
+        id = "a"
+        prompt = "a"
+        needs = ["x"]
+        [[node]]
+        id = "b"
+        prompt = "b"
+        needs = ["a"]
+        [[node]]
+        id = "c"
+        prompt = "c"
+        needs = ["b"]
+        "#,
+    );
+
+    let violations = violations(&after, &record);
+    assert_eq!(
+        violations,
+        vec![
+            Violation::Edited {
+                node: "a".to_owned(),
+                consumed_by: Vec::new(),
+            },
+            Violation::ReachedBack {
+                node: "b".to_owned(),
+                upstream: "x".to_owned(),
+            },
+            Violation::ReachedBack {
+                node: "c".to_owned(),
+                upstream: "x".to_owned(),
+            },
+        ],
+        "the reach-back travels through sealed work; only `a`'s own text changed"
+    );
+}
+
+/// Only the nearest un-run ancestor is named, for the same reason
+/// `newly_blocked` names the nearest blocker: a chain of new nodes is one
+/// problem, not one per node.
+#[test]
+fn only_the_nearest_ancestor_that_never_ran_is_reported() {
+    let before = plan(CHAIN);
+    let record = build_record(&before, &all_done(&before));
+    let after = plan(
+        r#"
+        [[node]]
+        id = "x"
+        prompt = "x"
+        [[node]]
+        id = "y"
+        prompt = "y"
+        needs = ["x"]
+        [[node]]
+        id = "a"
+        prompt = "a"
+        needs = ["y"]
+        [[node]]
+        id = "b"
+        prompt = "b"
+        needs = ["a"]
+        [[node]]
+        id = "c"
+        prompt = "c"
+        needs = ["b"]
+        "#,
+    );
+
+    let violations = violations(&after, &record);
+    let reached_back: Vec<&str> = violations
+        .iter()
+        .filter_map(|violation| match violation {
+            Violation::ReachedBack { upstream, .. } => Some(upstream.as_str()),
+            Violation::Edited { .. } => None,
+        })
+        .collect();
+    assert_eq!(
+        reached_back,
+        vec!["y", "y"],
+        "`x` is behind `y` and adds nothing a reader could act on"
+    );
+}
+
+/// There is no rule for a deleted node, and this is why: removing one rewrites
+/// the `needs` of everything downstream, which is rule 1 on those nodes.
+#[test]
+fn deleting_a_finished_node_is_caught_through_its_dependent() {
+    let before = plan(SURVEY_AND_FIX);
+    let record = build_record(&before, &all_done(&before));
+    let after = plan(
+        r#"
+        [defaults]
+        allow_tools = ["read-only"]
+
+        [[node]]
+        id = "fix"
+        prompt = "Migrate those files to the new API."
+        allow_tools = ["read-only", "APPLY_FILE_DIFFS"]
+        "#,
+    );
+
+    assert_eq!(nodes_in(&violations(&after, &record)), vec!["fix"]);
+}
+
+/// `[defaults]` is resolved into the fingerprint rather than hashed beside it,
+/// so loosening a default reaches exactly the nodes that inherit it.
+#[test]
+fn changing_a_default_reaches_the_nodes_that_inherit_it_and_no_others() {
+    let before = plan(SURVEY_AND_FIX);
+    let record = build_record(&before, &all_done(&before));
+    let after = plan(&SURVEY_AND_FIX.replace(
+        r#"[defaults]
+allow_tools = ["read-only"]"#,
+        r#"[defaults]
+allow_tools = ["read-only", "RUN_SHELL_COMMAND"]"#,
+    ));
+
+    assert_eq!(
+        nodes_in(&violations(&after, &record)),
+        vec!["survey"],
+        "`fix` names its own allowlist, so the default never applied to it"
+    );
+}
+
+/// The optional parts carry a `+`/`-` discriminant, so "no allowlist" and an
+/// allowlist whose one entry happens to be `-` cannot hash the same.
+#[test]
+fn the_fingerprint_separates_an_absent_field_from_a_literal_dash() {
+    let unrestricted = plan("[[node]]\nid = \"a\"\nprompt = \"a\"\n");
+    let dash = plan("[[node]]\nid = \"a\"\nprompt = \"a\"\nallow_tools = [\"-\"]\n");
+    assert_ne!(
+        fingerprint(&unrestricted, &unrestricted.nodes[0]),
+        fingerprint(&dash, &dash.nodes[0])
+    );
+
+    let ordering = plan(
+        "[[node]]\nid = \"a\"\nprompt = \"a\"\n[[node]]\nid = \"b\"\nprompt = \"b\"\nneeds = [\"a\"]\n",
+    );
+    let passes_a_dash = plan(
+        "[[node]]\nid = \"a\"\nprompt = \"a\"\n[[node]]\nid = \"b\"\nprompt = \"b\"\nneeds = [{ node = \"a\", pass = \"-\" }]\n",
+    );
+    assert_ne!(
+        fingerprint(&ordering, &ordering.nodes[1]),
+        fingerprint(&passes_a_dash, &passes_a_dash.nodes[1])
+    );
+}
+
+/// Edge order counts, because `compose_prompt` appends handoffs in `needs`
+/// order and the child reads them in that order.
+#[test]
+fn reordering_handoffs_changes_the_fingerprint() {
+    let one = plan(
+        r#"
+        [[node]]
+        id = "a"
+        prompt = "a"
+        [[node]]
+        id = "b"
+        prompt = "b"
+        [[node]]
+        id = "c"
+        prompt = "c"
+        needs = [{ node = "a", pass = "first" }, { node = "b", pass = "second" }]
+        "#,
+    );
+    let other = plan(
+        r#"
+        [[node]]
+        id = "a"
+        prompt = "a"
+        [[node]]
+        id = "b"
+        prompt = "b"
+        [[node]]
+        id = "c"
+        prompt = "c"
+        needs = [{ node = "b", pass = "second" }, { node = "a", pass = "first" }]
+        "#,
+    );
+
+    assert_ne!(
+        fingerprint(&one, &one.nodes[2]),
+        fingerprint(&other, &other.nodes[2])
+    );
+}
+
+/// An ordering edge carries nothing, so a node that only waited on the edited
+/// one is not listed as having been handed anything.
+#[test]
+fn an_ordering_edge_is_not_a_consumer() {
+    let before = plan(CHAIN);
+    let record = build_record(&before, &all_done(&before));
+    let after = plan(&CHAIN.replace(r#"prompt = "a""#, r#"prompt = "a, differently""#));
+
+    assert_eq!(
+        violations(&after, &record),
+        vec![Violation::Edited {
+            node: "a".to_owned(),
+            consumed_by: Vec::new(),
+        }]
+    );
+}
+
+/// What a resume actually does, without a socket: the finished node is not
+/// ready to run again, the next one is, and the recorded answer reaches it.
+#[test]
+fn a_resume_skips_what_finished_and_hands_its_answer_on() {
+    let plan = plan(SURVEY_AND_FIX);
+    let record = build_record(
+        &plan,
+        &states(&[
+            ("survey", done("src/a.rs\nsrc/b.rs")),
+            (
+                "fix",
+                NodeState::Failed {
+                    conversation_id: "c-2".to_owned(),
+                    reason: "the conversation ended `error`".to_owned(),
+                },
+            ),
+        ]),
+    );
+
+    let reuse = reusable(&plan, &record);
+    assert_eq!(
+        reuse.keys().collect::<Vec<_>>(),
+        vec!["survey"],
+        "only a finished node has an answer worth reusing"
+    );
+    assert_eq!(
+        ready(&plan, &reuse, 0, 4)
+            .iter()
+            .map(|node| node.id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["fix"],
+        "the survey is not spawned a second time"
+    );
+    assert!(
+        compose_prompt(&plan.nodes[1], &reuse).contains("src/a.rs\nsrc/b.rs"),
+        "and the answer it already gave still reaches the node that needed it"
+    );
+}
+
+/// A node the record has never heard of is simply pending — a plan may grow.
+#[test]
+fn a_node_the_record_does_not_know_is_not_reused() {
+    let before = plan(SURVEY_AND_FIX);
+    let record = build_record(&before, &all_done(&before));
+    let after = plan(&format!(
+        "{SURVEY_AND_FIX}\n[[node]]\nid = \"report\"\nprompt = \"report\"\nneeds = [\"fix\"]\n"
+    ));
+
+    assert!(
+        violations(&after, &record).is_empty(),
+        "adding work after finished work invalidates nothing"
+    );
+    assert_eq!(reusable(&after, &record).len(), 2);
+}
+
+/// The schema is the format's only documentation, and it now has to mention the
+/// half of the format that is not fields.
+#[test]
+fn the_schema_documents_the_record_and_the_guard() {
+    for phrase in [
+        "--resume",
+        "--no-record",
+        "plan.toml.run.json",
+        ".gitignore",
+    ] {
+        assert!(
+            SCHEMA.contains(phrase),
+            "the schema should mention `{phrase}`"
+        );
+    }
+}

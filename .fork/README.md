@@ -1120,10 +1120,17 @@ needs = [
 ```
 
 ```bash
-warpctrl graph schema              # the format, as a plan that runs
-warpctrl graph check plan.toml     # parse, resolve edges, find cycles
+warpctrl graph schema                     # the format, as a plan that runs
+warpctrl graph check plan.toml            # parse, resolve edges, find cycles
 warpctrl graph run   plan.toml --parent <conversation-id>
+warpctrl graph run   plan.toml --resume   # ...but skip what already worked
 ```
+
+**Give it a parent, or give the pane an agent first.** `agent spawn` parents
+every child to a conversation, so a `graph run` against a pane whose agent has
+never been prompted fails *every* node with *"the targeted pane has no agent
+conversation to parent a child to"*. The plan is fine; the pane is empty. Either
+pass `--parent`, or send one `agent prompt` first.
 
 ```
 4 nodes, 3 in sequence
@@ -1171,6 +1178,42 @@ that is your call rather than the runner's.
 
 This adds no actions. `graph` is a loop over `agent spawn` and `agent read`,
 which is why the catalog is the same size with it as without.
+
+#### Resuming, and the guard that comes with it
+
+`graph run` writes `plan.toml.run.json` next to the plan: every settled node,
+plus a hash of the node *as it ran*. `--record PATH` moves it; `--no-record`
+suppresses it. **It holds each finished node's answer verbatim**, so it is
+agent-authored text on disk — add it to `.gitignore` unless you mean to commit
+it. It is not a transcript; `WARP_FORK_EVENT_LOG` holds the tool calls.
+
+`--resume` carries over every node that finished and re-runs the rest. Pass it
+every time: with no record to resume from, it runs the whole plan. A five-node
+plan whose fourth node failed costs one turn to retry rather than five.
+
+```
+hello: reused — finished in an earlier run
+after: reused — finished in an earlier run
+report: running (3b6b6b6f-…)
+report: done — summary
+```
+
+And because a resume *reuses* answers, `graph check` starts caring what changed:
+
+```
+3 nodes, 3 in sequence
+2 sealed by plan.toml.run.json: after, hello
+  `hello` finished, and then its definition changed — its answer was handed to `after`, …
+  `after` finished, but the plan now runs `lint` before it, and `lint` never did
+```
+
+Both are refused by `graph run --resume` too, before it contacts Warp at all.
+A plain `graph run` is **not** gated: it spawns everything again, so there is
+nothing for an edit to invalidate.
+
+The rule of thumb is **edit the failure, not the evidence.** Nodes that failed
+or were skipped are not sealed and are yours to rewrite freely — that is why you
+came back to the plan. To start over completely, delete the record.
 
 #### Letting an agent write the plan
 

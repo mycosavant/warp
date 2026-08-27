@@ -38,8 +38,8 @@
 //! would have to be kept consistent, and a graph where B hands to C but C does
 //! not depend on B is a bug you can draw.
 
-use std::collections::{HashMap, HashSet};
-use std::path::Path;
+use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
+use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use local_control::protocol::{
@@ -47,10 +47,11 @@ use local_control::protocol::{
     ErrorCode,
 };
 use serde::{Deserialize, Serialize};
+use sha2::{Digest as _, Sha256};
 
 use crate::agent::OutputFormat;
 use crate::local_control::output::{write_json, write_json_line};
-use crate::local_control::{GraphCommand, GraphRunArgs, TargetArgs};
+use crate::local_control::{GraphCheckArgs, GraphCommand, GraphRunArgs, TargetArgs};
 
 /// A plan, as it is written on disk.
 #[derive(Debug, Default, Deserialize)]
@@ -144,7 +145,7 @@ impl Node {
 /// `Skipped` is deliberately distinct from `Failed`. A run that reports six
 /// failures when one node failed and five were waiting on it has hidden the
 /// only fact worth acting on.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "state", rename_all = "snake_case")]
 pub(super) enum NodeState {
     Pending,
@@ -266,6 +267,278 @@ fn find_cycle(plan: &Plan) -> Option<Vec<String>> {
     let mut cycle: Vec<String> = remaining.keys().map(|id| (*id).to_owned()).collect();
     cycle.sort();
     Some(cycle)
+}
+
+// ---------------------------------------------------------------------------
+// The run record, and the guard over it (`.fork/TASKS.md`, T13.1 — `ZB-PLAN`).
+//
+// The plan says what should happen. The record says what did. Keeping the
+// second is what makes `--resume` possible, and `--resume` is what makes the
+// guard mean something: a run that starts from scratch every time can never
+// reuse evidence, so nothing an edit does to the plan can invalidate any.
+//
+// The guard's whole invariant, borrowed as a description rather than as code:
+// **a resumed run must never reuse a node's answer that the plan on disk no
+// longer justifies.** Two things can break that, and the second is the one you
+// would not find by eye:
+//
+//  1. a finished node's own definition changed — the answer on file was
+//     produced by a different prompt, allowlist or set of handoffs;
+//  2. a finished node now waits on something that never ran — the plan grew a
+//     node upstream of completed work, so a resume would run the new node and
+//     then skip the one that was supposed to consume it.
+//
+// Both are stated relative to *what a resume would reuse*, which is why there
+// is no third rule for a deleted node: deleting one changes the `needs` of
+// everything downstream, and that is rule 1 on those nodes.
+// ---------------------------------------------------------------------------
+
+/// What one run wrote down.
+///
+/// A `BTreeMap` rather than a `HashMap` because the point of a file is that it
+/// diffs: two runs of the same plan should differ only where the run differed.
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub(super) struct RunRecord {
+    /// Names the format for anything that finds the file without being told.
+    pub record: String,
+    pub version: u32,
+    pub nodes: BTreeMap<String, RecordedNode>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub(super) struct RecordedNode {
+    /// The node as it was when it ran — see [`fingerprint`].
+    pub fingerprint: String,
+    pub settled: NodeState,
+}
+
+const RECORD_KIND: &str = "warpctrl.graph.run";
+const RECORD_VERSION: u32 = 1;
+
+/// Where a run writes its record when nobody says otherwise.
+///
+/// Appended rather than substituted for the extension, so a `plan.toml` and a
+/// `plan.json` in the same directory cannot claim the same record.
+pub(super) fn default_record_path(plan: &Path) -> PathBuf {
+    let mut path = plan.as_os_str().to_owned();
+    path.push(".run.json");
+    PathBuf::from(path)
+}
+
+/// Domain separation, so this hash can never be confused with another one that
+/// happens to be built from the same strings.
+const FINGERPRINT_DOMAIN: &str = "warpctrl.graph.node.v1";
+
+/// The node, reduced to the parts that decide what its agent was asked to do.
+///
+/// Everything the runner actually uses is in here and nothing else is:
+/// `spawn_params` is `compose_prompt` plus the name and the resolved allowlist,
+/// so those are exactly the fields whose change makes a recorded answer
+/// unreproducible. `[defaults]` is resolved rather than hashed separately —
+/// changing a default changes what a node inheriting it was allowed to do, and
+/// a node that names its own is untouched by it.
+///
+/// Edge *order* counts, because `compose_prompt` appends handoffs in `needs`
+/// order and the child reads them in that order.
+pub(super) fn fingerprint(plan: &Plan, node: &Node) -> String {
+    // A leading `+`/`-` on the optional parts, because otherwise "no allowlist"
+    // and an allowlist whose one entry is `-` hash the same. Cheap, and the
+    // alternative is a collision nobody would ever debug.
+    let mut parts = vec![
+        node.id.clone(),
+        node.name(),
+        node.prompt.trim().to_owned(),
+        match node.allow_tools(&plan.defaults) {
+            Some(tools) => format!("allow:+{}", tools.join("\u{1f}")),
+            None => "allow:-".to_owned(),
+        },
+    ];
+    for need in &node.needs {
+        let pass = match need.pass() {
+            Some(pass) => format!("+{pass}"),
+            None => "-".to_owned(),
+        };
+        parts.push(format!("need:{}\u{1f}{pass}", need.node()));
+    }
+
+    let mut hasher = Sha256::new();
+    hasher.update(FINGERPRINT_DOMAIN.as_bytes());
+    for part in &parts {
+        hasher.update((part.len() as u64).to_le_bytes());
+        hasher.update(part.as_bytes());
+    }
+    hex::encode(hasher.finalize())
+}
+
+/// The ids the record says finished, whether or not the plan still has them.
+fn cleared(record: &RunRecord) -> HashSet<&str> {
+    record
+        .nodes
+        .iter()
+        .filter(|(_, recorded)| matches!(recorded.settled, NodeState::Done { .. }))
+        .map(|(id, _)| id.as_str())
+        .collect()
+}
+
+/// The nodes a resume would reuse rather than run.
+///
+/// This is Tusk's `sealed_node_ids` under the fork's shape, and it is smaller
+/// than it looks: that design has two node kinds, so a *gate* clears while the
+/// work upstream of it is in any state, and the seal has to be an upstream
+/// closure. Here every node is its own gate — `ready` refuses to start a node
+/// until every edge is `Done` — so a finished node's ancestors are finished by
+/// construction, and the closure collapses to the set itself. The closure is
+/// still walked, but in [`violations`], where the plan may have grown an
+/// ancestor since.
+pub(super) fn sealed(plan: &Plan, record: &RunRecord) -> Vec<String> {
+    let cleared = cleared(record);
+    let mut sealed: Vec<String> = plan
+        .nodes
+        .iter()
+        .filter(|node| cleared.contains(node.id.as_str()))
+        .map(|node| node.id.clone())
+        .collect();
+    sealed.sort();
+    sealed
+}
+
+/// A place where the plan on disk no longer justifies evidence a resume would
+/// reuse.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub(super) enum Violation {
+    /// The node finished, and then its definition changed.
+    Edited {
+        node: String,
+        /// Finished nodes that were handed this node's answer. Named because
+        /// the edit reaches them too, and they will not be re-run either.
+        consumed_by: Vec<String>,
+    },
+    /// The node finished, and the plan has since put something in front of it
+    /// that never ran.
+    ReachedBack { node: String, upstream: String },
+}
+
+/// Everything wrong with resuming this plan from this record.
+///
+/// Only meaningful for a plan that has passed [`validate`]: the upstream walk
+/// assumes edges resolve and does not assume they terminate, so it carries a
+/// visited set rather than trusting the acyclicity it was promised.
+pub(super) fn violations(plan: &Plan, record: &RunRecord) -> Vec<Violation> {
+    let cleared = cleared(record);
+    let by_id: HashMap<&str, &Node> = plan
+        .nodes
+        .iter()
+        .map(|node| (node.id.as_str(), node))
+        .collect();
+
+    let mut violations = Vec::new();
+    for node in &plan.nodes {
+        let Some(recorded) = record.nodes.get(&node.id) else {
+            continue;
+        };
+        if !matches!(recorded.settled, NodeState::Done { .. }) {
+            continue;
+        }
+
+        if recorded.fingerprint != fingerprint(plan, node) {
+            violations.push(Violation::Edited {
+                node: node.id.clone(),
+                consumed_by: consumers(plan, &cleared, &node.id),
+            });
+            // And nothing more about this node. An un-run node among its *own*
+            // `needs` can only have got there by an edit, so the reach-back
+            // would be the same edit counted twice. The reach-backs worth
+            // printing are the ones below, on nodes nobody touched.
+            continue;
+        }
+
+        for upstream in uncleared_upstream(&by_id, &cleared, &node.id) {
+            violations.push(Violation::ReachedBack {
+                node: node.id.clone(),
+                upstream,
+            });
+        }
+    }
+    violations.sort_by_key(|violation| match violation {
+        Violation::Edited { node, .. } => (node.clone(), String::new()),
+        Violation::ReachedBack { node, upstream } => (node.clone(), upstream.clone()),
+    });
+    violations
+}
+
+/// The nearest ancestors of `id` that did not finish.
+///
+/// Walks *through* finished ancestors and stops at the first that is not, for
+/// the same reason `newly_blocked` reports the nearest blocker: a plan that
+/// grew a chain of three new nodes upstream has one problem, not three, and
+/// the chain is readable from the entries the other nodes produce.
+fn uncleared_upstream(
+    by_id: &HashMap<&str, &Node>,
+    cleared: &HashSet<&str>,
+    id: &str,
+) -> Vec<String> {
+    let mut frontier = Vec::new();
+    let mut seen: HashSet<&str> = HashSet::from([id]);
+    let mut queue: VecDeque<&str> = VecDeque::from([id]);
+    while let Some(current) = queue.pop_front() {
+        let Some(node) = by_id.get(current) else {
+            continue;
+        };
+        for need in &node.needs {
+            let upstream = need.node();
+            if !seen.insert(upstream) {
+                continue;
+            }
+            if cleared.contains(upstream) {
+                queue.push_back(upstream);
+            } else {
+                frontier.push(upstream.to_owned());
+            }
+        }
+    }
+    frontier.sort();
+    frontier
+}
+
+/// Finished nodes that were handed `id`'s answer.
+///
+/// `pass` and not merely `needs`, because an ordering edge carries nothing: a
+/// node that only waited on `id` is unaffected by what `id` said.
+fn consumers(plan: &Plan, cleared: &HashSet<&str>, id: &str) -> Vec<String> {
+    let mut consumers: Vec<String> = plan
+        .nodes
+        .iter()
+        .filter(|node| cleared.contains(node.id.as_str()))
+        .filter(|node| {
+            node.needs
+                .iter()
+                .any(|need| need.node() == id && need.pass().is_some())
+        })
+        .map(|node| node.id.clone())
+        .collect();
+    consumers.sort();
+    consumers
+}
+
+/// The states a resume starts from.
+///
+/// Only `Done` nodes are carried: a node that failed or was skipped produced no
+/// answer to reuse, and re-running it is the entire point of resuming. That is
+/// also the guard's practical advice — **edit the failure, not the evidence.**
+///
+/// Fingerprints are not re-checked here. [`violations`] has already refused the
+/// run if any disagreed, and checking in two places invites the two checks to
+/// drift.
+pub(super) fn reusable(plan: &Plan, record: &RunRecord) -> HashMap<String, NodeState> {
+    plan.nodes
+        .iter()
+        .filter_map(|node| {
+            let recorded = record.nodes.get(&node.id)?;
+            matches!(recorded.settled, NodeState::Done { .. })
+                .then(|| (node.id.clone(), recorded.settled.clone()))
+        })
+        .collect()
 }
 
 /// The nodes that could start right now.
@@ -400,12 +673,18 @@ const POLL: Duration = Duration::from_secs(2);
 /// *itself* — an unreadable plan, a Warp that cannot be reached. A node that
 /// fails is a result, not an error: the other branches of the graph may still
 /// be worth running, and the caller needs the whole picture to decide.
+///
+/// `reuse` seeds nodes that a previous run already finished (see [`reusable`]).
+/// Nothing downstream needs to know: a reused node is `Done` before the loop
+/// starts, so `ready` will not start it and `compose_prompt` hands its recorded
+/// answer along exactly as a fresh one would.
 pub(super) fn run(
     plan: &Plan,
     args: &TargetArgs,
     parent: Option<String>,
     max_parallel: usize,
     timeout: Option<Duration>,
+    reuse: &HashMap<String, NodeState>,
     report: &mut dyn FnMut(Event),
 ) -> Result<HashMap<String, NodeState>, ControlError> {
     validate(plan)?;
@@ -413,8 +692,18 @@ pub(super) fn run(
     let mut states: HashMap<String, NodeState> = plan
         .nodes
         .iter()
-        .map(|node| (node.id.clone(), NodeState::Pending))
+        .map(|node| {
+            let state = reuse.get(&node.id).cloned().unwrap_or(NodeState::Pending);
+            (node.id.clone(), state)
+        })
         .collect();
+    for node in &plan.nodes {
+        if reuse.contains_key(&node.id) {
+            report(Event::Reused {
+                id: node.id.clone(),
+            });
+        }
+    }
     let mut started_at: HashMap<String, Instant> = HashMap::new();
 
     loop {
@@ -591,7 +880,7 @@ pub(super) fn run_graph_command(
             print!("{SCHEMA}");
             Ok(())
         }
-        GraphCommand::Check(args) => check(&args.plan, output_format),
+        GraphCommand::Check(args) => check(args, output_format),
         GraphCommand::Run(args) => execute(args, output_format),
     }
 }
@@ -609,8 +898,9 @@ pub(super) fn run_graph_command(
 /// documentation into a prompt, which is the human this was supposed to remove.
 const SCHEMA: &str = r##"# A warpctrl task graph.
 #
-#   warpctrl graph check plan.toml     # parse, resolve edges, find cycles
-#   warpctrl graph run   plan.toml     # run it, blocking until it settles
+#   warpctrl graph check plan.toml            # parse, resolve edges, find cycles
+#   warpctrl graph run   plan.toml            # run it, blocking until it settles
+#   warpctrl graph run   plan.toml --resume   # ...but skip what already worked
 #
 # Every node is one `warpctrl agent spawn`: a fresh child agent, in a hidden
 # pane, with the prompt below and nothing else. A child does NOT inherit the
@@ -675,6 +965,22 @@ needs = [
 # * Nothing is retried. An agent turn is not idempotent.
 # * A cycle, an unknown node in `needs`, a duplicate id, or a misspelled field
 #   is refused before anything spawns.
+#
+# The run record, and what it is for:
+#
+# * `graph run` writes `plan.toml.run.json` — every settled node, plus a hash of
+#   the node as it was when it ran. `--record PATH` moves it, `--no-record`
+#   suppresses it. It holds each finished node's answer verbatim, so it is
+#   agent-authored text on disk; add it to .gitignore unless you mean to commit
+#   it. It is not a transcript — WARP_FORK_EVENT_LOG holds the tool calls.
+# * `--resume` carries over every node that finished and re-runs the rest, so a
+#   plan whose fourth node failed costs four agent turns to retry, not seven.
+#   Pass it every time: with no record, it runs the whole plan.
+# * `graph check` picks that record up and refuses a plan the record no longer
+#   fits: a finished node whose prompt, allowlist, name or edges changed, or a
+#   finished node the plan now runs something new in front of. The advice it is
+#   really giving is **edit the failure, not the evidence** — failed and skipped
+#   nodes are yours to rewrite freely, because nothing will be reused from them.
 "##;
 
 fn load(path: &Path) -> Result<Plan, ControlError> {
@@ -692,9 +998,48 @@ fn load(path: &Path) -> Result<Plan, ControlError> {
     })
 }
 
+/// Reads a run record, if one is meant to be there.
+///
+/// An explicit `--against` that is missing is an error, because the caller said
+/// a file was there. The sibling default going missing is not: a plan that has
+/// never run has no record, and that is the ordinary first case.
+fn load_record(path: &Path, required: bool) -> Result<Option<RunRecord>, ControlError> {
+    let text = match std::fs::read_to_string(path) {
+        Ok(text) => text,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound && !required => return Ok(None),
+        Err(error) => {
+            return Err(invalid(format!(
+                "could not read the run record {}: {error}",
+                path.display()
+            )));
+        }
+    };
+    let record: RunRecord = serde_json::from_str(&text).map_err(|error| {
+        invalid(format!(
+            "{} is not a readable run record: {error}",
+            path.display()
+        ))
+    })?;
+    if record.record != RECORD_KIND {
+        return Err(invalid(format!(
+            "{} says it is a `{}`, not a `{RECORD_KIND}`",
+            path.display(),
+            record.record
+        )));
+    }
+    if record.version != RECORD_VERSION {
+        return Err(invalid(format!(
+            "{} is a version {} record and this warpctrl writes version {RECORD_VERSION}",
+            path.display(),
+            record.version
+        )));
+    }
+    Ok(Some(record))
+}
+
 /// `graph check` — everything that can be known without spending a token.
-fn check(path: &Path, output_format: OutputFormat) -> Result<(), ControlError> {
-    let plan = load(path)?;
+fn check(args: GraphCheckArgs, output_format: OutputFormat) -> Result<(), ControlError> {
+    let plan = load(&args.plan)?;
     validate(&plan)?;
 
     // The order is reported in waves rather than as a flat list because the
@@ -702,26 +1047,90 @@ fn check(path: &Path, output_format: OutputFormat) -> Result<(), ControlError> {
     // own wave is a plan that will run one agent at a time, and that is usually
     // not what its author drew.
     let waves = waves(&plan);
+
+    let required = args.against.is_some();
+    let record_path = args
+        .against
+        .clone()
+        .unwrap_or_else(|| default_record_path(&args.plan));
+    let record = load_record(&record_path, required)?;
+    let sealed = record
+        .as_ref()
+        .map(|record| sealed(&plan, record))
+        .unwrap_or_default();
+    let violations = record
+        .as_ref()
+        .map(|record| violations(&plan, record))
+        .unwrap_or_default();
+    let ok = violations.is_empty();
+
+    let summary = serde_json::json!({
+        "action": "graph.check",
+        "ok": ok,
+        "nodes": plan.nodes.len(),
+        "waves": waves,
+        "record": record.is_some().then(|| record_path.display().to_string()),
+        "sealed": sealed,
+        "violations": violations,
+    });
     match output_format {
-        OutputFormat::Json => write_json(&serde_json::json!({
-            "action": "graph.check",
-            "ok": true,
-            "nodes": plan.nodes.len(),
-            "waves": waves,
-        })),
-        OutputFormat::Ndjson => write_json_line(&serde_json::json!({
-            "action": "graph.check",
-            "ok": true,
-            "nodes": plan.nodes.len(),
-            "waves": waves,
-        })),
+        OutputFormat::Json => write_json(&summary)?,
+        OutputFormat::Ndjson => write_json_line(&summary)?,
         OutputFormat::Pretty | OutputFormat::Text => {
             println!("{} nodes, {} in sequence", plan.nodes.len(), waves.len());
             for (index, wave) in waves.iter().enumerate() {
                 println!("  {}. {}", index + 1, wave.join(", "));
             }
-            Ok(())
+            if record.is_some() {
+                println!(
+                    "{} sealed by {}{}",
+                    sealed.len(),
+                    record_path.display(),
+                    if sealed.is_empty() {
+                        String::new()
+                    } else {
+                        format!(": {}", sealed.join(", "))
+                    }
+                );
+            }
+            for violation in &violations {
+                println!("  {}", render_violation(violation));
+            }
         }
+    }
+
+    if ok {
+        Ok(())
+    } else {
+        // The same channel `graph run` uses for a plan's own verdict: the check
+        // worked, and its answer is no.
+        Err(ControlError::new(
+            ErrorCode::TargetStateConflict,
+            "the plan no longer justifies work the run record says is finished; \
+             see the entries above, or delete the record to start over",
+        ))
+    }
+}
+
+fn render_violation(violation: &Violation) -> String {
+    match violation {
+        Violation::Edited { node, consumed_by } => {
+            let mut line = format!("`{node}` finished, and then its definition changed");
+            if !consumed_by.is_empty() {
+                line.push_str(&format!(
+                    " — its answer was handed to {}, which will not run again either",
+                    consumed_by
+                        .iter()
+                        .map(|id| format!("`{id}`"))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ));
+            }
+            line
+        }
+        Violation::ReachedBack { node, upstream } => format!(
+            "`{node}` finished, but the plan now runs `{upstream}` before it, and `{upstream}` never did"
+        ),
     }
 }
 
@@ -761,6 +1170,46 @@ fn waves(plan: &Plan) -> Vec<Vec<String>> {
 /// `graph run` — the plan, actually run.
 fn execute(args: GraphRunArgs, output_format: OutputFormat) -> Result<(), ControlError> {
     let plan = load(&args.plan)?;
+    validate(&plan)?;
+
+    let record_path = args
+        .record
+        .clone()
+        .unwrap_or_else(|| default_record_path(&args.plan));
+
+    // Only a resume can reuse anything, so only a resume can have anything
+    // invalidated. A run from scratch spawns every node again and is free to
+    // ignore whatever the last one wrote down.
+    let reuse = if args.resume {
+        match load_record(&record_path, false)? {
+            Some(record) => {
+                let violations = violations(&plan, &record);
+                if !violations.is_empty() {
+                    let detail = violations
+                        .iter()
+                        .map(render_violation)
+                        .collect::<Vec<_>>()
+                        .join("; ");
+                    return Err(ControlError::new(
+                        ErrorCode::TargetStateConflict,
+                        format!(
+                            "refusing to resume: {detail}. Run `graph check` for the same list, \
+                             fix the plan, or delete {} to run the whole plan again",
+                            record_path.display()
+                        ),
+                    ));
+                }
+                reusable(&plan, &record)
+            }
+            // Not an error. `--resume` is meant to be the command you always
+            // run, so the first time — when there is nothing to resume from —
+            // has to mean "run it all" rather than "you did that wrong".
+            None => HashMap::new(),
+        }
+    } else {
+        HashMap::new()
+    };
+
     let mut report = |event: Event| match output_format {
         // Machine formats get every event as it happens. A graph run is minutes
         // long, and a caller that only learns the outcome at the end cannot act
@@ -777,8 +1226,24 @@ fn execute(args: GraphRunArgs, output_format: OutputFormat) -> Result<(), Contro
         args.parent,
         args.max_parallel.max(1),
         args.timeout.map(Duration::from_secs),
+        &reuse,
         &mut report,
     )?;
+
+    // After the run, and reporting its own failure rather than raising it: the
+    // work has already happened, and an exit code that says the plan failed
+    // because a file could not be written would be a lie about the plan.
+    let recorded = if args.no_record {
+        None
+    } else {
+        match write_record(&record_path, &plan, &states) {
+            Ok(()) => Some(record_path.display().to_string()),
+            Err(error) => {
+                eprintln!("warpctrl: {}", error.message);
+                None
+            }
+        }
+    };
 
     let ok = states
         .values()
@@ -787,6 +1252,7 @@ fn execute(args: GraphRunArgs, output_format: OutputFormat) -> Result<(), Contro
         "action": "graph.run",
         "ok": ok,
         "nodes": serde_json::to_value(&states).unwrap_or_default(),
+        "record": recorded,
     });
     match output_format {
         OutputFormat::Json | OutputFormat::Ndjson => write_json_line(&summary)?,
@@ -803,6 +1269,9 @@ fn execute(args: GraphRunArgs, output_format: OutputFormat) -> Result<(), Contro
                     })
                 );
             }
+            if let Some(recorded) = &recorded {
+                println!("recorded to {recorded}");
+            }
         }
     }
 
@@ -816,6 +1285,66 @@ fn execute(args: GraphRunArgs, output_format: OutputFormat) -> Result<(), Contro
             "some nodes did not finish; see the per-node states above",
         ))
     }
+}
+
+/// The record a finished run leaves behind.
+///
+/// Every settled node, not only the finished ones: a `failed` entry is what
+/// tells the next `--resume` that this node is the one to run again, and a
+/// record that held only successes would be indistinguishable from a plan that
+/// never had the other nodes in it.
+///
+/// This does hold each finished node's **answer verbatim**, because that is
+/// what a resume hands downstream — so it is agent-authored text on disk, next
+/// to the plan, and usually wants a `.gitignore` line. It is not a transcript:
+/// the tool calls and the reasoning live in `WARP_FORK_EVENT_LOG` (T11.1), and
+/// keeping those roles apart is deliberate.
+pub(super) fn build_record(plan: &Plan, states: &HashMap<String, NodeState>) -> RunRecord {
+    RunRecord {
+        record: RECORD_KIND.to_owned(),
+        version: RECORD_VERSION,
+        nodes: plan
+            .nodes
+            .iter()
+            .filter_map(|node| {
+                let state = states.get(&node.id)?;
+                state.is_settled().then(|| {
+                    (
+                        node.id.clone(),
+                        RecordedNode {
+                            fingerprint: fingerprint(plan, node),
+                            settled: state.clone(),
+                        },
+                    )
+                })
+            })
+            .collect(),
+    }
+}
+
+fn write_record(
+    path: &Path,
+    plan: &Plan,
+    states: &HashMap<String, NodeState>,
+) -> Result<(), ControlError> {
+    let record = build_record(plan, states);
+    // Pretty, because the file is meant to be read and diffed by a person as
+    // much as by the next run.
+    let text = serde_json::to_string_pretty(&record).map_err(|error| {
+        ControlError::new(
+            ErrorCode::Internal,
+            format!("could not serialize the run record: {error}"),
+        )
+    })?;
+    std::fs::write(path, format!("{text}\n")).map_err(|error| {
+        ControlError::new(
+            ErrorCode::Internal,
+            format!(
+                "could not write the run record to {}: {error}",
+                path.display()
+            ),
+        )
+    })
 }
 
 fn event_json(event: &Event) -> serde_json::Value {
@@ -834,6 +1363,11 @@ fn event_json(event: &Event) -> serde_json::Value {
             "node": id,
             "waiting": status,
             "blocked_action": blocked_action,
+        }),
+        Event::Reused { id } => serde_json::json!({
+            "action": "graph.run",
+            "node": id,
+            "reused": true,
         }),
     }
 }
@@ -859,6 +1393,7 @@ fn render(event: &Event) -> String {
             Some(action) => format!("{id}: {status} — waiting on approval for {action}"),
             None => format!("{id}: {status}"),
         },
+        Event::Reused { id } => format!("{id}: reused — finished in an earlier run"),
     }
 }
 
@@ -887,6 +1422,13 @@ pub(super) enum Event {
         id: String,
         status: String,
         blocked_action: Option<String>,
+    },
+    /// Carried over from a previous run rather than spawned.
+    ///
+    /// Announced rather than silent: a resumed run that says nothing about the
+    /// nodes it skipped looks like a plan that lost half its work.
+    Reused {
+        id: String,
     },
 }
 

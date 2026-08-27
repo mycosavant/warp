@@ -5363,7 +5363,7 @@ target never compiles.
 
 ---
 
-## T11 — Observability first, then the surface  ← ACTIVE
+## T11 — Observability first, then the surface  ← DONE (2026-08-26)
 
 > Ratified 2026-08-24. The goal, in the maintainer's words: a project you can
 > *"spin up, check in on, fire a session from my phone and keep things moving
@@ -5445,7 +5445,7 @@ That is what T12 is.
 
 ---
 
-## T12 — The console: the client T11 was built for  ← ACTIVE
+## T12 — The console: the client T11 was built for  ← DONE (2026-08-27)
 
 > Scoped 2026-08-26. **The argument for doing this before anything else is the
 > fork's own anti-goal.** T11 shipped an event log, a state snapshot, an SSE
@@ -5499,7 +5499,7 @@ a build step in this tree would be a new toolchain for one page.
       the *page* URL rather than a bare token — pairing that ends at a page a
       person can use is the difference between a demo and a tool.
 
-## T13 — The run gate (ratified Tier 1, items 4 and 5)
+## T13 — The run gate (ratified Tier 1, items 4 and 5)  ← ACTIVE
 
 > `CONSOLIDATION.md` §4.1 orders these fourth and fifth, and they are the other
 > half of the maintainer's sentence: T12 delivers *"check in on"*, T13 delivers
@@ -5512,8 +5512,12 @@ a build step in this tree would be a new toolchain for one page.
 > Migrating a *concept* is free; migrating Tusk source into an AGPL tree before
 > the §10-step-1 extraction is the one-way door that step exists to hold open.
 
-- [ ] **T13.1** `ZB-PLAN` — the sealed-subgraph guard, as `warpctrl graph check`
-      over an existing plan file.
+- [x] **T13.1** `ZB-PLAN` — the sealed-subgraph guard, as `warpctrl graph check`
+      over an existing plan file. **The guard had nothing to guard, and finding
+      that was the ticket**: a plan that re-runs from scratch every time can
+      never reuse evidence, so no edit to it can invalidate any. What was
+      missing was Tusk's own §7 promotion trigger, and here that trigger is
+      `--resume`. Built as record → resume → guard.
 - [ ] **T13.2** `ZB-CONTRACT` — per-assertion verdicts. A node declares what
       must hold after it, and the runner records a verdict *per assertion*
       rather than one pass/fail per node. This is the same detector T11.1 built
@@ -5602,6 +5606,111 @@ used* — **Firefox on Android**, with DuckDuckGo as the Chromium fallback. The
 install rows in `README.md` were originally written around iOS Safari and Android
 *Chrome*, neither of which is this maintainer's phone; they are corrected there
 and the Firefox row is the one still open.
+
+### T13.1 — as built
+
+**The gate check came back empty for once, and the ticket was still mostly
+wrong.** `seal|subgraph|verdict|precondition` across
+`crates/warp_cli/src/local_control/` returns nothing, so unusually for this
+board the answer to "is it already built" was no. What the scoping found
+instead was one level up: **the fork had the plan substrate and nothing for the
+guard to guard.**
+
+Tusk's design note refuses to ship this in exactly that state — *"With no
+persistent DAG, every function in §4 would operate on an empty or one-node graph
+— the guard would guard nothing. Per the honest-knob rule, we record the design
+and stop rather than ship inert machinery."* Its §6 precondition is a persistent
+plan with `depends_on` edges, and this fork has had one since T7.1. But its
+§7 trigger is subtler than the precondition, and reading `graph.rs` is what
+surfaced it: `run` seeds every node `Pending` (`graph.rs:413`), prints, and
+exits. **Nothing is written down, so a second run re-runs the whole plan, so an
+edit between runs invalidates nothing.** The seal in Tusk is load-bearing
+because the run *continues* from it; here there was nothing to continue from.
+
+So T13.1 is Tusk's §7 trigger, then Tusk's §2.1 guard:
+
+| | what it is |
+|---|---|
+| **record** | `graph run` writes `plan.toml.run.json` — every settled node, plus a SHA-256 of the node *as it ran*. `--record` moves it, `--no-record` suppresses it. |
+| **resume** | `--resume` seeds finished nodes from that record instead of spawning them. Failed and skipped nodes run again. |
+| **guard** | `graph check` picks the record up and refuses a plan the record no longer fits. |
+
+**The sealed subgraph collapses here, and saying why is the interesting part.**
+Tusk has two node kinds — a *gate* clears while the work upstream of it sits in
+any state — so its seal has to be the transitive upstream closure of every
+cleared gate. This fork has one kind, and `ready` refuses to start a node until
+every edge is `Done`, so **a finished node's ancestors are finished by
+construction** and the closure is the set itself. `sealed()` is therefore a
+filter, not a walk, and it says so in its own doc comment. The closure still
+exists — it moved into `violations`, where the plan may have *grown* an ancestor
+since the record was written, which is the one case the collapse does not cover.
+
+**Two rules, and a third that turned out to be unnecessary.** Both are stated
+relative to what a resume would reuse, which is what makes them checkable:
+
+1. **edited** — a finished node's own definition changed, so the answer on file
+   was produced by a different prompt, allowlist, name or set of edges;
+2. **reached back** — a finished node now waits on something that never ran, so
+   a resume would run the new node and then skip the one meant to consume it.
+
+The third rule anyone would write — *a finished node was deleted* — is not
+there, because deleting one rewrites the `needs` of everything downstream and
+that is rule 1 on those nodes. A test pins the claim rather than the comment
+asserting it.
+
+**One thing the tests got wrong before the code did.** The first expectations
+had a node inserted upstream producing both an `edited` and a `reached back`
+entry for the same node. That is accurate and it is one edit counted twice: an
+un-run node among a node's *own* `needs` can only have arrived by an edit, so a
+direct reach-back always implies a fingerprint change. Suppressed, with the
+reasoning inline — the reach-backs worth printing are the ones on nodes nobody
+touched, which is exactly how the guard earns its keep.
+
+**The advice the guard is really giving:** *edit the failure, not the evidence.*
+A failed or skipped node is not sealed, is yours to rewrite freely, and is the
+whole reason you came back to the plan. That is a test name, not a slogan.
+
+**Verified by running, 2026-08-27.** Release build, WSLg, scratch
+`XDG_CONFIG_HOME`/`XDG_STATE_HOME`/`XDG_RUNTIME_DIR`, `WARP_FORK_LOCAL_AGENT=1`,
+a two-node plan against a real `claude`.
+
+| | result |
+|---|---|
+| `graph check` with no record | unchanged output, exit 0 — the pre-T13.1 behaviour is intact |
+| `--against` a file that is not there | refused; a missing *sibling* is not an error |
+| a record claiming to be something else, and a version 99 record | both refused by name |
+| run 1, `--timeout 1` | `hello` failed, `after` skipped; record written holding both |
+| `check` against that record | `0 sealed` — a failure is not evidence |
+| run 2, `--resume` | nothing to reuse, both nodes ran, both `done` |
+| run 3, `--resume` | `hello: reused`, `after: reused`, **5 ms, zero new conversations** |
+| edit `hello`'s prompt, `check` | refused, naming `after` as having been handed its answer |
+| the same edit, `run --resume` | refused before contacting Warp at all |
+| the same edit, `run` with no `--resume` | **ran, ungated** — a run that reuses nothing can invalidate nothing |
+| `--no-record` | the earlier record's fingerprint untouched |
+| insert `lint` in front of both | `hello` edited, **`after` reached back through `hello` to `lint`** |
+| append `report` after both, `--resume` | two reused, one spawned, 4 s |
+
+**A gap the first run found, which no unit test would have.** `agent.spawn`
+needs an existing conversation to parent to, so `graph run` against a pane whose
+agent has never been prompted fails *every node* with *"the targeted pane has no
+agent conversation to parent a child to"*. The plan is fine; the pane is not.
+`--parent` or one `agent.prompt` first. Not new in T13.1 — T7.1 has always
+worked this way — but it is the first thing a person hits and it was written
+down nowhere.
+
+**Named unverified inputs.** The guard has never been run against a plan large
+enough for the *nearest-ancestor* reporting to matter — the live plan was three
+nodes, and the chain case is held by a unit test only. And nothing here has been
+run on Windows; the record is written with `std::fs::write` and a path built by
+appending to an `OsString`, so a UNC or extension-less plan path is read, not
+run.
+
+**And a fourth sighting for T15's open item, with one new detail.** After a clean
+`warpctrl window close` and no process alive, `inst_….json` and `….broker.sock`
+were still in the scratch `XDG_RUNTIME_DIR`. New: **two instances were closed in
+this session and only one leaked** — the first, which never got past onboarding,
+cleaned up; the second, which ran agents, did not. That is a difference to bisect
+against, not a cause; nothing in T13.1 touches discovery.
 
 ### T12.3 — as built
 
