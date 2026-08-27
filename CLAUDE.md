@@ -271,6 +271,16 @@ edges, so `rustfmt some_mod.rs` silently rewrites `some_mod_tests.rs` too.
 Whichever you run, check `git status` afterwards and revert files you did not
 mean to touch.
 
+**There is a browser, and it is on the Windows side.** `/mnt/c/Program Files`
+holds Firefox, Brave and Zen, and Windows reaches the WSL wide listener — so a
+page served by `WARP_FORK_CONTROL_BIND` can be loaded in a real engine and
+photographed with `shot.ps1 -Process firefox`. Launch with a scratch profile
+(`-profile 'C:\dev\…' -no-remote`, or `--user-data-dir=` for Chromium) so the
+user's own session is untouched. **T12 filed "no browser on this machine" three
+times as a blocker; it meant the WSL userland and was written as though it meant
+the hardware.** Before naming something as needing a person, check that the
+blocker is real.
+
 **Screenshotting the Windows build: `shot.ps1 -Process warp-oss`.** It
 captures one window via `PrintWindow(hwnd, hdc, PW_RENDERFULLCONTENT)` —
 *without* raising or focusing it, and regardless of what is on top. Omit

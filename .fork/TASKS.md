@@ -5548,6 +5548,61 @@ a build step in this tree would be a new toolchain for one page.
       (§10 step 1). Not work in this repo, but a *dependency* of T13 and of any
       later migration, and §12 forbids the migration until it is done.
 
+### T12 — the browser pass, and the "no browser on this machine" claim retracted
+
+**Three as-builts below say a real browser has never loaded this page. That was
+true of the WSL side and false of the machine, and the difference cost nothing
+only because it was caught the same week.** `/mnt/c/Program Files` holds Firefox,
+Brave and Zen; Windows reaches the WSL wide listener (`Invoke-WebRequest` →
+`200`); and `C:\dev\shot.ps1` has been in the operating manual since T9. So the
+item filed three times as *"one session with a phone"* was, for its most
+important half, one command away the whole time.
+
+The mistake was a scope word. "No browser on this machine" meant the Linux
+userland the agent runs in, and got written as though it described the hardware.
+The fork's own rule — *name the inputs you did not verify* — was followed; what
+was not done was checking whether the named blocker was real.
+
+**What a real browser proved that `node` could not, 2026-08-27.** Scratch
+profiles for both browsers, so nothing touched the maintainer's own session.
+
+| | result |
+|---|---|
+| Firefox, page load | renders; `<title>` correct; paired from a scanned code; badge `live` |
+| Brave (Blink), page load | same, at a 430px viewport — the approval card, both buttons, full-width targets |
+| **markup in agent text** | an agent asking to run `` rm -rf build/ && echo <b>not markup</b> `` drew the angle brackets **as text** in both engines |
+| the two-tap `Yes` | clicked by hand by the maintainer; agent read `0d` |
+| `agent.deny` from the CLI | agent read `1b` |
+
+**The escaping row is the one that mattered.** T12.2's as-built says outright
+that its `<img onerror>` payload "looks like a demonstration and is not one",
+because a DOM shim with no HTML parser reports any string verbatim. A real Blink
+and a real Gecko parser have now received attacker-shaped text through the same
+path and rendered it inert. That claim is no longer resting on the test alone.
+
+**And the two-tap arming was confirmed by a person, which is the only way it
+could be.** The maintainer clicked `Yes` twice without being told to, describing
+it as "twice (per design)" — so the armed state reads as deliberate rather than
+as a button that failed the first time. No capture answers that question;
+T12.2's as-built said so and was right to.
+
+**One false alarm, recorded because the reasoning was worth more than the
+result.** The first Firefox screenshot showed the approval already answered, and
+the fake agent had read `0d` after the point where nothing of ours had written to
+that PTY. The suspicion — that Warp itself writes a stray `\r`, which for a real
+agent would be an *accidental approval* — was serious enough to stop and isolate
+rather than wave off. It was the maintainer clicking `Yes`. The escalation was
+still correct: an unexplained byte reaching an agent's stdin is exactly the
+silent-failure class this phase exists to detect, and "probably nothing" is not
+an answer to it.
+
+**What is still unverified, and it is now a short list.** Nothing about desktop
+browsers. What remains is *installation on the phone that will actually be
+used* — **Firefox on Android**, with DuckDuckGo as the Chromium fallback. The
+install rows in `README.md` were originally written around iOS Safari and Android
+*Chrome*, neither of which is this maintainer's phone; they are corrected there
+and the Firefox row is the one still open.
+
 ### T12.3 — as built
 
 **Half the ticket was already done, and the other half turned out to be two

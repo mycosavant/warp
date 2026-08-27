@@ -2151,6 +2151,13 @@ pinned by `the_console_is_a_constant_and_names_no_secret`. Everything with
 authority happens in `fetch` calls the script makes afterwards, each carrying a
 five-minute action-scoped credential it minted from the device token.
 
+**The escaping is verified in a real HTML parser, not only by the test.** An
+agent asked to run `rm -rf build/ && echo <b>not markup</b>`, and Firefox and
+Brave both drew those angle brackets as text. This is worth naming because the
+`node` harness the console was otherwise developed against *cannot* check it —
+a shim with no HTML parser prints the string verbatim whether the page escapes
+it or not, so that run proved nothing about escaping and said so.
+
 What it shows:
 
 * **Waiting on you** — `agent.approvals`, with a `No` button always and a `Yes`
@@ -2199,6 +2206,11 @@ asymmetry that keeps `agent.deny` pairable while `agent.approve` needs a
 variable: a tap on `Yes` runs a command on your machine, and a pocket should not
 be able to. Measured: one tap sends nothing and the button is back to `Yes` four
 seconds later.
+
+**Confirmed by a person, in Firefox, on 2026-08-27** — the maintainer clicked
+`Yes` twice on a real permission request and the agent read `0d`. Worth recording
+because the arming is a claim about *human* timing and legibility that no capture
+can check: the two taps read as deliberate rather than as a broken button.
 
 **Every answer carries the digest of what was on screen.** That is T11.5's
 binding, and it is what makes answering from a phone safe rather than merely
@@ -2262,10 +2274,19 @@ the ceiling is set by HTTP.** A service worker requires a secure context, and
 `http://` at a LAN address is not one — so there is no service worker, no
 install prompt, no WebAPK, and no offline anything. What remains:
 
-| | what you get |
-|---|---|
-| **iOS Safari** | *Add to Home Screen* is a manual user action that needs neither HTTPS nor a service worker, and honours `apple-touch-icon` and `apple-mobile-web-app-capable`. A real standalone launch with the right icon. |
-| **Android Chrome** | *Add to Home screen* creates a shortcut, not an installed app. It opens in browser UI. |
+| | what you get | verified? |
+|---|---|---|
+| **desktop Firefox / Brave / Zen** | the page itself, which is most of the value. No install. | **yes** — both engines, 2026-08-27 |
+| **Firefox on Android** | *Add to Home screen* from the menu. Whether it opens standalone or in browser UI is what needs checking. | **no** |
+| **DuckDuckGo on Android** (Chromium) | expected to be a shortcut in browser UI, since Chromium's install path needs a service worker. | **no** |
+| **iOS Safari** | *Add to Home Screen* is manual, needs neither HTTPS nor a service worker, and honours `apple-touch-icon` and `apple-mobile-web-app-capable`. | **no** |
+
+**The rows above were originally written with only the last one in mind, which
+was a mistake about whose phone this is for.** The fork's maintainer uses Firefox
+on Android, with DuckDuckGo as a Chromium fallback; iOS is a device they own and
+do not use. The manifest is platform-neutral and the iOS meta tags cost four
+lines, so nothing needs undoing — but *the row that matters is the Firefox one,
+and it is the one still unchecked.*
 
 The fixed port is what makes the saved URL survive a restart. The **pairing**
 does not: codes and device tokens live in memory and die with the process, so
