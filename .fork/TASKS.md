@@ -5535,16 +5535,205 @@ a build step in this tree would be a new toolchain for one page.
       by demoting the verdict — **a model's answer may narrow acceptance, never
       widen it.**
 
-## T14 — ACP as the adapter contract (a decide, not yet a build)
+## T14 — ACP as the adapter contract  ← DECIDED 2026-08-27, and it is now a build
 
-> Filed as a decide in §4.1 and still one. The reasoning there is strong enough
-> to be worth re-reading before scoping: the fork speaks the *client* side, and
-> every ACP agent — Gemini CLI, Claude Code via Zed's adapter — arrives without
-> a per-agent integration. The crate is Apache-2.0, which an AGPL work may
-> depend on, and it is already on this machine at
+> **As filed:** a decide. The reasoning in §4.1 was that the fork speaks the
+> *client* side, and every ACP agent — Gemini CLI, Claude Code via Zed's adapter
+> — arrives without a per-agent integration. The crate is Apache-2.0, which an
+> AGPL work may depend on, and it was "already on this machine" at
 > `~/git/agent-client-protocol-main`. The slots exist twice (`CLIAgent`,
 > `Harness`). **Unverified:** that the crate's client side is complete enough to
 > drive an agent, which is a reading job before it is a building one.
+
+**Four of those sentences were wrong, and the sync that found it took ten
+minutes.** The one input nobody thought to check was the dependency's own
+freshness — the ticket said "already on this machine" and treated that as
+currency.
+
+### What the sync found
+
+`~/git/agent-client-protocol-main` **was not a git repository**. It was an
+unzipped snapshot of `main` at **v0.3.0**, file mtimes **2025-09-12**. Because
+it was not a clone there was no `git pull` that would ever have corrected it,
+and no `git status` that would ever have looked stale. It has been deleted;
+fresh clones are at `~/git/agent-client-protocol` (spec) and `~/git/acp-rust-sdk`
+(SDK).
+
+| the ticket said | measured 2026-08-27 |
+|---|---|
+| the crate is at `agent-client-protocol-main` | that path held v0.3.0 from 2025-09-12, **two major versions** stale |
+| (implied) the SDK is in the spec repo | the spec repo **deleted the SDK** in `935857f` ("Remove SDK code (#155)") |
+| Zed's protocol | moved org to `agentclientprotocol/`, now carries `GOVERNANCE.md`, `MAINTAINERS.md` |
+| Apache-2.0 | **still true** — the one premise that held |
+| "Gemini CLI, Claude Code via Zed's adapter" | **39 agents** in a stabilized registry |
+| the slots exist twice (`CLIAgent`, `Harness`) | both are the wrong seam — see below |
+
+The Rust SDK now lives at `agentclientprotocol/rust-sdk`, published as
+`agent-client-protocol` **v2.0.0** (2026-07-23, Apache-2.0), a ten-crate
+workspace. The `claude-acp` registry entry lists **Anthropic, Zed and JetBrains**
+as authors, so "betting on one vendor's protocol" is no longer the objection it
+was when this was filed.
+
+### The unverified input, settled by running rather than reading
+
+The ticket called this "a reading job before it is a building one". It was a
+*running* job, and it took two commands.
+
+- **`testy`** (`agent-client-protocol-test`) driven by the SDK's
+  `yolo_one_shot_client`: `initialize` → `session/new` → `session/prompt` →
+  streamed `AgentMessageChunk` → `EndTurn`. Offline, deterministic, no quota.
+- **The real Claude agent**, `npx -y @agentclientprotocol/claude-agent-acp@0.70.0`:
+  same loop, answered on the maintainer's own subscription with **no Warp
+  account involved**, `EndTurn`, $0.21.
+
+So the client side is not merely "complete enough" — it is a builder API, and
+the whole client in the SDK's example is 113 lines including clap and comments.
+
+**Three things came back that the fork has no equivalent for today**, and they
+are the actual argument for adopting ACP:
+
+- `Implementation { name, title, version }` — the agent **identifies itself**,
+  which is precisely what replaces a closed `Harness` enum.
+- `UsageUpdate { used, size, cost, rateLimit }` — live token, context, cost and
+  rate-limit status *pushed from the agent to the client*.
+- `AvailableCommandsUpdate` — the agent's own slash commands, enumerated.
+
+**And the gate is open.** `cargo add agent-client-protocol@2.0.0 -p warp_cli`
+resolves in **14 new packages**, disturbing existing deps only by a `futures`
+patch bump (0.3.31 → 0.3.34), and `cargo check -p warp_cli` compiles it in 13s.
+`cargo check --workspace --all-targets` passes with it added. That was the one
+claim the advisor could only read; it has now been run.
+
+**The one cost measured rather than assumed:** that `futures` bump deprecates
+`UnboundedReceiver::try_next`, which **upstream** code uses — 4 new warnings in
+`app/src/ai/blocklist/orchestration_event_streamer.rs`. Confirmed by diffing
+against a same-session baseline: **0** occurrences before, **4** after. Warnings,
+not errors, and the fix is `try_recv`; but it means adopting ACP puts warnings in
+files the fork does not own, which is a merge-noise cost the dependency count
+alone does not show.
+
+### The decide
+
+**ACP is the adapter contract for every agent that is not Claude;
+`app/src/ai/local_agent/` stays the Claude path.** Reaching Claude over ACP means
+an `npx`-launched, `license: proprietary` shim in front of a CLI this fork
+already drives directly — a regression on the flagship agent for a fork whose
+thesis is the user's own subscription with no intermediaries. Verified: `claude`
+2.1.247 has **no `--acp` flag**.
+
+**The premise that survives the challenge: ACP does not delete `translate.rs`.**
+The expensive half of the fork's agent work is the *output* side — Warp's
+`ResponseEvent` mutation log. In `app/src/ai/local_agent/translate.rs` (830
+lines) the Claude wire types are lines 35–262, ~28%; the other ~72% is
+Warp-protocol construction that any input front-end still needs. **ACP is a
+better input, not a smaller problem.**
+
+**Both named slots are the wrong seam.** `CLIAgent`
+(`app/src/terminal/cli_agent.rs:140`) is terminal *decoration* — prefixes, icons,
+brand colours — with no transport behind it to swap. `Harness`
+(`crates/warp_cli/src/agent.rs:227`) is a cloud-run selector whose local half
+reaches `ThirdPartyHarness::build_runner`; that *is* an adapter slot, and it is
+the expensive one — **8,148 lines for three agents**. Upstream hand-wrote drivers
+for 3 of the 39 registry agents; `CLIAgent` names 15 third-party agents, of which
+**13 are in the registry**.
+
+**The seam is the one the fork already owns** — `app/src/ai/agent/api/impl.rs:20`,
+the single `if` in front of `generate_multi_agent_output` that T5 opened. An ACP
+agent is a second arm of that same condition, behind `fork::acp_agent_enabled()`
+next to `local_agent_enabled()` at `app/src/fork.rs:196`, with
+`app/src/ai/acp_agent/` as a sibling of `local_agent/`. The reuse is **not** free:
+`init()`, `add()`, `message()`, `timestamp()` lift cleanly, but `assistant()`
+takes a Claude-typed `AssistantMessage` — a deliberate ~400-line extraction, not
+a split.
+
+**Schema v1, and not because v2 is alpha.** `docs/protocol/v2/migration.mdx` is
+unambiguous: **v2 removes `fs/read_text_file`, `fs/write_text_file` and all five
+`terminal/*` methods from the client**, replacing them with client-provided MCP
+servers. Those are exactly the capability that makes ACP interesting to a
+*terminal*. Maturity is a free second argument — all 39 agents ship v1 today, and
+in the SDK v1/v2 is a cargo feature (`unstable_protocol_v2`), so v2 later is a
+flag rather than a rewrite.
+
+**The registry: consume it as data, never as an installer.** The `distribution`
+block carries per-platform GitHub release URLs with sha256 — implementing it
+means downloading and executing third-party binaries from the network, on the
+project whose thesis rests on `crates/http_client/src/egress.rs`. Use it for
+*recognition and configuration* of an agent the user already installed: the `id`,
+the display name, and the args that put it in ACP mode (`--acp` for Gemini, `acp`
+for goose and OpenCode). A **vendored snapshot refreshed deliberately**, not a
+fetch at startup.
+
+### The prize, which is bigger than "more agents arrive free"
+
+`local_agent/mod.rs`'s own doc comment names its limit: Claude runs its own
+tools, so Warp's diff review, command approval and block UI *do not participate*.
+ACP v1's client side — `session/request_permission`, `fs/read_text_file`,
+`fs/write_text_file`, `terminal/create|output|release|kill|wait_for_exit` — is
+exactly that surface, **as a published spec**. Warp is a terminal with a
+permission model and a diff reviewer. This is the one route where tool
+participation is a document to implement rather than a private protocol to
+reverse-engineer per agent.
+
+- [x] **T14.1** The probe, and no app surface: a hidden `--warpctrl` subcommand
+      (**not** a catalog action — that pays the two-test pin tax for something
+      whose job is to be deleted or promoted) that runs `initialize` →
+      `session/new` → `session/prompt` and prints every `SessionUpdate` as JSON.
+      ~80 lines. Its real output is **the mapping table** the app work needs:
+      real `SessionUpdate` variants matched arm-by-arm against `translate.rs`'s
+      existing `ResponseEvent` constructors. `testy` is the gate; the npx Claude
+      shim is the evidence. Composes with `graph.rs` for free — an assertion is
+      a command, so the probe is directly assertable in a plan node.
+
+**Decided by the maintainer 2026-08-27:** (A) **No** — "no intermediaries" does
+not tolerate an npx-launched proprietary shim on the Claude path, which is what
+buys the two-path split above. (B) remains open, and is now sharper than when it
+was asked; see T14.1's as-built.
+
+### T14.1 — as built
+
+**The probe is `warpctrl acp probe`**, hidden, not a catalog action, a sibling of
+`mcp` and `completions` in `ControlCommand`. `crates/warp_cli/src/local_control/acp.rs`,
+~170 lines with the doc comments, plus 7 tests. It runs `initialize` →
+`session/new` → `session/prompt` and prints one JSON object per line.
+
+**No async runtime was added, and one nearly was.** `warp_cli` deliberately has
+none — `mcp.rs:17` says so — and the SDK's own example is `#[tokio::main]`, which
+made it look like adopting ACP meant adopting a runtime. It does not:
+`agent-client-protocol` reaches the OS through `async-io` and `blocking`, both of
+which drive their own threads, so `futures::executor::block_on` hosts the entire
+exchange. Reading the SDK's *example* would have given the wrong answer; reading
+its `Cargo.toml` gave the right one.
+
+**Permission requests are denied unless `--approve` is passed**, following the
+asymmetry from T11.5 and T13.3 — saying no can only ever make less happen.
+
+**What running it against a real agent found, and it changes (B).** Against
+`npx -y @agentclientprotocol/claude-agent-acp` in a scratch directory, asking it
+to list files and read one: **20 updates, and exactly five variants** —
+`usage_update` (8), `tool_call_update` (6), `tool_call` (2),
+`available_commands_update` (2), `agent_message_chunk` (2). `tool_call` carries a
+vendor-neutral `kind` (`execute`, `read`) with the vendor's own name tucked in
+`_meta.claudeCode.toolName`, so Warp could render blocks by kind **without
+knowing which agent it is talking to**. That is the mapping table, measured
+rather than guessed.
+
+**And zero permission requests arrived — while the agent ran `ls -la` and read a
+file.** That is the finding. Because the probe advertises no `fs/*` and no
+`terminal/*` client capabilities, Claude simply ran its own tools and reported
+what it had done. So the open question (B) is not "should the fork implement the
+client side eventually" but **"without it, ACP buys nothing over `local_agent`"**
+— it delivers the same read-only view of an agent doing its own thing that
+`local_agent/mod.rs`'s doc comment already names as its limitation. The
+ecosystem argument (39 agents, no per-agent integration) survives intact and is
+the reason to adopt; the tool-participation argument is entirely contingent on
+(B), and this run is what proves it rather than assuming it.
+
+**Named unverified.** The `--approve` path has **never been exercised against a
+live agent**, because no agent asked — and none will until the fork advertises
+the capabilities that make asking meaningful. Its logic is tested, its behaviour
+is not. Nothing here has run on Windows. And the mapping table is one agent, one
+prompt: `usage_update` dominating the traffic is a Claude-wrapper trait that may
+not generalise, and no `plan`, `diff` or elicitation update appeared at all.
 
 ## T15 — Loose ends carried, not forgotten
 

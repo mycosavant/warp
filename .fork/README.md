@@ -1351,6 +1351,51 @@ plan**, so each prompt must contain everything that node needs. The failure
 mode is invisible otherwise — the run completes, and every answer is
 confidently context-free.
 
+### Talking to an agent that is not Warp's: `warpctrl acp probe`
+
+Hidden, not in the catalog, and not a stable surface — it is T14's probe, kept
+until what it prints has been built on or abandoned. It speaks the **Agent
+Client Protocol**, so the agent is whatever you name and nothing about it is
+built in:
+
+```
+warpctrl acp probe --command "gemini --acp" --prompt "what is in this directory?"
+warpctrl acp probe --command "npx -y @agentclientprotocol/claude-agent-acp" --prompt "hello"
+```
+
+It runs `initialize` → `session/new` → `session/prompt` and prints **one JSON
+object per line** — the agent's own identification, the session, every
+`SessionUpdate` in the order it arrived, and the stop reason. That transcript is
+the point. Anything that maps ACP into Warp's `ResponseEvent` log has to know
+which updates a real agent actually emits and in what order, and guessing is how
+that mapping goes quietly wrong.
+
+Because it is JSONL, `jq` reads it with no arguments:
+
+```
+warpctrl acp probe --command "…" --prompt "…" | jq -r 'select(.kind=="update") | .payload.sessionUpdate' | sort -u
+```
+
+**Permission requests are denied unless you pass `--approve`.** An ACP agent
+asks permission in order to write files and run commands, so the flag that says
+yes is the one that has to be typed — the same asymmetry as `agent.approve`
+versus `agent.deny`. A denial is printed rather than swallowed.
+
+**`--cwd` defaults to the current directory and is always made absolute.** An
+ACP session carries its working directory explicitly, which is worth using:
+T13.3 shipped a review node that read the wrong tree because a spawned agent
+inherited a cwd nobody had named, and the run still looked like a success.
+
+Two things worth knowing before reading too much into a transcript. Warp is not
+yet an ACP *client* in the full sense — it does not advertise `fs/*` or
+`terminal/*` capabilities, so an agent cannot ask it to read a file, write one,
+or run a command, and the tool participation those unlock is not on display
+here. And **this is not the Claude path**: reaching Claude over ACP needs an
+`npx`-launched proprietary shim in front of the CLI the fork already drives
+directly, so `app/src/ai/local_agent/` stays where Claude lives. The probe talks
+to it anyway, because it is the best available evidence that the ecosystem claim
+is real.
+
 ### Targets: the rule that decides whether a call works
 
 **Nothing needs the window focused. Everything needs to know which target you

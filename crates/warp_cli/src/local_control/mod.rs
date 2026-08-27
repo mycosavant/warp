@@ -1,4 +1,5 @@
 //! Command-line interface for controlling a running local Warp app.
+mod acp;
 mod commands;
 mod completions;
 mod graph;
@@ -215,6 +216,14 @@ pub enum ControlCommand {
     /// Run a task graph: a plan of agents, in a file, with edges between them.
     #[command(subcommand)]
     Graph(GraphCommand),
+
+    /// Talk to an agent that speaks the Agent Client Protocol.
+    ///
+    /// Not a catalog action, and hidden: this is T14's probe, kept until the
+    /// SessionUpdate-to-ResponseEvent mapping it prints is either built on or
+    /// abandoned.
+    #[command(subcommand, hide = true)]
+    Acp(AcpCommand),
 
     /// Run Warp's slash commands — `/compact`, `/plan`, `/fork-and-compact`.
     #[command(subcommand)]
@@ -950,6 +959,47 @@ pub enum GraphCommand {
     Run(GraphRunArgs),
 }
 
+/// Commands that speak the Agent Client Protocol.
+#[derive(Debug, Clone, Subcommand)]
+pub enum AcpCommand {
+    /// Run one prompt against one ACP agent and print what it sent back.
+    ///
+    /// Prints one JSON object per line: the agent's own identification, the
+    /// session, every `SessionUpdate` in the order it arrived, and the stop
+    /// reason. That transcript is the point — it is the mapping table an
+    /// `acp_agent` module would be written against.
+    ///
+    /// The agent is whatever `--command` names, so no agent is built in:
+    ///     warpctrl acp probe --command "gemini --acp" --prompt "hello"
+    ///     warpctrl acp probe --command "npx -y @agentclientprotocol/claude-agent-acp" --prompt "hello"
+    #[command(verbatim_doc_comment)]
+    Probe(AcpProbeArgs),
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct AcpProbeArgs {
+    /// The command that starts the agent, as you would type it.
+    #[arg(long = "command")]
+    pub command: String,
+
+    /// The prompt to send.
+    #[arg(long = "prompt")]
+    pub prompt: String,
+
+    /// The directory the session runs in. Defaults to the current directory.
+    #[arg(long = "cwd")]
+    pub cwd: Option<PathBuf>,
+
+    /// Answer the agent's permission requests with yes.
+    ///
+    /// Off by default, and deliberately: without it every request is refused
+    /// and the refusal is printed. An ACP agent asks permission in order to
+    /// write files and run commands, so this is the flag that lets a probe
+    /// change the machine.
+    #[arg(long = "approve")]
+    pub approve: bool,
+}
+
 #[derive(Debug, Clone, Args)]
 pub struct GraphCheckArgs {
     /// Path to the plan.
@@ -1624,6 +1674,7 @@ fn run_inner(args: ControlArgs) -> Result<(), local_control::protocol::ControlEr
         ControlCommand::Drive(command) => run_drive_command(command, output_format),
         ControlCommand::Agent(command) => run_agent_command(command, output_format),
         ControlCommand::Graph(command) => graph::run_graph_command(command, output_format),
+        ControlCommand::Acp(AcpCommand::Probe(args)) => acp::run_probe(args),
         ControlCommand::Slash(command) => run_slash_command(command, output_format),
         ControlCommand::Events(command) => run_events_command(command, output_format),
         ControlCommand::Pair(command) => run_pair_command(command, output_format),

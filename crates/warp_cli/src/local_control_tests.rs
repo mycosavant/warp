@@ -954,5 +954,9 @@ fn parsed_action_kind(command: &ControlCommand) -> Option<ActionKind> {
         // over `agent.spawn` and `agent.read`, which is why T7.1 added no
         // actions to the catalog.
         ControlCommand::Graph(_) => None,
+        // Not an action either: `acp` talks to a process that is not Warp, so
+        // there is nothing in the catalog for it to be. T14.1 keeps it out on
+        // purpose — a probe should not pay the four-test pin tax.
+        ControlCommand::Acp(_) => None,
     }
 }

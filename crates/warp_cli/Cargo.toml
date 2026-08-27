@@ -25,6 +25,8 @@ anyhow.workspace = true
 local_control.workspace = true
 sha2.workspace = true
 hex.workspace = true
+agent-client-protocol = "2.0.0"
+futures.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 windows = { workspace = true, features = [
