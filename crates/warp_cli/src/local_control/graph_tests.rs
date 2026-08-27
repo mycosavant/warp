@@ -513,6 +513,14 @@ prompt = "c"
 needs = ["b"]
 "#;
 
+/// The states half of an [`Outcome`], for the many tests that assert nothing.
+fn outcome(states: HashMap<String, NodeState>) -> Outcome {
+    Outcome {
+        states,
+        verdicts: HashMap::new(),
+    }
+}
+
 fn all_done(plan: &Plan) -> HashMap<String, NodeState> {
     plan.nodes
         .iter()
@@ -533,7 +541,7 @@ fn nodes_in(violations: &[Violation]) -> Vec<&str> {
 #[test]
 fn a_record_round_trips_and_names_its_own_format() {
     let plan = plan(SURVEY_AND_FIX);
-    let record = build_record(&plan, &all_done(&plan));
+    let record = build_record(&plan, &outcome(all_done(&plan)));
 
     let text = serde_json::to_string(&record).expect("a record should serialize");
     let parsed: RunRecord = serde_json::from_str(&text).expect("and parse back");
@@ -554,7 +562,7 @@ fn a_record_round_trips_and_names_its_own_format() {
 #[test]
 fn only_settled_nodes_are_recorded() {
     let plan = plan(SURVEY_AND_FIX);
-    let record = build_record(&plan, &states(&[("survey", done("one"))]));
+    let record = build_record(&plan, &outcome(states(&[("survey", done("one"))])));
 
     assert_eq!(record.nodes.keys().collect::<Vec<_>>(), vec!["survey"]);
 }
@@ -563,7 +571,7 @@ fn only_settled_nodes_are_recorded() {
 #[test]
 fn an_untouched_plan_agrees_with_its_own_record() {
     let plan = plan(SURVEY_AND_FIX);
-    let record = build_record(&plan, &all_done(&plan));
+    let record = build_record(&plan, &outcome(all_done(&plan)));
 
     assert_eq!(sealed(&plan, &record), vec!["fix", "survey"]);
     assert!(violations(&plan, &record).is_empty());
@@ -573,7 +581,7 @@ fn an_untouched_plan_agrees_with_its_own_record() {
 #[test]
 fn editing_a_finished_node_is_refused_and_names_who_was_handed_its_answer() {
     let before = plan(SURVEY_AND_FIX);
-    let record = build_record(&before, &all_done(&before));
+    let record = build_record(&before, &outcome(all_done(&before)));
     let after = plan(&SURVEY_AND_FIX.replace(
         "List every file under src/ that still calls the old API.",
         "List every file under src/, including the tests.",
@@ -596,7 +604,7 @@ fn editing_a_failed_node_is_the_whole_point_of_coming_back() {
     let before = plan(SURVEY_AND_FIX);
     let record = build_record(
         &before,
-        &states(&[
+        &outcome(states(&[
             ("survey", done("src/a.rs")),
             (
                 "fix",
@@ -605,7 +613,7 @@ fn editing_a_failed_node_is_the_whole_point_of_coming_back() {
                     reason: "the conversation ended `error`".to_owned(),
                 },
             ),
-        ]),
+        ])),
     );
     let after = plan(&SURVEY_AND_FIX.replace(
         "Migrate those files to the new API.",
@@ -625,7 +633,7 @@ fn editing_a_failed_node_is_the_whole_point_of_coming_back() {
 #[test]
 fn a_node_inserted_upstream_of_finished_work_is_refused() {
     let before = plan(CHAIN);
-    let record = build_record(&before, &all_done(&before));
+    let record = build_record(&before, &outcome(all_done(&before)));
     let after = plan(
         r#"
         [[node]]
@@ -673,7 +681,7 @@ fn a_node_inserted_upstream_of_finished_work_is_refused() {
 #[test]
 fn only_the_nearest_ancestor_that_never_ran_is_reported() {
     let before = plan(CHAIN);
-    let record = build_record(&before, &all_done(&before));
+    let record = build_record(&before, &outcome(all_done(&before)));
     let after = plan(
         r#"
         [[node]]
@@ -718,7 +726,7 @@ fn only_the_nearest_ancestor_that_never_ran_is_reported() {
 #[test]
 fn deleting_a_finished_node_is_caught_through_its_dependent() {
     let before = plan(SURVEY_AND_FIX);
-    let record = build_record(&before, &all_done(&before));
+    let record = build_record(&before, &outcome(all_done(&before)));
     let after = plan(
         r#"
         [defaults]
@@ -739,7 +747,7 @@ fn deleting_a_finished_node_is_caught_through_its_dependent() {
 #[test]
 fn changing_a_default_reaches_the_nodes_that_inherit_it_and_no_others() {
     let before = plan(SURVEY_AND_FIX);
-    let record = build_record(&before, &all_done(&before));
+    let record = build_record(&before, &outcome(all_done(&before)));
     let after = plan(&SURVEY_AND_FIX.replace(
         r#"[defaults]
 allow_tools = ["read-only"]"#,
@@ -821,7 +829,7 @@ fn reordering_handoffs_changes_the_fingerprint() {
 #[test]
 fn an_ordering_edge_is_not_a_consumer() {
     let before = plan(CHAIN);
-    let record = build_record(&before, &all_done(&before));
+    let record = build_record(&before, &outcome(all_done(&before)));
     let after = plan(&CHAIN.replace(r#"prompt = "a""#, r#"prompt = "a, differently""#));
 
     assert_eq!(
@@ -840,7 +848,7 @@ fn a_resume_skips_what_finished_and_hands_its_answer_on() {
     let plan = plan(SURVEY_AND_FIX);
     let record = build_record(
         &plan,
-        &states(&[
+        &outcome(states(&[
             ("survey", done("src/a.rs\nsrc/b.rs")),
             (
                 "fix",
@@ -849,17 +857,17 @@ fn a_resume_skips_what_finished_and_hands_its_answer_on() {
                     reason: "the conversation ended `error`".to_owned(),
                 },
             ),
-        ]),
+        ])),
     );
 
     let reuse = reusable(&plan, &record);
     assert_eq!(
-        reuse.keys().collect::<Vec<_>>(),
+        reuse.states.keys().collect::<Vec<_>>(),
         vec!["survey"],
         "only a finished node has an answer worth reusing"
     );
     assert_eq!(
-        ready(&plan, &reuse, 0, 4)
+        ready(&plan, &reuse.states, 0, 4)
             .iter()
             .map(|node| node.id.as_str())
             .collect::<Vec<_>>(),
@@ -867,7 +875,7 @@ fn a_resume_skips_what_finished_and_hands_its_answer_on() {
         "the survey is not spawned a second time"
     );
     assert!(
-        compose_prompt(&plan.nodes[1], &reuse).contains("src/a.rs\nsrc/b.rs"),
+        compose_prompt(&plan.nodes[1], &reuse.states).contains("src/a.rs\nsrc/b.rs"),
         "and the answer it already gave still reaches the node that needed it"
     );
 }
@@ -876,7 +884,7 @@ fn a_resume_skips_what_finished_and_hands_its_answer_on() {
 #[test]
 fn a_node_the_record_does_not_know_is_not_reused() {
     let before = plan(SURVEY_AND_FIX);
-    let record = build_record(&before, &all_done(&before));
+    let record = build_record(&before, &outcome(all_done(&before)));
     let after = plan(&format!(
         "{SURVEY_AND_FIX}\n[[node]]\nid = \"report\"\nprompt = \"report\"\nneeds = [\"fix\"]\n"
     ));
@@ -885,7 +893,7 @@ fn a_node_the_record_does_not_know_is_not_reused() {
         violations(&after, &record).is_empty(),
         "adding work after finished work invalidates nothing"
     );
-    assert_eq!(reusable(&after, &record).len(), 2);
+    assert_eq!(reusable(&after, &record).states.len(), 2);
 }
 
 /// The schema is the format's only documentation, and it now has to mention the
@@ -898,6 +906,430 @@ fn the_schema_documents_the_record_and_the_guard() {
         "plan.toml.run.json",
         ".gitignore",
     ] {
+        assert!(
+            SCHEMA.contains(phrase),
+            "the schema should mention `{phrase}`"
+        );
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Acceptance assertions (`.fork/TASKS.md`, T13.2).
+//
+// The ones that run a command are `#[cfg(unix)]`: `sh -c` is the shell on every
+// machine this fork is developed on, and pinning `cmd /C` spellings on a
+// platform nobody has run this on would be asserting a guess. The Windows path
+// is named as unverified in the as-built rather than covered by a test that
+// only proves the test was written.
+// ---------------------------------------------------------------------------
+
+const ASSERTED: &str = r#"
+[[node]]
+id = "fix"
+prompt = "Migrate the files."
+assert = [
+  { id = "compiles", run = "true" },
+  { id = "clean", run = "true" },
+]
+"#;
+
+/// Both spellings, one concept — the same shape `needs` has.
+#[test]
+fn an_assertion_can_name_itself_or_be_named() {
+    let plan = plan(
+        r#"
+        [[node]]
+        id = "a"
+        prompt = "a"
+        assert = ["cargo check --quiet", { id = "clean", run = "git diff --quiet" }]
+        "#,
+    );
+
+    assert!(validate(&plan).is_ok());
+    assert_eq!(plan.nodes[0].assertions.len(), 2);
+    assert_eq!(plan.nodes[0].assertions[0].id(), "cargo check --quiet");
+    assert_eq!(plan.nodes[0].assertions[0].run(), "cargo check --quiet");
+    assert_eq!(plan.nodes[0].assertions[1].id(), "clean");
+    assert_eq!(plan.nodes[0].assertions[1].run(), "git diff --quiet");
+}
+
+/// All that is left of Zenith's coverage invariant.
+///
+/// "Exactly one active owner per assertion" has two failure modes there —
+/// un-owned and doubly-owned — and neither is expressible here, because an
+/// assertion is written inside the node that owns it. What remains is that a
+/// verdict has to be able to name which assertion it is about.
+#[test]
+fn a_node_cannot_assert_the_same_thing_twice() {
+    let twice = plan(
+        r#"
+        [[node]]
+        id = "a"
+        prompt = "a"
+        assert = [{ id = "same", run = "true" }, { id = "same", run = "false" }]
+        "#,
+    );
+
+    let error = validate(&twice).expect_err("two verdicts could not be told apart");
+    assert!(
+        error.message.contains("asserts `same` twice"),
+        "{}",
+        error.message
+    );
+
+    let empty = plan(
+        r#"
+        [[node]]
+        id = "a"
+        prompt = "a"
+        assert = [{ id = "nothing", run = "   " }]
+        "#,
+    );
+    assert!(
+        validate(&empty)
+            .expect_err("an assertion with no command asserts nothing")
+            .message
+            .contains("nothing to run")
+    );
+}
+
+/// Two nodes may assert the same id — a verdict is filed under its node.
+#[test]
+fn the_same_assertion_id_on_two_nodes_is_fine() {
+    let plan = plan(
+        r#"
+        [[node]]
+        id = "a"
+        prompt = "a"
+        assert = [{ id = "compiles", run = "true" }]
+        [[node]]
+        id = "b"
+        prompt = "b"
+        assert = [{ id = "compiles", run = "true" }]
+        "#,
+    );
+
+    assert!(validate(&plan).is_ok());
+}
+
+/// Loosening an assertion is an edit to what "done" meant, and T13.1's guard
+/// would otherwise be blind to the one change that matters most.
+#[test]
+fn changing_an_assertion_changes_the_fingerprint() {
+    let strict = plan(ASSERTED);
+    let loosened = plan(&ASSERTED.replace(r#"run = "true" "#, r#"run = "true || true" "#));
+    let dropped = plan(
+        r#"
+        [[node]]
+        id = "fix"
+        prompt = "Migrate the files."
+        "#,
+    );
+
+    let strict_print = fingerprint(&strict, &strict.nodes[0]);
+    assert_ne!(strict_print, fingerprint(&loosened, &loosened.nodes[0]));
+    assert_ne!(
+        strict_print,
+        fingerprint(&dropped, &dropped.nodes[0]),
+        "deleting the gate is the loosest edit of all"
+    );
+}
+
+/// A node with no assertions gets no verdicts and no gate — the pre-T13.2
+/// behaviour, unchanged.
+#[test]
+fn a_node_that_asserts_nothing_is_judged_by_nothing() {
+    let plan = plan(SURVEY_AND_FIX);
+
+    assert!(evaluate(&plan.nodes[0], "anything").is_empty());
+}
+
+#[cfg(unix)]
+#[test]
+fn every_assertion_is_run_and_reported_separately() {
+    let plan = plan(
+        r#"
+        [[node]]
+        id = "a"
+        prompt = "a"
+        assert = [
+          { id = "passes", run = "true" },
+          { id = "fails", run = "echo the tree does not build >&2; exit 3" },
+          { id = "also-passes", run = "true" },
+        ]
+        "#,
+    );
+
+    let verdicts = evaluate(&plan.nodes[0], "");
+    assert_eq!(
+        verdicts.iter().map(|v| v.id.as_str()).collect::<Vec<_>>(),
+        vec!["passes", "fails", "also-passes"],
+        "all of them, in the order they were written — stopping at the first \
+         failure answers a different question"
+    );
+    assert_eq!(
+        verdicts.iter().map(|v| v.passed).collect::<Vec<_>>(),
+        vec![true, false, true]
+    );
+    assert_eq!(verdicts[1].code, Some(3));
+    assert_eq!(
+        verdicts[1].detail, "the tree does not build",
+        "a failing check that explained itself is the whole value"
+    );
+    assert!(
+        verdicts[0].detail.is_empty(),
+        "a passing check has nothing to say"
+    );
+}
+
+/// The node's answer is on stdin, so an assertion can be about the answer as
+/// well as about the world.
+#[cfg(unix)]
+#[test]
+fn the_nodes_answer_reaches_the_assertion_on_stdin() {
+    let plan = plan(
+        r#"
+        [[node]]
+        id = "survey"
+        prompt = "list them"
+        assert = [{ id = "one-per-line", run = "grep -q '^src/'" }]
+        "#,
+    );
+
+    assert!(evaluate(&plan.nodes[0], "src/a.rs\nsrc/b.rs")[0].passed);
+    assert!(!evaluate(&plan.nodes[0], "I could not find any files.")[0].passed);
+}
+
+/// And its id is in the environment, for an assertion shared across nodes.
+#[cfg(unix)]
+#[test]
+fn the_node_id_reaches_the_assertion_in_the_environment() {
+    let plan = plan(
+        r#"
+        [[node]]
+        id = "survey"
+        prompt = "list them"
+        assert = [{ id = "knows-me", run = "test \"$WARP_GRAPH_NODE\" = survey" }]
+        "#,
+    );
+
+    assert!(evaluate(&plan.nodes[0], "")[0].passed);
+}
+
+/// A command that cannot run at all is a failed assertion, not a crashed run.
+#[cfg(unix)]
+#[test]
+fn an_assertion_that_cannot_run_fails_rather_than_stopping_the_plan() {
+    let plan = plan(
+        r#"
+        [[node]]
+        id = "a"
+        prompt = "a"
+        assert = [{ id = "missing", run = "definitely-not-a-real-binary-9f3a" }]
+        "#,
+    );
+
+    let verdict = &evaluate(&plan.nodes[0], "")[0];
+    assert!(!verdict.passed);
+    assert_eq!(
+        verdict.code,
+        Some(127),
+        "the shell starts fine; it is the command inside that is missing"
+    );
+}
+
+/// A child that never reads stdin must not hang the run.
+///
+/// Pinned because it is the failure the three-thread shape in `verdict_for`
+/// exists to prevent, and because it only shows up once the answer is bigger
+/// than a pipe buffer — which is exactly the size a real agent answer is.
+#[cfg(unix)]
+#[test]
+fn an_assertion_that_ignores_a_large_answer_does_not_deadlock() {
+    let plan = plan(
+        r#"
+        [[node]]
+        id = "a"
+        prompt = "a"
+        assert = [{ id = "ignores-stdin", run = "true" }]
+        "#,
+    );
+
+    let huge = "x".repeat(1_000_000);
+    assert!(evaluate(&plan.nodes[0], &huge)[0].passed);
+}
+
+/// A child that writes more than a pipe buffer must not hang either.
+#[cfg(unix)]
+#[test]
+fn an_assertion_that_says_a_great_deal_does_not_deadlock() {
+    let plan = plan(
+        r#"
+        [[node]]
+        id = "a"
+        prompt = "a"
+        assert = [{ id = "verbose", run = "yes nonsense | head -c 1000000; exit 1" }]
+        "#,
+    );
+
+    let verdict = &evaluate(&plan.nodes[0], "")[0];
+    assert!(!verdict.passed);
+    assert_eq!(verdict.detail, "nonsense", "trimmed to its first line");
+}
+
+/// Rejected is not failed, and the difference is what a reader does next.
+#[test]
+fn a_rejected_node_blocks_its_dependents_exactly_as_a_failure_does() {
+    let plan = plan(SURVEY_AND_FIX);
+    let rejected = states(&[(
+        "survey",
+        NodeState::Rejected {
+            conversation_id: "c-1".to_owned(),
+            output: "I did not find any.".to_owned(),
+        },
+    )]);
+
+    assert_eq!(
+        newly_blocked(&plan, &rejected),
+        vec![("fix".to_owned(), "survey".to_owned())]
+    );
+    assert!(
+        ready(&plan, &rejected, 0, 4).is_empty(),
+        "a rejected node's answer must not reach the node that needed it"
+    );
+}
+
+/// It is settled, so it is recorded — and it is not `Done`, so it is not sealed
+/// and `--resume` runs it again. Both halves matter.
+#[test]
+fn a_rejected_node_is_recorded_but_never_reused() {
+    let plan = plan(ASSERTED);
+    let record = build_record(
+        &plan,
+        &Outcome {
+            states: states(&[(
+                "fix",
+                NodeState::Rejected {
+                    conversation_id: "c-1".to_owned(),
+                    output: "I changed one file.".to_owned(),
+                },
+            )]),
+            verdicts: [(
+                "fix".to_owned(),
+                vec![
+                    Verdict {
+                        id: "compiles".to_owned(),
+                        passed: false,
+                        code: Some(101),
+                        detail: "error[E0425]: cannot find value `old_api`".to_owned(),
+                    },
+                    Verdict {
+                        id: "clean".to_owned(),
+                        passed: true,
+                        code: Some(0),
+                        detail: String::new(),
+                    },
+                ],
+            )]
+            .into_iter()
+            .collect(),
+        },
+    );
+
+    assert_eq!(record.nodes["fix"].verdicts.len(), 2);
+    assert_eq!(
+        record.nodes["fix"].verdicts[0].detail, "error[E0425]: cannot find value `old_api`",
+        "which assertion failed, and why, is the point of recording per-assertion"
+    );
+    assert!(
+        sealed(&plan, &record).is_empty(),
+        "work that did not hold up is not evidence"
+    );
+    assert!(
+        reusable(&plan, &record).states.is_empty(),
+        "so a resume runs it again"
+    );
+    assert!(
+        violations(&plan, &record).is_empty(),
+        "and editing it is not a violation — that is the fix"
+    );
+}
+
+/// Verdicts travel with the node they belong to, and are not re-run.
+#[test]
+fn a_reused_node_carries_the_verdicts_it_earned() {
+    let plan = plan(ASSERTED);
+    let record = build_record(
+        &plan,
+        &Outcome {
+            states: states(&[("fix", done("changed three files"))]),
+            verdicts: [(
+                "fix".to_owned(),
+                vec![Verdict {
+                    id: "compiles".to_owned(),
+                    passed: true,
+                    code: Some(0),
+                    detail: String::new(),
+                }],
+            )]
+            .into_iter()
+            .collect(),
+        },
+    );
+
+    let reuse = reusable(&plan, &record);
+    assert_eq!(reuse.states.len(), 1);
+    assert_eq!(
+        reuse.verdicts["fix"][0].id, "compiles",
+        "a resume that forgot the verdicts would report a gate that never ran"
+    );
+}
+
+/// The record round-trips a verdict, including the absent-on-pass detail.
+#[test]
+fn verdicts_survive_the_record_file() {
+    let plan = plan(ASSERTED);
+    let record = build_record(
+        &plan,
+        &Outcome {
+            states: states(&[("fix", done("ok"))]),
+            verdicts: [(
+                "fix".to_owned(),
+                vec![Verdict {
+                    id: "compiles".to_owned(),
+                    passed: true,
+                    code: Some(0),
+                    detail: String::new(),
+                }],
+            )]
+            .into_iter()
+            .collect(),
+        },
+    );
+
+    let text = serde_json::to_string(&record).expect("a record should serialize");
+    assert!(
+        !text.contains("detail"),
+        "an empty detail is left out rather than written as \"\": {text}"
+    );
+    let parsed: RunRecord = serde_json::from_str(&text).expect("and parse back");
+    assert_eq!(parsed.nodes["fix"].verdicts[0].code, Some(0));
+}
+
+/// A node with no assertions writes no `verdicts` key at all.
+#[test]
+fn a_node_without_assertions_adds_nothing_to_the_record() {
+    let plan = plan(SURVEY_AND_FIX);
+    let record = build_record(&plan, &outcome(all_done(&plan)));
+
+    let text = serde_json::to_string(&record).expect("a record should serialize");
+    assert!(!text.contains("verdicts"), "{text}");
+}
+
+/// The schema is the format's only documentation.
+#[test]
+fn the_schema_documents_assertions() {
+    for phrase in ["assert = [", "$WARP_GRAPH_NODE", "rejected", "stdin"] {
         assert!(
             SCHEMA.contains(phrase),
             "the schema should mention `{phrase}`"

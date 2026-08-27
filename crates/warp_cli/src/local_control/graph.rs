@@ -88,6 +88,59 @@ pub(super) struct Node {
     pub allow_tools: Option<Vec<String>>,
     #[serde(default)]
     pub needs: Vec<Need>,
+    /// What must hold once this node has finished (`.fork/TASKS.md`, T13.2).
+    #[serde(default, rename = "assert")]
+    pub assertions: Vec<Assertion>,
+}
+
+/// One thing that must be true once a node's turn is over.
+///
+/// A command, and not a sentence, because the whole point of an acceptance
+/// contract is that it is *falsifiable*: **the statement and the evidence are
+/// the same string.** A node that says "the tests pass" is making a claim, and
+/// asking a second model whether the first model's claim is true is a claim
+/// about a claim. `cargo test --quiet` cannot be talked around.
+///
+/// Two spellings and one concept, exactly as [`Need`] has: the bare form is the
+/// one that gets written, and the named form exists for when the command is too
+/// long to read as a label.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+pub(super) enum Assertion {
+    /// `assert = ["cargo check --quiet"]` — the command is its own name.
+    Command(String),
+    /// `assert = [{ id = "compiles", run = "cargo check --quiet" }]`.
+    Named { id: String, run: String },
+}
+
+impl Assertion {
+    fn id(&self) -> &str {
+        match self {
+            Self::Command(run) => run,
+            Self::Named { id, .. } => id,
+        }
+    }
+
+    fn run(&self) -> &str {
+        match self {
+            Self::Command(run) | Self::Named { run, .. } => run,
+        }
+    }
+}
+
+/// What one assertion turned out to be.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(super) struct Verdict {
+    pub id: String,
+    pub passed: bool,
+    /// The exit status, or `None` when the command never reached one — it could
+    /// not be started, or it outlived [`ASSERT_TIMEOUT`].
+    pub code: Option<i32>,
+    /// The first line it had to say for itself. Empty on a pass, because a
+    /// passing check has nothing to report and a record full of noise is a
+    /// record nobody reads.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub detail: String,
 }
 
 /// One edge, pointing backwards at what has to happen first.
@@ -160,6 +213,19 @@ pub(super) enum NodeState {
         conversation_id: String,
         reason: String,
     },
+    /// The turn finished, and the work it produced did not hold up.
+    ///
+    /// A fifth state rather than a second kind of `Failed`, for the same reason
+    /// `Skipped` is not `Failed`: a reader acts differently on each. *Failed* is
+    /// "the agent could not do it" and the answer is usually to run it again.
+    /// *Rejected* is "the agent said it was done and an assertion says
+    /// otherwise" — running it again unchanged will produce the same thing, and
+    /// what needs editing is the prompt or the assertion. The output is kept
+    /// because the claim is the evidence you debug from.
+    Rejected {
+        conversation_id: String,
+        output: String,
+    },
     /// Never started, because something it needs did not finish.
     Skipped {
         blocked_by: String,
@@ -196,6 +262,23 @@ pub(super) fn validate(plan: &Plan) -> Result<(), ControlError> {
                 "two nodes share the id `{}`; edges could not tell them apart",
                 node.id
             )));
+        }
+
+        let mut asserted = HashSet::new();
+        for assertion in &node.assertions {
+            if assertion.run().trim().is_empty() {
+                return Err(invalid(format!(
+                    "node `{}` has an assertion with nothing to run",
+                    node.id
+                )));
+            }
+            if !asserted.insert(assertion.id()) {
+                return Err(invalid(format!(
+                    "node `{}` asserts `{}` twice; a verdict could not tell them apart",
+                    node.id,
+                    assertion.id()
+                )));
+            }
         }
     }
 
@@ -270,6 +353,163 @@ fn find_cycle(plan: &Plan) -> Option<Vec<String>> {
 }
 
 // ---------------------------------------------------------------------------
+// Acceptance assertions (`.fork/TASKS.md`, T13.2 — `ZB-CONTRACT`).
+//
+// A node's turn ending `success` means the agent stopped without erroring. It
+// does not mean the work happened. These run after that, in the directory
+// `graph run` was invoked from, with the node's answer on **stdin** and its id
+// in `WARP_GRAPH_NODE` — so an assertion can be about the world (`cargo check`)
+// or about the answer (`grep -q '^src/'`), and usually should be about the
+// world.
+//
+// **The coverage invariant collapses here, and for the same reason the sealed
+// subgraph did in T13.1.** Zenith's contract lives beside the plan and its
+// assertions are *claimed* by tasks, so "exactly one active owner per
+// assertion" is a real invariant with two real failure modes — un-owned, and
+// doubly-owned. Here an assertion is written inside the node that owns it, so
+// it has exactly one owner by construction and neither failure mode is
+// expressible. What is left of the invariant is that two assertions on one node
+// must not share an id, which `validate` refuses. This is the second time the
+// fork's habit of writing a relationship on the thing itself rather than in a
+// side table has deleted an invariant rather than implementing it.
+// ---------------------------------------------------------------------------
+
+/// How long an assertion gets before it is killed and counted as failed.
+///
+/// Fixed rather than configurable because an assertion is a *check*, not the
+/// work — a plan that needs longer than this to decide whether its own node
+/// succeeded has put the work in the wrong place. The reason there is a limit
+/// at all is that the whole point of a run gate is unattended runs, and a gate
+/// that can hang forever is not one.
+const ASSERT_TIMEOUT: Duration = Duration::from_secs(120);
+
+/// Runs every assertion on a node and reports each one separately.
+///
+/// All of them, not up to the first failure: "which of the three things I asked
+/// for actually happened" is the question this exists to answer, and stopping
+/// early answers a different one. They are commands, so the cost of running the
+/// rest is nothing.
+pub(super) fn evaluate(node: &Node, output: &str) -> Vec<Verdict> {
+    node.assertions
+        .iter()
+        .map(|assertion| verdict_for(assertion, &node.id, output))
+        .collect()
+}
+
+/// One assertion, run.
+fn verdict_for(assertion: &Assertion, node: &str, output: &str) -> Verdict {
+    let id = assertion.id().to_owned();
+    let mut command = shell(assertion.run());
+    command
+        .env("WARP_GRAPH_NODE", node)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
+
+    let mut child = match command.spawn() {
+        Ok(child) => child,
+        Err(error) => {
+            return Verdict {
+                id,
+                passed: false,
+                code: None,
+                detail: format!("could not be started: {error}"),
+            };
+        }
+    };
+
+    // Every pipe gets its own thread, and this is not belt-and-braces. A child
+    // that never reads stdin blocks *us* once the pipe fills, and a child that
+    // writes more than a pipeful blocks *itself* while we are polling for its
+    // exit — either one is a hang, and a `cargo check` on a broken tree emits
+    // far more than a pipeful.
+    let mut stdin = child.stdin.take();
+    let payload = output.to_owned();
+    let writer = std::thread::spawn(move || {
+        if let Some(stdin) = stdin.as_mut() {
+            // Ignored: a command that does not read stdin is not wrong, it just
+            // hands us an `EPIPE` when it exits.
+            let _ = std::io::Write::write_all(stdin, payload.as_bytes());
+        }
+    });
+    let mut stdout = child.stdout.take();
+    let out = std::thread::spawn(move || drain(stdout.as_mut()));
+    let mut stderr = child.stderr.take();
+    let err = std::thread::spawn(move || drain(stderr.as_mut()));
+
+    let started = Instant::now();
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break Ok(status),
+            Ok(None) => {
+                if started.elapsed() > ASSERT_TIMEOUT {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    break Err(format!("still running after {}s", ASSERT_TIMEOUT.as_secs()));
+                }
+                std::thread::sleep(Duration::from_millis(20));
+            }
+            Err(error) => break Err(format!("could not be waited for: {error}")),
+        }
+    };
+
+    // After the child is reaped, so the writer's pipe is closed and its thread
+    // cannot still be blocked on a full one.
+    let _ = writer.join();
+    let out = out.join().unwrap_or_default();
+    let err = err.join().unwrap_or_default();
+
+    match status {
+        Ok(status) if status.success() => Verdict {
+            id,
+            passed: true,
+            code: status.code(),
+            detail: String::new(),
+        },
+        Ok(status) => Verdict {
+            id,
+            passed: false,
+            code: status.code(),
+            // stderr first: a failing check that bothered to explain itself
+            // almost always did it there.
+            detail: first_line(if err.trim().is_empty() { &out } else { &err }),
+        },
+        Err(reason) => Verdict {
+            id,
+            passed: false,
+            code: None,
+            detail: reason,
+        },
+    }
+}
+
+/// `std::process::Command` and not `command::blocking`, because this runs in the
+/// `warpctrl` process — a CLI that opens no window and owns no job object, so
+/// the wrapper's Windows and WSL handling has nothing to do here.
+fn shell(run: &str) -> std::process::Command {
+    #[cfg(windows)]
+    {
+        let mut command = std::process::Command::new("cmd");
+        command.args(["/C", run]);
+        command
+    }
+    #[cfg(not(windows))]
+    {
+        let mut command = std::process::Command::new("sh");
+        command.args(["-c", run]);
+        command
+    }
+}
+
+fn drain(pipe: Option<&mut impl std::io::Read>) -> String {
+    let mut text = String::new();
+    if let Some(pipe) = pipe {
+        let _ = pipe.read_to_string(&mut text);
+    }
+    text
+}
+
+// ---------------------------------------------------------------------------
 // The run record, and the guard over it (`.fork/TASKS.md`, T13.1 — `ZB-PLAN`).
 //
 // The plan says what should happen. The record says what did. Keeping the
@@ -310,6 +550,21 @@ pub(super) struct RecordedNode {
     /// The node as it was when it ran — see [`fingerprint`].
     pub fingerprint: String,
     pub settled: NodeState,
+    /// One entry per assertion the node declared, in the order it declared
+    /// them. Absent for a node that asserted nothing, which is most of them.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub verdicts: Vec<Verdict>,
+}
+
+/// What is known about a run — during it, and afterwards.
+///
+/// One type for both directions: [`reusable`] builds one out of a record to say
+/// what is already known, and [`run`] returns one to say what is known at the
+/// end. They are the same question asked at two times.
+#[derive(Debug, Default)]
+pub(super) struct Outcome {
+    pub states: HashMap<String, NodeState>,
+    pub verdicts: HashMap<String, Vec<Verdict>>,
 }
 
 const RECORD_KIND: &str = "warpctrl.graph.run";
@@ -359,6 +614,16 @@ pub(super) fn fingerprint(plan: &Plan, node: &Node) -> String {
             None => "-".to_owned(),
         };
         parts.push(format!("need:{}\u{1f}{pass}", need.node()));
+    }
+    // Assertions are part of what "done" meant. Loosening one is exactly the
+    // edit T13.1's guard exists to catch, and it would otherwise be the one
+    // edit that left the fingerprint alone.
+    for assertion in &node.assertions {
+        parts.push(format!(
+            "assert:{}\u{1f}{}",
+            assertion.id(),
+            assertion.run()
+        ));
     }
 
     let mut hasher = Sha256::new();
@@ -530,15 +795,34 @@ fn consumers(plan: &Plan, cleared: &HashSet<&str>, id: &str) -> Vec<String> {
 /// Fingerprints are not re-checked here. [`violations`] has already refused the
 /// run if any disagreed, and checking in two places invites the two checks to
 /// drift.
-pub(super) fn reusable(plan: &Plan, record: &RunRecord) -> HashMap<String, NodeState> {
-    plan.nodes
-        .iter()
-        .filter_map(|node| {
-            let recorded = record.nodes.get(&node.id)?;
-            matches!(recorded.settled, NodeState::Done { .. })
-                .then(|| (node.id.clone(), recorded.settled.clone()))
-        })
-        .collect()
+/// Its verdicts come with it, and are **not** re-run.
+///
+/// A tempting alternative, rejected on purpose: assertions are commands, so
+/// re-checking them on every resume would cost nothing and would catch a pass
+/// that has since gone stale. But the record is a record *of the run*, and a
+/// verdict is part of what happened rather than a live probe — the same reason
+/// the node's answer is carried rather than re-derived. If you distrust the
+/// record, the command that asks the world again is `graph run` without
+/// `--resume`, which re-runs every node and every assertion in it.
+pub(super) fn reusable(plan: &Plan, record: &RunRecord) -> Outcome {
+    let mut outcome = Outcome::default();
+    for node in &plan.nodes {
+        let Some(recorded) = record.nodes.get(&node.id) else {
+            continue;
+        };
+        if !matches!(recorded.settled, NodeState::Done { .. }) {
+            continue;
+        }
+        outcome
+            .states
+            .insert(node.id.clone(), recorded.settled.clone());
+        if !recorded.verdicts.is_empty() {
+            outcome
+                .verdicts
+                .insert(node.id.clone(), recorded.verdicts.clone());
+        }
+    }
+    outcome
 }
 
 /// The nodes that could start right now.
@@ -584,7 +868,11 @@ pub(super) fn newly_blocked(
             let blocker = node.needs.iter().find(|need| {
                 matches!(
                     states.get(need.node()),
-                    Some(NodeState::Failed { .. } | NodeState::Skipped { .. })
+                    Some(
+                        NodeState::Failed { .. }
+                            | NodeState::Rejected { .. }
+                            | NodeState::Skipped { .. }
+                    )
                 )
             })?;
             Some((node.id.clone(), blocker.node().to_owned()))
@@ -674,31 +962,41 @@ const POLL: Duration = Duration::from_secs(2);
 /// fails is a result, not an error: the other branches of the graph may still
 /// be worth running, and the caller needs the whole picture to decide.
 ///
-/// `reuse` seeds nodes that a previous run already finished (see [`reusable`]).
-/// Nothing downstream needs to know: a reused node is `Done` before the loop
-/// starts, so `ready` will not start it and `compose_prompt` hands its recorded
-/// answer along exactly as a fresh one would.
+/// `resumed` seeds nodes that a previous run already finished (see
+/// [`reusable`]). Nothing downstream needs to know: a reused node is `Done`
+/// before the loop starts, so `ready` will not start it and `compose_prompt`
+/// hands its recorded answer along exactly as a fresh one would.
 pub(super) fn run(
     plan: &Plan,
     args: &TargetArgs,
     parent: Option<String>,
     max_parallel: usize,
     timeout: Option<Duration>,
-    reuse: &HashMap<String, NodeState>,
+    resumed: &Outcome,
     report: &mut dyn FnMut(Event),
-) -> Result<HashMap<String, NodeState>, ControlError> {
+) -> Result<Outcome, ControlError> {
     validate(plan)?;
 
+    let by_id: HashMap<&str, &Node> = plan
+        .nodes
+        .iter()
+        .map(|node| (node.id.as_str(), node))
+        .collect();
     let mut states: HashMap<String, NodeState> = plan
         .nodes
         .iter()
         .map(|node| {
-            let state = reuse.get(&node.id).cloned().unwrap_or(NodeState::Pending);
+            let state = resumed
+                .states
+                .get(&node.id)
+                .cloned()
+                .unwrap_or(NodeState::Pending);
             (node.id.clone(), state)
         })
         .collect();
+    let mut verdicts = resumed.verdicts.clone();
     for node in &plan.nodes {
-        if reuse.contains_key(&node.id) {
+        if resumed.states.contains_key(&node.id) {
             report(Event::Reused {
                 id: node.id.clone(),
             });
@@ -761,7 +1059,7 @@ pub(super) fn run(
         }
 
         if states.values().all(NodeState::is_settled) {
-            return Ok(states);
+            return Ok(Outcome { states, verdicts });
         }
 
         let running: Vec<(String, String)> = states
@@ -847,13 +1145,36 @@ pub(super) fn run(
             }
 
             let state = if read.conversation.status == "success" {
-                NodeState::Done {
-                    conversation_id: conversation_id.clone(),
-                    output: read
-                        .exchanges
-                        .last()
-                        .and_then(|exchange| exchange.output.clone())
-                        .unwrap_or_default(),
+                let output = read
+                    .exchanges
+                    .last()
+                    .and_then(|exchange| exchange.output.clone())
+                    .unwrap_or_default();
+
+                // The turn ending `success` means the agent stopped without
+                // erroring. Whether the work happened is a separate question,
+                // and this is where it gets asked.
+                let node = by_id.get(id.as_str()).copied();
+                let judged = node.map(|node| evaluate(node, &output)).unwrap_or_default();
+                let held = judged.iter().all(|verdict| verdict.passed);
+                if !judged.is_empty() {
+                    report(Event::Asserted {
+                        id: id.clone(),
+                        verdicts: judged.clone(),
+                    });
+                    verdicts.insert(id.clone(), judged);
+                }
+
+                if held {
+                    NodeState::Done {
+                        conversation_id: conversation_id.clone(),
+                        output,
+                    }
+                } else {
+                    NodeState::Rejected {
+                        conversation_id: conversation_id.clone(),
+                        output,
+                    }
                 }
             } else {
                 NodeState::Failed {
@@ -945,6 +1266,23 @@ allow_tools = ["read-only", "APPLY_FILE_DIFFS"]
 # a heading naming what it is. Without it, nothing is handed along.
 needs = [{ node = "survey", pass = "the list of files" }]
 
+# `assert` is what must be TRUE once this node has finished, and it is how a
+# node's "done" stops being the agent's own word for it. Each entry is a shell
+# command run in the directory you launched `graph run` from, with this node's
+# answer on stdin and its id in $WARP_GRAPH_NODE. Non-zero is a failure.
+#
+#   assert = ["cargo check --quiet"]                       the command names itself
+#   assert = [{ id = "compiles", run = "cargo check" }]     ...or give it a label
+#
+# A node whose assertion fails is `rejected`, not `done`: its dependents are
+# skipped and `--resume` will run it again. Prefer asserting about the WORLD
+# (does it build, is the old API gone) over the answer, because the answer is
+# the claim you are trying to check.
+assert = [
+  { id = "compiles", run = "cargo check --quiet" },
+  { id = "no-old-api", run = "! grep -rq old_api src/" },
+]
+
 [[node]]
 id = "report"
 prompt = """
@@ -962,9 +1300,14 @@ needs = [
 # * A node that fails stops the nodes that need it — reported as `skipped`,
 #   naming the blocker — and leaves every other branch running. The process
 #   exits non-zero if anything did not finish.
+# * Five states, and the distinctions are load-bearing. `done` is finished and
+#   its assertions held. `rejected` is finished and one did not — re-running it
+#   unchanged gives the same thing, so edit the prompt or the assertion.
+#   `failed` is the agent erroring, which is usually worth retrying. `skipped`
+#   is a node that never started because something it needed did not finish.
 # * Nothing is retried. An agent turn is not idempotent.
-# * A cycle, an unknown node in `needs`, a duplicate id, or a misspelled field
-#   is refused before anything spawns.
+# * A cycle, an unknown node in `needs`, a duplicate id, an assertion asserted
+#   twice, or a misspelled field is refused before anything spawns.
 #
 # The run record, and what it is for:
 #
@@ -1204,10 +1547,10 @@ fn execute(args: GraphRunArgs, output_format: OutputFormat) -> Result<(), Contro
             // Not an error. `--resume` is meant to be the command you always
             // run, so the first time — when there is nothing to resume from —
             // has to mean "run it all" rather than "you did that wrong".
-            None => HashMap::new(),
+            None => Outcome::default(),
         }
     } else {
-        HashMap::new()
+        Outcome::default()
     };
 
     let mut report = |event: Event| match output_format {
@@ -1220,7 +1563,7 @@ fn execute(args: GraphRunArgs, output_format: OutputFormat) -> Result<(), Contro
         OutputFormat::Pretty | OutputFormat::Text => println!("{}", render(&event)),
     };
 
-    let states = run(
+    let outcome = run(
         &plan,
         &args.target,
         args.parent,
@@ -1236,7 +1579,7 @@ fn execute(args: GraphRunArgs, output_format: OutputFormat) -> Result<(), Contro
     let recorded = if args.no_record {
         None
     } else {
-        match write_record(&record_path, &plan, &states) {
+        match write_record(&record_path, &plan, &outcome) {
             Ok(()) => Some(record_path.display().to_string()),
             Err(error) => {
                 eprintln!("warpctrl: {}", error.message);
@@ -1245,19 +1588,21 @@ fn execute(args: GraphRunArgs, output_format: OutputFormat) -> Result<(), Contro
         }
     };
 
-    let ok = states
+    let ok = outcome
+        .states
         .values()
         .all(|state| matches!(state, NodeState::Done { .. }));
     let summary = serde_json::json!({
         "action": "graph.run",
         "ok": ok,
-        "nodes": serde_json::to_value(&states).unwrap_or_default(),
+        "nodes": serde_json::to_value(&outcome.states).unwrap_or_default(),
+        "verdicts": serde_json::to_value(&outcome.verdicts).unwrap_or_default(),
         "record": recorded,
     });
     match output_format {
         OutputFormat::Json | OutputFormat::Ndjson => write_json_line(&summary)?,
         OutputFormat::Pretty | OutputFormat::Text => {
-            let mut ids: Vec<&String> = states.keys().collect();
+            let mut ids: Vec<&String> = outcome.states.keys().collect();
             ids.sort();
             println!("---");
             for id in ids {
@@ -1265,9 +1610,25 @@ fn execute(args: GraphRunArgs, output_format: OutputFormat) -> Result<(), Contro
                     "{}",
                     render(&Event::Settled {
                         id: id.clone(),
-                        state: states[id].clone(),
+                        state: outcome.states[id].clone(),
                     })
                 );
+                // Which gate said no, under the node that it rejected. Found by
+                // running it: the per-assertion lines are printed as they
+                // happen, minutes earlier and interleaved with every other
+                // node, and the summary is the part anyone actually reads — so
+                // without this a rejected node says only that *something*
+                // disagreed, which is the fact you already had.
+                for verdict in outcome.verdicts.get(id).into_iter().flatten() {
+                    if !verdict.passed {
+                        let detail = if verdict.detail.is_empty() {
+                            String::new()
+                        } else {
+                            format!(" — {}", verdict.detail)
+                        };
+                        println!("    assert `{}` FAILED{detail}", verdict.id);
+                    }
+                }
             }
             if let Some(recorded) = &recorded {
                 println!("recorded to {recorded}");
@@ -1299,7 +1660,7 @@ fn execute(args: GraphRunArgs, output_format: OutputFormat) -> Result<(), Contro
 /// to the plan, and usually wants a `.gitignore` line. It is not a transcript:
 /// the tool calls and the reasoning live in `WARP_FORK_EVENT_LOG` (T11.1), and
 /// keeping those roles apart is deliberate.
-pub(super) fn build_record(plan: &Plan, states: &HashMap<String, NodeState>) -> RunRecord {
+pub(super) fn build_record(plan: &Plan, outcome: &Outcome) -> RunRecord {
     RunRecord {
         record: RECORD_KIND.to_owned(),
         version: RECORD_VERSION,
@@ -1307,13 +1668,14 @@ pub(super) fn build_record(plan: &Plan, states: &HashMap<String, NodeState>) -> 
             .nodes
             .iter()
             .filter_map(|node| {
-                let state = states.get(&node.id)?;
+                let state = outcome.states.get(&node.id)?;
                 state.is_settled().then(|| {
                     (
                         node.id.clone(),
                         RecordedNode {
                             fingerprint: fingerprint(plan, node),
                             settled: state.clone(),
+                            verdicts: outcome.verdicts.get(&node.id).cloned().unwrap_or_default(),
                         },
                     )
                 })
@@ -1322,12 +1684,8 @@ pub(super) fn build_record(plan: &Plan, states: &HashMap<String, NodeState>) -> 
     }
 }
 
-fn write_record(
-    path: &Path,
-    plan: &Plan,
-    states: &HashMap<String, NodeState>,
-) -> Result<(), ControlError> {
-    let record = build_record(plan, states);
+fn write_record(path: &Path, plan: &Plan, outcome: &Outcome) -> Result<(), ControlError> {
+    let record = build_record(plan, outcome);
     // Pretty, because the file is meant to be read and diffed by a person as
     // much as by the next run.
     let text = serde_json::to_string_pretty(&record).map_err(|error| {
@@ -1369,6 +1727,11 @@ fn event_json(event: &Event) -> serde_json::Value {
             "node": id,
             "reused": true,
         }),
+        Event::Asserted { id, verdicts } => serde_json::json!({
+            "action": "graph.run",
+            "node": id,
+            "verdicts": verdicts,
+        }),
     }
 }
 
@@ -1381,6 +1744,9 @@ fn render(event: &Event) -> String {
                 format!("{id}: done — {}", first_line(output))
             }
             NodeState::Failed { reason, .. } => format!("{id}: failed — {reason}"),
+            NodeState::Rejected { .. } => {
+                format!("{id}: rejected — the turn finished and an assertion did not agree")
+            }
             NodeState::Skipped { blocked_by } => {
                 format!("{id}: skipped — `{blocked_by}` did not finish")
             }
@@ -1394,6 +1760,19 @@ fn render(event: &Event) -> String {
             None => format!("{id}: {status}"),
         },
         Event::Reused { id } => format!("{id}: reused — finished in an earlier run"),
+        Event::Asserted { id, verdicts } => verdicts
+            .iter()
+            .map(|verdict| {
+                let mark = if verdict.passed { "ok" } else { "FAILED" };
+                let detail = if verdict.detail.is_empty() {
+                    String::new()
+                } else {
+                    format!(" — {}", verdict.detail)
+                };
+                format!("{id}: assert `{}` {mark}{detail}", verdict.id)
+            })
+            .collect::<Vec<_>>()
+            .join("\n"),
     }
 }
 
@@ -1429,6 +1808,15 @@ pub(super) enum Event {
     /// nodes it skipped looks like a plan that lost half its work.
     Reused {
         id: String,
+    },
+    /// What the node's assertions had to say, per assertion.
+    ///
+    /// Reported even when they all pass, because "the gate ran and agreed" and
+    /// "there was no gate" are different facts and the summary alone cannot
+    /// tell them apart.
+    Asserted {
+        id: String,
+        verdicts: Vec<Verdict>,
     },
 }
 

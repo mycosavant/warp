@@ -5518,10 +5518,14 @@ a build step in this tree would be a new toolchain for one page.
       never reuse evidence, so no edit to it can invalidate any. What was
       missing was Tusk's own §7 promotion trigger, and here that trigger is
       `--resume`. Built as record → resume → guard.
-- [ ] **T13.2** `ZB-CONTRACT` — per-assertion verdicts. A node declares what
+- [x] **T13.2** `ZB-CONTRACT` — per-assertion verdicts. A node declares what
       must hold after it, and the runner records a verdict *per assertion*
       rather than one pass/fail per node. This is the same detector T11.1 built
-      for events, applied to work instead of to activity.
+      for events, applied to work instead of to activity. **An assertion is a
+      command, not a sentence** — the statement and the evidence are the same
+      string — and a node whose assertion fails is `rejected`, a fifth state.
+      Tusk's two open decides are both answered by the file: the contract lives
+      on the node, and nothing produces a verdict except the command itself.
 - [ ] **T13.3** `ZB-REVIEW` — an independent completion-review gate: the agent
       that checks is not the agent that did the work.
 
@@ -5606,6 +5610,131 @@ used* — **Firefox on Android**, with DuckDuckGo as the Chromium fallback. The
 install rows in `README.md` were originally written around iOS Safari and Android
 *Chrome*, neither of which is this maintainer's phone; they are corrected there
 and the Firefox row is the one still open.
+
+### T13.2 — as built
+
+**Tusk filed this as `decide → build` with two gating questions, and the file
+answers both.** *"Where does the contract attach — a task field, a Harness
+Profile section, or a new `acceptance` config domain?"* and *"who produces
+verdicts — the ZB-REVIEW reviewer voting per-assertion, or a separate run?"*
+Those are hard because Tusk has a config surface, a database and a UI to place
+it in. Here there is a TOML file, so the contract goes on the node, and §5's
+*"migrate toward the file, not the schema"* did the deciding.
+
+**The second question got the answer the ticket did not offer, and it is the
+whole design.** Both of Tusk's options produce a verdict by asking a model. This
+fork's answer is that **an assertion is a command**:
+
+```toml
+assert = [
+  { id = "compiles",   run = "cargo check --quiet" },
+  { id = "no-old-api", run = "! grep -rq old_api src/" },
+]
+```
+
+The reasoning is one line long. An acceptance contract exists to be
+*falsifiable*, so **the statement and the evidence are the same string.** A node
+that reports "the tests pass" is making a claim, and asking a second model
+whether the first model's claim is true is a claim about a claim — the exact
+shape of the failure this fork was started over. `cargo check --quiet` cannot be
+talked around. A model-judged assertion is therefore not a smaller version of
+this, it is the degraded one, and it is a stated non-goal rather than a
+deferral.
+
+**Two spellings and one concept**, taking the shape `needs` already has:
+`assert = ["cargo check --quiet"]` names itself, and the `{ id, run }` form
+exists for when the command is too long to read as a label.
+
+**The coverage invariant collapses, and this is the second time.** Zenith's
+*"exactly one active owner per assertion"* has two real failure modes — an
+assertion nobody owns, and one two tasks both own — because its contract lives
+beside the plan and tasks *claim* entries from it. Here the assertion is written
+inside the node that owns it, so it has exactly one owner by construction and
+neither failure mode is expressible. What survives is that two assertions on one
+node must not share an id, or a verdict could not say which one it is about, and
+`validate` refuses that. T13.1 deleted the sealed-subgraph closure the same way.
+**Twice now, writing a relationship on the thing itself rather than in a side
+table has turned an invariant into a type.** That is worth watching for in
+T13.3.
+
+**A fifth `NodeState`, argued rather than assumed.** `Rejected` is not a second
+kind of `Failed`, for exactly the reason the enum already gives for `Skipped`
+not being one: a reader acts differently. *Failed* is the agent erroring and is
+usually worth running again. *Rejected* is the agent finishing and an assertion
+disagreeing — running it again unchanged produces the same thing, and what needs
+editing is the prompt or the gate. It keeps the node's `output`, because the
+claim is what you debug from, and that was the argument that settled it: the
+alternative shape lost the answer at the moment it became interesting.
+
+It composes with T13.1 without a line of glue. `Rejected` is settled, so it is
+recorded; it is not `Done`, so it is not sealed, so `--resume` runs it again and
+editing its assertion is not a violation — **which is exactly the workflow**:
+the gate says no, you fix the gate or the prompt, you resume. Verified live.
+
+**And the assertions are in the fingerprint**, which is the other half. Loosening
+a gate on a node that already passed is the single most invalidating edit
+anybody can make to a plan, and it was the one edit T13.1's guard would otherwise
+have been blind to.
+
+**Three threads per assertion, and that is not belt-and-braces.** A child that
+never reads stdin blocks *us* once the pipe fills; a child that writes more than
+a pipeful blocks *itself* while we poll for its exit. Either is a hang, a real
+agent answer is bigger than a pipe buffer, and a `cargo check` on a broken tree
+emits far more than one. Both are pinned by tests that pass a megabyte through.
+`ASSERT_TIMEOUT` is fixed at 120s and deliberately not a knob — an assertion is a
+*check*, not the work, and a plan needing longer has put the work in the wrong
+place.
+
+**Verified by running, 2026-08-27.** Release build, WSLg, scratch XDG,
+`WARP_FORK_LOCAL_AGENT=1`, a three-node plan against a real `claude`.
+
+| | result |
+|---|---|
+| `graph check` on a plan asserting the same id twice | refused by name, no Warp needed |
+| the schema, which now contains assertions | still parses and validates as a plan |
+| run 1 | `hello` **done** (2 gates ok), `strict` **rejected**, `after` **skipped** |
+| the record | per-assertion verdicts under both nodes, exit code and the failing gate's first line of stderr |
+| a passing verdict in the file | no `detail` key at all — an empty one is omitted |
+| `graph check` after the rejection | `1 sealed` — only `hello`; work that did not hold up is not evidence |
+| editing the rejected node's gate | **no violation** — that is the fix, not a reach-back |
+| `--resume` after that edit | `hello` reused, `strict` re-ran and passed, `after` finally ran (8 s) |
+| loosening `hello`'s gate to `true` | **refused** — the assertion is in the fingerprint |
+| `--output-format json` | verdicts on the live event *and* in the summary; exit 1 |
+
+**One thing running found that no test would have.** The per-assertion lines are
+printed as they happen — minutes earlier, interleaved with every other node — and
+the block after `---` is the part anyone actually reads. In the first live run
+that block said `strict: rejected — an assertion says otherwise, and it said: ok`,
+which names the *agent's answer* and not the gate: the reader learns only that
+something disagreed, which is the fact they already had. The summary now prints
+each failing verdict under its node, and the state line no longer quotes the
+output. Rebuilt and re-run to confirm.
+
+**Named unverified inputs.** **Windows is the big one**: `shell()` picks
+`cmd /C` there and no `cmd` has ever run one of these. The command-running tests
+are `#[cfg(unix)]` on purpose — pinning `cmd` spellings from a machine that
+cannot execute them would assert a guess, which is the failure mode
+`.fork/IDEAS.md` marks its own claims for. Also unverified: any assertion that
+is slow enough to meet `ASSERT_TIMEOUT` (the live gates were `grep` and `exit
+4`), and the `code: None` path, which only a killed or unstartable command
+reaches — that one is held by a unit test.
+
+**The obvious next thing, deliberately not built.** Assertions are commands, so
+re-running them costs nothing, and a `graph check --verify` that re-ran every
+sealed node's gates would catch a pass that has since gone stale. It is not here
+because `reusable` carries verdicts rather than re-deriving them, on the
+principle that **the record is a record of the run** — a verdict is part of what
+happened, not a live probe, the same as the node's answer. The command that asks
+the world again is `graph run` with no `--resume`. If that principle turns out
+to be wrong, `--verify` is where it gets fixed, and it is a small addition.
+
+**A fifth sighting for T15's leaked discovery record, and the hypothesis held.**
+T13.1 noticed that of two cleanly-closed instances only one leaked, and guessed
+the difference was whether the instance had run agents. This session ran the
+same shape and got the same split: the onboarding-only launch cleaned up, the
+launch that spawned agents left both `inst_….json` and `….broker.sock` behind
+with no process alive. Two for two is still not a cause, but it is now a
+bisection with a direction.
 
 ### T13.1 — as built
 

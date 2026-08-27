@@ -1215,6 +1215,51 @@ The rule of thumb is **edit the failure, not the evidence.** Nodes that failed
 or were skipped are not sealed and are yours to rewrite freely — that is why you
 came back to the plan. To start over completely, delete the record.
 
+#### Assertions — what must be true, not what the agent says is true
+
+A turn ending `success` means the agent stopped without erroring. Whether the
+work happened is a different question, and `assert` is where you ask it.
+
+```toml
+[[node]]
+id = "fix"
+prompt = "Migrate the files listed below to the new API."
+assert = [
+  { id = "compiles",   run = "cargo check --quiet" },
+  { id = "no-old-api", run = "! grep -rq old_api src/" },
+]
+```
+
+Each entry is a shell command, run in the directory you launched `graph run`
+from, with the node's answer on **stdin** and its id in `$WARP_GRAPH_NODE`.
+Non-zero fails. `assert = ["cargo check --quiet"]` is the shorthand, where the
+command names itself.
+
+**An assertion is a command and not a sentence, on purpose.** A contract exists
+to be falsifiable, so the statement and the evidence are the same string. A node
+reporting "the tests pass" is making a claim, and asking a second model whether
+the first model's claim is true is a claim about a claim. Prefer asserting about
+the *world* over the answer — the answer is what you are checking.
+
+```
+strict: assert `said-ok` ok
+strict: assert `impossible` FAILED — this gate was never going to pass
+strict: rejected — the turn finished and an assertion did not agree
+```
+
+**`rejected` is a fifth state and not a kind of `failed`**, because you do
+something different about it. `failed` is the agent erroring — usually worth
+running again. `rejected` is the agent finishing and a gate disagreeing —
+running it again unchanged gives the same thing, so edit the prompt or the gate.
+Its dependents are skipped either way, and its answer is kept in the record
+because the claim is what you debug from.
+
+Every verdict is recorded separately, so `--resume` gets the whole loop: the
+gate says no, you fix it, you resume, and only the rejected node costs a turn.
+Editing a rejected node's assertion is *not* a guard violation — that is the fix.
+Editing a **passed** node's assertion is, because loosening a gate after the
+fact is the most invalidating edit there is.
+
 #### Letting an agent write the plan
 
 `warpctrl graph schema` prints the format as an annotated plan — and what it
