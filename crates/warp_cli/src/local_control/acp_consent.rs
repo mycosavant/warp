@@ -32,9 +32,12 @@
 //!
 //! - The mode is reported as **the agent's claim**, quoted, never as a Warp
 //!   finding and never as a prediction.
-//! - Gating is reported **per call**, and only ever as *"Warp was asked"* /
-//!   *"Warp was not asked"* — a fact about this process's own inbox, which is the
-//!   only thing here that is certainly true.
+//! - Gating is reported **per call**, and only ever as a count of the requests
+//!   this process received and a list of the answers it sent — facts about
+//!   Warp's own inbox, which are the only things here that are certainly true.
+//!   A count rather than a label, because a label is a verdict: *"unasked"* and
+//!   *"ungoverned"* are inferences about the agent, and only the arithmetic is an
+//!   observation.
 //! - The two are never combined into a verdict.
 //!
 //! # "Not asked" is not "not approved", and the difference is the whole point
@@ -110,13 +113,23 @@ pub(super) struct Call {
     /// through `#[serde(other)]`, so anything hung on it degrades silently.
     pub kind: Option<String>,
     pub status: Option<String>,
-    /// Whether a `session/request_permission` for this call reached this process.
+    /// How many `session/request_permission` calls for this id reached this
+    /// process.
     ///
-    /// Named for Warp's inbox on purpose. `false` does **not** mean unapproved,
-    /// unauthorized or bypassed — see the module docs.
-    pub warp_was_asked: bool,
-    /// What Warp answered, when it was asked.
-    pub warp_answered: Option<String>,
+    /// **A count and not a boolean, and that is a correction rather than a
+    /// preference.** T14.2 withdrew the claim that a `toolCallId` binds an answer
+    /// to its question, on the grounds that nothing in the schema forbids an
+    /// agent re-asking on the same id after a refusal — and then this struct
+    /// shipped a `bool`, which would have recorded the second ask as the first
+    /// and dropped its answer. Writing a hazard down does not implement it.
+    ///
+    /// Named for Warp's inbox on purpose. A zero is a count of what this process
+    /// received; grammatically it cannot be a statement about the agent, and it
+    /// does **not** mean unapproved, unauthorized or bypassed. See the module
+    /// docs.
+    pub permission_requests_received: usize,
+    /// What Warp sent back, in order, one entry per request received.
+    pub answers_warp_sent: Vec<String>,
 }
 
 /// A policy change an agent offered to make, and what Warp did about it.
@@ -168,8 +181,8 @@ pub(super) struct Report {
 }
 
 /// Why the counts above mean less than they look like they mean.
-const CAVEAT: &str = "`warp_was_asked: false` means only that no permission request for this call \
-                      reached Warp. The agent's permission rules live in the user's own \
+const CAVEAT: &str = "`permission_requests_received: 0` means only that no permission request for \
+                      this call reached Warp. The agent's permission rules live in the user's own \
                       configuration, which Warp does not read; a call it was not asked about was \
                       most likely allowed by a rule the user wrote deliberately. The declared mode \
                       is the agent's claim and does not predict per-call gating — one measured \
@@ -265,7 +278,8 @@ impl Ledger {
             })
             .collect::<Vec<_>>();
         self.transitions.extend(transitions);
-        self.entry(&request.tool_call.tool_call_id).warp_was_asked = true;
+        self.entry(&request.tool_call.tool_call_id)
+            .permission_requests_received += 1;
     }
 
     /// Record what Warp answered, and which option it picked if it picked one.
@@ -275,7 +289,9 @@ impl Ledger {
         answer: &str,
         selected_option_name: Option<&str>,
     ) {
-        self.entry(tool_call_id).warp_answered = Some(answer.to_owned());
+        self.entry(tool_call_id)
+            .answers_warp_sent
+            .push(answer.to_owned());
         let Some(name) = selected_option_name else {
             return;
         };
@@ -304,7 +320,7 @@ impl Ledger {
             calls_warp_was_not_asked_about: self
                 .calls
                 .iter()
-                .filter(|call| !call.warp_was_asked)
+                .filter(|call| call.permission_requests_received == 0)
                 .count(),
             calls: self.calls.clone(),
             transitions_authorized_by_warp: self
@@ -333,8 +349,8 @@ impl Ledger {
             title: None,
             kind: None,
             status: None,
-            warp_was_asked: false,
-            warp_answered: None,
+            permission_requests_received: 0,
+            answers_warp_sent: Vec::new(),
         });
         self.calls.last_mut().expect("a record was just pushed")
     }

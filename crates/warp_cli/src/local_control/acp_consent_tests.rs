@@ -64,9 +64,12 @@ fn one_mode_can_cover_a_call_that_was_asked_about_and_one_that_was_not() {
 
     assert_eq!(report.mode_the_agent_declared.as_deref(), Some("default"));
     assert_eq!(report.calls.len(), 2);
-    assert!(report.calls[0].warp_was_asked, "the write was put to Warp");
-    assert!(
-        !report.calls[1].warp_was_asked,
+    assert_eq!(
+        report.calls[0].permission_requests_received, 1,
+        "the write was put to Warp"
+    );
+    assert_eq!(
+        report.calls[1].permission_requests_received, 0,
         "the shell command was not put to Warp"
     );
     assert_eq!(report.calls_warp_was_not_asked_about, 1);
@@ -131,8 +134,35 @@ fn a_request_before_any_notification_still_produces_a_call() {
     let report = ledger.report();
 
     assert_eq!(report.calls.len(), 1);
-    assert!(report.calls[0].warp_was_asked);
+    assert_eq!(report.calls[0].permission_requests_received, 1);
     assert_eq!(report.calls_warp_was_not_asked_about, 0);
+}
+
+/// The hazard T14.2 wrote down and this struct first shipped against: nothing in
+/// the schema forbids an agent re-asking on the same `toolCallId` after a
+/// refusal. A boolean would record the second ask as the first and lose its
+/// answer, which is the whole reason this is a count and a list.
+#[test]
+fn a_second_request_on_the_same_id_is_counted_and_its_answer_kept() {
+    let mut ledger = Ledger::new();
+    ledger.observe_request(&permission_for(WRITE, "Write a.txt"));
+    ledger.observe_answer(&ToolCallId::new(WRITE), "selected", Some("Deny"));
+    ledger.observe_request(&permission_for(WRITE, "Write a.txt, smaller"));
+    ledger.observe_answer(&ToolCallId::new(WRITE), "cancelled", None);
+
+    let report = ledger.report();
+
+    assert_eq!(
+        report.calls.len(),
+        1,
+        "it is one tool call, asked about twice"
+    );
+    assert_eq!(report.calls[0].permission_requests_received, 2);
+    assert_eq!(
+        report.calls[0].answers_warp_sent,
+        vec!["selected".to_owned(), "cancelled".to_owned()],
+        "both answers survive, in order"
+    );
 }
 
 /// Later updates refine a call rather than duplicating it — the measured stream
@@ -293,7 +323,7 @@ fn the_serialized_report_names_warp_rather_than_the_agent() {
 
     let value = serde_json::to_value(&report).expect("the report should render");
 
-    assert_eq!(value["calls"][1]["warp_was_asked"], false);
+    assert_eq!(value["calls"][1]["permission_requests_received"], 0);
     assert_eq!(value["calls_warp_was_not_asked_about"], 1);
     assert!(
         value.get("approved").is_none() && value.get("unapproved").is_none(),

@@ -6008,7 +6008,12 @@ silently dropped.
       it cannot enforce.
       It is cheaply mitigable, because the condition is visible: an agent making
       `tool_call` updates while sending no `session/request_permission` is
-      observably ungoverned. Report it rather than infer approval — **per
+      ~~observably ungoverned~~ **observably un-consulted-through-Warp — and this
+      ticket committed its own error in that phrase.** "Ungoverned" is an
+      inference about the agent's policy layer, and the paragraph directly above
+      says why it is wrong: the user's 87 allow rules *are* governance. What is
+      observable is that no request reached Warp. Report it rather than infer
+      approval — **per
       tool-call**, because policy is layered and per-tool: in one run `Write`
       asked and `echo done` did not. And Warp is blind to the *state* but sighted
       on the *transitions it is asked to authorize*, so the honest sentence is
@@ -6087,11 +6092,14 @@ thing Warp can only say because the agent named the mode.
 
 The rules the field names encode:
 
-- **`warp_was_asked`, not `approved`.** It is a fact about this process's inbox,
-  which is the only thing here that is certainly true. `false` does not mean
-  unapproved: the `echo done` above was allowed by a rule its user wrote, and the
-  user's settings are the user's own expressed policy — an agent honouring them
-  is this fork's thesis, not a bypass.
+- **`permission_requests_received`, not `approved` — and a count, not a label.**
+  It is arithmetic over this process's inbox, which is the only thing here that is
+  certainly true. A zero does not mean unapproved: the `echo done` above was
+  allowed by a rule its user wrote, and the user's settings are the user's own
+  expressed policy — an agent honouring them is this fork's thesis, not a bypass.
+  **A label would be a verdict.** *"Unasked"*, *"ungoverned"*, *"bypassed"* are
+  all inferences about the agent; only the number is an observation. This shipped
+  as a `bool` first and was corrected within the hour — see the correction below.
 - **`mode_the_agent_declared`, not `mode`.** Provenance in the field name,
   because the same information rendered in Warp's voice becomes a Warp-issued
   assurance. The same category as `tool_digest.rs` recording what MCP tools
@@ -6129,6 +6137,20 @@ recorded `{"from":"default","to":"plan","warp_requested_it":false}`. So an agent
 happen. That is the fact `warp_requested_it` exists to keep separate: this one was
 the agent's own move, at a person's spoken request, with Warp never consulted.
 The same channel would carry a widening.
+
+**A hazard written down in T14.2 and then built against in T14.3.** The first
+version of `Call` had `warp_was_asked: bool` and `warp_answered: Option<String>`.
+T14.2's as-built had already established, two commits earlier, that **nothing in
+the schema forbids an agent re-asking on the same `toolCallId`** after a refusal
+— that was the whole reason the digest argument was withdrawn. A boolean records
+the second ask as the first, and the single `Option` drops its answer. So the
+record that exists to say what Warp was asked would have under-reported exactly
+the case worth seeing. Now `permission_requests_received: usize` and
+`answers_warp_sent: Vec<String>`, with a test that asks twice on one id.
+
+The general lesson is worth more than the fix: **writing a hazard down does not
+implement it.** It is the same shape as T8.6 updating one of two count pins after
+the doc said there were two.
 
 **Named unverified.** `session/set_mode` is schema-only — nothing here sends one,
 and whether `claude-agent-acp` honours it is unknown, which is the half of the

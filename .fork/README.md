@@ -1429,8 +1429,12 @@ permission request reached Warp at all:
 warpctrl acp probe --command "…" --prompt "…" | jq 'select(.kind=="consent_report") | .payload'
 ```
 
-Read the field names literally. `warp_was_asked: false` means no request reached
-Warp; it does **not** mean unapproved. And `mode_the_agent_declared` is the
+Read the field names literally. `permission_requests_received: 0` means no
+request for that call reached Warp; it does **not** mean unapproved, and it is a
+count rather than a label because every label — *unasked*, *ungoverned*,
+*bypassed* — is an inference about the agent rather than an observation of
+Warp's inbox. (A count also because nothing stops an agent asking twice about
+one call.) And `mode_the_agent_declared` is the
 agent's claim, not a Warp finding — **the mode does not predict per-call
 gating.** Measured 2026-08-27: at mode `default`, whose own description is
 *"Standard behavior, prompts for dangerous operations"*, a prompt to write a file
