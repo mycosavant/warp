@@ -15207,6 +15207,7 @@ name = "warp"
 version = "0.1.0"
 dependencies = [
  "addr",
+ "agent-client-protocol",
  "aha-reqwest-eventsource",
  "aho-corasick",
  "ai",

@@ -67,6 +67,10 @@ pub mod cloud_agent_config;
 pub mod cloud_agent_settings;
 pub mod cloud_environments;
 pub mod connected_self_hosted_workers;
+// Spawns whatever agent `WARP_FORK_ACP_COMMAND` names; the ACP client reaches
+// the OS through `async-io` and `async-process`, neither of which is on wasm.
+#[cfg(not(target_family = "wasm"))]
+pub(crate) mod acp_agent;
 pub mod execution_profiles;
 pub mod facts;
 pub(crate) mod generate_block_title;

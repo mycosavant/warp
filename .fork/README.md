@@ -1351,6 +1351,46 @@ plan**, so each prompt must contain everything that node needs. The failure
 mode is invisible otherwise — the run completes, and every answer is
 confidently context-free.
 
+### Putting a third-party agent in the agent panel: `WARP_FORK_ACP_COMMAND`
+
+Name an agent and it answers Warp's own conversation model — no account, no
+`api.warp.dev`, no Claude:
+
+```
+WARP_FORK_ACP_COMMAND="opencode acp" warp-oss
+```
+
+**Naming the command is the switch.** There is no second flag: every other
+variable here answers *"is this permitted"*, this one answers *"which program"*,
+and ACP's whole point is that there is no default. It outranks
+`WARP_FORK_LOCAL_AGENT` when both are set. Verified 2026-08-28 against `opencode`
+1.18.25 on OpenRouter — the panel showed the tool calls and the answer, driven
+and read through `warpctrl agent prompt` / `agent read`.
+
+**It can only say no.** Every permission request is denied and the refusal is
+printed in the conversation, so read-only turns work and anything needing consent
+does not:
+
+> `write`
+> Warp denied this: **/tmp/…/out.txt**. This build can only say no to an agent's
+> permission requests — there is no surface yet that could show you what saying
+> yes would allow.
+
+That is the shape `local_agent` shipped in for the same reason: saying yes needs a
+surface that can show what is being agreed to, and T14.4 measured what goes wrong
+when something says yes without one.
+
+**Two things that will bite, both measured.** The agent *process* inherits Warp's
+working directory, because ACP's spawn config carries a command, args and env and
+no cwd — so `opencode`, which reads `opencode.json` from the process directory,
+takes its model config from wherever Warp was launched. The *session* directory is
+separate and correct: it comes from the pane, which for a conversation started by
+`warpctrl agent prompt` is a fresh pane in `$HOME`. `cd` first, or the agent
+reports your files missing and the transcript gives no hint why.
+
+**Not yet:** session resume (every turn is a new session), `/compact`, model
+selection, and Warp's own tools.
+
 ### Talking to an agent that is not Warp's: `warpctrl acp probe`
 
 Hidden, not in the catalog, and not a stable surface — it is T14's probe, kept

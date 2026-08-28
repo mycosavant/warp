@@ -6162,7 +6162,7 @@ other than `claude-agent-acp` uses `switch_mode` for a policy question is
 unknown, and an agent that labels one `edit` is not caught — which the module
 says out loud rather than claiming a boundary it does not have.
 
-- [ ] **T14.5** The app surface, when there is a reason for one. Inherits every
+- [x] **T14.5** The app surface, when there is a reason for one. Inherits every
       constraint listed under T14.4 above, as corrected there, plus what T14.4
       measured:
       **First and most load-bearing: no app surface until one agent the surface
@@ -6267,6 +6267,131 @@ against it, because it declares no modes to set.
       **`refuse allow_tools on an ACP node` is filed, not active.** It is
       conditional on an ACP graph-node type, and none exists; it binds whoever
       adds one.
+
+
+### T14.5 — as built
+
+**An ACP agent answers in Warp's agent panel.** Measured 2026-08-28, end to end:
+
+```
+$ WARP_FORK_ACP_COMMAND="opencode acp" warp-oss          # opencode, on OpenRouter/Gemini
+$ warpctrl agent prompt "Read notes.txt and tell me the second line."
+`read`
+`tmp/t145/project/notes.txt`
+beta
+```
+
+No account, no `api.warp.dev`, no Claude — a third-party agent driving Warp's
+own conversation model, on the user's own key.
+
+**The seam was one branch.** `ai::agent::api::generate_multi_agent_output` already
+had the `local_agent` fork in it; this adds a sibling above it. Everything else
+is a new module, `app/src/ai/acp_agent/`, which is why T5's finding still pays:
+the whole agent surface hangs off one function.
+
+**Naming the command is the switch.** `WARP_FORK_ACP_COMMAND="opencode acp"`, and
+deliberately no second flag. Every other predicate in `fork.rs` answers *"is this
+permitted"*, which wants a boolean because the behaviour is already specified;
+this one answers *"which program"*, and ACP's whole point is that there is no
+default. It outranks `WARP_FORK_LOCAL_AGENT` when both are set, because naming a
+specific agent is the more specific instruction.
+
+**A spike on the same terms the last one had: every permission request is
+denied.** Read-only turns work; anything needing consent does not, and the
+refusal is said in the conversation rather than swallowed. Measured:
+
+```
+$ warpctrl agent prompt "Create a file called out.txt containing the word hello."
+`write`
+Warp denied this: **/tmp/t145/project/out.txt**. This build can only say no …
+$ ls          # notes.txt  opencode.json — nothing was written
+```
+
+That is not a shortcut, it is the shape `local_agent` shipped in and for the same
+reason, quoted from its own module docs: *"anything needing approval is denied.
+Wiring Warp's tool execution back in … is the next step rather than part of the
+spike."* Saying **yes** needs a surface that can show what is being agreed to, and
+T14.4 measured what goes wrong when something says yes without one.
+
+**And because it only ever says no, it needs none of `acp_permission`.** That
+module's allowlist, its `switch_mode` rule and its `_meta` reading all guard the
+*allow* side; refusing is unconditional. So there is no second copy of an allow
+rule in the tree. **When T14.6 can say yes, that module must be shared rather
+than reimplemented** — which is recorded in `acp_agent/mod.rs` where whoever does
+it will be reading.
+
+**Two things found by running it, neither visible from the code.**
+
+- **ACP streams *tokens*, and one message per chunk shreds the answer.** The
+  first live turn rendered `"notes.txt doesn"`, `"'t exist in this"`,
+  `" directory"` as three separate messages in the panel. Claude's path never
+  showed this — `stream-json` delivers whole content blocks — so nothing in the
+  fork had met it. Text now accumulates and flushes at a boundary (a tool call, a
+  switch between answer and reasoning, the end of the turn), which gives exactly
+  the granularity `local_agent` already produces. The protocol *does* have
+  `AppendToMessageContent`, built for precisely this; it was not used because its
+  `FieldMask` path into the `Message` oneof is produced nowhere in this repo, and
+  shipping it would have meant guessing an input and learning from a silent
+  failure. On T14.6.
+- **The first run answered about the wrong directory**, and that turned out to be
+  correct plumbing rather than a bug: the ACP session cwd comes from the *pane's*
+  working directory, and a conversation started by `warpctrl agent prompt` gets a
+  fresh pane in `$HOME`. `cd` first and it reads the right tree. Worth knowing
+  because it is invisible in the transcript — the agent simply reports the file
+  is missing.
+
+**The process cwd is a separate thing, and it is Warp's.** `AcpAgentConfig`
+carries a command, args and env and **no cwd**, so the agent process inherits
+Warp's. The session cwd is carried properly in `session/new` and is what the
+agent's *tools* use — measured. What it changes is where an agent looks for its
+**own** configuration: `opencode` reads `opencode.json` from the process
+directory, which is why the model had to be configured beside where Warp was
+launched. Named rather than solved, because solving it per agent is what ACP
+exists to avoid.
+
+**No task, no thread, no executor borrowed.** `agent-client-protocol` runs a
+connection through a scoped `connect_with(agent, |connection| async { … })`,
+which is a future; Warp's seam wants a stream. The bridge is an unbounded channel
+plus `stream::select`: the driver pushes events into the sender and yields
+nothing itself, so **whoever polls the returned stream drives the connection**.
+That gives cancellation in the right direction for free — dropping the stream
+drops the driver, drops the connection, closes the agent's stdin — and it is the
+same runtime-free property the `warpctrl` probe has, for the same reason (ACP
+reaches the OS through `async-io` and `blocking`, both self-driving).
+
+**The dependency was checked rather than assumed.** `agent-client-protocol` in
+the `app` crate adds the protocol crates, `async-process` and `shell-words`;
+`async-io`, `blocking`, `futures`, `serde_json` and `uuid` were already there. It
+sits in the existing `cfg(not(target_family = "wasm"))` block, matching the
+module's own gate.
+
+**The hazard `local_agent` recorded, this time with a test under it.** A
+`ToolCall` message is an *instruction* — Warp's action model executes it — and the
+agent has already run the tool, so emitting one runs it twice. T14 produced three
+separate instances of a hazard written in prose and then built against, so this
+one is pinned by `a_tool_call_is_never_emitted_as_a_tool_call_message` rather than
+by a paragraph. Same for the denial: `no_option_that_permits_anything_is_ever_selected`
+is what a future "helpful" edit has to come through.
+
+**Named unverified.** One agent, one model, three prompts, Linux/WSL. Session
+resume is carried and unused — `session/load` is an optional capability and this
+makes no capability check, so **every turn is a new session**, which is a real
+limitation. `/compact` is not handled (the protocol has no compaction) and falls
+through. Cancellation is reasoned from the drop chain and was not exercised. No
+GUI screenshot was taken; the turns were driven and read through `warpctrl`.
+Nothing has run on Windows.
+
+- [ ] **T14.6** Saying yes: the consent surface. What is now paid for:
+      **`acp_permission` moves out of `warp_cli` and is shared**, not copied —
+      `acp_agent/mod.rs` says so at the point of use.
+      **The approval card is the surface**, not a mode picker (T14.4).
+      It has to render the structured diff — `opencode` sends `oldText` as well
+      as `newText`, more than Claude — and, for a `switch_mode` request, the
+      option *names*, because English is the only place that transition is
+      disclosed.
+      **`AppendToMessageContent` for token streaming**, once its `FieldMask` path
+      is established by running it rather than guessed.
+      **Session resume**, gated on the agent's advertised `loadSession`.
 
 - [x] **T14.3** ~~**Warp cannot observe an agent's permission policy, so it must
       not imply one.**~~ **The headline is false and running it is what showed

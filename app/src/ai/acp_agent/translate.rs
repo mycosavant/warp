@@ -1,0 +1,457 @@
+//! ACP `SessionUpdate`s, said in Warp's vocabulary.
+//!
+//! Pure functions over protocol values: one update in, zero or more
+//! [`api::ResponseEvent`] out. No process, no clock, no network — the same
+//! property `local_agent/translate.rs` has, and for the same reason: it is what
+//! makes the interesting half testable without either end.
+//!
+//! # The mapping table, and where it came from
+//!
+//! `warpctrl acp probe` exists to produce this table by running real agents
+//! rather than by reading the schema. Both columns are measured — Claude
+//! through `claude-agent-acp`, and `opencode` 1.18.25 over OpenRouter:
+//!
+//! | `SessionUpdate` | becomes | why |
+//! |---|---|---|
+//! | `AgentMessageChunk` | `AgentOutput` | the answer |
+//! | `AgentThoughtChunk` | `AgentReasoning` | rendered as thinking, not as output |
+//! | `ToolCall` | `AgentOutput`, as text | **never a `ToolCall` message** — see below |
+//! | `ToolCallUpdate` | `AgentOutput`, on completion only | a title that arrives late is the useful one |
+//! | `UserMessageChunk` | nothing | Warp already holds the prompt it sent |
+//! | `Plan`, `PlanUpdate`, `PlanRemoved` | nothing | Warp has a todo model; wiring it is not this step |
+//! | `AvailableCommandsUpdate` | nothing | a menu for a UI that is not here |
+//! | `CurrentModeUpdate` | nothing | T14.3/T14.4: the mode is a claim and must not be rendered as governance |
+//! | `ConfigOptionUpdate`, `SessionInfoUpdate` | nothing | measured: opencode sends 356 models here |
+//! | `UsageUpdate` | nothing | Warp's own accounting is on the `StreamFinished` |
+//! | anything else | nothing | `#[non_exhaustive]`; a new variant must not fail a turn |
+//!
+//! # A tool call is reported, never requested
+//!
+//! **`ToolCall` never becomes `api::message::Message::ToolCall`.** That type is
+//! an *instruction*: Warp's action model executes it and returns a result. The
+//! ACP agent has already run the tool itself, so emitting one would run it a
+//! second time.
+//!
+//! This is inherited verbatim from `local_agent/translate.rs`, which found it
+//! the hard way, and it is written out again here rather than assumed because
+//! T14 produced three separate instances of a hazard being recorded in prose and
+//! then built against anyway. There is a test under this paragraph.
+//!
+//! # Nothing here reads a permission
+//!
+//! Permission requests are a *request* on the connection, not an update on this
+//! stream, so they never reach this file. What answers them is
+//! `warp_cli`'s `acp_permission`, reached from `mod.rs`. Keeping the two apart
+//! is deliberate: this file decides how something is *shown*, and showing must
+//! not be able to authorize.
+
+use agent_client_protocol::schema::v1::{
+    ContentBlock, ContentChunk, SessionUpdate, StopReason, ToolCall, ToolCallStatus, ToolCallUpdate,
+};
+use chrono::{DateTime, Utc};
+use warp_multi_agent_api as api;
+
+/// How much of the prompt becomes the conversation's name in the history panel.
+///
+/// Same constant and same reasoning as the local agent: there is no summariser
+/// on this path either, so the prompt itself is the honest stand-in.
+const TASK_DESCRIPTION_CHARS: usize = 60;
+
+fn task_description(prompt: &str) -> String {
+    let prompt = prompt.trim();
+    // `char_indices` rather than byte slicing: a prompt can end mid-glyph and
+    // `String::truncate` would panic on the boundary.
+    match prompt.char_indices().nth(TASK_DESCRIPTION_CHARS) {
+        Some((cut, _)) => format!("{}…", prompt[..cut].trim_end()),
+        None => prompt.to_owned(),
+    }
+}
+
+/// Which kind of message buffered text is on its way to becoming.
+///
+/// Answer and reasoning are shown differently, so a run of one must be flushed
+/// before a run of the other starts rather than merged into it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Pending {
+    Output,
+    Reasoning,
+}
+
+/// Turns one ACP turn into one Warp response stream.
+pub(super) struct Translator {
+    task_id: String,
+    task_needs_announcing: bool,
+    request_id: String,
+    prompt: String,
+    next_message: u64,
+    started_at: DateTime<Utc>,
+    /// Text seen since the last flush, and which kind of message it becomes.
+    ///
+    /// **Found by running it.** ACP's `agent_message_chunk` is a *token* stream,
+    /// not a paragraph stream: the first live turn through Warp's panel rendered
+    /// `"notes.txt doesn"`, `"'t exist in this"`, `" directory"` as separate
+    /// messages, because one chunk was becoming one message. Claude's path never
+    /// showed this — `stream-json` delivers whole content blocks — so nothing in
+    /// the fork had met it before.
+    ///
+    /// Buffering to a natural boundary gives exactly the granularity
+    /// `local_agent` already produces. The alternative is
+    /// `AppendToMessageContent`, which the protocol has and which is built for
+    /// precisely this — but its `FieldMask` path into the `Message` oneof is not
+    /// used anywhere in this repo, so shipping it would mean guessing an input
+    /// and finding out from a silent failure. Named on T14.6 instead.
+    pending: Option<(Pending, String)>,
+    /// Tool calls whose title has already been shown, so a late correction is
+    /// not printed twice.
+    ///
+    /// Measured: both agents send `tool_call` with a placeholder title and then
+    /// correct it on `tool_call_update` — Claude sent *"Preparing file…"* before
+    /// *"Write a.txt"*, opencode sent *"read"* before the path. So the first
+    /// title is usually the useless one, and this is what lets the second be
+    /// shown without showing both.
+    announced: Vec<(String, String)>,
+}
+
+impl Translator {
+    pub(super) fn new(
+        task_id: String,
+        task_needs_announcing: bool,
+        request_id: String,
+        prompt: String,
+        started_at: DateTime<Utc>,
+    ) -> Self {
+        Self {
+            task_id,
+            task_needs_announcing,
+            request_id,
+            prompt,
+            next_message: 0,
+            started_at,
+            pending: None,
+            announced: Vec::new(),
+        }
+    }
+
+    /// The events that open the stream, emitted once the agent has named its
+    /// session.
+    ///
+    /// The ACP session id becomes Warp's conversation token, exactly as Claude's
+    /// session id does on the other path: the client stores it and hands it back
+    /// as `params.conversation_token`, so Warp's own round-tripping is the
+    /// session store and this module keeps no state between turns.
+    pub(super) fn open(&mut self, session_id: String) -> Vec<api::ResponseEvent> {
+        let mut events = vec![api::ResponseEvent {
+            r#type: Some(api::response_event::Type::Init(
+                api::response_event::StreamInit {
+                    conversation_id: session_id,
+                    request_id: self.request_id.clone(),
+                    run_id: String::new(),
+                },
+            )),
+        }];
+        if self.task_needs_announcing {
+            self.task_needs_announcing = false;
+            events.push(actions(vec![api::client_action::Action::CreateTask(
+                api::client_action::CreateTask {
+                    task: Some(api::Task {
+                        id: self.task_id.clone(),
+                        // `AIConversation::title` reads this first and only
+                        // falls back to the initial query, so a task with no
+                        // description is a conversation called "Untitled" in
+                        // the history panel.
+                        description: task_description(&self.prompt),
+                        ..Default::default()
+                    }),
+                },
+            )]));
+        }
+        let query = self.user_query();
+        events.push(self.add(vec![query]));
+        events
+    }
+
+    /// Translates one update. Anything not in the table above yields nothing:
+    /// `SessionUpdate` is `#[non_exhaustive]` and an agent is versioned
+    /// independently of this fork, so a variant added upstream must not take the
+    /// conversation down with it.
+    pub(super) fn on_update(&mut self, update: &SessionUpdate) -> Vec<api::ResponseEvent> {
+        // Text accumulates; anything else is a boundary that flushes it first,
+        // so a tool call never lands in the middle of a sentence.
+        let text = match update {
+            SessionUpdate::AgentMessageChunk(chunk) => Some((Pending::Output, chunk_text(chunk))),
+            SessionUpdate::AgentThoughtChunk(chunk) => {
+                Some((Pending::Reasoning, chunk_text(chunk)))
+            }
+            _ => None,
+        };
+        if let Some((kind, text)) = text {
+            if text.is_empty() {
+                return Vec::new();
+            }
+            return match &mut self.pending {
+                Some((pending, buffer)) if *pending == kind => {
+                    buffer.push_str(&text);
+                    Vec::new()
+                }
+                _ => {
+                    let flushed = self.flush();
+                    self.pending = Some((kind, text));
+                    flushed
+                }
+            };
+        }
+
+        let body = match update {
+            SessionUpdate::ToolCall(call) => match self.tool_text(call) {
+                Some(text) => {
+                    api::message::Message::AgentOutput(api::message::AgentOutput { text })
+                }
+                None => return Vec::new(),
+            },
+            SessionUpdate::ToolCallUpdate(update) => match self.tool_update_text(update) {
+                Some(text) => {
+                    api::message::Message::AgentOutput(api::message::AgentOutput { text })
+                }
+                None => return Vec::new(),
+            },
+            _ => return Vec::new(),
+        };
+        let mut events = self.flush();
+        let message = self.message(body);
+        events.push(self.add(vec![message]));
+        events
+    }
+
+    /// Emits whatever text has accumulated, as one message.
+    ///
+    /// Must be called before the turn ends, or the agent's last sentence — which
+    /// is usually its whole answer — is never shown. The driver in `mod.rs` does
+    /// that; `finished` deliberately does not, because a caller that forgets is
+    /// better caught by a test than by silence.
+    pub(super) fn flush(&mut self) -> Vec<api::ResponseEvent> {
+        let Some((kind, text)) = self.pending.take() else {
+            return Vec::new();
+        };
+        if text.trim().is_empty() {
+            return Vec::new();
+        }
+        let body = match kind {
+            Pending::Output => {
+                api::message::Message::AgentOutput(api::message::AgentOutput { text })
+            }
+            Pending::Reasoning => {
+                api::message::Message::AgentReasoning(api::message::AgentReasoning {
+                    reasoning: text,
+                    finished_duration: None,
+                })
+            }
+        };
+        let message = self.message(body);
+        vec![self.add(vec![message])]
+    }
+
+    /// What a newly announced tool call is shown as, if anything.
+    ///
+    /// **Deliberately not a `ToolCall` message** — see the module docs. The
+    /// agent has already run it; this says what happened rather than asking for
+    /// it to happen again.
+    fn tool_text(&mut self, call: &ToolCall) -> Option<String> {
+        let title = call.title.trim();
+        if title.is_empty() {
+            return None;
+        }
+        self.remember(call.tool_call_id.to_string(), title.to_owned());
+        Some(format!("`{title}`"))
+    }
+
+    /// A later update for a call already seen.
+    ///
+    /// Only a *changed* title on a *finished* call is worth a second line. The
+    /// measured streams send several updates per call — status transitions,
+    /// content, raw output — and printing each would bury the answer.
+    fn tool_update_text(&mut self, update: &ToolCallUpdate) -> Option<String> {
+        if !matches!(update.fields.status, Some(ToolCallStatus::Completed)) {
+            return None;
+        }
+        let title = update.fields.title.as_deref()?.trim();
+        if title.is_empty() {
+            return None;
+        }
+        let id = update.tool_call_id.to_string();
+        let shown = self
+            .announced
+            .iter()
+            .find(|(seen, _)| seen == &id)
+            .map(|(_, title)| title.clone());
+        if shown.as_deref() == Some(title) {
+            return None;
+        }
+        self.remember(id, title.to_owned());
+        Some(format!("`{title}`"))
+    }
+
+    fn remember(&mut self, id: String, title: String) {
+        match self.announced.iter_mut().find(|(seen, _)| seen == &id) {
+            Some(entry) => entry.1 = title,
+            None => self.announced.push((id, title)),
+        }
+    }
+
+    /// The user's own turn, written into the transcript.
+    ///
+    /// Upstream the server echoes the query back as a message and a great deal
+    /// hangs off that; live it is inert, but a restored conversation without it
+    /// is missing the question.
+    fn user_query(&mut self) -> api::Message {
+        let body = api::message::Message::UserQuery(api::message::UserQuery {
+            query: self.prompt.clone(),
+            context: Some(api::InputContext {
+                current_time: Some(self.timestamp()),
+                ..Default::default()
+            }),
+            ..Default::default()
+        });
+        self.message(body)
+    }
+
+    fn add(&self, messages: Vec<api::Message>) -> api::ResponseEvent {
+        actions(vec![api::client_action::Action::AddMessagesToTask(
+            api::client_action::AddMessagesToTask {
+                task_id: self.task_id.clone(),
+                messages,
+            },
+        )])
+    }
+
+    /// Wraps a body with the identity and time every message needs.
+    ///
+    /// The timestamp is not decoration: `convert_conversation` derives a
+    /// restored exchange's `finish_time` from it, so an unstamped message
+    /// becomes a conversation that happened in 1970.
+    fn message(&mut self, body: api::message::Message) -> api::Message {
+        self.next_message += 1;
+        api::Message {
+            id: format!("{}-{}", self.request_id, self.next_message),
+            task_id: self.task_id.clone(),
+            request_id: self.request_id.clone(),
+            timestamp: Some(self.timestamp()),
+            message: Some(body),
+            ..Default::default()
+        }
+    }
+
+    /// One time for the whole turn, taken when it started — these all belong to
+    /// one exchange.
+    fn timestamp(&self) -> prost_types::Timestamp {
+        prost_types::Timestamp {
+            seconds: self.started_at.timestamp(),
+            nanos: self.started_at.timestamp_subsec_nanos() as i32,
+        }
+    }
+
+    /// How the turn ended, in Warp's terms.
+    ///
+    /// `Refusal` and `MaxTokens` are reported as what they are rather than
+    /// flattened into `Done`: a turn that stopped because the agent declined is
+    /// a different event from one that finished, and a person reading a
+    /// conversation that simply stops has no way to tell.
+    pub(super) fn finished(&self, stop: StopReason) -> api::ResponseEvent {
+        use api::response_event::stream_finished;
+
+        let reason = match stop {
+            StopReason::EndTurn => stream_finished::Reason::Done(stream_finished::Done {}),
+            StopReason::Cancelled => stream_finished::Reason::Done(stream_finished::Done {}),
+            StopReason::MaxTokens => {
+                stream_finished::Reason::InternalError(stream_finished::InternalError {
+                    message: "The agent stopped: it reached its token limit.".to_owned(),
+                })
+            }
+            StopReason::MaxTurnRequests => {
+                stream_finished::Reason::InternalError(stream_finished::InternalError {
+                    message: "The agent stopped: it reached its limit on requests for this turn."
+                        .to_owned(),
+                })
+            }
+            StopReason::Refusal => {
+                stream_finished::Reason::InternalError(stream_finished::InternalError {
+                    message: "The agent declined to continue.".to_owned(),
+                })
+            }
+            // `StopReason` is `#[non_exhaustive]`. An unknown reason is still a
+            // finished turn — the alternative is a stream the client reports as
+            // an unexpected EOF, which is a worse lie than "done".
+            _ => stream_finished::Reason::Done(stream_finished::Done {}),
+        };
+        api::ResponseEvent {
+            r#type: Some(api::response_event::Type::Finished(
+                api::response_event::StreamFinished {
+                    reason: Some(reason),
+                    ..Default::default()
+                },
+            )),
+        }
+    }
+
+    /// A failure, said in the conversation rather than swallowed.
+    pub(super) fn failed(&self, message: String) -> api::ResponseEvent {
+        use api::response_event::stream_finished;
+
+        api::ResponseEvent {
+            r#type: Some(api::response_event::Type::Finished(
+                api::response_event::StreamFinished {
+                    reason: Some(stream_finished::Reason::InternalError(
+                        stream_finished::InternalError { message },
+                    )),
+                    ..Default::default()
+                },
+            )),
+        }
+    }
+
+    /// One line of plain text in the conversation, from Warp rather than the
+    /// agent.
+    ///
+    /// Used for the refusal notice. It is `AgentOutput` because there is no
+    /// "the client says" message type on this protocol, so the text itself has
+    /// to carry the attribution — see `mod.rs`.
+    pub(super) fn note(&mut self, text: String) -> api::ResponseEvent {
+        let message = self.message(api::message::Message::AgentOutput(
+            api::message::AgentOutput { text },
+        ));
+        self.add(vec![message])
+    }
+}
+
+/// The text of a content chunk, ignoring the parts Warp cannot render inline.
+///
+/// Images and audio arrive here too. Dropping them silently is wrong and
+/// naming them is cheap, so an unrenderable block becomes a short line saying
+/// what was there.
+fn chunk_text(chunk: &ContentChunk) -> String {
+    match &chunk.content {
+        ContentBlock::Text(text) => text.text.clone(),
+        ContentBlock::Image(_) => "[image]".to_owned(),
+        ContentBlock::Audio(_) => "[audio]".to_owned(),
+        ContentBlock::ResourceLink(link) => format!("[{}]", link.uri),
+        _ => String::new(),
+    }
+}
+
+fn actions(actions: Vec<api::client_action::Action>) -> api::ResponseEvent {
+    api::ResponseEvent {
+        r#type: Some(api::response_event::Type::ClientActions(
+            api::response_event::ClientActions {
+                actions: actions
+                    .into_iter()
+                    .map(|action| api::ClientAction {
+                        action: Some(action),
+                    })
+                    .collect(),
+            },
+        )),
+    }
+}
+
+#[cfg(test)]
+#[path = "translate_tests.rs"]
+mod tests;

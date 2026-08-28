@@ -303,6 +303,10 @@ winit = { workspace = true }
 wgpu.workspace = true
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
+# The ACP client (`ai::acp_agent`, T14.5). Cheap here: `async-io`, `blocking`,
+# `futures`, `serde_json` and `uuid` are already below, so what this actually
+# adds is the protocol crates, `async-process` and `shell-words`.
+agent-client-protocol = "2.0.0"
 app-installation-detection.workspace = true
 async-io.workspace = true
 axum.workspace = true

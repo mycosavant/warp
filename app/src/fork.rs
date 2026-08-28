@@ -201,6 +201,36 @@ pub fn local_agent_enabled() -> bool {
         )
 }
 
+/// The command that starts an ACP agent, as you would type it:
+/// `WARP_FORK_ACP_COMMAND="opencode acp"`.
+const ACP_AGENT_ENV_VAR: &str = "WARP_FORK_ACP_COMMAND";
+
+/// Which agent, if any, answers conversations over the Agent Client Protocol
+/// (T14.5).
+///
+/// **Naming the command is the switch**, and there is deliberately no second
+/// flag beside it. Every other predicate here answers *"is this behaviour
+/// permitted"*, which needs a boolean because the behaviour is already
+/// specified; this one answers *"which program"*, and there is no sensible
+/// default — ACP's whole point is that the agent is whatever you name. A flag
+/// plus a command would make the empty-flag-with-a-command state mean nothing,
+/// and the flag-set-with-no-command state mean failure.
+///
+/// Blank is treated as unset, so `WARP_FORK_ACP_COMMAND=` reads the way a
+/// person clearing it expects rather than as a request to run nothing.
+///
+/// **Outranks [`local_agent_enabled`] when both are set**, because naming a
+/// specific agent is the more specific instruction of the two. The seam in
+/// `ai::agent::api::generate_multi_agent_output` checks this first.
+pub fn acp_agent_command() -> Option<String> {
+    if !is_active() {
+        return None;
+    }
+    let command = std::env::var(ACP_AGENT_ENV_VAR).ok()?;
+    let command = command.trim();
+    (!command.is_empty()).then(|| command.to_owned())
+}
+
 /// Set to a number to change how deep `warpctrl agent spawn` may nest.
 const SPAWN_DEPTH_ENV_VAR: &str = "WARP_FORK_AGENT_SPAWN_DEPTH";
 
