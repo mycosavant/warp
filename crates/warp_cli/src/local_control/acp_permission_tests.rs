@@ -64,6 +64,125 @@ fn as_claude_sent_it() -> Vec<PermissionOption> {
     ]
 }
 
+/// The second measured list, transcribed the same way: `ExitPlanMode` on
+/// 2026-08-27. Every option is a session mode id, every name is a sentence about
+/// policy, and **none of them carries `_meta`** — which is the whole reason the
+/// `_meta` rule alone was not enough.
+fn as_claude_asked_to_leave_plan_mode() -> RequestPermissionRequest {
+    RequestPermissionRequest::new(
+        "session-1",
+        ToolCallUpdate::new(
+            "toolu_switch",
+            ToolCallUpdateFields::new()
+                .title("Ready to code?")
+                .kind(ToolKind::SwitchMode),
+        ),
+        vec![
+            option(
+                "bypassPermissions",
+                "Yes, and bypass permissions",
+                PermissionOptionKind::AllowAlways,
+            ),
+            option(
+                "auto",
+                "Yes, and use \"auto\" mode",
+                PermissionOptionKind::AllowAlways,
+            ),
+            option(
+                "acceptEdits",
+                "Yes, and auto-accept edits",
+                PermissionOptionKind::AllowAlways,
+            ),
+            option(
+                "default",
+                "Yes, and manually approve edits",
+                PermissionOptionKind::AllowOnce,
+            ),
+            option(
+                "plan",
+                "No, keep planning",
+                PermissionOptionKind::RejectOnce,
+            ),
+        ],
+    )
+}
+
+/// The live hole, pinned. `--approve` selected `default` on the wire — a
+/// session-wide permission mode, typed `allow_once`, carrying no declaration —
+/// and the agent then left plan mode and wrote a file the person had asked it to
+/// only plan.
+#[test]
+fn an_allow_refuses_a_question_about_which_policy_applies() {
+    let choice = choose(&as_claude_asked_to_leave_plan_mode(), Decision::Allow);
+
+    assert!(
+        matches!(choice, Choice::Cancel { .. }),
+        "answering yes here sets the policy for every later call, got: {choice:?}"
+    );
+}
+
+/// The asymmetry survives the fix: declining a policy change leaves the session
+/// with the policy it already had, so a no is still expressible and still safe.
+#[test]
+fn a_deny_still_answers_a_question_about_which_policy_applies() {
+    let choice = choose(&as_claude_asked_to_leave_plan_mode(), Decision::Deny);
+
+    assert_eq!(
+        choice,
+        Choice::Select(PermissionOptionId::new("plan")),
+        "\"No, keep planning\" is a well-formed no and refusing to send it would help nobody"
+    );
+}
+
+/// The refusal is scoped to the *question*, not to option shapes that happen to
+/// resemble it — an ordinary tool call is answered exactly as before.
+#[test]
+fn an_ordinary_request_is_not_caught_by_the_policy_question_rule() {
+    assert!(!asks_which_policy_applies(&request(as_claude_sent_it())));
+    assert_eq!(
+        choose(&request(as_claude_sent_it()), Decision::Allow),
+        Choice::Select(PermissionOptionId::new("allow"))
+    );
+}
+
+/// `ToolKind` is `#[serde(other)]`, so a kind this build does not know arrives as
+/// `Other`. Refusing on `SwitchMode` therefore degrades by *not* refusing — back
+/// to the previous behaviour, never to a wrongly-refused approval. This is the
+/// direction that makes gating on an agent-authored kind admissible at all.
+#[test]
+fn an_unknown_tool_kind_is_not_treated_as_a_policy_question() {
+    let mut request = as_claude_asked_to_leave_plan_mode();
+    request.tool_call.fields.kind = Some(ToolKind::Other);
+
+    assert!(!asks_which_policy_applies(&request));
+}
+
+/// A request that says nothing about its kind is the common case on the measured
+/// wire — the `permission_request`'s tool call carried no `kind` for an edit —
+/// and it must not be swept up.
+#[test]
+fn a_request_with_no_kind_is_not_treated_as_a_policy_question() {
+    let mut request = as_claude_asked_to_leave_plan_mode();
+    request.tool_call.fields.kind = None;
+
+    assert!(!asks_which_policy_applies(&request));
+}
+
+/// The reason reaches the person, because a `--approve` run that quietly stops
+/// approving is the failure this whole module was built out of.
+#[test]
+fn the_refusal_says_what_was_being_asked() {
+    let Choice::Cancel { reason } = choose(&as_claude_asked_to_leave_plan_mode(), Decision::Allow)
+    else {
+        panic!("a policy question is refused");
+    };
+
+    assert!(
+        reason.contains("which permission policy should apply"),
+        "the reason should name the question, got: {reason}"
+    );
+}
+
 /// The regression. `options.first()` here is **Deny**, so the old code answered
 /// an approval by refusing it — and did so silently, reporting success.
 #[test]

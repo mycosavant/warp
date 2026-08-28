@@ -30,7 +30,7 @@ use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::schema::v1::{
     ContentBlock, InitializeRequest, NewSessionRequest, PromptRequest, RequestPermissionOutcome,
     RequestPermissionRequest, RequestPermissionResponse, SelectedPermissionOutcome,
-    SessionNotification, TextContent,
+    SessionNotification, SetSessionModeRequest, TextContent,
 };
 use agent_client_protocol::{AcpAgent, Agent, ConnectionTo};
 use local_control::protocol::{ControlError, ErrorCode};
@@ -86,6 +86,7 @@ pub(super) fn run_probe(args: AcpProbeArgs) -> Result<(), ControlError> {
     let approve = args.approve;
     let prompt = args.prompt.clone();
     let command = args.command.clone();
+    let mode = args.mode.clone();
 
     // Shared because the two handlers and the exchange all write to it, and
     // `std` rather than a runtime's lock because there is no runtime here and the
@@ -190,6 +191,55 @@ pub(super) fn run_probe(args: AcpProbeArgs) -> Result<(), ControlError> {
                 emit("session", &session);
                 if let Ok(mut ledger) = session_modes.lock() {
                     ledger.observe_session(session.modes.clone());
+                }
+
+                // Before the prompt, because a mode asked for after the work is
+                // done governs nothing. Requesting is recorded before sending —
+                // see `Ledger::observe_mode_request` for the race that matters.
+                if let Some(mode) = mode {
+                    if let Ok(mut ledger) = session_modes.lock() {
+                        ledger.observe_mode_request(&mode);
+                    }
+                    let acknowledged = connection
+                        .send_request(SetSessionModeRequest::new(
+                            session.session_id.clone(),
+                            mode.clone(),
+                        ))
+                        .block_task()
+                        .await;
+                    match acknowledged {
+                        Ok(response) => {
+                            emit("mode_acknowledged", &response);
+                            if let Ok(mut ledger) = session_modes.lock() {
+                                ledger.observe_mode_acknowledgement(&mode);
+                            }
+                        }
+                        // Stopping rather than prompting anyway. `--mode` names a
+                        // policy, and continuing under a different one is exactly
+                        // the shape of the `--approve` bug: a flag that quietly
+                        // did the opposite of what it said.
+                        Err(error) => {
+                            let offered = session
+                                .modes
+                                .as_ref()
+                                .map(|modes| {
+                                    modes
+                                        .available_modes
+                                        .iter()
+                                        .map(|mode| mode.id.to_string())
+                                        .collect::<Vec<_>>()
+                                        .join(", ")
+                                })
+                                .unwrap_or_else(|| "nothing — it declared no modes".to_owned());
+                            eprintln!(
+                                "acp: the agent refused --mode {mode}: {error}; it offered: {offered}"
+                            );
+                            if let Ok(ledger) = session_modes.lock() {
+                                emit("consent_report", &ledger.report());
+                            }
+                            return Err(error);
+                        }
+                    }
                 }
 
                 let answer = connection

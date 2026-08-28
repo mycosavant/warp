@@ -15,6 +15,7 @@ fn probe(command: &str) -> AcpProbeArgs {
         prompt: "hello".to_owned(),
         cwd: None,
         approve: false,
+        mode: None,
     }
 }
 

@@ -60,6 +60,61 @@
 //! shown. An in-app picker that renders the declaration could legitimately offer
 //! it; nothing that exists today can.
 //!
+//! # The hole that argument left, measured 2026-08-27
+//!
+//! All of the above assumes a policy change announces itself in `_meta`. It does
+//! not have to. Asked to leave plan mode, `claude-agent-acp` sends a
+//! `session/request_permission` whose tool call has stable-v1
+//! `kind: "switch_mode"` and whose five options are the session's **mode ids**:
+//!
+//! ```text
+//! bypassPermissions  "Yes, and bypass permissions"       allow_always
+//! auto               "Yes, and use \"auto\" mode"         allow_always
+//! acceptEdits        "Yes, and auto-accept edits"        allow_always
+//! default            "Yes, and manually approve edits"   allow_once    ← selected
+//! plan               "No, keep planning"                 reject_once
+//! ```
+//!
+//! **Not one of the five carries `_meta`.** So the kind gate admitted `default`,
+//! the declaration gate found nothing to object to, and `--approve` answered
+//! *"Yes, and manually approve edits"* — setting the session's permission mode
+//! for every call after it. Watched on the wire: `{"outcome":"selected",
+//! "optionId":"default"}`, followed by the agent leaving plan mode and writing a
+//! file. The person had asked for `--mode plan`.
+//!
+//! The docs below already said why this would happen — *"absence of `_meta`
+//! proves nothing"* — and `choose` read exactly that absence as safety anyway.
+//! Writing a hazard down does not implement it; this is the third time in T14,
+//! after the re-ask hazard T14.2 recorded and T14.3 built against, and the count
+//! pin in T8.6. So it stops being an observation and becomes a rule: **a hazard
+//! in a doc comment with no test under it is a hazard that is not defended.**
+//! *"Absence of `_meta` proves nothing"* had none for as long as it was true and
+//! undefended; the `switch_mode` tests are the first.
+//!
+//! What the case actually shows is that the *question* can be the problem. These
+//! options declare their transition in their **names**, in English, which is
+//! disclosure to a person and nothing at all to a flag. When an agent is asking
+//! *which policy should apply* rather than *may I do this one thing*, no option
+//! is single-shot whatever its kind says — so `--approve` has no business
+//! answering yes to any of them, and [`asks_which_policy_applies`] is where that
+//! is decided.
+//!
+//! Refusing is only the *allow* side. `reject_once` — "No, keep planning" — is
+//! still selected and still correct, because declining a change leaves the state
+//! where it already was. A no cannot widen anything here either.
+//!
+//! ## This reverses a constraint written in `TASKS.md`, deliberately
+//!
+//! T14.4's constraint list says **"gate on the method, never on
+//! `tool_call.kind`"**. There is no method to gate on: every one of these arrives
+//! as `session/request_permission`, so the constraint as written forbids the only
+//! defence available. It is sound about *granting* — `ToolKind` is
+//! `#[serde(other)]`, so an unrecognised kind silently becomes `Other`, and
+//! anything that grants on a kind grants on the default. Used to **refuse**, that
+//! same degradation runs the safe way: an unknown kind is not `SwitchMode`, so it
+//! is not refused, which is today's behaviour rather than a new hole. The rule
+//! survives with its direction named: never grant on `tool_call.kind`.
+//!
 //! # Two things this is not
 //!
 //! **Absence of `_meta` proves nothing.** The moment any path here reads "no
@@ -77,7 +132,7 @@
 //! does not claim protection it does not have.
 
 use agent_client_protocol::schema::v1::{
-    PermissionOption, PermissionOptionId, PermissionOptionKind, RequestPermissionRequest,
+    PermissionOption, PermissionOptionId, PermissionOptionKind, RequestPermissionRequest, ToolKind,
 };
 
 /// Which way the caller wants to answer.
@@ -109,8 +164,39 @@ const PERMISSION_META_KEY: &str = "permission";
 /// not look, so an absent list is not evidence of an absent declaration.
 const KNOWN_PERMISSION_VERSION: u64 = 1;
 
+/// Said when the agent asks which policy should apply and the answer is a flag.
+///
+/// Names the surface rather than the option, because the refusal is not about
+/// this agent doing anything wrong — it asked clearly and in English. It is about
+/// `--approve` being unable to read English.
+const POLICY_QUESTION_REASON: &str = "the agent is asking which permission policy should apply, not whether one thing may \
+     happen; no option there is single-shot, so --approve declines and the session keeps \
+     the policy it already had";
+
+/// Whether the agent is asking which policy should apply, rather than whether one
+/// thing may happen.
+///
+/// Read only to **refuse**, exactly like [`declaration`], and for the same reason:
+/// `ToolKind` is agent-authored, so an agent that labels a mode switch `edit` is
+/// not caught. That is not a regression — it is where this already stood — and it
+/// is the same honesty `changes_policy` is written with. What this does catch is
+/// the agent that says plainly what it is asking, which is the one worth
+/// answering carefully.
+pub(super) fn asks_which_policy_applies(request: &RequestPermissionRequest) -> bool {
+    request.tool_call.fields.kind == Some(ToolKind::SwitchMode)
+}
+
 /// Answer one permission request.
 pub(super) fn choose(request: &RequestPermissionRequest, decision: Decision) -> Choice {
+    // Before the kind gate, because the kind gate is what got this wrong: the
+    // option that changes the session's policy was typed `allow_once` and carried
+    // no declaration, so every later test here passes it.
+    if decision == Decision::Allow && asks_which_policy_applies(request) {
+        return Choice::Cancel {
+            reason: POLICY_QUESTION_REASON.to_owned(),
+        };
+    }
+
     let wanted = match decision {
         Decision::Allow => PermissionOptionKind::AllowOnce,
         Decision::Deny => PermissionOptionKind::RejectOnce,

@@ -1395,11 +1395,41 @@ the rest of the session. T14.1 took `options.first()`, so `--approve` **denied**
 been a phone tap that denied, and the always-variant would have been a phone tap
 that authorized every later call the person is never shown.
 
+**…and `--approve` refuses outright when the agent is asking *which policy should
+apply*.** Measured 2026-08-27 (T14.4), and it is the same bug class caught a
+second time. Ask `claude-agent-acp` to leave plan mode and it sends a
+`session/request_permission` whose tool call is stable-v1 `kind: "switch_mode"`
+and whose five options are the session's mode ids:
+
+```
+bypassPermissions  "Yes, and bypass permissions"       allow_always
+auto               "Yes, and use \"auto\" mode"         allow_always
+acceptEdits        "Yes, and auto-accept edits"        allow_always
+default            "Yes, and manually approve edits"   allow_once     ← was selected
+plan               "No, keep planning"                 reject_once
+```
+
+**None of the five carries `_meta`.** So the `kind` gate admitted `default`, the
+declaration gate found nothing to object to, and `--approve` answered *"Yes, and
+manually approve edits"* — a permission mode for the rest of the session. Watched
+on the wire, then the agent left plan mode and wrote a file the person had asked
+it to only plan. The options declare their transition in their **names**, in
+English, which discloses it to a person and nothing at all to a flag.
+
+So the rule now runs before the `kind` gate: on a `switch_mode` request there is
+no single-shot option whatever its kind says, and `--approve` declines. Denial is
+untouched — *"No, keep planning"* is a well-formed no, and declining a change
+leaves the session where it already was.
+
 **What that is not.** It is not protection from a hostile agent — an option's
-`kind` is as agent-authored as anything else it sends, and a hostile agent does
-not ask permission at all. It defends against honest agents: an arbitrary option
-order, an escalating option offered by default, and a kind that understates what
-its option does.
+`kind` is as agent-authored as anything else it sends, and so is `switch_mode`,
+and a hostile agent does not ask permission at all. It defends against honest
+agents: an arbitrary option order, an escalating option offered by default, and a
+kind that understates what its option does. The reason gating a *refusal* on an
+agent-authored kind is admissible while gating a *grant* on one is not:
+`ToolKind` is `#[serde(other)]`, so an unrecognised kind arrives as `Other` — a
+refusal that misses it falls back to the old behaviour, a grant that trusts it
+grants on the default.
 
 **`--cwd` defaults to the current directory and is always made absolute.** An
 ACP session carries its working directory explicitly, which is worth using:
@@ -1434,7 +1464,7 @@ request for that call reached Warp; it does **not** mean unapproved, and it is a
 count rather than a label because every label — *unasked*, *ungoverned*,
 *bypassed* — is an inference about the agent rather than an observation of
 Warp's inbox. (A count also because nothing stops an agent asking twice about
-one call.) And `mode_the_agent_declared` is the
+one call.) And `mode_the_agent_declared_at_session_start` is the
 agent's claim, not a Warp finding — **the mode does not predict per-call
 gating.** Measured 2026-08-27: at mode `default`, whose own description is
 *"Standard behavior, prompts for dangerous operations"*, a prompt to write a file
@@ -1452,11 +1482,38 @@ the fork acts on any of it — refusing a session because it honestly declared
 optional.
 
 **An agent can change its own permission mode mid-session, and you can watch it.**
-Asked to switch to plan mode, `claude-agent-acp` sent
+Asked *in prose* to switch to plan mode, `claude-agent-acp` sent
 `{"sessionUpdate":"current_mode_update","currentModeId":"plan"}` and the report
-recorded `{"from":"default","to":"plan","warp_requested_it":false}`. Read that
-last field: it is what separates *"you were asked and you agreed"* from *"the
-agent re-declared itself and said so."* The same channel carries a widening.
+recorded the transition. The same channel carries a widening.
+
+**`--mode <id>` asks for one, and the honest word is *asks*.** It sends
+`session/set_mode` before the prompt; if the agent refuses, the probe stops
+rather than prompting under a policy you did not choose. What comes back is
+nearly nothing: `SetSessionModeResponse` has **no fields**, so a success carries
+one bit — no error. Measured 2026-08-27 (T14.4): `--mode plan` was acknowledged
+and honoured — the agent wrote a plan and then asked to leave plan mode — and it
+sent **no `current_mode_update` at all**. So an agent announces a mode change it
+makes *itself* and stays silent about one the client asks for, and Warp is less
+sighted the more it participates.
+
+That is why the report has **no current-mode field**. The version that had one
+printed `auto` for the session above, which was demonstrably in `plan`. What is
+left is three separate facts and no field a reader can mistake for the mode in
+force:
+
+| field | what it is |
+|---|---|
+| `mode_the_agent_declared_at_session_start` | the `session/new` value, never amended |
+| `mode_changes_the_agent_announced` | `current_mode_update`s, each quoting the agent's own description of the mode moved to |
+| `mode_requests_warp_sent` | what Warp asked for, whether the agent acknowledged, and whether it ever announced it |
+
+The same run corrected one more thing. `mode_changes_the_agent_announced` used to
+carry `warp_requested_it: false`, documented as *"the agent widening itself"* —
+and it printed exactly that over a change **Warp had just caused** by answering
+the `switch_mode` request above. A ledger that launders its own action as the
+agent's is worse than no ledger. The field is now
+`answers_a_set_mode_warp_sent`, named for the message Warp sent rather than for
+who moved the mode, because that is the part Warp can check.
 
 Two more things before reading too much into a transcript. Warp is not an ACP
 *client* in the full sense — it advertises no `fs/*` and no `terminal/*`

@@ -1004,6 +1004,19 @@ pub struct AcpProbeArgs {
     /// if it is the only yes the agent offered. See `acp_permission.rs`.
     #[arg(long = "approve")]
     pub approve: bool,
+
+    /// Ask the agent to run the session in this mode, before prompting it.
+    ///
+    /// A `session/set_mode` for one of the mode ids the agent listed in its
+    /// `session/new` response. **Asking is all this does**, and the report says
+    /// so: `SetSessionModeResponse` carries no fields, so a success means only
+    /// that no error came back. Never read it as "the mode is now in force".
+    ///
+    /// If the agent refuses, the probe stops without prompting. You named a
+    /// policy; running the prompt under a different one is the failure `--approve`
+    /// already shipped once (`acp_permission.rs`).
+    #[arg(long = "mode")]
+    pub mode: Option<String>,
 }
 
 #[derive(Debug, Clone, Args)]

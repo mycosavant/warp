@@ -62,7 +62,10 @@ fn measured_session() -> Ledger {
 fn one_mode_can_cover_a_call_that_was_asked_about_and_one_that_was_not() {
     let report = measured_session().report();
 
-    assert_eq!(report.mode_the_agent_declared.as_deref(), Some("default"));
+    assert_eq!(
+        report.mode_the_agent_declared_at_session_start.as_deref(),
+        Some("default")
+    );
     assert_eq!(report.calls.len(), 2);
     assert_eq!(
         report.calls[0].permission_requests_received, 1,
@@ -82,7 +85,7 @@ fn the_mode_description_is_the_agents_own_words() {
     let report = measured_session().report();
 
     assert_eq!(
-        report.mode_description_from_the_agent.as_deref(),
+        report.its_description_from_the_agent.as_deref(),
         Some("Standard behavior, prompts for dangerous operations")
     );
 }
@@ -98,8 +101,8 @@ fn an_agent_that_declares_no_mode_is_reported_as_declaring_none() {
 
     let report = ledger.report();
 
-    assert_eq!(report.mode_the_agent_declared, None);
-    assert_eq!(report.mode_description_from_the_agent, None);
+    assert_eq!(report.mode_the_agent_declared_at_session_start, None);
+    assert_eq!(report.its_description_from_the_agent, None);
     assert_eq!(
         report.calls_warp_was_not_asked_about, 1,
         "a missing mode does not change what Warp was or was not asked"
@@ -185,10 +188,12 @@ fn updates_for_the_same_id_refine_one_record() {
     assert_eq!(report.calls[0].status.as_deref(), Some("completed"));
 }
 
-/// An agent announcing a mode change is Warp watching a transition rather than
-/// guessing a state, so the report follows it.
+/// An announcement is a *transition Warp watched*, and it does not overwrite the
+/// opening declaration — that used to be a `mode_the_agent_declared` field which
+/// a reader took for the current mode, and the current mode is the one thing here
+/// Warp does not know.
 #[test]
-fn an_announced_mode_change_replaces_the_declared_mode() {
+fn an_announced_mode_change_does_not_rewrite_what_was_declared_at_the_start() {
     let mut ledger = Ledger::new();
     ledger.observe_session(Some(modes("default")));
     ledger.observe_update(&SessionUpdate::CurrentModeUpdate(CurrentModeUpdate::new(
@@ -197,11 +202,37 @@ fn an_announced_mode_change_replaces_the_declared_mode() {
 
     let report = ledger.report();
 
-    assert_eq!(report.mode_the_agent_declared.as_deref(), Some("auto"));
     assert_eq!(
-        report.mode_description_from_the_agent.as_deref(),
-        Some("Use a model classifier to approve/deny permission prompts")
+        report.mode_the_agent_declared_at_session_start.as_deref(),
+        Some("default"),
+        "the opening claim is a wire-fact and stays one"
     );
+    let change = &report.mode_changes_the_agent_announced[0];
+    assert_eq!(change.to, "auto");
+    assert_eq!(
+        change.description_from_the_agent.as_deref(),
+        Some("Use a model classifier to approve/deny permission prompts"),
+        "the mode moved to is quoted in the agent's own words, where the move is recorded"
+    );
+}
+
+/// Chained announcements read from the last one, not from the opening
+/// declaration, or the second change would claim to start where the first did.
+#[test]
+fn a_second_announced_change_starts_from_the_first() {
+    let mut ledger = Ledger::new();
+    ledger.observe_session(Some(modes("default")));
+    ledger.observe_update(&SessionUpdate::CurrentModeUpdate(CurrentModeUpdate::new(
+        "auto",
+    )));
+    ledger.observe_update(&SessionUpdate::CurrentModeUpdate(CurrentModeUpdate::new(
+        "default",
+    )));
+
+    let changes = ledger.report().mode_changes_the_agent_announced;
+
+    assert_eq!(changes[1].from.as_deref(), Some("auto"));
+    assert_eq!(changes[1].to, "default");
 }
 
 /// An agent re-declaring itself mid-session is the rug-pull shape, and applying
@@ -222,7 +253,7 @@ fn an_announced_mode_change_is_kept_as_well_as_applied() {
     assert_eq!(change.from.as_deref(), Some("default"));
     assert_eq!(change.to, "auto");
     assert!(
-        !change.warp_requested_it,
+        !change.answers_a_set_mode_warp_sent,
         "this probe never sends session/set_mode, so it asked for nothing"
     );
 }
@@ -231,12 +262,146 @@ fn an_announced_mode_change_is_kept_as_well_as_applied() {
 /// itself" is a claim worth evidencing rather than assuming.
 #[test]
 fn a_session_with_no_announced_change_reports_an_empty_list() {
+    let report = measured_session().report();
+
+    assert!(report.mode_changes_the_agent_announced.is_empty());
     assert!(
-        measured_session()
-            .report()
-            .mode_changes_the_agent_announced
-            .is_empty()
+        report.mode_requests_warp_sent.is_empty(),
+        "a session Warp stayed out of must be distinguishable from one where it asked"
     );
+}
+
+/// The one change Warp participated in. Without this the probe's own
+/// `session/set_mode` would be reported as the agent widening itself, which is
+/// the rug-pull sentence and would be false.
+#[test]
+fn a_change_answering_warps_request_is_reported_as_requested() {
+    let mut ledger = Ledger::new();
+    ledger.observe_session(Some(modes("default")));
+    ledger.observe_mode_request("auto");
+    ledger.observe_mode_acknowledgement("auto");
+    ledger.observe_update(&SessionUpdate::CurrentModeUpdate(CurrentModeUpdate::new(
+        "auto",
+    )));
+
+    let report = ledger.report();
+
+    assert!(report.mode_changes_the_agent_announced[0].answers_a_set_mode_warp_sent);
+    assert_eq!(
+        report.mode_requests_warp_sent,
+        vec![ModeRequest {
+            mode_id: "auto".to_owned(),
+            the_agent_acknowledged: true,
+            the_agent_announced_it_afterwards: true,
+        }]
+    );
+}
+
+/// `SetSessionModeResponse` has no fields, so an acknowledgement is one bit: no
+/// error. Reporting it as though the mode were in force would be the mode
+/// picker's version of claiming protection the fork does not have.
+#[test]
+fn an_acknowledgement_alone_is_not_reported_as_the_mode_taking_effect() {
+    let mut ledger = Ledger::new();
+    ledger.observe_session(Some(modes("default")));
+    ledger.observe_mode_request("auto");
+    ledger.observe_mode_acknowledgement("auto");
+
+    let report = ledger.report();
+
+    assert!(report.mode_requests_warp_sent[0].the_agent_acknowledged);
+    assert!(!report.mode_requests_warp_sent[0].the_agent_announced_it_afterwards);
+    assert_eq!(
+        report.mode_the_agent_declared_at_session_start.as_deref(),
+        Some("default"),
+        "the opening declaration is untouched by a mode Warp asked for and was never told about"
+    );
+    assert!(report.mode_changes_the_agent_announced.is_empty());
+}
+
+/// The measured case, and the reason the current-mode field was deleted. Warp
+/// asked for `plan`, the agent acknowledged and behaved as though in plan mode,
+/// and announced nothing — so the only two mode facts in the report disagree with
+/// the session, and the report has to be readable as *that* rather than as `auto`.
+#[test]
+fn a_silently_honoured_request_leaves_the_report_saying_only_what_it_saw() {
+    let mut ledger = Ledger::new();
+    ledger.observe_session(Some(modes("auto")));
+    ledger.observe_mode_request("plan");
+    ledger.observe_mode_acknowledgement("plan");
+
+    let value = serde_json::to_value(ledger.report()).expect("the report should render");
+
+    assert!(
+        value.get("mode_the_agent_declared").is_none(),
+        "no field may read as the mode the session is in, got: {value}"
+    );
+    assert_eq!(
+        value["mode_the_agent_declared_at_session_start"], "auto",
+        "named for the moment it was true"
+    );
+    assert_eq!(value["mode_requests_warp_sent"][0]["mode_id"], "plan");
+    assert_eq!(
+        value["mode_changes_the_agent_announced"],
+        serde_json::json!([]),
+        "nothing was announced, and the empty list is the evidence of that"
+    );
+}
+
+/// One request buys credit for one announcement. An agent that acknowledges,
+/// announces, and then announces the same mode again unprompted is doing
+/// something Warp did not ask for the second time, and the record has to show it.
+#[test]
+fn a_second_change_to_the_same_mode_is_not_credited_to_the_one_request() {
+    let mut ledger = Ledger::new();
+    ledger.observe_session(Some(modes("default")));
+    ledger.observe_mode_request("auto");
+    ledger.observe_mode_acknowledgement("auto");
+    ledger.observe_update(&SessionUpdate::CurrentModeUpdate(CurrentModeUpdate::new(
+        "auto",
+    )));
+    ledger.observe_update(&SessionUpdate::CurrentModeUpdate(CurrentModeUpdate::new(
+        "auto",
+    )));
+
+    let changes = ledger.report().mode_changes_the_agent_announced;
+
+    assert!(changes[0].answers_a_set_mode_warp_sent);
+    assert!(!changes[1].answers_a_set_mode_warp_sent);
+}
+
+/// The announcement may overtake the response — nothing orders a notification
+/// against a reply — and a request recorded afterwards would miss its own answer.
+#[test]
+fn a_change_that_arrives_before_the_acknowledgement_is_still_credited() {
+    let mut ledger = Ledger::new();
+    ledger.observe_session(Some(modes("default")));
+    ledger.observe_mode_request("auto");
+    ledger.observe_update(&SessionUpdate::CurrentModeUpdate(CurrentModeUpdate::new(
+        "auto",
+    )));
+    ledger.observe_mode_acknowledgement("auto");
+
+    let report = ledger.report();
+
+    assert!(report.mode_changes_the_agent_announced[0].answers_a_set_mode_warp_sent);
+    assert!(report.mode_requests_warp_sent[0].the_agent_acknowledged);
+    assert!(report.mode_requests_warp_sent[0].the_agent_announced_it_afterwards);
+}
+
+/// An agent that never answers is a case the report must be able to show, since
+/// the probe stops on a refusal and the record is the only account of why.
+#[test]
+fn an_unanswered_request_is_reported_rather_than_dropped() {
+    let mut ledger = Ledger::new();
+    ledger.observe_session(Some(modes("default")));
+    ledger.observe_mode_request("plan");
+
+    let report = ledger.report();
+
+    assert_eq!(report.mode_requests_warp_sent.len(), 1);
+    assert!(!report.mode_requests_warp_sent[0].the_agent_acknowledged);
+    assert!(!report.mode_requests_warp_sent[0].the_agent_announced_it_afterwards);
 }
 
 /// Warp refuses every option that declares a change, so the offered list fills

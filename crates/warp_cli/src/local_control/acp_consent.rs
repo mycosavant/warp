@@ -52,6 +52,35 @@
 //! `approved: true`, and `local_agent/tools.rs` refuses an allowlist it cannot
 //! enforce.
 //!
+//! # …and "out loud" turned out to mean "once" (T14.4)
+//!
+//! T14.3 concluded the agent says its mode out loud. Measured again once Warp
+//! could *ask*: it says it out loud **at `session/new`**, and re-announces when a
+//! person asks it in prose to switch — but sending `session/set_mode(plan)`
+//! produced an acknowledgement, plan-mode behaviour, and **no
+//! `CurrentModeUpdate` at all**. The report still read `auto`.
+//!
+//! So Warp gets *less* sighted the more it participates, and the field that
+//! tracked "the mode" was wrong in exactly the direction this module exists to
+//! prevent. It is gone. What is left is three separate wire-facts —
+//! what was declared at the start, what was announced since, what Warp asked for
+//! — and no field that a reader can mistake for the mode the session is in.
+//!
+//! # A ledger that laundered its own action
+//!
+//! Worse, and from the same runs. `--approve` selected the option *"Yes, and
+//! manually approve edits"* on an `ExitPlanMode` request (see
+//! `acp_permission.rs`), and the agent then announced
+//! `{"from":"auto","to":"default"}` — which this file recorded as
+//! `warp_requested_it: false`, documented as *"the agent widening or narrowing
+//! itself"*. Warp caused that change and the ledger attributed it to the agent.
+//!
+//! The field is now named for the message Warp sent rather than for who moved
+//! the mode, because that is the part Warp can actually check. `choose` refusing
+//! those options puts the case out of reach from this binary, which is a reason
+//! to fix the record rather than a reason not to: the next surface that can
+//! answer a policy question will reach it again.
+//!
 //! # Transitions, which are the one thing Warp is genuinely sighted on
 //!
 //! Warp cannot know the policy state, but it knows exactly what it was *asked to
@@ -70,11 +99,17 @@ use super::acp_permission::{self, Declaration};
 /// What Warp observed, in the order it observed it.
 #[derive(Debug, Default)]
 pub(super) struct Ledger {
-    /// The mode the agent declared, if it declared one.
+    /// What `session/new` said about modes, **as received and never amended**.
     ///
     /// `Option` because `NewSessionResponse.modes` is optional in the schema. An
     /// agent that declares nothing is a **third state**, not an ungoverned one,
     /// and the report says so rather than filling the gap with a guess.
+    ///
+    /// Kept unmodified since the measurement in the module docs: overwriting
+    /// `current_mode_id` on every announcement produced a field that read as *the
+    /// mode the session is in*, which Warp does not know. What it knows is the
+    /// opening declaration and the announcements since, and those are two facts,
+    /// not one.
     mode: Option<SessionModeState>,
     /// Insertion-ordered rather than a map: a prompt turn has a handful of tool
     /// calls, and the order they happened in is the order a person wants to read.
@@ -83,6 +118,30 @@ pub(super) struct Ledger {
     transitions: Vec<Transition>,
     /// Mode changes the agent announced, in order.
     announced_mode_changes: Vec<ModeChange>,
+    /// Mode changes Warp asked for, in order.
+    mode_requests: Vec<ModeRequest>,
+}
+
+/// A `session/set_mode` Warp sent, and everything that came back.
+///
+/// Kept as its own record because **an acknowledgement is nearly empty**:
+/// `SetSessionModeResponse` has no fields at all, so a successful reply carries
+/// exactly one bit — no error. Whether the agent then behaved differently is not
+/// on the wire, and the only follow-up evidence that can exist is a
+/// [`SessionUpdate::CurrentModeUpdate`] naming the mode. So the two are recorded
+/// separately and a reader can see which of them happened.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub(super) struct ModeRequest {
+    pub mode_id: String,
+    /// The agent answered without an error. That is the whole content of an
+    /// acknowledgement — see the type docs — and it is **not** evidence the mode
+    /// took effect.
+    pub the_agent_acknowledged: bool,
+    /// The agent afterwards announced this mode as current.
+    ///
+    /// The strongest evidence available, and still only the agent's own claim
+    /// about itself. Absent this, an acknowledgement is all there is.
+    pub the_agent_announced_it_afterwards: bool,
 }
 
 /// A mode change the agent announced mid-session.
@@ -91,13 +150,31 @@ pub(super) struct ModeChange {
     /// The mode the agent had last claimed, or `null` if it never claimed one.
     pub from: Option<String>,
     pub to: String,
-    /// Whether this change is one Warp asked for.
+    /// The agent's own description of the mode it moved to, if it gave one.
+    pub description_from_the_agent: Option<String>,
+    /// Whether this change answers a `session/set_mode` Warp sent and no earlier
+    /// announcement has already been credited to.
     ///
-    /// `session/set_mode` exists in the schema, so a future surface can request a
-    /// mode; nothing here does. A change with this `false` is the agent widening
-    /// or narrowing itself and saying so, which is a wire-fact worth keeping
-    /// separate from a change Warp participated in.
-    pub warp_requested_it: bool,
+    /// **Named for the message Warp sent, not for who caused the change, and that
+    /// is a correction.** This field was `warp_requested_it`, documented as
+    /// *"a change with this `false` is the agent widening or narrowing itself"* —
+    /// and then a run measured `{"from":"auto","to":"default",
+    /// "warp_requested_it":false}` arriving immediately after Warp had itself
+    /// selected the option *"Yes, and manually approve edits"* on a `switch_mode`
+    /// permission request. So `false` was printing the rug-pull sentence over
+    /// Warp's own doing. A ledger that launders its own action as the agent's is
+    /// worse than no ledger.
+    ///
+    /// `acp_permission::choose` now refuses those options, which puts that case
+    /// out of reach *from this binary* — and the field is still renamed, because
+    /// the next surface to answer a policy question will reach it again and the
+    /// record has to have been right before it does.
+    ///
+    /// What remains is an inference, and the only one in this file: nothing on the
+    /// wire links a `CurrentModeUpdate` to the request that may have caused it, so
+    /// this matches on the mode id and consumes the request — which is why a
+    /// second, unsolicited change back to the same mode reads `false`.
+    pub answers_a_set_mode_warp_sent: bool,
 }
 
 /// One tool call, and whether this process was asked about it.
@@ -151,19 +228,35 @@ pub(super) struct Transition {
 /// The whole of what Warp can honestly say about one session.
 #[derive(Debug, Clone, PartialEq, serde::Serialize)]
 pub(super) struct Report {
-    /// The mode id the agent declared, or `null` if it declared none.
+    /// The mode id the agent declared in its `session/new` response, or `null` if
+    /// it declared none.
     ///
-    /// **The agent's claim, not Warp's finding.** Warp cannot verify it and does
-    /// not act on it.
-    pub mode_the_agent_declared: Option<String>,
-    /// The agent's own description of that mode, quoted.
-    pub mode_description_from_the_agent: Option<String>,
+    /// **The agent's opening claim, not Warp's finding, and not the mode the
+    /// session is in.** There used to be a `mode_the_agent_declared` here that
+    /// tracked announcements and was read as the current mode. It was measured
+    /// wrong: Warp sent `session/set_mode(plan)`, the agent acknowledged and
+    /// behaved accordingly — it wrote a plan and then asked to leave plan mode —
+    /// and announced nothing, so the field still said `auto` for a session
+    /// demonstrably in `plan`.
+    ///
+    /// So there is no current-mode field any more. Warp knows what was declared at
+    /// the start, what was announced since, and what it asked for; the current
+    /// mode is not among them, and a reader composing it from these three can at
+    /// least see where it is uncertain.
+    pub mode_the_agent_declared_at_session_start: Option<String>,
+    /// The agent's own description of that opening mode, quoted.
+    pub its_description_from_the_agent: Option<String>,
     /// Mode changes the agent announced after the session started.
     ///
-    /// Empty in every run measured so far — which is why it is printed rather
-    /// than omitted, since "the agent did not re-declare itself" is the claim
-    /// this field exists to evidence.
+    /// Printed even when empty, since "the agent did not re-declare itself" is the
+    /// claim this field exists to evidence. **An empty list is not evidence the
+    /// mode never moved** — see the field above, where it moved silently.
     pub mode_changes_the_agent_announced: Vec<ModeChange>,
+    /// Mode changes Warp asked for, and what evidence came back that they landed.
+    ///
+    /// Printed even when empty, because a reader has no other way to tell a
+    /// session Warp stayed out of from one where it asked and was ignored.
+    pub mode_requests_warp_sent: Vec<ModeRequest>,
     pub calls: Vec<Call>,
     /// How many calls this process was never asked about.
     ///
@@ -187,7 +280,9 @@ const CAVEAT: &str = "`permission_requests_received: 0` means only that no permi
                       most likely allowed by a rule the user wrote deliberately. The declared mode \
                       is the agent's claim and does not predict per-call gating — one measured \
                       session at mode `default` asked about a file write and did not ask about a \
-                      shell command.";
+                      shell command. Nor is it necessarily current: an agent that honours a \
+                      `session/set_mode` need not announce it, and one measured session ran in \
+                      `plan` while its last declaration still said `auto`.";
 
 impl Ledger {
     pub(super) fn new() -> Self {
@@ -197,6 +292,33 @@ impl Ledger {
     /// Record what `session/new` said about modes.
     pub(super) fn observe_session(&mut self, modes: Option<SessionModeState>) {
         self.mode = modes;
+    }
+
+    /// Record that Warp is about to send `session/set_mode`.
+    ///
+    /// Before rather than after, and that is not tidiness. Nothing orders a
+    /// notification against a response, so the agent's `CurrentModeUpdate` may
+    /// arrive while the `set_mode` call is still outstanding; a request recorded
+    /// afterwards would miss its own answer and the change Warp asked for would be
+    /// reported as the agent widening itself. Recording first cannot lose that
+    /// race in either direction.
+    pub(super) fn observe_mode_request(&mut self, mode_id: &str) {
+        self.mode_requests.push(ModeRequest {
+            mode_id: mode_id.to_owned(),
+            the_agent_acknowledged: false,
+            the_agent_announced_it_afterwards: false,
+        });
+    }
+
+    /// Record that the agent answered a `session/set_mode` without an error.
+    pub(super) fn observe_mode_acknowledgement(&mut self, mode_id: &str) {
+        if let Some(request) = self
+            .mode_requests
+            .iter_mut()
+            .find(|request| request.mode_id == mode_id && !request.the_agent_acknowledged)
+        {
+            request.the_agent_acknowledged = true;
+        }
     }
 
     /// Record one `SessionUpdate`.
@@ -233,23 +355,36 @@ impl Ledger {
             // — that the agent widened *itself* — so the announcement is kept as
             // well as applied.
             SessionUpdate::CurrentModeUpdate(update) => {
-                let from = self
-                    .mode
-                    .as_ref()
-                    .map(|mode| mode.current_mode_id.to_string());
                 let to = update.current_mode_id.to_string();
-                if let Some(mode) = self.mode.as_mut() {
-                    mode.current_mode_id = update.current_mode_id.clone();
-                }
+                let from = self
+                    .announced_mode_changes
+                    .last()
+                    .map(|change| change.to.clone())
+                    .or_else(|| {
+                        self.mode
+                            .as_ref()
+                            .map(|mode| mode.current_mode_id.to_string())
+                    });
+                let description = self.description_of(&to);
+                // Credited to the oldest un-answered request for this mode, if
+                // there is one. Telling the two apart is the point: "you were
+                // asked and you agreed" is a different sentence from "the agent
+                // widened itself and said so", and only the second is a rug pull.
+                let answers_a_request = self
+                    .mode_requests
+                    .iter_mut()
+                    .find(|request| {
+                        request.mode_id == to && !request.the_agent_announced_it_afterwards
+                    })
+                    .map(|request| {
+                        request.the_agent_announced_it_afterwards = true;
+                    })
+                    .is_some();
                 self.announced_mode_changes.push(ModeChange {
                     from,
                     to,
-                    // This probe never sends `session/set_mode`, so every change
-                    // it sees is one it did not ask for. The field exists because
-                    // a surface that *can* request one must be able to tell the
-                    // two apart: "you were asked and you agreed" is a different
-                    // sentence from "the agent widened itself and said so".
-                    warp_requested_it: false,
+                    description_from_the_agent: description,
+                    answers_a_set_mode_warp_sent: answers_a_request,
                 });
             }
             _ => {}
@@ -305,18 +440,17 @@ impl Ledger {
 
     /// Everything Warp can honestly say, and nothing else.
     pub(super) fn report(&self) -> Report {
-        let current = self.mode.as_ref().map(|mode| mode.current_mode_id.clone());
-        let description = current.as_ref().and_then(|current| {
-            self.mode
-                .as_ref()?
-                .available_modes
-                .iter()
-                .find_map(|mode| (&mode.id == current).then(|| mode.description.clone())?)
-        });
+        let opening = self
+            .mode
+            .as_ref()
+            .map(|mode| mode.current_mode_id.to_string());
         Report {
-            mode_the_agent_declared: current.map(|id| id.to_string()),
-            mode_description_from_the_agent: description,
+            its_description_from_the_agent: opening
+                .as_deref()
+                .and_then(|opening| self.description_of(opening)),
+            mode_the_agent_declared_at_session_start: opening,
             mode_changes_the_agent_announced: self.announced_mode_changes.clone(),
+            mode_requests_warp_sent: self.mode_requests.clone(),
             calls_warp_was_not_asked_about: self
                 .calls
                 .iter()
@@ -332,6 +466,17 @@ impl Ledger {
             transitions_offered: self.transitions.clone(),
             caveat: CAVEAT,
         }
+    }
+
+    /// The agent's own description of one of the modes it listed, if it gave one.
+    fn description_of(&self, mode_id: &str) -> Option<String> {
+        self.mode
+            .as_ref()?
+            .available_modes
+            .iter()
+            .find(|mode| mode.id.to_string() == mode_id)?
+            .description
+            .clone()
     }
 
     /// The record for a call, created on first sight.

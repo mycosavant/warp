@@ -5950,8 +5950,12 @@ to an ACP *node* in the task graph, and there is none: graph nodes spawn agents
 through `agent.spawn`, which has no ACP link. Recorded on T14.4 rather than
 silently dropped.
 
-- [ ] **T14.4** The app surface, when there is a reason for one. Constraints
-      already paid for, so they should not be rediscovered:
+- [x] **T14.4** ~~The app surface, when there is a reason for one.~~ **The two
+      measurements this ticket named as prerequisites were run first, and the
+      first one found a live consent hole in the module T14.2 had just built —
+      so T14.4 became that fix, and the app surface is now T14.5.** As built
+      below. The constraint list survives intact except where the measurement
+      contradicts it, which is called out in place.
       **a new approval shape** in `crates/local_control/src/protocol.rs`, sibling
       to `PendingApproval` and decided next to its consumer — not `PendingApproval`
       with a session id smuggled into a field documented as a pane id.
@@ -5966,8 +5970,15 @@ silently dropped.
       **Refuse `allow_tools` on an ACP node** rather than accept and drop it —
       `local_agent/tools.rs:17-20`'s stated nightmare, *"worse than no allowlist,
       because it reads as a guarantee."*
-      **Gate on the method, never on `tool_call.kind`**, which is agent-authored
-      and whose unknown case silently becomes `Other` via `#[serde(other)]`.
+      ~~**Gate on the method, never on `tool_call.kind`**, which is agent-authored
+      and whose unknown case silently becomes `Other` via `#[serde(other)]`.~~
+      **Half-false, and the measurement below is what showed it.** There is no
+      method to gate on — everything arrives as `session/request_permission` — so
+      as written the rule forbade the only defence available against the hole
+      T14.4 found. It is sound about *granting*: an unrecognised kind becomes
+      `Other`, so anything granting on a kind grants on the default. Used to
+      **refuse**, the same degradation runs the safe way. Corrected to: **never
+      grant on `tool_call.kind`.**
       **Provenance-tag every agent-authored string** — mode id, mode description,
       option name, tool title — and render **no session-level governance
       indicator**, which now explicitly includes the declared mode (T14.3: it
@@ -5980,13 +5991,137 @@ silently dropped.
       but its effect is unverifiable — so it may only ever be reported as
       *"requested `default`; the agent acknowledged"*, never as *"protection
       enabled"*.
-      **To measure first:** whether the already-deployed `console.js` renders an
-      approval entry with unfamiliar fields gracefully. It passes
-      `approval_id`/`digest` back opaquely, which was checked; how it handles an
-      unknown `kind` was not. If old clients turn out to need the old shape
-      unmodified, a flatten-to-`PendingApproval` compatibility shim comes back
-      with its warts accepted — that is the one thing that would reopen the
-      decision above.
+      ~~**To measure first:** whether the already-deployed `console.js` renders an
+      approval entry with unfamiliar fields gracefully.~~ **Answered by reading,
+      and it was the wrong question — see the as-built.**
+
+### T14.4 — as built
+
+**The ticket was the app surface. Running its own prerequisites first turned it
+into a consent fix, because the first measurement found `--approve` authorizing
+a session-wide policy change.** Same shape as T14.2, in the module T14.2 built,
+two commits later.
+
+**What was built to measure with: `--mode <id>`.** `session/set_mode` was
+schema-only at the end of T14.3 — named unverified, and the half of the mode
+picker T14.4 was told to measure first. It is a flag on the probe that sends one
+before the prompt. If the agent refuses, the probe **stops rather than
+prompting**, because the person named a policy and running under a different one
+is exactly the `--approve` failure T14.2 fixed.
+
+**The agent honours it, and says nothing.** Measured 2026-08-27:
+`--mode plan` was acknowledged, and behaviourally obeyed — the agent wrote a
+plan file and then asked to leave plan mode. It sent **no `CurrentModeUpdate`**.
+So T14.3's "the agent says its mode out loud" is sharper than it was written:
+it says so **at `session/new`**, and re-announces when a *person* asks it in
+prose — but not when the *client* uses the protocol's own mode API. **Warp is
+less sighted the more it participates**, which is the opposite of what a
+governance surface would assume.
+
+An acknowledgement is also nearly empty by construction: `SetSessionModeResponse`
+has **no fields**. A success is one bit. T14.4's own constraint already said a
+mode request may only be reported as *"requested; the agent acknowledged"* — this
+is why, and it is stronger than the constraint assumed.
+
+**Then the hole.** `ExitPlanMode` arrives as a permission request whose tool call
+is stable-v1 `kind: "switch_mode"` and whose five options are the session's mode
+ids:
+
+```
+bypassPermissions  "Yes, and bypass permissions"       allow_always
+auto               "Yes, and use \"auto\" mode"         allow_always
+acceptEdits        "Yes, and auto-accept edits"        allow_always
+default            "Yes, and manually approve edits"   allow_once     ← selected
+plan               "No, keep planning"                 reject_once
+```
+
+**Not one of the five carries `_meta`.** So `acp_permission::choose` — which
+finds the first `allow_once` carrying no declared change — selected `default`.
+Watched on the wire: `{"outcome":"selected","optionId":"default"}`, then the
+agent left plan mode and wrote the file the person had asked it to only plan.
+`--approve` promises "once each" and had just set the session's permission mode.
+
+The module's own docs predicted it in as many words — *"absence of `_meta` proves
+nothing; the moment any path here reads 'no declared change, therefore safe', the
+forbidden assumption has been made in the granting direction"* — and `choose` did
+that anyway. **Third instance in T14 of writing a hazard down and then building
+against it** (T14.2's re-ask, T14.3's boolean, this). The lesson is not learning
+itself, so it is now stated as a rule: *a hazard in a doc comment with no test
+under it is a hazard that is not defended.*
+
+**The fix, and what makes it more than a patch.** The generalisation is that **the
+question can be the problem**: when an agent asks *which policy should apply*
+rather than *may I do this one thing*, no option is single-shot whatever its kind
+says. These options declare their transition in their **names**, in English —
+disclosure to a person, nothing at all to a flag. `--approve` now declines the
+whole request. Denial is untouched, and correctly: *"No, keep planning"* is a
+well-formed no, and declining a change leaves the session where it already was.
+
+**Two corroborating signals were seen and deliberately not built on**: every
+`optionId` equals a declared `availableModes` id, and the request offers *three*
+distinct `allow_always` options where an ordinary write offers one. Both are
+heuristics whose false positives would make `--approve` stop working on some
+other agent and read as a bug; `ToolKind::SwitchMode` is typed, stable v1, and
+present in the request.
+
+**Two report defects, from the same three runs.**
+
+- **`mode_the_agent_declared` was wrong and is deleted.** It printed `auto` for
+  the session measured above, which was in `plan`. There is now **no current-mode
+  field**, because Warp does not know the current mode: what it has is the
+  opening declaration, the announcements since, and what it asked for — three
+  facts, and a reader composing them can at least see where it is uncertain.
+- **The ledger laundered Warp's own action as the agent's.** After `--approve`
+  selected *"Yes, and manually approve edits"*, the agent announced
+  `{"from":"auto","to":"default"}` and the report recorded
+  `warp_requested_it: false`, documented as *"the agent widening or narrowing
+  itself"* — the rug-pull sentence, printed over Warp's own doing. Renamed to
+  `answers_a_set_mode_warp_sent`: named for the message Warp sent rather than for
+  who moved the mode, because that is the part Warp can check. The fix to
+  `choose` puts the case out of reach *from this binary*, which is a reason to
+  correct the record rather than a reason not to — T14.5 reaches it again.
+
+**The second prerequisite was answered by reading, and it was the wrong
+question.** `console.js` cannot throw on an unfamiliar approval: every field
+access in `approvalRow` is guarded by `||`, an `if`, or a `=== 'question'`
+comparison, there is no field enumeration and no `switch`. But that was never the
+risk. `answer()` hardcodes `agent.approve`/`agent.deny` with `approval_id` and
+`digest`, pinned by `an_answer_carries_the_digest_of_what_was_shown`, and T14.2
+established that `AgentApproveParams.digest` is required with no opt-out. So the
+deployed console can only answer an approval that fits the `agent.approve`
+contract — the constraint is about the **answer path, not the fields**, and an
+ACP approval exposed through `agent.approvals` would draw a Yes button that
+cannot be honoured. Named unverified: this one is read, not run, and the reason
+it was not run is that producing a real unfamiliar approval requires the app
+change T14.5 has not made.
+
+**Named unverified.** One agent, three prompts, all on Linux/WSL. `--approve`
+has still never met an agent offering only always-variants. Whether any agent
+other than `claude-agent-acp` uses `switch_mode` for a policy question is
+unknown, and an agent that labels one `edit` is not caught — which the module
+says out loud rather than claiming a boundary it does not have.
+
+- [ ] **T14.5** The app surface, when there is a reason for one. Inherits every
+      constraint listed under T14.4 above, as corrected there, plus what T14.4
+      measured:
+      **The mode picker's prerequisite is measured and the news is bad for it.**
+      `session/set_mode` is honoured, so a picker can act — but the agent
+      announces nothing back, and the response type is empty. A picker can
+      therefore only ever say *"requested `default`; the agent acknowledged"*,
+      and it must **not** re-render the mode as though it had changed. Warp is
+      less sighted after asking than before.
+      **A picker is still the first legitimate declaration-rendering surface**,
+      and it now has a concrete instance to render rather than a hypothetical: the
+      five `switch_mode` options, whose English names are the only place their
+      transition is disclosed. Rendering those names honestly, with attribution,
+      is exactly *"a surface capable of showing what the option declares"* — and
+      it is what would let a person answer the request `--approve` now refuses.
+      **The report's mode fields are the layout to start from**, including the
+      absence of a current-mode field. Any app surface that reintroduces one is
+      reintroducing a measured falsehood.
+      **`answers_a_set_mode_warp_sent` becomes insufficient the moment the app can
+      answer a policy question**, because then Warp moves the mode by two
+      different routes and the record needs to say which.
 
 - [x] **T14.3** ~~**Warp cannot observe an agent's permission policy, so it must
       not imply one.**~~ **The headline is false and running it is what showed
@@ -6103,7 +6238,12 @@ The rules the field names encode:
 - **`mode_the_agent_declared`, not `mode`.** Provenance in the field name,
   because the same information rendered in Warp's voice becomes a Warp-issued
   assurance. The same category as `tool_digest.rs` recording what MCP tools
-  *claimed* to be.
+  *claimed* to be. **Provenance was right and the field was still wrong — T14.4
+  deleted it.** Naming it a claim did not stop a reader taking it for the mode in
+  force, and once Warp could send `session/set_mode` it *was* the mode in force
+  that the field got wrong. It is now
+  `mode_the_agent_declared_at_session_start`, and there is no current-mode field
+  at all.
 - **The mode is never load-bearing.** It colours nothing, suppresses nothing and
   gates nothing. The moment it hides a per-call record because "default will
   ask", a claim has been converted into an assurance.
@@ -6116,7 +6256,10 @@ The rules the field names encode:
   that matters: that the agent changed *itself*. This is `tool_digest.rs`'s
   rug-pull shape one layer up, and the field is what distinguishes *"you were
   asked and you agreed"* from *"the agent re-declared itself and said so."*
-  Measured, not hypothetical — see below.
+  Measured, not hypothetical — see below. **And measured false in T14.4**: the
+  field printed `false` — *the agent re-declared itself* — over a change Warp had
+  caused by answering a `switch_mode` permission request. Renamed to
+  `answers_a_set_mode_warp_sent`, which is what it actually measured all along.
 - **`ToolKind` is reported and never branched on**: it is agent-authored and its
   unknown case silently becomes `Other` through `#[serde(other)]`.
 
@@ -6150,11 +6293,16 @@ the case worth seeing. Now `permission_requests_received: usize` and
 
 The general lesson is worth more than the fix: **writing a hazard down does not
 implement it.** It is the same shape as T8.6 updating one of two count pins after
-the doc said there were two.
+the doc said there were two. **And it happened again in T14.4**, in
+`acp_permission.rs`, against a hazard that module's own docs state in as many
+words — three times in one phase. Promoted to a rule there: *a hazard in a doc
+comment with no test under it is a hazard that is not defended.*
 
-**Named unverified.** `session/set_mode` is schema-only — nothing here sends one,
+**Named unverified.** ~~`session/set_mode` is schema-only — nothing here sends one,
 and whether `claude-agent-acp` honours it is unknown, which is the half of the
-mode picker that T14.4 would have to measure first. The `--approve` path has
+mode picker that T14.4 would have to measure first.~~ **Sent and measured in
+T14.4: honoured, acknowledged with an empty response, and never announced.** The
+`--approve` path has
 never met an agent offering only always-variants. Everything is one agent and
 four prompts. Nothing has run on Windows.
 
