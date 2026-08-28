@@ -1416,20 +1416,33 @@ on the wire, then the agent left plan mode and wrote a file the person had asked
 it to only plan. The options declare their transition in their **names**, in
 English, which discloses it to a person and nothing at all to a flag.
 
-So the rule now runs before the `kind` gate: on a `switch_mode` request there is
-no single-shot option whatever its kind says, and `--approve` declines. Denial is
-untouched — *"No, keep planning"* is a well-formed no, and declining a change
-leaves the session where it already was.
+**This is the spec's own shape, not one agent's quirk.**
+`docs/protocol/v1/session-modes.mdx`, under *"Exiting plan modes"*, documents
+exactly this — including an option named *"Yes, and manually accept actions"*
+typed `allow_once` with no `_meta`. Any ACP agent with a plan mode is expected to
+present a policy change this way.
+
+So a rule now runs **before** the `kind` gate, and it is an **allowlist**: an
+option may be selected only when the call's kind is one whose spec meaning stops
+at the call — `read`, `edit`, `delete`, `move`, `search`, `execute`, `think`,
+`fetch`. Everything else declines: `switch_mode`, `other`, an absent kind, and
+any variant a later schema adds. `delete` and `execute` are on the list on
+purpose — the test is whether the effect is *bounded*, not whether it is gentle.
+
+The first version of this fix refused only `switch_mode`, which is *"not the
+signal, therefore safe"* — the same trap one field over, and `#[serde(other)]`
+makes it silent. A refusal that is wrong costs a loud message naming the kind; a
+grant that is wrong costs the session's policy. Denial is untouched throughout —
+*"No, keep planning"* is a well-formed no, and declining a change leaves the
+session where it already was.
 
 **What that is not.** It is not protection from a hostile agent — an option's
 `kind` is as agent-authored as anything else it sends, and so is `switch_mode`,
 and a hostile agent does not ask permission at all. It defends against honest
 agents: an arbitrary option order, an escalating option offered by default, and a
-kind that understates what its option does. The reason gating a *refusal* on an
-agent-authored kind is admissible while gating a *grant* on one is not:
-`ToolKind` is `#[serde(other)]`, so an unrecognised kind arrives as `Other` — a
-refusal that misses it falls back to the old behaviour, a grant that trusts it
-grants on the default.
+kind that understates what its option does. The rule that makes reading an
+agent-authored kind admissible at all: **a kind may disqualify, never qualify —
+and a kind this build does not recognise must not qualify either.**
 
 **`--cwd` defaults to the current directory and is always made absolute.** An
 ACP session carries its working directory explicitly, which is worth using:

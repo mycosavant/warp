@@ -6049,20 +6049,51 @@ against it** (T14.2's re-ask, T14.3's boolean, this). The lesson is not learning
 itself, so it is now stated as a rule: *a hazard in a doc comment with no test
 under it is a hazard that is not defended.*
 
+**And it is the spec's own shape, which is the rare case here of a finding that
+generalises past one agent.** `docs/protocol/v1/session-modes.mdx`, under
+*"Exiting plan modes"*, documents this exchange down to an option named *"Yes,
+and manually accept actions"* typed `allow_once` with no `_meta`. So every ACP
+agent with a plan mode is expected to present a policy change this way. Found
+only after the fix was written, by grepping the spec for the thing the
+measurement had already shown.
+
 **The fix, and what makes it more than a patch.** The generalisation is that **the
 question can be the problem**: when an agent asks *which policy should apply*
 rather than *may I do this one thing*, no option is single-shot whatever its kind
 says. These options declare their transition in their **names**, in English —
-disclosure to a person, nothing at all to a flag. `--approve` now declines the
-whole request. Denial is untouched, and correctly: *"No, keep planning"* is a
+disclosure to a person, nothing at all to a flag.
+
+**The first fix was a denylist of one, and that was the same trap again.** It
+refused `SwitchMode` and allowed everything else — *"not the signal, therefore
+safe"*, one field over from *"no `_meta`, therefore safe"*, and `#[serde(other)]`
+makes it silent: an agent whose mode switch arrived as `execute`, as a kind added
+in a later schema, or with no kind at all would have gone straight through. The
+doc comment even named that degradation and called it acceptable, which is the
+rule promoted three paragraphs ago being broken in the act of writing it down.
+Caught by the advisor rather than by a run, and the fix is an **allowlist**: an
+option may be selected only for a kind whose spec meaning stops at the call —
+`read`, `edit`, `delete`, `move`, `search`, `execute`, `think`, `fetch` — with
+everything else falling off the end of a `matches!` rather than being enumerated.
+`delete` and `execute` are on the list on purpose; the test is whether the effect
+is *bounded*, not whether it is gentle.
+
+Its cost is named rather than hidden: an honest agent whose ordinary calls arrive
+as `other` gets refused, **loudly, with the kind in the message**, because an
+allowlist's wrong answers have to be explicable on sight — a person concluding
+"the flag is broken" is exactly what T14.2 cost. A wrong refusal costs a message;
+a wrong grant costs the session's policy. The amended constraint, replacing
+T14.4's absolute: **a kind may disqualify, never qualify — and a kind this build
+does not recognise must not qualify either.**
+
+Denial is untouched throughout, and correctly: *"No, keep planning"* is a
 well-formed no, and declining a change leaves the session where it already was.
 
 **Two corroborating signals were seen and deliberately not built on**: every
 `optionId` equals a declared `availableModes` id, and the request offers *three*
-distinct `allow_always` options where an ordinary write offers one. Both are
-heuristics whose false positives would make `--approve` stop working on some
-other agent and read as a bug; `ToolKind::SwitchMode` is typed, stable v1, and
-present in the request.
+distinct `allow_always` options where an ordinary write offers one. Both fail in
+both directions — the spec gives `optionId` no semantics, and "always for this
+file / always for all files" is a plausible ordinary pair — so they are wire-facts
+worth observing and nothing may rest on them.
 
 **Two report defects, from the same three runs.**
 
@@ -6080,20 +6111,50 @@ present in the request.
   who moved the mode, because that is the part Warp can check. The fix to
   `choose` puts the case out of reach *from this binary*, which is a reason to
   correct the record rather than a reason not to — T14.5 reaches it again.
+- **`transitions_offered` was blind to the transition that mattered.** The live
+  `ExitPlanMode` run reported `transitions_offered: []` for a session whose one
+  event was a five-option policy menu, because the list was fed only from
+  `_meta.permission.changes` and none of the five had any. So the report said no
+  transition was offered in the session where one was. The predicate is now *"would
+  selecting this do more than answer the question"* — which on an unbounded call
+  is every way of saying yes — and `readable: bool` became a three-state
+  `disclosed_as`, because a boolean cannot tell *"a declaration this build cannot
+  parse"* from *"no declaration at all"*, and after this measurement the second is
+  the common case. `reject_once` is excluded deliberately: recording a refusal
+  would have printed *"authorized by Warp: No, keep planning"*.
 
-**The second prerequisite was answered by reading, and it was the wrong
-question.** `console.js` cannot throw on an unfamiliar approval: every field
-access in `approvalRow` is guarded by `||`, an `if`, or a `=== 'question'`
-comparison, there is no field enumeration and no `switch`. But that was never the
-risk. `answer()` hardcodes `agent.approve`/`agent.deny` with `approval_id` and
-`digest`, pinned by `an_answer_carries_the_digest_of_what_was_shown`, and T14.2
-established that `AgentApproveParams.digest` is required with no opt-out. So the
-deployed console can only answer an approval that fits the `agent.approve`
-contract — the constraint is about the **answer path, not the fields**, and an
-ACP approval exposed through `agent.approvals` would draw a Yes button that
-cannot be honoured. Named unverified: this one is read, not run, and the reason
-it was not run is that producing a real unfamiliar approval requires the app
-change T14.5 has not made.
+**The last two were found by the advisor rather than by a run**, reading the
+shipped code against the measurements. Worth recording as a method note: the
+runs found the hole, and a reader found that the first fix for it repeated the
+hole's own shape.
+
+**The second prerequisite dissolves, and it was the wrong question twice over.**
+
+First, the premise. *"The already-deployed `console.js`"* presupposes a
+deployment model the console does not have. All four routes are served
+`Cache-Control: no-store` (`console.rs:138`, pinned by a test), and there is no
+service worker — a LAN address is not a secure context, which `console.rs:111`
+already says. **The script and the shape ship in the same binary; a `console.js`
+stale relative to its server cannot exist.** The one stale client that can is an
+old `warpctrl`, and `AgentApprovalsResult` has no `deny_unknown_fields`, so serde
+ignores a new sibling field. The ticket's single named "thing that would reopen
+the decision" cannot trigger.
+
+Second, even granting the premise: `console.js` cannot throw on an unfamiliar
+approval — every field access in `approvalRow` is guarded by `||`, an `if`, or a
+`=== 'question'` comparison, with no field enumeration and no `switch`. But that
+was never the risk either. `answer()` hardcodes `agent.approve`/`agent.deny` with
+`approval_id` and `digest`, pinned by
+`an_answer_carries_the_digest_of_what_was_shown`, and T14.2 established that
+`AgentApproveParams.digest` is required with no opt-out. So the deployed console
+can only answer an approval that fits the `agent.approve` contract — the
+constraint is about the **answer path, not the fields**, and an ACP approval
+exposed through `agent.approvals` would draw a Yes button that cannot be
+honoured.
+
+Named unverified: both halves are read, not run. The reload check (`no-store`
+honoured by a real browser) was not done, and producing a real unfamiliar
+approval needs the app change T14.5 has not made.
 
 **Named unverified.** One agent, three prompts, all on Linux/WSL. `--approve`
 has still never met an agent offering only always-variants. Whether any agent
@@ -6104,24 +6165,53 @@ says out loud rather than claiming a boundary it does not have.
 - [ ] **T14.5** The app surface, when there is a reason for one. Inherits every
       constraint listed under T14.4 above, as corrected there, plus what T14.4
       measured:
-      **The mode picker's prerequisite is measured and the news is bad for it.**
-      `session/set_mode` is honoured, so a picker can act — but the agent
-      announces nothing back, and the response type is empty. A picker can
-      therefore only ever say *"requested `default`; the agent acknowledged"*,
-      and it must **not** re-render the mode as though it had changed. Warp is
-      less sighted after asking than before.
-      **A picker is still the first legitimate declaration-rendering surface**,
-      and it now has a concrete instance to render rather than a hypothetical: the
-      five `switch_mode` options, whose English names are the only place their
-      transition is disclosed. Rendering those names honestly, with attribution,
-      is exactly *"a surface capable of showing what the option declares"* — and
-      it is what would let a person answer the request `--approve` now refuses.
+      **First and most load-bearing: no app surface until one agent the surface
+      would host has been probed.** Every ACP measurement this fork has ever made
+      — the update-variant table, the option order, the mode list, the
+      `_meta.claudeCode` vendor names — is from `claude-agent-acp`, which T14 (A)
+      *permanently excludes* from the app surface, because reaching Claude over
+      ACP means an `npx` shim in front of the CLI `local_agent/` already drives.
+      The surface's actual clientele has been probed **zero** times, and checked
+      2026-08-27 none of `gemini`, `goose`, `opencode`, `amp`, `droid`, `auggie`
+      or `codex` is installed in this WSL userland (`copilot` resolves, but to a
+      Windows npm install reached through PATH interop, and whether it speaks ACP
+      is unknown). Building the mapping now bakes one agent's idioms into a
+      surface for agents never observed — which T14.1's own as-built flagged and
+      the constraint list then quietly forgot. Installing one is a maintainer
+      call; **ask before doing it.**
+      ~~**A picker is the first legitimate declaration-rendering surface.**~~
+      **Struck: measured dead, on two counts.** Its display goes stale exactly
+      when it acts — `set_mode` produces no announcement — so it cannot render
+      honest state after its own use. And it is the wrong *channel*:
+      `acp_permission.rs`'s "nothing that exists today can show what the option
+      declares" is about an option on a live `session/request_permission`, which a
+      picker acting through `session/set_mode` can never answer. **The successor
+      surface is an interactive approval card**, and it now has a concrete thing
+      to render: the `switch_mode` menu, whose English option names are the only
+      place the transition is disclosed at all (`disclosed_as:
+      the_options_name_only`). That is what would let a person answer the request
+      `--approve` now refuses.
+      A picker may still exist as a *display* surface. It may only ever report
+      *"requested `default`; the agent acknowledged"* — never *"protection
+      enabled"* — because `SetSessionModeResponse` has no fields.
       **The report's mode fields are the layout to start from**, including the
       absence of a current-mode field. Any app surface that reintroduces one is
       reintroducing a measured falsehood.
+      ~~**Record `CurrentModeUpdate` with whether Warp requested it.**~~
+      **Falsified as written**: a Warp-requested transition produces *no*
+      `CurrentModeUpdate`, so that field's `true` case cannot occur on the API
+      path. The fact belongs on the `set_mode` send record, which is where
+      `mode_requests_warp_sent` now puts it.
       **`answers_a_set_mode_warp_sent` becomes insufficient the moment the app can
       answer a policy question**, because then Warp moves the mode by two
-      different routes and the record needs to say which.
+      different routes and the record needs to say which. An ordered event list
+      across all three sources — Warp's `set_mode` and its one-bit ack, the
+      agent's announcements, and transitions Warp itself authorized — is the shape
+      to reach for; the two separate lists shipped in T14.4 are each true but
+      cannot show the interleaving.
+      **`refuse allow_tools on an ACP node` is filed, not active.** It is
+      conditional on an ACP graph-node type, and none exists; it binds whoever
+      adds one.
 
 - [x] **T14.3** ~~**Warp cannot observe an agent's permission policy, so it must
       not imply one.**~~ **The headline is false and running it is what showed

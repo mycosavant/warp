@@ -412,7 +412,12 @@ fn a_declared_transition_is_reported_as_offered_and_not_authorized() {
     let mut ledger = Ledger::new();
     let request = RequestPermissionRequest::new(
         "session-1",
-        ToolCallUpdate::new(WRITE, ToolCallUpdateFields::new().title("Write a.txt")),
+        ToolCallUpdate::new(
+            WRITE,
+            ToolCallUpdateFields::new()
+                .title("Write a.txt")
+                .kind(ToolKind::Edit),
+        ),
         vec![
             PermissionOption::new("allow", "Allow Once", PermissionOptionKind::AllowOnce),
             PermissionOption::new(
@@ -438,9 +443,16 @@ fn a_declared_transition_is_reported_as_offered_and_not_authorized() {
 
     let report = ledger.report();
 
-    assert_eq!(report.transitions_offered.len(), 1);
+    assert_eq!(
+        report.transitions_offered.len(),
+        1,
+        "on a call whose effect is bounded, only the option that declares more than an answer"
+    );
     assert_eq!(report.transitions_offered[0].option_name, "Always Allow");
-    assert!(report.transitions_offered[0].readable);
+    assert_eq!(
+        report.transitions_offered[0].disclosed_as,
+        Disclosure::ADeclarationThisBuildCanRead
+    );
     assert_eq!(
         report.transitions_offered[0]
             .declared
@@ -458,11 +470,11 @@ fn a_declared_transition_is_reported_as_offered_and_not_authorized() {
 /// A declaration this build cannot read is still reported — the absence of
 /// detail is the finding, and dropping the entry would hide it.
 #[test]
-fn an_unreadable_declaration_is_reported_with_readable_false() {
+fn an_unreadable_declaration_is_reported_as_one_this_build_cannot_read() {
     let mut ledger = Ledger::new();
     ledger.observe_request(&RequestPermissionRequest::new(
         "session-1",
-        ToolCallUpdate::new(WRITE, ToolCallUpdateFields::new()),
+        ToolCallUpdate::new(WRITE, ToolCallUpdateFields::new().kind(ToolKind::Edit)),
         vec![
             PermissionOption::new("allow", "Allow Once", PermissionOptionKind::AllowOnce).meta(
                 serde_json::json!({ "permission": { "version": 99 } })
@@ -476,8 +488,67 @@ fn an_unreadable_declaration_is_reported_with_readable_false() {
     let report = ledger.report();
 
     assert_eq!(report.transitions_offered.len(), 1);
-    assert!(!report.transitions_offered[0].readable);
+    assert_eq!(
+        report.transitions_offered[0].disclosed_as,
+        Disclosure::ADeclarationThisBuildCannotRead
+    );
     assert_eq!(report.transitions_offered[0].declared, None);
+}
+
+/// The measured `ExitPlanMode` menu, and the falsehood it produced: the shipped
+/// report said `transitions_offered: []` for a session whose one event was a
+/// five-option policy menu, because the list was fed only from `_meta` and none
+/// of the five had any. The offer is the fact worth having, now that nothing
+/// here can accept it.
+#[test]
+fn a_transition_disclosed_only_in_the_option_names_is_still_recorded() {
+    let mut ledger = Ledger::new();
+    ledger.observe_request(&RequestPermissionRequest::new(
+        "session-1",
+        ToolCallUpdate::new(
+            WRITE,
+            ToolCallUpdateFields::new()
+                .title("Ready to code?")
+                .kind(ToolKind::SwitchMode),
+        ),
+        vec![
+            PermissionOption::new(
+                "bypassPermissions",
+                "Yes, and bypass permissions",
+                PermissionOptionKind::AllowAlways,
+            ),
+            PermissionOption::new(
+                "default",
+                "Yes, and manually approve edits",
+                PermissionOptionKind::AllowOnce,
+            ),
+            PermissionOption::new(
+                "plan",
+                "No, keep planning",
+                PermissionOptionKind::RejectOnce,
+            ),
+        ],
+    ));
+
+    let offered = ledger.report().transitions_offered;
+
+    assert_eq!(
+        offered.len(),
+        2,
+        "both ways of saying yes are transitions; the refusal is not"
+    );
+    assert!(
+        offered
+            .iter()
+            .all(|transition| transition.disclosed_as == Disclosure::TheOptionsNameOnly),
+        "the agent said what these do in English and nowhere else"
+    );
+    assert!(
+        !offered
+            .iter()
+            .any(|transition| transition.option_name == "No, keep planning"),
+        "recording a refusal here would put \"authorized by Warp: No, keep planning\" in a report"
+    );
 }
 
 /// The field name is about Warp's inbox, and the serialized form is what a

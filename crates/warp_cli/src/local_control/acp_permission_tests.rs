@@ -9,12 +9,21 @@ use agent_client_protocol::schema::v1::{ToolCallUpdate, ToolCallUpdateFields};
 
 use super::*;
 
+/// An ordinary file write, carrying `kind: edit` because the measured one did —
+/// `{"toolCallId":"toolu_01Fs…","kind":"edit","title":"Write hello.txt"}`.
+///
+/// It did not carry one when these tests were first written, and the allowlist is
+/// what exposed that as a fixture bug rather than a test failure: a request with
+/// no kind is a real case, but it is not *this* case, and using it here quietly
+/// tested the wrong thing.
 fn request(options: Vec<PermissionOption>) -> RequestPermissionRequest {
     RequestPermissionRequest::new(
         "session-1",
         ToolCallUpdate::new(
             "toolu_1",
-            ToolCallUpdateFields::new().title("Write probe.txt"),
+            ToolCallUpdateFields::new()
+                .title("Write probe.txt")
+                .kind(ToolKind::Edit),
         ),
         options,
     )
@@ -134,42 +143,81 @@ fn a_deny_still_answers_a_question_about_which_policy_applies() {
     );
 }
 
-/// The refusal is scoped to the *question*, not to option shapes that happen to
-/// resemble it — an ordinary tool call is answered exactly as before.
+/// The ordinary path, unchanged. The measured `Write hello.txt` request carried
+/// `kind: "edit"`, which is on the allowlist, so `--approve` still says yes.
 #[test]
-fn an_ordinary_request_is_not_caught_by_the_policy_question_rule() {
-    assert!(!asks_which_policy_applies(&request(as_claude_sent_it())));
+fn an_ordinary_edit_is_still_allowed() {
+    let request = request(as_claude_sent_it());
+
+    assert!(effect_is_confined_to_this_call(&request));
     assert_eq!(
-        choose(&request(as_claude_sent_it()), Decision::Allow),
+        choose(&request, Decision::Allow),
         Choice::Select(PermissionOptionId::new("allow"))
     );
 }
 
-/// `ToolKind` is `#[serde(other)]`, so a kind this build does not know arrives as
-/// `Other`. Refusing on `SwitchMode` therefore degrades by *not* refusing — back
-/// to the previous behaviour, never to a wrongly-refused approval. This is the
-/// direction that makes gating on an agent-authored kind admissible at all.
+/// Every kind the spec gives a meaning that stops at the call. `delete` and
+/// `execute` are on the list on purpose: the test is whether the effect is
+/// *bounded*, not whether it is gentle, and confusing the two would turn this
+/// into a danger rating `--approve` has no way to make.
 #[test]
-fn an_unknown_tool_kind_is_not_treated_as_a_policy_question() {
-    let mut request = as_claude_asked_to_leave_plan_mode();
-    request.tool_call.fields.kind = Some(ToolKind::Other);
+fn every_kind_whose_effect_stops_at_the_call_is_allowed() {
+    for kind in [
+        ToolKind::Read,
+        ToolKind::Edit,
+        ToolKind::Delete,
+        ToolKind::Move,
+        ToolKind::Search,
+        ToolKind::Execute,
+        ToolKind::Think,
+        ToolKind::Fetch,
+    ] {
+        let mut request = request(as_claude_sent_it());
+        request.tool_call.fields.kind = Some(kind);
 
-    assert!(!asks_which_policy_applies(&request));
+        assert!(
+            effect_is_confined_to_this_call(&request),
+            "{kind:?} should be answerable"
+        );
+    }
 }
 
-/// A request that says nothing about its kind is the common case on the measured
-/// wire — the `permission_request`'s tool call carried no `kind` for an edit —
-/// and it must not be swept up.
+/// The correction to the first fix. A denylist of `SwitchMode` read "not the
+/// signal, therefore safe", and `#[serde(other)]` makes an unrecognised kind
+/// arrive silently as `Other` — so a mode switch labelled anything else would
+/// have gone through. Refusing by falling off the end of an allowlist is what
+/// makes that impossible rather than merely unlikely.
 #[test]
-fn a_request_with_no_kind_is_not_treated_as_a_policy_question() {
+fn a_kind_this_build_does_not_recognise_is_refused() {
+    for kind in [ToolKind::Other, ToolKind::SwitchMode] {
+        let mut request = as_claude_asked_to_leave_plan_mode();
+        request.tool_call.fields.kind = Some(kind);
+
+        assert!(
+            matches!(choose(&request, Decision::Allow), Choice::Cancel { .. }),
+            "{kind:?} is not known to stop at the call, so it cannot be approved by a flag"
+        );
+    }
+}
+
+/// A request that says nothing about its kind. Fail-closed, same as an unknown
+/// `_meta.permission.version`: the reason no bound was found may be that this
+/// code was never told one.
+#[test]
+fn a_request_with_no_kind_is_refused() {
     let mut request = as_claude_asked_to_leave_plan_mode();
     request.tool_call.fields.kind = None;
 
-    assert!(!asks_which_policy_applies(&request));
+    assert!(!effect_is_confined_to_this_call(&request));
+    assert!(matches!(
+        choose(&request, Decision::Allow),
+        Choice::Cancel { .. }
+    ));
 }
 
 /// The reason reaches the person, because a `--approve` run that quietly stops
-/// approving is the failure this whole module was built out of.
+/// approving is the failure this whole module was built out of — and an allowlist
+/// refuses more than a denylist, so it owes more of an explanation.
 #[test]
 fn the_refusal_says_what_was_being_asked() {
     let Choice::Cancel { reason } = choose(&as_claude_asked_to_leave_plan_mode(), Decision::Allow)
@@ -180,6 +228,25 @@ fn the_refusal_says_what_was_being_asked() {
     assert!(
         reason.contains("which permission policy should apply"),
         "the reason should name the question, got: {reason}"
+    );
+}
+
+/// An unrecognised kind produces a *different* sentence, naming the kind, so the
+/// person can tell "this build does not know that kind" from "that agent asked
+/// something a flag may not answer". Conflating them is how an allowlist earns
+/// the reputation of being broken.
+#[test]
+fn a_refusal_for_an_unrecognised_kind_names_it() {
+    let mut request = as_claude_asked_to_leave_plan_mode();
+    request.tool_call.fields.kind = Some(ToolKind::Other);
+
+    let Choice::Cancel { reason } = choose(&request, Decision::Allow) else {
+        panic!("an unrecognised kind is refused");
+    };
+
+    assert!(
+        reason.contains("`other`"),
+        "the reason should name the kind, got: {reason}"
     );
 }
 

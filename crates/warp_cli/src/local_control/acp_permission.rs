@@ -57,8 +57,14 @@
 //! An option carrying a declared change describes a *transition*, and neither a
 //! non-interactive `--approve` nor a phone card can show that before the tap — so
 //! selecting it there would authorize something the person was structurally never
-//! shown. An in-app picker that renders the declaration could legitimately offer
-//! it; nothing that exists today can.
+//! shown. An interactive approval card that renders the declaration could
+//! legitimately offer it; nothing that exists today can.
+//!
+//! A *mode picker* cannot, and the distinction is a channel rather than a
+//! quibble: this option lives on a pending `session/request_permission`, which
+//! only the surface answering that request can select. A picker acts through
+//! `session/set_mode` and can never answer it. T14.4's constraint list named the
+//! picker as the successor surface and was wrong about which one.
 //!
 //! # The hole that argument left, measured 2026-08-27
 //!
@@ -91,29 +97,52 @@
 //! *"Absence of `_meta` proves nothing"* had none for as long as it was true and
 //! undefended; the `switch_mode` tests are the first.
 //!
+//! **And it is not one agent's quirk.** The spec documents this shape itself, in
+//! `docs/protocol/v1/session-modes.mdx` under *"Exiting plan modes"*, down to an
+//! option named *"Yes, and manually accept actions"* typed `allow_once` with no
+//! `_meta`. So every ACP agent with a plan mode is expected to present a policy
+//! change this way, and the finding generalises past the one agent that was
+//! watched — which is rare enough here to be worth saying.
+//!
 //! What the case actually shows is that the *question* can be the problem. These
 //! options declare their transition in their **names**, in English, which is
 //! disclosure to a person and nothing at all to a flag. When an agent is asking
 //! *which policy should apply* rather than *may I do this one thing*, no option
-//! is single-shot whatever its kind says — so `--approve` has no business
-//! answering yes to any of them, and [`asks_which_policy_applies`] is where that
-//! is decided.
+//! is single-shot whatever its kind says.
+//!
+//! ## The first fix for that was a denylist of one, which is the same trap again
+//!
+//! It refused `SwitchMode` and allowed everything else — that is *"not the
+//! signal, therefore safe"*, one field over from *"no `_meta`, therefore safe"*,
+//! and `#[serde(other)]` makes it silent. An agent whose mode switch arrived as
+//! `execute`, as a kind added in a later schema, or with no kind at all would
+//! have gone straight through. The question is now inverted:
+//! [`effect_is_confined_to_this_call`] is an **allowlist** of the kinds whose
+//! spec meaning stops at the call, and everything else — `SwitchMode`, `Other`,
+//! an absent kind, a variant that does not exist yet — refuses by falling off the
+//! end of a `matches!` rather than by being listed.
+//!
+//! That costs something and the cost is named: an honest agent whose ordinary
+//! calls arrive as `other` gets refused under `--approve`. It is refused
+//! *loudly*, with the kind in the message, because an allowlist's wrong answers
+//! have to be explicable on sight — a person concluding "the flag is broken" is
+//! exactly what T14.2 cost. A wrong refusal costs a message; a wrong grant costs
+//! the session's policy.
 //!
 //! Refusing is only the *allow* side. `reject_once` — "No, keep planning" — is
 //! still selected and still correct, because declining a change leaves the state
 //! where it already was. A no cannot widen anything here either.
 //!
-//! ## This reverses a constraint written in `TASKS.md`, deliberately
+//! ## This amends a constraint written in `TASKS.md`, rather than rereading it
 //!
 //! T14.4's constraint list says **"gate on the method, never on
-//! `tool_call.kind`"**. There is no method to gate on: every one of these arrives
-//! as `session/request_permission`, so the constraint as written forbids the only
-//! defence available. It is sound about *granting* — `ToolKind` is
-//! `#[serde(other)]`, so an unrecognised kind silently becomes `Other`, and
-//! anything that grants on a kind grants on the default. Used to **refuse**, that
-//! same degradation runs the safe way: an unknown kind is not `SwitchMode`, so it
-//! is not refused, which is today's behaviour rather than a new hole. The rule
-//! survives with its direction named: never grant on `tool_call.kind`.
+//! `tool_call.kind`"**, as an absolute. There is no method to gate on — every one
+//! of these arrives as `session/request_permission` — so as written it forbade
+//! the only defence available, and the honest response is to correct the
+//! constraint in the doc that carries it, not to find a reading of it that lets
+//! this through. What survives, and is sharper: **a kind may disqualify, never
+//! qualify — and a kind this build does not recognise must not qualify either.**
+//! The second clause is what the denylist got wrong.
 //!
 //! # Two things this is not
 //!
@@ -164,26 +193,109 @@ const PERMISSION_META_KEY: &str = "permission";
 /// not look, so an absent list is not evidence of an absent declaration.
 const KNOWN_PERMISSION_VERSION: u64 = 1;
 
-/// Said when the agent asks which policy should apply and the answer is a flag.
+/// Why nothing was allowed for a call whose effect this build cannot bound.
 ///
-/// Names the surface rather than the option, because the refusal is not about
-/// this agent doing anything wrong — it asked clearly and in English. It is about
-/// `--approve` being unable to read English.
-const POLICY_QUESTION_REASON: &str = "the agent is asking which permission policy should apply, not whether one thing may \
-     happen; no option there is single-shot, so --approve declines and the session keeps \
-     the policy it already had";
+/// **Names the kind**, and that is load-bearing rather than polite. An allowlist
+/// refuses more than a denylist would, so its wrong answers have to be
+/// explicable on sight: a person whose `--approve` stopped working needs to read
+/// *which* kind was not recognised rather than conclude the flag is broken. That
+/// conclusion is exactly what the T14.2 bug cost, and a silent refusal would earn
+/// it honestly.
+fn unconfined_reason(request: &RequestPermissionRequest) -> String {
+    match request.tool_call.fields.kind {
+        Some(ToolKind::SwitchMode) => {
+            "the agent is asking which permission policy should apply, not whether one thing may \
+             happen; no option there is single-shot whatever its kind says, so --approve declines \
+             and the session keeps the policy it already had"
+                .to_owned()
+        }
+        Some(kind) => format!(
+            "the call's kind is `{}`, whose effect this build cannot bound to this one call, so \
+             --approve declines; a kind it knows would have been answered",
+            tool_kind_name(kind)
+        ),
+        None => {
+            "the request says nothing about the call's kind, so this build cannot tell whether \
+                 saying yes stops at this call, and --approve declines rather than guess"
+                .to_owned()
+        }
+    }
+}
 
-/// Whether the agent is asking which policy should apply, rather than whether one
-/// thing may happen.
+/// The wire name of a tool kind, for a person reading a refusal. Written out for
+/// the same reason as [`kind_name`], and the `_` arm carries the same weight.
+fn tool_kind_name(kind: ToolKind) -> &'static str {
+    match kind {
+        ToolKind::Read => "read",
+        ToolKind::Edit => "edit",
+        ToolKind::Delete => "delete",
+        ToolKind::Move => "move",
+        ToolKind::Search => "search",
+        ToolKind::Execute => "execute",
+        ToolKind::Think => "think",
+        ToolKind::Fetch => "fetch",
+        ToolKind::SwitchMode => "switch_mode",
+        ToolKind::Other => "other",
+        _ => "a kind this build does not know",
+    }
+}
+
+/// Whether this build knows the effect of saying yes to stop at this call.
 ///
-/// Read only to **refuse**, exactly like [`declaration`], and for the same reason:
-/// `ToolKind` is agent-authored, so an agent that labels a mode switch `edit` is
-/// not caught. That is not a regression — it is where this already stood — and it
-/// is the same honesty `changes_policy` is written with. What this does catch is
-/// the agent that says plainly what it is asking, which is the one worth
-/// answering carefully.
-pub(super) fn asks_which_policy_applies(request: &RequestPermissionRequest) -> bool {
-    request.tool_call.fields.kind == Some(ToolKind::SwitchMode)
+/// **An allowlist, and the first draft was a denylist of one.** Refusing only
+/// `SwitchMode` reads "not the signal, therefore safe" — the same shape as
+/// reading an absent `_meta` as safety, one field over, and `#[serde(other)]`
+/// makes it silent: an agent whose mode switch arrives as `execute`, as a kind
+/// added upstream, or with no kind at all would have sailed through. So the
+/// question is inverted. An option may be selected only for a kind the spec
+/// gives a meaning that stops at the call — read, edit, delete, move, search,
+/// execute, think, fetch. Dangerous is fine; *unbounded* is not, which is why
+/// `Delete` is on the list and `SwitchMode` is not.
+///
+/// Everything else refuses, and by construction rather than by enumeration:
+/// `Other`, an absent kind, and any variant a later schema adds all fall through
+/// this `matches!` to `false`. That is the same fail-closed as an unknown
+/// `_meta.permission.version`, with the same cost — one round trip — and it is
+/// the property that makes reading an agent-authored kind admissible at all.
+/// A refusal that is wrong costs a loud message; a grant that is wrong costs the
+/// session's policy.
+pub(super) fn effect_is_confined_to_this_call(request: &RequestPermissionRequest) -> bool {
+    matches!(
+        request.tool_call.fields.kind,
+        Some(
+            ToolKind::Read
+                | ToolKind::Edit
+                | ToolKind::Delete
+                | ToolKind::Move
+                | ToolKind::Search
+                | ToolKind::Execute
+                | ToolKind::Think
+                | ToolKind::Fetch
+        )
+    )
+}
+
+/// Whether selecting this option would do more than answer this one question.
+///
+/// The predicate the consent ledger records transitions from, and it is wider
+/// than [`changes_policy`] on purpose. A `switch_mode` request's options carry no
+/// `_meta` and are typed `allow_once`, so a ledger keyed on declarations alone
+/// reported `transitions_offered: []` for a session whose one event was a
+/// five-option policy menu — the *offer* went unrecorded, which is the fact worth
+/// having even now that nothing here can accept it.
+///
+/// `reject_once` is excluded, and not for tidiness: declining leaves the session
+/// with the policy it already had, so recording a refusal as an offered
+/// transition would put *"authorized by Warp: No, keep planning"* in a report,
+/// which is the wrong inference this module keeps having to design against.
+pub(super) fn is_more_than_an_answer(
+    request: &RequestPermissionRequest,
+    option: &PermissionOption,
+) -> bool {
+    if option.kind == PermissionOptionKind::RejectOnce {
+        return false;
+    }
+    changes_policy(option) || !effect_is_confined_to_this_call(request)
 }
 
 /// Answer one permission request.
@@ -191,9 +303,9 @@ pub(super) fn choose(request: &RequestPermissionRequest, decision: Decision) -> 
     // Before the kind gate, because the kind gate is what got this wrong: the
     // option that changes the session's policy was typed `allow_once` and carried
     // no declaration, so every later test here passes it.
-    if decision == Decision::Allow && asks_which_policy_applies(request) {
+    if decision == Decision::Allow && !effect_is_confined_to_this_call(request) {
         return Choice::Cancel {
-            reason: POLICY_QUESTION_REASON.to_owned(),
+            reason: unconfined_reason(request),
         };
     }
 

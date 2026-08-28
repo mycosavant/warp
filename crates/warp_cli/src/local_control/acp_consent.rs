@@ -209,17 +209,39 @@ pub(super) struct Call {
     pub answers_warp_sent: Vec<String>,
 }
 
+/// How an agent disclosed what an option would do beyond answering the question.
+///
+/// Three states rather than a `readable` boolean, because a boolean could not
+/// tell *"there is a declaration and this build cannot parse it"* from *"there is
+/// no declaration at all"* — and after the `switch_mode` measurement the second
+/// is the common case, not the rare one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(super) enum Disclosure {
+    /// `_meta.permission.changes`, at a version this build reads. `declared`
+    /// holds it verbatim.
+    ADeclarationThisBuildCanRead,
+    /// A `permission` block in a layout this build does not know. The absence of
+    /// detail is the finding, so the entry is kept rather than dropped.
+    ADeclarationThisBuildCannotRead,
+    /// Nothing structured. The agent said what the option does **in the option's
+    /// name**, in English — which is disclosure to a person reading a card and
+    /// nothing at all to a program. The measured `ExitPlanMode` menu is entirely
+    /// this.
+    TheOptionsNameOnly,
+}
+
 /// A policy change an agent offered to make, and what Warp did about it.
 #[derive(Debug, Clone, PartialEq, serde::Serialize)]
 pub(super) struct Transition {
     pub tool_call_id: String,
     /// The option that carried it, by the agent's own name for it.
     pub option_name: String,
-    /// The declaration verbatim, or `null` when the agent used a layout this
-    /// build cannot read — in which case `readable` is false and the absence of
-    /// detail is the finding.
+    /// The declaration verbatim, or `null` when there is nothing structured to
+    /// quote. Which of those it is, is `disclosed_as`.
     pub declared: Option<serde_json::Value>,
-    pub readable: bool,
+    /// How the agent said what this option would do.
+    pub disclosed_as: Disclosure,
     /// Whether Warp selected the option. Always false today; printed anyway,
     /// because "nothing was authorized" is exactly the claim worth evidencing.
     pub authorized_by_warp: bool,
@@ -397,19 +419,25 @@ impl Ledger {
         let transitions = request
             .options
             .iter()
-            .filter_map(|option| {
-                let (declared, readable) = match acp_permission::declaration(option) {
-                    Declaration::None => return None,
-                    Declaration::Changes(changes) => (Some(changes.clone()), true),
-                    Declaration::UnknownVersion => (None, false),
+            .filter(|option| acp_permission::is_more_than_an_answer(request, option))
+            .map(|option| {
+                let (declared, disclosed_as) = match acp_permission::declaration(option) {
+                    Declaration::Changes(changes) => (
+                        Some(changes.clone()),
+                        Disclosure::ADeclarationThisBuildCanRead,
+                    ),
+                    Declaration::UnknownVersion => {
+                        (None, Disclosure::ADeclarationThisBuildCannotRead)
+                    }
+                    Declaration::None => (None, Disclosure::TheOptionsNameOnly),
                 };
-                Some(Transition {
+                Transition {
                     tool_call_id: request.tool_call.tool_call_id.to_string(),
                     option_name: option.name.clone(),
                     declared,
-                    readable,
+                    disclosed_as,
                     authorized_by_warp: false,
-                })
+                }
             })
             .collect::<Vec<_>>();
         self.transitions.extend(transitions);
