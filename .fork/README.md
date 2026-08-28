@@ -1395,6 +1395,12 @@ the rest of the session. T14.1 took `options.first()`, so `--approve` **denied**
 been a phone tap that denied, and the always-variant would have been a phone tap
 that authorized every later call the person is never shown.
 
+**What that is not.** It is not protection from a hostile agent — an option's
+`kind` is as agent-authored as anything else it sends, and a hostile agent does
+not ask permission at all. It defends against honest agents: an arbitrary option
+order, an escalating option offered by default, and a kind that understates what
+its option does.
+
 **`--cwd` defaults to the current directory and is always made absolute.** An
 ACP session carries its working directory explicitly, which is worth using:
 T13.3 shipped a review node that read the wrong tree because a spawned agent

@@ -45,11 +45,36 @@
 //!
 //! `_meta` is read only to *refuse*, never to grant, which is why reading it does
 //! not violate the spec's "implementations MUST NOT make assumptions about
-//! values at these keys". No assumption is made about what a change means; the
-//! presence of the key is treated as "this option does more than answer the
+//! values at these keys". No assumption is made about what a change means; a
+//! declared change is treated as "this option does more than answer the
 //! question", and that is true whatever it says. An agent that mislabels
 //! `allow_always` as `allow_once` is still caught, and an agent that attaches a
 //! change to a genuinely single-shot option loses nothing but one round trip.
+//!
+//! The rule that makes this a line rather than a rationalisation: **an option may
+//! only be selected by a surface capable of showing what that option declares.**
+//! A single-shot option declares only the tool call, which every surface renders.
+//! An option carrying a declared change describes a *transition*, and neither a
+//! non-interactive `--approve` nor a phone card can show that before the tap — so
+//! selecting it there would authorize something the person was structurally never
+//! shown. An in-app picker that renders the declaration could legitimately offer
+//! it; nothing that exists today can.
+//!
+//! # Two things this is not
+//!
+//! **Absence of `_meta` proves nothing.** The moment any path here reads "no
+//! declared change, therefore safe", the forbidden assumption has been made in
+//! the granting direction. The kind gate is what admits an option; the declared
+//! change is only ever an extra way to reject one.
+//!
+//! **This is not a boundary against a hostile agent.** `PermissionOption.kind` is
+//! exactly as agent-authored as `tool_call.kind`, which the ticket forbids gating
+//! on — and a hostile agent does not ask permission at all, which T14.1 measured:
+//! with `defaultMode: auto` the agent read files, wrote files and ran commands
+//! and asked nobody. What this defends against is honest agents: an arbitrary
+//! option order, an escalating option offered by default, and a spec-sloppy
+//! option whose kind understates what it does. Saying so is the point — the fork
+//! does not claim protection it does not have.
 
 use agent_client_protocol::schema::v1::{
     PermissionOption, PermissionOptionId, PermissionOptionKind, RequestPermissionRequest,
@@ -76,6 +101,13 @@ pub(super) enum Choice {
 
 /// The `_meta` key an option uses to declare that selecting it changes policy.
 const PERMISSION_META_KEY: &str = "permission";
+
+/// The only `_meta.permission.version` whose layout this build claims to know.
+///
+/// Measured: `claude-agent-acp` sends `1`. Anything else — including a missing
+/// version — means the `changes` list could be spelled somewhere this code does
+/// not look, so an absent list is not evidence of an absent declaration.
+const KNOWN_PERMISSION_VERSION: u64 = 1;
 
 /// Answer one permission request.
 pub(super) fn choose(request: &RequestPermissionRequest, decision: Decision) -> Choice {
@@ -106,16 +138,58 @@ pub(super) fn changes_policy(option: &PermissionOption) -> bool {
     matches!(
         option.kind,
         PermissionOptionKind::AllowAlways | PermissionOptionKind::RejectAlways
-    ) || declared_changes(option).is_some()
+    ) || !matches!(declaration(option), Declaration::None)
 }
 
-/// The policy change an option declares, verbatim.
+/// What an option's `_meta` says about widening policy.
+#[derive(Debug, Clone, PartialEq)]
+pub(super) enum Declaration<'a> {
+    /// Nothing relevant. **Not a guarantee of safety** — see the module docs.
+    None,
+    /// A version this build knows how to read, declaring these changes verbatim.
+    ///
+    /// Verbatim rather than summarised. Warp cannot see an agent's permission
+    /// policy — T14.3 — so the only honest thing it can ever say about one is
+    /// what the agent itself put on the wire.
+    Changes(&'a serde_json::Value),
+    /// A `permission` block in a layout this build does not know.
+    ///
+    /// Refused, because the reason no changes were found may simply be that this
+    /// code looked in the wrong place. Failing closed on an unknown version costs
+    /// one round trip; failing open costs the escalation the whole rule exists to
+    /// stop.
+    UnknownVersion,
+}
+
+/// Read an option's policy declaration.
 ///
-/// Returned rather than summarised. Warp cannot see an agent's permission policy
-/// — T14.3 — so the only honest thing it can ever say about one is what the agent
-/// itself put on the wire, quoted rather than interpreted.
-pub(super) fn declared_changes(option: &PermissionOption) -> Option<&serde_json::Value> {
-    option.meta.as_ref()?.get(PERMISSION_META_KEY)
+/// Keyed on a **non-empty `changes` list**, not on the presence of the
+/// `permission` block. `_meta` is a free-form map and an agent may reasonably put
+/// benign permission metadata on every option it sends; refusing all of those
+/// would make ordinary approvals fail for no reason, which is how a safety rule
+/// gets switched off. Whether any agent actually does that is unmeasured — one
+/// agent has been watched — so the narrow rule is the one to hold.
+pub(super) fn declaration(option: &PermissionOption) -> Declaration<'_> {
+    let Some(permission) = option
+        .meta
+        .as_ref()
+        .and_then(|meta| meta.get(PERMISSION_META_KEY))
+    else {
+        return Declaration::None;
+    };
+    if permission
+        .get("version")
+        .and_then(serde_json::Value::as_u64)
+        != Some(KNOWN_PERMISSION_VERSION)
+    {
+        return Declaration::UnknownVersion;
+    }
+    match permission.get("changes") {
+        Some(changes) if changes.as_array().is_none_or(|list| !list.is_empty()) => {
+            Declaration::Changes(changes)
+        }
+        _ => Declaration::None,
+    }
 }
 
 /// Why nothing was selected, naming what the agent actually offered.
@@ -129,10 +203,10 @@ fn no_option_reason(request: &RequestPermissionRequest, decision: Decision) -> S
         .options
         .iter()
         .map(|option| {
-            let suffix = if changes_policy(option) {
-                " (changes policy)"
-            } else {
-                ""
+            let suffix = match declaration(option) {
+                Declaration::Changes(_) => " (declares a policy change)",
+                Declaration::UnknownVersion => " (declares something this build cannot read)",
+                Declaration::None => "",
             };
             format!("{}{suffix}", kind_name(option.kind))
         })

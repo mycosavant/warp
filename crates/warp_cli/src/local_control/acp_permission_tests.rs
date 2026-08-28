@@ -24,6 +24,14 @@ fn option(id: &'static str, name: &'static str, kind: PermissionOptionKind) -> P
     PermissionOption::new(id, name, kind)
 }
 
+fn allow_once_with_meta(meta: serde_json::Value) -> PermissionOption {
+    PermissionOption::new("allow", "Allow Once", PermissionOptionKind::AllowOnce).meta(
+        meta.as_object()
+            .expect("a _meta fixture is an object")
+            .clone(),
+    )
+}
+
 /// The measured list, in the measured order: deny first, then allow once, then
 /// an always-variant carrying a session-wide mode change.
 fn as_claude_sent_it() -> Vec<PermissionOption> {
@@ -110,12 +118,9 @@ fn an_allow_never_selects_an_always_variant() {
 fn an_allow_refuses_an_option_that_declares_a_policy_change_whatever_its_kind() {
     let request = request(vec![
         option("reject", "Deny", PermissionOptionKind::RejectOnce),
-        PermissionOption::new("allow", "Allow Once", PermissionOptionKind::AllowOnce).meta(
-            serde_json::json!({ "permission": { "changes": [] } })
-                .as_object()
-                .expect("the fixture is an object")
-                .clone(),
-        ),
+        allow_once_with_meta(serde_json::json!({
+            "permission": { "version": 1, "changes": [{ "type": "permission_mode" }] }
+        })),
     ]);
 
     let choice = choose(&request, Decision::Allow);
@@ -130,19 +135,59 @@ fn an_allow_refuses_an_option_that_declares_a_policy_change_whatever_its_kind() 
 /// perfectly ordinary approval.
 #[test]
 fn an_unrelated_meta_key_does_not_disqualify_an_option() {
-    let request = request(vec![
-        PermissionOption::new("allow", "Allow Once", PermissionOptionKind::AllowOnce).meta(
-            serde_json::json!({ "claudeCode": { "toolName": "Write" } })
-                .as_object()
-                .expect("the fixture is an object")
-                .clone(),
-        ),
-    ]);
+    let request = request(vec![allow_once_with_meta(
+        serde_json::json!({ "claudeCode": { "toolName": "Write" } }),
+    )]);
 
     assert_eq!(
         choose(&request, Decision::Allow),
         Choice::Select(PermissionOptionId::new("allow"))
     );
+}
+
+/// The rule is keyed on a non-empty `changes` list, not on the `permission` block
+/// existing. An agent that decorates every option with benign metadata must not
+/// find that ordinary approvals stop working — that is how a safety rule gets
+/// switched off by whoever it inconveniences.
+#[test]
+fn a_permission_block_declaring_no_changes_does_not_disqualify_an_option() {
+    let request = request(vec![allow_once_with_meta(serde_json::json!({
+        "permission": { "version": 1, "changes": [] }
+    }))]);
+
+    assert_eq!(
+        choose(&request, Decision::Allow),
+        Choice::Select(PermissionOptionId::new("allow"))
+    );
+}
+
+/// The narrowing above is only safe if an unreadable block still fails closed:
+/// finding no `changes` may just mean this code looked in the wrong place.
+#[test]
+fn a_permission_block_in_an_unknown_version_is_refused_even_with_no_changes() {
+    let request = request(vec![allow_once_with_meta(serde_json::json!({
+        "permission": { "version": 7 }
+    }))]);
+
+    let Choice::Cancel { reason } = choose(&request, Decision::Allow) else {
+        panic!("an unreadable declaration must fail closed");
+    };
+    assert!(
+        reason.contains("cannot read"),
+        "the reason should say the declaration was unreadable, got: {reason}"
+    );
+}
+
+#[test]
+fn a_permission_block_with_no_version_at_all_is_refused() {
+    let request = request(vec![allow_once_with_meta(serde_json::json!({
+        "permission": { "changes": [] }
+    }))]);
+
+    assert!(matches!(
+        choose(&request, Decision::Allow),
+        Choice::Cancel { .. }
+    ));
 }
 
 /// An agent that offers only always-variants can still be told no — cancelling
@@ -187,20 +232,22 @@ fn a_declared_change_is_returned_verbatim() {
         .find(|option| option.kind == PermissionOptionKind::AllowAlways)
         .expect("the fixture has an always-variant");
 
-    let declared = declared_changes(always).expect("the always-variant declares a change");
+    let Declaration::Changes(declared) = declaration(always) else {
+        panic!("the always-variant declares a readable change");
+    };
 
-    assert_eq!(declared["changes"][0]["mode"], "acceptEdits");
-    assert_eq!(declared["changes"][0]["lifetime"]["scope"], "session");
+    assert_eq!(declared[0]["mode"], "acceptEdits");
+    assert_eq!(declared[0]["lifetime"]["scope"], "session");
 }
 
 #[test]
 fn an_option_with_no_meta_declares_nothing() {
     assert_eq!(
-        declared_changes(&option(
+        declaration(&option(
             "allow",
             "Allow Once",
             PermissionOptionKind::AllowOnce
         )),
-        None
+        Declaration::None
     );
 }

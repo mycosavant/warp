@@ -5859,12 +5859,38 @@ transcribed field for field, order included. One pure function:
 `choose(&RequestPermissionRequest, Decision) -> Choice`.
 
 - Selects by `PermissionOptionKind`, **never by position**.
-- Refuses both always-variants, and additionally refuses **any** option carrying
-  `_meta.permission.changes` whatever its kind — two independent signals, either
-  disqualifying. `_meta` is read only ever to *refuse*, never to grant, which is
-  what keeps it clear of the spec's *"implementations MUST NOT make assumptions
-  about values at these keys"*: no assumption is made about what a change means,
-  only that an option declaring one does more than answer the question.
+- Refuses both always-variants, and additionally refuses any option declaring a
+  **non-empty** `_meta.permission.changes` at a version this build knows, or
+  carrying a `permission` block at any *other* version — two independent signals,
+  either disqualifying. `_meta` is read only ever to *refuse*, never to grant,
+  which is what keeps it clear of the spec's *"implementations MUST NOT make
+  assumptions about values at these keys"*: no assumption is made about what a
+  change means, only that an option declaring one does more than answer the
+  question.
+- The line that makes that a principle rather than a rationalisation:
+  **an option may only be selected by a surface capable of showing what that
+  option declares.** A single-shot option declares only the tool call, which
+  every surface renders. An option declaring a *transition* cannot be shown by a
+  non-interactive `--approve` or a phone card before the tap, so selecting it
+  there would authorize something the person was structurally never shown. An
+  in-app picker that renders the declaration could legitimately offer it; nothing
+  that exists today can.
+- Keyed on `changes` being non-empty rather than on the `permission` block
+  existing, because `_meta` is free-form and an agent may reasonably decorate
+  every option with benign permission metadata; refusing all of those would break
+  ordinary approvals, which is how a safety rule gets switched off by whoever it
+  inconveniences. **Unmeasured:** whether any agent does that. One agent has been
+  watched. So the narrow rule, plus fail-closed on an unknown version — where an
+  absent `changes` list may only mean this code looked in the wrong place.
+- **What this is not, said in the module rather than assumed.** It is not a
+  boundary against a hostile agent: `PermissionOption.kind` is exactly as
+  agent-authored as `tool_call.kind`, which the ticket forbids gating on, and a
+  hostile agent does not ask at all — T14.1 measured that, with `defaultMode:
+  auto` producing writes and commands and no questions. It defends against
+  *honest* agents: arbitrary option order, escalation offered by default, and a
+  kind that understates what its option does. And **absence of a declaration is
+  never a guarantee** — the kind gate is what admits an option; a declared change
+  is only ever an extra way to reject one.
 - An allow that cannot be expressed safely **becomes a no**, and the reason names
   what the agent offered — because "no single-shot allow was on offer" is
   invisible otherwise and indistinguishable from a bug in this code.
