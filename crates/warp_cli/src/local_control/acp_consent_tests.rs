@@ -116,13 +116,20 @@ fn the_report_carries_the_sentence_that_stops_the_wrong_reading() {
     let report = measured_session().report();
 
     assert!(
-        report.caveat.contains("does not read"),
+        report.caveat.contains("never reads"),
         "the caveat should say Warp does not read the user's rules, got: {}",
         report.caveat
     );
     assert!(
         report.caveat.contains("does not predict"),
         "the caveat should refuse the mode-to-gating inference, got: {}",
+        report.caveat
+    );
+    assert!(
+        report.caveat.contains("cannot tell whose policy"),
+        "the caveat should refuse to guess between the user's rules and the agent's own \
+         defaults — measured: one agent silent because its user wrote 87 rules, another \
+         silent on a fresh install with none. Got: {}",
         report.caveat
     );
 }

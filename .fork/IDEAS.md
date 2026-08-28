@@ -63,6 +63,12 @@ And one added 2026-08-22 that outranks all five on impact, at a larger size:
 |---|---|---|---|
 | **★** | [WSL as a remote target, the way Zed does it](#i16--wsl-as-a-remote-target-the-way-zed-does-it) | The seven-method transport trait exists with one implementation, the server binary builds here, and **the handshake is not account-gated — verified by completing one, logged out** | Weeks, not months |
 
+And one captured 2026-08-28, unscoped and unverified:
+
+| | Idea | Why | Rough size |
+|---|---|---|---|
+| **+** | [OpenRouter as a first-class provider, and a place to keep secrets](#i18--openrouter-as-a-first-class-provider-and-a-place-to-keep-secrets) | One credential reaches ~356 models across a dozen vendors — the widest version of "the user's own keys" — and it is already the key in use here | Unknown; **the gate has not been looked for**, and the secrets half needs a threat model before an implementation |
+
 Two that are **deliberately not on the list yet**, both for stated reasons
 rather than by omission:
 
@@ -1976,3 +1982,67 @@ Worth writing down because it generalises: the ideas in this file are graded on
 what the code can do, and that grading is only as good as knowing what the
 moment was. Where an entry still says "needs a sentence from you", that is not
 politeness.
+
+---
+
+# I18 — OpenRouter as a first-class provider, and a place to keep secrets
+
+Captured 2026-08-28, from the maintainer, while probing `opencode` over
+OpenRouter for T14.5. **Unverified against the code — nothing below has been
+grepped, let alone run.** It is written down so it is not lost, not because it
+has been scoped.
+
+## The ask, as given
+
+Full OpenRouter provider integration alongside the fork's existing providers,
+with:
+
+- **dynamic model availability** — the catalogue is fetched, not compiled in;
+- **pricing** — per-model, shown where a model is chosen;
+- **service tiers**;
+- and, **optionally for the user**, full API credential and secrets management,
+  **encrypted at rest**.
+
+## Why it is on-thesis, and where it is in tension
+
+Squarely on-thesis for the first half. The fork exists so agents run on *the
+user's own* subscription, API keys and local models; OpenRouter is one key that
+reaches ~356 models across a dozen vendors, which is the widest possible version
+of that with the fewest credentials. It also turns out to be the credential
+already in use here — the `opencode` probe that discharged T14.5's gate ran on
+it, and the model catalogue arrived over the wire in the ACP `session/new`
+response as `configOptions`, 356 entries deep.
+
+The tension is the second half. **A secrets store is the one thing in this fork
+that would hold something worth stealing**, and the fork's own security posture
+has to be re-argued around it rather than inherited:
+
+- `warpctrl` already has `auth.rs`, a credential broker and a peer-UID check;
+  upstream's 9282 server answers **unauthenticated** and must never see this.
+- `WARP_FORK_CONTROL_BIND` is the one variable that reaches off the machine, and
+  the console is the only browser-reachable surface. Neither may become a path
+  to a key. The console's *"the page is a constant and names no secret"* test
+  is the shape to extend, not to weaken.
+- "Encrypted at rest" needs a named threat model before an implementation.
+  Encrypted against whom, with a key kept where? A key sitting beside the
+  ciphertext under the same UID buys very little against the attacker who has
+  the UID, and buys real protection against a synced dotfile, a backup, or a
+  shared `$HOME`. Say which, or the feature reads as a guarantee it does not
+  have — `local_agent/tools.rs:17-20`'s stated nightmare, one layer down.
+
+## Look for the gate first
+
+Not done. Before any of this is scoped, the standard question: upstream is a
+commercial AI terminal and **already has a provider abstraction, a model picker
+and a credential path** — probably account-gated, which is exactly the shape
+T4 and I16 turned out to have. Grep for the provider enum and the secret store
+before writing a line. `warpctrl secret` already exists in the CLI surface,
+which is itself evidence the storage half may be mostly built.
+
+## The smallest version that is still the idea
+
+Guessing, and marked as such: a provider entry plus a catalogue fetch, with
+pricing rendered from the response rather than a table this fork maintains.
+Secrets management is a **separate** entry and should not ride along — it is the
+part with the threat model, and bundling it means the cheap half waits for the
+argument.

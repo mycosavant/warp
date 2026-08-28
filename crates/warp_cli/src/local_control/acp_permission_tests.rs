@@ -73,6 +73,62 @@ fn as_claude_sent_it() -> Vec<PermissionOption> {
     ]
 }
 
+/// `opencode` 1.18.25 on 2026-08-28, transcribed the same way — and the reason
+/// this module's rule is a measurement rather than an argument. **Allow is first
+/// here and deny is first in [`as_claude_sent_it`]**, so one line taking
+/// `options.first()` approves on one agent and denies on the other.
+fn as_opencode_sent_it() -> Vec<PermissionOption> {
+    vec![
+        option("once", "Allow once", PermissionOptionKind::AllowOnce),
+        // No `_meta`. Only the kind gate refuses this one.
+        option("always", "Always allow", PermissionOptionKind::AllowAlways),
+        option("reject", "Reject", PermissionOptionKind::RejectOnce),
+    ]
+}
+
+/// Two agents, opposite orders, the same answers. This is the property the whole
+/// module exists for, and it could not be written until a second agent was run.
+#[test]
+fn two_agents_order_their_options_oppositely_and_both_are_answered_correctly() {
+    assert_eq!(
+        as_claude_sent_it()[0].kind,
+        PermissionOptionKind::RejectOnce,
+        "claude-agent-acp puts deny first"
+    );
+    assert_eq!(
+        as_opencode_sent_it()[0].kind,
+        PermissionOptionKind::AllowOnce,
+        "opencode puts allow first — so first() would approve here and deny there"
+    );
+
+    let opencode = request(as_opencode_sent_it());
+    assert_eq!(
+        choose(&opencode, Decision::Allow),
+        Choice::Select(PermissionOptionId::new("once"))
+    );
+    assert_eq!(
+        choose(&opencode, Decision::Deny),
+        Choice::Select(PermissionOptionId::new("reject"))
+    );
+}
+
+/// opencode's always-variant declares nothing at all, so the kind gate is the
+/// only thing standing between `--approve` and a remembered yes. Second
+/// confirmation that the `_meta` rule is an extra refusal and never the
+/// load-bearing one.
+#[test]
+fn an_always_variant_that_declares_nothing_is_still_refused() {
+    let always = &as_opencode_sent_it()[1];
+
+    assert_eq!(declaration(always), Declaration::None);
+    assert!(changes_policy(always), "the kind alone must be enough");
+    assert_eq!(
+        choose(&request(as_opencode_sent_it()), Decision::Allow),
+        Choice::Select(PermissionOptionId::new("once")),
+        "the single-shot allow is taken, never the always-variant beside it"
+    );
+}
+
 /// The second measured list, transcribed the same way: `ExitPlanMode` on
 /// 2026-08-27. Every option is a session mode id, every name is a sentence about
 /// policy, and **none of them carries `_meta`** — which is the whole reason the

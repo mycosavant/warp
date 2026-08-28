@@ -1361,7 +1361,15 @@ built in:
 ```
 warpctrl acp probe --command "gemini --acp" --prompt "what is in this directory?"
 warpctrl acp probe --command "npx -y @agentclientprotocol/claude-agent-acp" --prompt "hello"
+warpctrl acp probe --command "opencode acp" --prompt "hello"
 ```
+
+**Two agents have actually been run**, and everything below that says "measured"
+means one or both of them. `opencode acp` is a built-in subcommand of
+`opencode-ai` — install it, `opencode auth login`, and set a model in an
+`opencode.json` beside the session, because `opencode acp` does **not** accept
+`-m`. Beware `opencode-acp` on npm: it is "Active Context Pruning", an unrelated
+package that shares the acronym.
 
 It runs `initialize` → `session/new` → `session/prompt` and prints **one JSON
 object per line** — the agent's own identification, the session, every
@@ -1381,6 +1389,12 @@ asks permission in order to write files and run commands, so the flag that says
 yes is the one that has to be typed — the same asymmetry as `agent.approve`
 versus `agent.deny`. A denial is printed rather than swallowed, and both
 directions now print a `permission_answer` record saying which option was sent.
+
+**Two agents order their options oppositely, which is why the rule below is a
+measurement rather than a preference.** `claude-agent-acp` sends **deny first**;
+`opencode` sends `once` / `always` / `reject` — **allow first**. One line taking
+`options.first()` would approve on one and deny on the other. opencode's
+always-variant also carries no `_meta`, so only its *kind* gives it away.
 
 **`--approve` means "allow once", and that is enforced rather than intended.**
 The option is chosen by its `kind`, never by its position in the list, and any
@@ -1462,6 +1476,13 @@ absence then answers. Measured both ways, 2026-08-27.
 The corollary is the important half: **an agent that did not ask is not an agent
 that was approved.** It is also not an agent that did anything wrong — the user's
 own rules are the user's own expressed policy.
+
+**…but do not assume there were any rules.** `opencode`, on a fresh install with
+no user configuration at all, wrote a file and asked nobody. Claude's silence
+came from the user's 87 allow rules; opencode's came from its own defaults, and
+**nothing on the wire tells them apart.** Set `"permission": {"edit": "ask"}` in
+an `opencode.json` and the same prompt produces a request carrying the whole
+diff — with `oldText` as well as `newText`, which is more than Claude sends.
 
 **The last line of a transcript is a `consent_report`, and it is the honest
 version of the paragraph above.** It says what mode the agent *declared*, quoting

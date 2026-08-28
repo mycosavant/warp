@@ -44,13 +44,21 @@
 //!
 //! The user's settings are the user's own expressed policy, and an agent
 //! honouring them is precisely this fork's thesis — the `echo done` above was
-//! allowed by a rule its user wrote. A call Warp was not asked about was very
-//! probably consented to in advance, by the person, deliberately. What Warp can
-//! say is only that **it was not the one who was asked**. Saying more would claim
-//! knowledge of a file it never opened, which is the third instance of one
-//! principle: `approvals.rs` reports which keystroke it sent rather than
-//! `approved: true`, and `local_agent/tools.rs` refuses an allowlist it cannot
-//! enforce.
+//! allowed by a rule its user wrote. What Warp can say is only that **it was not
+//! the one who was asked**. Saying more would claim knowledge of a file it never
+//! opened, which is the third instance of one principle: `approvals.rs` reports
+//! which keystroke it sent rather than `approved: true`, and
+//! `local_agent/tools.rs` refuses an allowlist it cannot enforce.
+//!
+//! **And "very probably consented to in advance" was too generous — a second
+//! agent proved it (T14.5's gate).** That sentence stood here until `opencode`
+//! was probed: a fresh install, no user configuration beyond a model, and it
+//! wrote a file with no permission request at all. Nobody had written a rule.
+//! Claude's silence came from the user's own 87 allow rules; opencode's came from
+//! its own defaults, and **nothing on the wire distinguishes the two**. So the
+//! caveat no longer guesses which. A zero is not an unapproved call and it is not
+//! certainly a consented one; it is a fact about Warp's inbox and nothing else,
+//! which is what it always said on the tin.
 //!
 //! # …and "out loud" turned out to mean "once" (T14.4)
 //!
@@ -297,9 +305,12 @@ pub(super) struct Report {
 
 /// Why the counts above mean less than they look like they mean.
 const CAVEAT: &str = "`permission_requests_received: 0` means only that no permission request for \
-                      this call reached Warp. The agent's permission rules live in the user's own \
-                      configuration, which Warp does not read; a call it was not asked about was \
-                      most likely allowed by a rule the user wrote deliberately. The declared mode \
+                      this call reached Warp. Warp cannot tell whose policy allowed it. The rules \
+                      may live in the user's own configuration, which Warp never reads, or in the \
+                      agent's own defaults — both were measured, one agent asking nothing because \
+                      its user had written 87 allow rules, and another writing a file on a fresh \
+                      install with no user configuration at all. So a zero is not an unapproved \
+                      call, and it is not certainly a consented one. The declared mode \
                       is the agent's claim and does not predict per-call gating — one measured \
                       session at mode `default` asked about a file write and did not ask about a \
                       shell command. Nor is it necessarily current: an agent that honours a \

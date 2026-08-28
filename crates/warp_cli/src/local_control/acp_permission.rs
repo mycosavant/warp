@@ -25,6 +25,27 @@
 //! idea, and it is the reason a typed permission channel beats a screen-scraped
 //! one for all 39 agents at once.
 //!
+//! ## A second agent settled it, and the two disagree exactly (T14.5's gate)
+//!
+//! `opencode` 1.18.25, measured 2026-08-28, on OpenRouter with a Gemini model —
+//! a different codebase and a different model from everything above:
+//!
+//! ```text
+//! 1  once    "Allow once"    allow_once
+//! 2  always  "Always allow"  allow_always      (no _meta)
+//! 3  reject  "Reject"        reject_once
+//! ```
+//!
+//! **Allow is first here; deny is first there.** So `options.first()` — the bug
+//! this module was written to fix — would have *approved* on opencode and
+//! *denied* on Claude, from the same line of code. Two agents, opposite orders,
+//! neither wrong. The argument for choosing by kind stops being an argument and
+//! becomes a measurement.
+//!
+//! opencode's `always` also carries **no `_meta`**, so nothing declares what it
+//! does: only the kind gate refuses it. That is the second confirmation that
+//! [`declaration`] is an *extra* way to reject and never the load-bearing one.
+//!
 //! # Failing closed, in both directions
 //!
 //! An allow that cannot be expressed safely becomes a denial, because a denial is

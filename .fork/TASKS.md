@@ -6178,7 +6178,62 @@ says out loud rather than claiming a boundary it does not have.
       is unknown). Building the mapping now bakes one agent's idioms into a
       surface for agents never observed — which T14.1's own as-built flagged and
       the constraint list then quietly forgot. Installing one is a maintainer
-      call; **ask before doing it.**
+      call; **ask before doing it.** ✅ **Discharged 2026-08-28 — see below.**
+
+### T14.5's gate — as measured
+
+`opencode` 1.18.25, installed at a pinned version, driven through **OpenRouter**
+with `openrouter/~google/gemini-flash-latest` — deliberately non-Anthropic, so
+the probe is independent of everything above on *both* axes, codebase and model.
+Four runs, about two cents. `opencode acp` is a **built-in** subcommand; no
+adapter. (One trap first: `opencode-acp` on npm is *not* an ACP adapter, it is
+"Active Context Pruning" — an unrelated package sharing the acronym.)
+
+**The probe, the ledger and the permission module all handled a second agent with
+no code changes.** That is the first real evidence that any of this generalises.
+
+**The finding that settles `acp_permission.rs`'s whole premise.** opencode's
+options arrive `once` / `always` / `reject` — **allow first**, where
+`claude-agent-acp` sends **deny first**. So T14.1's `options.first()` would have
+*approved* on opencode and *denied* on Claude, from one line. Two agents,
+opposite orders, neither wrong. "Choose by kind, never by position" stops being
+an argument and becomes a measurement.
+
+**Its `always` carries no `_meta` at all**, so only the kind gate refuses it —
+second confirmation that the declaration rule is an extra way to reject and never
+the load-bearing one.
+
+**The allowlist's named falsifier was run and passed.** T14.4 shipped it saying
+*"if a real agent's routine calls arrive as unknown kinds, `--approve` becomes
+useless there and the rule retreats"*. opencode's calls carry `kind: "read"` and
+`kind: "edit"`, both on the list; `--approve` selected `once` and the file was
+written, and without it the probe selected `reject`. The rule stands.
+
+**It declares no modes at all.** `mode_the_agent_declared_at_session_start:
+null` — the "third state" T14.3 wrote a defensive test for against a schema
+`Option` is real, not hypothetical. It vindicates refusing to act on a declared
+mode: a policy keyed on the claim would have had nothing to read here, and
+**punishing declaration relative to silence** would have rewarded opencode for
+saying less. It uses `configOptions` for model selection instead.
+
+**And it falsified a sentence in the shipped report.** The caveat said a call
+Warp was not asked about *"was most likely allowed by a rule the user wrote
+deliberately"*. On a fresh opencode install with no user configuration, it wrote
+a file and asked nobody — **nobody had written a rule**. Claude's silence came
+from the user's own 87 allow rules; opencode's came from its own defaults, and
+nothing on the wire distinguishes the two. The caveat now refuses to guess, with
+a test pinning that it refuses.
+
+**Its diff is richer than Claude's**: `content: [{type: "diff", path, oldText,
+newText}]` — with `oldText`, which Claude omits. T14.4's constraint *"the
+app-side shape must keep the diff structured"* holds across both, and the in-app
+reviewer would get more from opencode, not less.
+
+**Named unverified.** One model behind opencode, four prompts, Linux/WSL. Its
+`--auto` flag and the rest of its permission vocabulary were not exercised; the
+`ask` behaviour above needed a project-local `opencode.json`, which is a config
+this fork wrote, not one a user would have. No `session/set_mode` was attempted
+against it, because it declares no modes to set.
       ~~**A picker is the first legitimate declaration-rendering surface.**~~
       **Struck: measured dead, on two counts.** Its display goes stale exactly
       when it acts — `set_mode` produces no announcement — so it cannot render
