@@ -1417,7 +1417,42 @@ updates after the fact. Set `{"permissions":{"defaultMode":"default"}}` in a
 absence then answers. Measured both ways, 2026-08-27.
 
 The corollary is the important half: **an agent that did not ask is not an agent
-that was approved.** Warp cannot see the policy governing it.
+that was approved.** It is also not an agent that did anything wrong — the user's
+own rules are the user's own expressed policy.
+
+**The last line of a transcript is a `consent_report`, and it is the honest
+version of the paragraph above.** It says what mode the agent *declared*, quoting
+the agent's own description of it, and then — per tool call — whether a
+permission request reached Warp at all:
+
+```
+warpctrl acp probe --command "…" --prompt "…" | jq 'select(.kind=="consent_report") | .payload'
+```
+
+Read the field names literally. `warp_was_asked: false` means no request reached
+Warp; it does **not** mean unapproved. And `mode_the_agent_declared` is the
+agent's claim, not a Warp finding — **the mode does not predict per-call
+gating.** Measured 2026-08-27: at mode `default`, whose own description is
+*"Standard behavior, prompts for dangerous operations"*, a prompt to write a file
+and run `echo done` put the write to Warp and never mentioned the command. Under
+the machine's own `auto` mode, three calls ran and none were put to Warp at all —
+and the mode's description says a *model classifier* approved them, which is a
+thing Warp can only report because the agent named the mode.
+
+This corrects a claim that stood in `TASKS.md`: **Warp is not blind to an agent's
+permission mode.** `NewSessionResponse.modes` is stable v1, with `session/set_mode`
+to request one and `SessionUpdate::CurrentModeUpdate` when the agent changes it
+by itself. What Warp cannot see is the rules *underneath* the mode. Nothing in
+the fork acts on any of it — refusing a session because it honestly declared
+`bypassPermissions` would punish declaring over staying quiet, and `modes` is
+optional.
+
+**An agent can change its own permission mode mid-session, and you can watch it.**
+Asked to switch to plan mode, `claude-agent-acp` sent
+`{"sessionUpdate":"current_mode_update","currentModeId":"plan"}` and the report
+recorded `{"from":"default","to":"plan","warp_requested_it":false}`. Read that
+last field: it is what separates *"you were asked and you agreed"* from *"the
+agent re-declared itself and said so."* The same channel carries a widening.
 
 Two more things before reading too much into a transcript. Warp is not an ACP
 *client* in the full sense — it advertises no `fs/*` and no `terminal/*`

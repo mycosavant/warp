@@ -5968,6 +5968,18 @@ silently dropped.
       because it reads as a guarantee."*
       **Gate on the method, never on `tool_call.kind`**, which is agent-authored
       and whose unknown case silently becomes `Other` via `#[serde(other)]`.
+      **Provenance-tag every agent-authored string** — mode id, mode description,
+      option name, tool title — and render **no session-level governance
+      indicator**, which now explicitly includes the declared mode (T14.3: it
+      does not predict per-call gating, measured).
+      **A mode picker is the first legitimate declaration-rendering surface.**
+      `acp_permission.rs` refuses `allow_always` because nothing that exists can
+      show what it declares; an in-app picker showing the agent's own mode
+      descriptions is the surface that could, and `session/set_mode` is how it
+      would act. Requesting a *stricter* mode is safe under the fork's asymmetry,
+      but its effect is unverifiable — so it may only ever be reported as
+      *"requested `default`; the agent acknowledged"*, never as *"protection
+      enabled"*.
       **To measure first:** whether the already-deployed `console.js` renders an
       approval entry with unfamiliar fields gracefully. It passes
       `approval_id`/`digest` back opaquely, which was checked; how it handles an
@@ -5976,8 +5988,12 @@ silently dropped.
       with its warts accepted — that is the one thing that would reopen the
       decision above.
 
-- [ ] **T14.3** **Warp cannot observe an agent's permission policy, so it must
-      not imply one.** `claude-agent-acp` resolves its mode from
+- [x] **T14.3** ~~**Warp cannot observe an agent's permission policy, so it must
+      not imply one.**~~ **The headline is false and running it is what showed
+      that — see the as-built below.** The agent declares its mode on the wire,
+      in stable v1. What is invisible is the *rules* under the mode, and the
+      corrected finding is sharper. The rest of this ticket survives and is
+      what was built. `claude-agent-acp` resolves its mode from
       `settingsManager.getSettings().permissions?.defaultMode` — *the user's own
       Claude Code settings*. On this machine that is `defaultMode: auto` with 87
       allow rules, which is why the first run wrote a file and asked nobody.
@@ -5998,6 +6014,135 @@ silently dropped.
       on the *transitions it is asked to authorize*, so the honest sentence is
       *"you were asked to widen this session to `acceptEdits`, and you agreed"* —
       never *"policy is X"*.
+
+### T14.3 — as built
+
+**The ticket's headline was wrong, and one command falsified it.** T14.3 was
+filed on the claim that Warp cannot observe an agent's permission policy. That
+was read off the agent's *source* — `settingsManager.getSettings().permissions?.defaultMode`
+— and it is false on the wire. `session/new` came back with:
+
+```json
+"modes": {
+  "currentModeId": "auto",
+  "availableModes": [
+    {"id":"auto","name":"Auto","description":"Use a model classifier to approve/deny permission prompts"},
+    {"id":"default","name":"Manual","description":"Standard behavior, prompts for dangerous operations"},
+    {"id":"acceptEdits","name":"Accept Edits","description":"Auto-accept file edit operations"},
+    {"id":"plan","name":"Plan Mode","description":"Planning mode, no actual tool execution"},
+    {"id":"dontAsk","name":"Don't Ask","description":"Don't prompt for permissions, deny if not pre-approved"},
+    {"id":"bypassPermissions","name":"Bypass Permissions","description":"Bypass all permission checks"}
+  ]
+}
+```
+
+**Stable v1, not vendor `_meta`**: `NewSessionResponse.modes: Option<SessionModeState>`,
+with its own spec page whose first line is *"Modes often affect the system
+prompts used, the availability of tools, and **whether they request permission
+before running**."* There is a `SessionUpdate::CurrentModeUpdate` for changes and
+a `session/set_mode` for requesting one. So the agent volunteers the exact dial
+the ticket assumed lived only in a file Warp never read.
+
+**The observation layer was already complete, which is the gate-first finding
+again.** All of that arrived through the probe's existing `session` record, with
+zero new code. The reason nobody had noticed is that nobody had read the record —
+T14.1 and T14.2 both went straight to the `update` stream.
+
+**The corrected finding is sharper than the original, and it is measured.** A
+mode is a coarse dial with the user's own rules underneath it, and the *rules*
+are the invisible half. In one session at `currentModeId: "default"` — whose own
+description is *"Standard behavior, prompts for dangerous operations"* — a prompt
+to write a file and run `echo done` produced **two tool calls and one permission
+request**: the write was put to Warp, the command was not. Same session, same
+mode, opposite outcomes. So the mode **does not predict per-call gating**, in
+either direction, and a report that let a reader infer otherwise would be T14.3's
+own error relocated.
+
+**The vocabulary that came out of it, and it generalises past ACP.** Everything
+Warp can assert is a **wire-fact** — what arrived, what Warp sent, when.
+Everything agent-authored — mode id, description strings, option kinds, tool
+names, titles — is a **claim**: quotable with attribution, never derivable-from.
+The state/transition line the ticket drew resolves into that rather than moving:
+states are only ever claims, and the transitions Warp participates in are
+wire-facts.
+
+**What was built.** `crates/warp_cli/src/local_control/acp_consent.rs` and 12
+tests. A ledger fed the session's updates and permission traffic, producing a
+final `consent_report` JSONL record from the probe. Live output at mode
+`default`, verbatim:
+
+```json
+{"mode_the_agent_declared":"default",
+ "mode_description_from_the_agent":"Standard behavior, prompts for dangerous operations",
+ "calls":[{"title":"Write a.txt","kind":"edit","warp_was_asked":true,"warp_answered":"selected"},
+          {"title":"echo done","kind":"execute","warp_was_asked":false,"warp_answered":null}],
+ "calls_warp_was_not_asked_about":1,
+ "transitions_offered":[{"option_name":"Always Allow","declared":[…acceptEdits…],"authorized_by_warp":false}],
+ "transitions_authorized_by_warp":[]}
+```
+
+and under the user's own `auto` mode: three calls, **none** put to Warp, and the
+agent's own description saying a *model classifier* approved them — which is a
+thing Warp can only say because the agent named the mode.
+
+The rules the field names encode:
+
+- **`warp_was_asked`, not `approved`.** It is a fact about this process's inbox,
+  which is the only thing here that is certainly true. `false` does not mean
+  unapproved: the `echo done` above was allowed by a rule its user wrote, and the
+  user's settings are the user's own expressed policy — an agent honouring them
+  is this fork's thesis, not a bypass.
+- **`mode_the_agent_declared`, not `mode`.** Provenance in the field name,
+  because the same information rendered in Warp's voice becomes a Warp-issued
+  assurance. The same category as `tool_digest.rs` recording what MCP tools
+  *claimed* to be.
+- **The mode is never load-bearing.** It colours nothing, suppresses nothing and
+  gates nothing. The moment it hides a per-call record because "default will
+  ask", a claim has been converted into an assurance.
+- **A `caveat` string travels with the numbers**, in the record, because a
+  caveat in a document nobody opens is not a caveat.
+- **An agent that declares no mode is a third state**, reported as such —
+  `modes` is `Option` — and never as ungoverned.
+- **An announced mode change is kept as well as applied**, with
+  `warp_requested_it`. Overwriting the mode silently would lose the only fact
+  that matters: that the agent changed *itself*. This is `tool_digest.rs`'s
+  rug-pull shape one layer up, and the field is what distinguishes *"you were
+  asked and you agreed"* from *"the agent re-declared itself and said so."*
+  Measured, not hypothetical — see below.
+- **`ToolKind` is reported and never branched on**: it is agent-authored and its
+  unknown case silently becomes `Other` through `#[serde(other)]`.
+
+**Nothing acts on any of it, deliberately.** `dontAsk` and `bypassPermissions`
+are in that mode list, and Warp refusing a session that declared one would
+**punish declaration relative to silence** — `modes` is optional, so an agent
+that would rather not be judged simply omits it. Any policy keyed on the claim
+defends against honest agents only, and one that makes honesty costly teaches
+agent authors to stop declaring. Same structure as `acp_permission.rs`'s "two
+things this is not". A *user-configured* refusal would be legitimate, because a
+refusal acting on an unverified claim fails safe — that belongs to T14.4.
+
+**And the rug-pull channel is real, watched rather than assumed.** Asked to
+switch itself into plan mode, the agent sent
+`{"sessionUpdate":"current_mode_update","currentModeId":"plan"}` and the report
+recorded `{"from":"default","to":"plan","warp_requested_it":false}`. So an agent
+**can and does re-declare its own permission mode mid-session**, and Warp sees it
+happen. That is the fact `warp_requested_it` exists to keep separate: this one was
+the agent's own move, at a person's spoken request, with Warp never consulted.
+The same channel would carry a widening.
+
+**Named unverified.** `session/set_mode` is schema-only — nothing here sends one,
+and whether `claude-agent-acp` honours it is unknown, which is the half of the
+mode picker that T14.4 would have to measure first. The `--approve` path has
+never met an agent offering only always-variants. Everything is one agent and
+four prompts. Nothing has run on Windows.
+
+**Added to T14.4** by this work: the mode is a claim and must be
+provenance-tagged wherever it is rendered; no session-level governance indicator,
+**which now explicitly includes the mode**; record `CurrentModeUpdate` with
+whether Warp requested it; and an in-app **mode picker** rendering the agent's own
+mode descriptions is the first legitimate instance of `acp_permission.rs`'s
+*"a surface capable of showing what the option declares"* — the sentence
+*"nothing that exists today can"* now has a designated successor.
 
 ## T15 — Loose ends carried, not forgotten
 

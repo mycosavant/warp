@@ -1,5 +1,6 @@
 //! Command-line interface for controlling a running local Warp app.
 mod acp;
+mod acp_consent;
 mod acp_permission;
 mod commands;
 mod completions;

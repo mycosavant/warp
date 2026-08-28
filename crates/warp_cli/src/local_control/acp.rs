@@ -35,7 +35,7 @@ use agent_client_protocol::schema::v1::{
 use agent_client_protocol::{AcpAgent, Agent, ConnectionTo};
 use local_control::protocol::{ControlError, ErrorCode};
 
-use super::{AcpProbeArgs, acp_permission};
+use super::{AcpProbeArgs, acp_consent, acp_permission};
 
 fn invalid(message: impl Into<String>) -> ControlError {
     ControlError::new(ErrorCode::InvalidParams, message)
@@ -87,6 +87,14 @@ pub(super) fn run_probe(args: AcpProbeArgs) -> Result<(), ControlError> {
     let prompt = args.prompt.clone();
     let command = args.command.clone();
 
+    // Shared because the two handlers and the exchange all write to it, and
+    // `std` rather than a runtime's lock because there is no runtime here and the
+    // critical sections are a few field assignments (`acp_consent.rs`).
+    let ledger = std::sync::Arc::new(std::sync::Mutex::new(acp_consent::Ledger::new()));
+    let updates = std::sync::Arc::clone(&ledger);
+    let requests = std::sync::Arc::clone(&ledger);
+    let session_modes = std::sync::Arc::clone(&ledger);
+
     futures::executor::block_on(async move {
         let agent = AcpAgent::from_str(&command)
             .map_err(|error| invalid(format!("cannot read --command: {error}")))?;
@@ -96,6 +104,9 @@ pub(super) fn run_probe(args: AcpProbeArgs) -> Result<(), ControlError> {
             .on_receive_notification(
                 async move |notification: SessionNotification, _cx| {
                     emit("update", &notification.update);
+                    if let Ok(mut ledger) = updates.lock() {
+                        ledger.observe_update(&notification.update);
+                    }
                     Ok(())
                 },
                 agent_client_protocol::on_receive_notification!(),
@@ -108,6 +119,9 @@ pub(super) fn run_probe(args: AcpProbeArgs) -> Result<(), ControlError> {
                     // verdicts: saying no can only ever make less happen, so it needs
                     // no switch, and saying yes is the one that does.
                     emit("permission_request", &request);
+                    if let Ok(mut ledger) = requests.lock() {
+                        ledger.observe_request(&request);
+                    }
                     let decision = if approve {
                         acp_permission::Decision::Allow
                     } else {
@@ -116,23 +130,44 @@ pub(super) fn run_probe(args: AcpProbeArgs) -> Result<(), ControlError> {
                     // Which option answers a decision is a question with a typed
                     // answer, and taking `options.first()` got it wrong against the
                     // one agent it was ever run on. See `acp_permission.rs`.
-                    let outcome = match acp_permission::choose(&request, decision) {
+                    let (outcome, selected) = match acp_permission::choose(&request, decision) {
                         acp_permission::Choice::Select(option_id) => {
                             if !approve {
                                 eprintln!(
                                     "acp: denied a permission request; pass --approve to allow them"
                                 );
                             }
-                            RequestPermissionOutcome::Selected(SelectedPermissionOutcome::new(
-                                option_id,
-                            ))
+                            // By name as well as id, because the report quotes what
+                            // the agent called the option rather than renaming it.
+                            let name = request
+                                .options
+                                .iter()
+                                .find(|option| option.option_id == option_id)
+                                .map(|option| option.name.clone());
+                            (
+                                RequestPermissionOutcome::Selected(SelectedPermissionOutcome::new(
+                                    option_id,
+                                )),
+                                name,
+                            )
                         }
                         acp_permission::Choice::Cancel { reason } => {
                             eprintln!("acp: {reason}");
-                            RequestPermissionOutcome::Cancelled
+                            (RequestPermissionOutcome::Cancelled, None)
                         }
                     };
                     emit("permission_answer", &outcome);
+                    if let Ok(mut ledger) = requests.lock() {
+                        let answered = match &outcome {
+                            RequestPermissionOutcome::Selected(_) => "selected",
+                            _ => "cancelled",
+                        };
+                        ledger.observe_answer(
+                            &request.tool_call.tool_call_id,
+                            answered,
+                            selected.as_deref(),
+                        );
+                    }
                     responder.respond(RequestPermissionResponse::new(outcome))
                 },
                 agent_client_protocol::on_receive_request!(),
@@ -150,7 +185,12 @@ pub(super) fn run_probe(args: AcpProbeArgs) -> Result<(), ControlError> {
                     .send_request(NewSessionRequest::new(cwd))
                     .block_task()
                     .await?;
+                // The agent volunteering its permission mode here is what
+                // falsified T14.3's premise that Warp is blind to it.
                 emit("session", &session);
+                if let Ok(mut ledger) = session_modes.lock() {
+                    ledger.observe_session(session.modes.clone());
+                }
 
                 let answer = connection
                     .send_request(PromptRequest::new(
@@ -160,6 +200,12 @@ pub(super) fn run_probe(args: AcpProbeArgs) -> Result<(), ControlError> {
                     .block_task()
                     .await?;
                 emit("stopped", &answer);
+
+                // Last, because it is a summary of everything above and a person
+                // reading the tail of a transcript should find it there.
+                if let Ok(ledger) = session_modes.lock() {
+                    emit("consent_report", &ledger.report());
+                }
 
                 Ok(())
             })
