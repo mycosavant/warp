@@ -1386,15 +1386,29 @@ ACP session carries its working directory explicitly, which is worth using:
 T13.3 shipped a review node that read the wrong tree because a spawned agent
 inherited a cwd nobody had named, and the run still looked like a success.
 
-Two things worth knowing before reading too much into a transcript. Warp is not
-yet an ACP *client* in the full sense — it does not advertise `fs/*` or
-`terminal/*` capabilities, so an agent cannot ask it to read a file, write one,
-or run a command, and the tool participation those unlock is not on display
-here. And **this is not the Claude path**: reaching Claude over ACP needs an
-`npx`-launched proprietary shim in front of the CLI the fork already drives
-directly, so `app/src/ai/local_agent/` stays where Claude lives. The probe talks
-to it anyway, because it is the best available evidence that the ecosystem claim
-is real.
+**Whether you see a permission request has nothing to do with this probe.** It is
+decided by the *agent's own configuration*, and that surprises everyone once.
+`claude-agent-acp` resolves its permission mode from your `~/.claude/settings.json`
+— so on a machine with `defaultMode: auto`, an agent will read files, write files
+and run commands and **ask nobody**, and the transcript shows only `tool_call`
+updates after the fact. Set `{"permissions":{"defaultMode":"default"}}` in a
+`.claude/settings.json` in the session directory and the same prompt produces a
+`session/request_permission` carrying the whole diff, which `--approve` or its
+absence then answers. Measured both ways, 2026-08-27.
+
+The corollary is the important half: **an agent that did not ask is not an agent
+that was approved.** Warp cannot see the policy governing it.
+
+Two more things before reading too much into a transcript. Warp is not an ACP
+*client* in the full sense — it advertises no `fs/*` and no `terminal/*`
+capabilities, so an agent cannot ask it to read a file, write one, or run a
+command. That is now a **decision rather than a gap** (T14's (B)): those methods
+exist for clients with unsaved editor buffers, which a terminal does not have, so
+serving them would mean handing back the same bytes off the same disk. And
+**this is not the Claude path**: reaching Claude over ACP needs an `npx`-launched
+proprietary shim in front of the CLI the fork already drives directly, so
+`app/src/ai/local_agent/` stays where Claude lives. The probe talks to it anyway,
+because it is the best available evidence that the ecosystem claim is real.
 
 ### Targets: the rule that decides whether a call works
 

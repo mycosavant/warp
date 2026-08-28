@@ -5729,11 +5729,121 @@ the reason to adopt; the tool-participation argument is entirely contingent on
 (B), and this run is what proves it rather than assuming it.
 
 **Named unverified.** The `--approve` path has **never been exercised against a
-live agent**, because no agent asked — and none will until the fork advertises
-the capabilities that make asking meaningful. Its logic is tested, its behaviour
-is not. Nothing here has run on Windows. And the mapping table is one agent, one
-prompt: `usage_update` dominating the traffic is a Claude-wrapper trait that may
-not generalise, and no `plan`, `diff` or elicitation update appeared at all.
+live agent**, because no agent asked. ~~And none will until the fork advertises
+the capabilities that make asking meaningful.~~ **That second clause was wrong,
+and T14.2 falsified it the same day**: asking is not capability-gated at all.
+The agent asked with **zero** capabilities advertised, as soon as its own config
+said to. Corrected below. Nothing here has run on Windows. And the mapping table
+is one agent, one prompt: `usage_update` dominating the traffic is a
+Claude-wrapper trait that may not generalise, and no `plan`, `diff` or
+elicitation update appeared at all.
+
+### T14 (B) — answered 2026-08-27: the execution half is dead, the consent half is the ticket
+
+The T14 decide left open *"does the fork implement the ACP client's `fs/*` and
+`terminal/*` side at all"*, called it the largest piece, and said it deserved its
+own gate. It got measured instead of scoped, and the answer is **mostly no** —
+which removes the biggest and most dangerous piece of work from T14 while leaving
+the ecosystem argument untouched.
+
+**The premise neither of us checked, and it is the whole answer.** The spec says
+what these methods are *for*. `docs/protocol/v1/file-system.mdx:6` — they *"enable
+Agents to access **unsaved editor state**"*. `docs/protocol/v1/terminals.mdx:6` —
+they let a client *"run build processes… while providing real-time output
+streaming"*. **Both describe a client that Warp is not.** Warp is a terminal: it
+has no dirty buffer for an agent to read, and it already has PTYs and blocks. So
+`fs/read_text_file` served by Warp is a *strictly worse* version of the agent's own
+Read tool — the same bytes off the same disk, plus a round trip — and `terminal/*`
+is a substitute for the thing Warp already is.
+
+| | verdict |
+|---|---|
+| `fs/read_text_file` | **No.** Its designed purpose is unsaved editor state, which Warp structurally lacks. Worse than neutral: Gemini *prefers* an advertised client fs, so advertising it would actively divert reads through Warp for bytes Warp did not improve. |
+| `fs/write_text_file` | **No.** Its one surviving motivation was diff review, and the diff arrives on the permission channel instead — typed, with `locations`, *before* the write. What Warp would gain is that its own hand applies the bytes; the user sees the same diff and gives the same consent either way. Not worth an unconfined absolute-path write surface. |
+| `terminal/*` | **No, and closed.** Zero uses found in four agents. All-or-nothing in the schema, arbitrary `command`/`args`/`env`/`cwd`, removed in v2, and Warp is the thing it exists to substitute for. Do not advertise it even in the probe. |
+| `session/request_permission` | **The live candidate → T14.2.** |
+
+**What was run.** A throwaway client (`/tmp/acpcap`, outside the fork) that
+advertises `fs.read`, `fs.write` and `terminal: true`, logs every client-side
+request and refuses every mutating one.
+
+1. **The client side works.** Against `testy` with prompt `callbacks`, all four
+   fired: `session/request_permission`, `fs/read_text_file`, `fs/write_text_file`,
+   `terminal/create`. ~150 lines, no runtime. "Can the fork be a first-class ACP
+   client" is answered yes.
+2. **The flagship agent used none of it.** Real `claude-agent-acp` run: it read a
+   file, wrote `hello.txt`, and ran `echo done` — all through **its own tools**,
+   zero client-side calls, despite all three capabilities being advertised. Its
+   dist contains `createTerminal` **0** times.
+3. **Confinement is not theoretical.** The first agent to exercise the path asked
+   to write `/tmp/testy-write.txt` and read it back — outside the session
+   directory — and wanted `terminal/create` with `cwd: /tmp`. It was
+   *protocol-conformant* doing so: the request paths are absolute `PathBuf`s with
+   nothing tying them to the session.
+4. **Three of four agents do consume client `fs/*`** — Gemini
+   (`packages/cli/src/acp/acpFileSystemService.ts`, gating on
+   `capabilities.readTextFile` with a fallback), goose
+   (`crates/goose/src/acp/fs.rs`; `server.rs` gates on
+   `client_fs_capabilities.read_text_file`, with tests), opencode
+   (`acp/permission.ts` types `writeTextFile`). **None consume `terminal/*`** —
+   goose's `acp/` directory has `fs.rs` and no terminal module at all. Demand is
+   real and it does not change the verdict: what those agents want from a client
+   fs is the unsaved-buffer case, which is exactly what Warp cannot give.
+
+**A grep falsifies but cannot confirm.** `readTextFile` appears 6 times in
+Claude's dist and fired zero times. So a **0** is decisive and a nonzero means
+only "worth one real run". Both directions above are labelled accordingly.
+
+- [ ] **T14.2** `session/request_permission` → Warp's permission model. **The
+      thing worth building was hiding inside (B) and is much smaller than it.**
+      Ungated, typed, agent-agnostic, and it needs **zero capabilities
+      advertised**. Verified by running: with `{"permissions":{"defaultMode":"default"}}`
+      in the session's own `.claude/settings.json`, the same prompt that
+      previously wrote a file silently instead produced a permission request
+      carrying the **whole diff** — `content: [{type: "diff", path, newText}]`
+      plus `locations` — and the probe's denial **held**: no file was written,
+      and the agent said so (*"the write to probe.txt was blocked"*).
+      Compare the existing path, which pattern-matches a prompt drawn in a
+      terminal and answers it with `\r`/`\x1b` bytes for exactly one agent
+      (`approvals.rs:83-84`, gated by `ALLOW_VERIFIED_AGENTS`, whose central
+      claim is still unverified in T15). This replaces a screen-scraping
+      heuristic with a typed request that works for all 39.
+      **Gates:** refuse `allow_tools` on an ACP node rather than accept and drop
+      it — the `agent.spawn --allow-tools` chain has no ACP link and cannot have
+      one, and silently ignoring it is `local_agent/tools.rs:17-20`'s own stated
+      nightmare, *"worse than no allowlist, because it reads as a guarantee"*.
+      Gate on the **method**, never on `tool_call.kind`, which is agent-authored.
+      **And remote approval must be able to select only single-shot options.**
+      `allow_always` carries `_meta.permission.changes` setting the session's
+      permission mode to `acceptEdits` with `lifetime: {scope: "session"}` — so
+      composed with `WARP_FORK_REMOTE_APPROVE`, one phone tap would authorize
+      every subsequent call the person will never be shown. Read
+      `PermissionOption.kind`; allow `allow_once`/`reject_once` remotely and
+      never `allow_always`. Same asymmetry the fork already uses: a remote *no*
+      is always safe, a remote *yes* should be as small as possible.
+
+- [ ] **T14.3** **Warp cannot observe an agent's permission policy, so it must
+      not imply one.** `claude-agent-acp` resolves its mode from
+      `settingsManager.getSettings().permissions?.defaultMode` — *the user's own
+      Claude Code settings*. On this machine that is `defaultMode: auto` with 87
+      allow rules, which is why the first run wrote a file and asked nobody.
+      **This is not a bypass and must not be written as one**: the user's
+      settings are the user's own expressed policy, and an agent honouring them
+      is precisely this fork's thesis. The finding is narrower and worse — if
+      Warp renders an approval affordance, or a graph node declares
+      `allow_tools`, while the governing policy lives in a file Warp never read,
+      **Warp is claiming knowledge it does not have.** That is the third
+      instance of one principle, after `approvals.rs` reporting *which keystroke
+      it sent* rather than `approved: true`, and `tools.rs` refusing an allowlist
+      it cannot enforce.
+      It is cheaply mitigable, because the condition is visible: an agent making
+      `tool_call` updates while sending no `session/request_permission` is
+      observably ungoverned. Report it rather than infer approval — **per
+      tool-call**, because policy is layered and per-tool: in one run `Write`
+      asked and `echo done` did not. And Warp is blind to the *state* but sighted
+      on the *transitions it is asked to authorize*, so the honest sentence is
+      *"you were asked to widen this session to `acceptEdits`, and you agreed"* —
+      never *"policy is X"*.
 
 ## T15 — Loose ends carried, not forgotten
 
