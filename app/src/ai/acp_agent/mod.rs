@@ -24,11 +24,33 @@
 //! # A spike, on the same terms the last one had
 //!
 //! **Every permission request is denied**, and the denial is said in the
-//! conversation rather than swallowed. So read-only turns work, and anything the
-//! agent needs consent for does not.
+//! conversation rather than swallowed.
 //!
-//! That is not a shortcut, it is the shape `local_agent` shipped in and for the
-//! same reason — its module docs say *"Claude's own permission prompts govern,
+//! # This is not read-only, and calling it that was measured false
+//!
+//! Warp only ever answers the questions an agent chooses to ask, and **an agent
+//! is free to ask nothing.** Measured 2026-08-28 through this very path, with
+//! `opencode` at its own default permissions and no user configuration:
+//!
+//! ```text
+//! prompt: Create a file called proof.txt containing the word hello.
+//! output: `write` `tmp/…/proof.txt` File `proof.txt` created with content `hello`.
+//! $ ls    proof.txt        ← written; Warp was never asked, so denied nothing
+//! ```
+//!
+//! The T5 spike had a real guarantee behind the same sentence — `claude -p`
+//! refuses its own tools — and that guarantee does **not** transfer. An ACP agent
+//! runs tools under its own policy, which Warp cannot see and does not read; the
+//! consent report's caveat says exactly this and was corrected to say it a day
+//! before this module described itself as read-only anyway.
+//!
+//! So: this denies what it is asked about. It is **not** a sandbox, not a
+//! read-only mode, and not a guarantee about what the agent will do to the
+//! machine. Claiming otherwise would be `local_agent/tools.rs:17-20`'s stated
+//! nightmare — *"worse than no allowlist, because it reads as a guarantee."*
+//!
+//! That the denial itself is the shape `local_agent` shipped in still holds — its
+//! module docs say *"Claude's own permission prompts govern,
 //! and in `-p` mode that means read-only tools work and anything needing
 //! approval is denied. Wiring Warp's tool execution back in ... is the next step
 //! rather than part of the spike."* Answering **yes** needs a surface that can
@@ -44,6 +66,10 @@
 //! place for it to be wrong.
 //!
 //! # Also not done
+//!
+//! **A second turn is refused**, honestly and out loud, because every turn starts
+//! a fresh session and an agent with no memory of the conversation above it is
+//! worse than no answer. See [`Turn::from_request`].
 //!
 //! `/compact` (the protocol has no compaction), model selection, attachments,
 //! MCP context, and Warp's own tools. Those fall through untouched.
@@ -96,6 +122,15 @@ fn query(params: &RequestParams) -> Option<String> {
     })
 }
 
+/// What a person is told when they send a second turn.
+///
+/// A constant so the tests pin the sentence that actually ships. It is the only
+/// thing they will see, so it says what happened and what to do, and names no
+/// protocol machinery they cannot act on.
+const CANNOT_CONTINUE: &str = "This build starts a new agent session for every turn, so it cannot continue this \
+     conversation — the agent would answer with no memory of what you see above. Start a new \
+     conversation instead.";
+
 /// One turn, in ACP's terms rather than Warp's.
 ///
 /// Split out from [`RequestParams`] for the same reason `local_agent::Turn` is:
@@ -103,15 +138,16 @@ fn query(params: &RequestParams) -> Option<String> {
 /// which would otherwise put everything below out of reach of a test.
 pub(crate) struct Turn {
     prompt: String,
-    /// The ACP session to resume, i.e. Warp's conversation token.
+    /// The ACP session this conversation is already holding, if any.
     ///
-    /// Carried and **not yet used**: `session/load` is an optional capability
-    /// (`opencode` advertises it, and whether the agent named in
-    /// `WARP_FORK_ACP_COMMAND` does is not knowable in advance), so resuming
-    /// needs a capability check this spike does not make. Every turn is a new
-    /// session for now, which is a real limitation and is why it is a named
-    /// field rather than a dropped one.
-    _session: Option<String>,
+    /// Only ever `None` on a turn that runs: `from_request` refuses a second
+    /// turn. Kept on the struct so a test can assert *that* rather than assert
+    /// the absence of a field, and so `session/load` (T14.6) has its place.
+    #[expect(
+        dead_code,
+        reason = "read by tests; the field is where session/load lands"
+    )]
+    session: Option<String>,
     task_id: String,
     task_needs_announcing: bool,
     working_directory: Option<String>,
@@ -121,6 +157,33 @@ impl Turn {
     fn from_request(params: &RequestParams) -> anyhow::Result<Self> {
         let prompt = query(params)
             .ok_or_else(|| anyhow!("The ACP agent was handed a request it does not serve."))?;
+        let session = params
+            .conversation_token
+            .as_ref()
+            .map(|token| token.as_str().to_owned());
+
+        // **Refused rather than silently answered, and that is a correction.**
+        // This shipped starting a fresh ACP session on every turn, with the
+        // limitation recorded in a doc comment. Measured through the panel, the
+        // limitation is not a footnote — it is the agent contradicting the
+        // transcript directly above it:
+        //
+        //   turn 1  "Create a file called proof.txt…"  → `write`, file created
+        //   turn 2  "What word did you just put in it?"
+        //           → "I haven't written to or modified any files yet in this session."
+        //
+        // Warp shows one continuous conversation to an agent that remembers none
+        // of it, which is `local_agent`'s own named hazard — "a true sentence
+        // about the wrong conversation" — with the roles swapped. A refusal
+        // cannot mislead; an amnesiac answer presented as continuous can.
+        //
+        // The real fix is `session/load`, which `opencode` advertises
+        // (`loadSession: true`) and which needs a capability check and a decision
+        // about the history it replays. T14.6.
+        if session.is_some() {
+            return Err(anyhow!(CANNOT_CONTINUE));
+        }
+
         // An existing conversation already has a task; a new one does not, and
         // the client learns about it from the CreateTask this mints an id for.
         let (task_id, task_needs_announcing) = match params.tasks.first() {
@@ -129,10 +192,7 @@ impl Turn {
         };
         Ok(Self {
             prompt,
-            _session: params
-                .conversation_token
-                .as_ref()
-                .map(|token| token.as_str().to_owned()),
+            session,
             task_id,
             task_needs_announcing,
             working_directory: params.session_context.current_working_directory().clone(),

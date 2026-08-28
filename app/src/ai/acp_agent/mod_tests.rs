@@ -119,3 +119,49 @@ fn a_request_without_a_title_still_reads_as_a_sentence() {
 
     assert!(note.contains("a request to act"), "got: {note}");
 }
+
+/// A second turn is refused rather than answered by an agent that remembers
+/// nothing. Measured: it answered *"I haven't written to or modified any files
+/// yet in this session"* directly below the turn where it wrote one.
+///
+/// The predicate is here rather than in `handles` on purpose — `handles` says
+/// "this path serves user queries", which is still true, and a request it
+/// declines would fall through to an implementation that would answer it wrongly
+/// in a different way.
+#[test]
+fn a_conversation_that_already_has_a_session_is_refused_with_a_reason() {
+    let error = continuation_error();
+
+    assert!(
+        error.contains("cannot continue"),
+        "the refusal must say what it is refusing, got: {error}"
+    );
+    assert!(
+        error.contains("Start a new conversation"),
+        "the refusal must say what to do instead, got: {error}"
+    );
+}
+
+/// The refusal text is the only thing a person sees, so it must not name a
+/// mechanism they cannot act on.
+#[test]
+fn the_continuation_refusal_explains_itself_without_protocol_jargon() {
+    let error = continuation_error();
+
+    for jargon in ["session/load", "loadSession", "ACP", "conversation_token"] {
+        assert!(
+            !error.contains(jargon),
+            "{jargon} means nothing to a person reading a conversation, got: {error}"
+        );
+    }
+}
+
+/// The sentence that actually ships.
+///
+/// `Turn::from_request` cannot be called from here — `RequestParams` has a
+/// private field, which is the whole reason `Turn` exists — so these pin the
+/// constant it returns rather than a copy of it. A test that retyped the message
+/// would pass while the shipped one said anything at all.
+fn continuation_error() -> String {
+    CANNOT_CONTINUE.to_owned()
+}

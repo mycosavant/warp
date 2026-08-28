@@ -6373,13 +6373,68 @@ one is pinned by `a_tool_call_is_never_emitted_as_a_tool_call_message` rather th
 by a paragraph. Same for the denial: `no_option_that_permits_anything_is_ever_selected`
 is what a future "helpful" edit has to come through.
 
-**Named unverified.** One agent, one model, three prompts, Linux/WSL. Session
-resume is carried and unused — `session/load` is an optional capability and this
-makes no capability check, so **every turn is a new session**, which is a real
-limitation. `/compact` is not handled (the protocol has no compaction) and falls
-through. Cancellation is reasoned from the drop chain and was not exercised. No
-GUI screenshot was taken; the turns were driven and read through `warpctrl`.
-Nothing has run on Windows.
+**Two corrections, both from an advisor reading the shipped code and both then
+measured.**
+
+**"Read-only" was false, and it was in `CLAUDE.md`.** The first version of this
+module, its README section and the seams table all described the ACP path as
+read-only because it denies every permission request. But Warp only answers the
+questions an agent *asks*, and an agent is free to ask nothing. Run through this
+very path with `opencode` at its own defaults and no user configuration:
+
+```
+prompt: Create a file called proof.txt containing the word hello.
+`write` `tmp/…/proof.txt` File `proof.txt` created with content `hello`.
+$ ls    proof.txt          ← written; Warp was never asked, so denied nothing
+```
+
+The T5 spike's identical sentence had a real guarantee behind it — `claude -p`
+refuses its own tools — and **that guarantee does not transfer**. Worse, the
+falsifying measurement was already in hand: T14.5's own gate recorded opencode
+writing a file on a fresh install with no rule behind it, and the consent
+report's caveat had been corrected *the same day* to stop guessing whose policy
+allowed a silent call. The claim was made anyway. That is the **fourth** instance
+in T14 of a hazard being written down and then built against, and the first one
+where the false claim was a safety guarantee in the file every session loads.
+
+**A second turn was silently answered by an agent with no memory of the first.**
+Recorded as "a real limitation" in a doc comment; measured through the panel it
+is not a footnote:
+
+```
+turn 1  "Create a file called proof.txt…"   → `write`, file created
+turn 2  "What word did you just put in it?"
+        → "I haven't written to or modified any files yet in this session."
+```
+
+Warp shows one continuous conversation to an agent that remembers none of it —
+`local_agent`'s own named hazard, *"a true sentence about the wrong
+conversation"*, with the roles swapped. A second turn is now **refused out loud**,
+because a refusal cannot mislead and an amnesiac answer presented as continuous
+can. `session/load` is the fix; `opencode` advertises `loadSession: true`.
+
+Verified live after the fix: turn 1 answers, turn 2 leaves the conversation
+`status: "error"` with the refusal reaching the log verbatim. One measured
+detail for anyone else returning an error from this seam — Warp classifies
+`AIApiError::Other` as **recoverable and retries it three times** before
+surfacing it. Harmless here, because `Turn::from_request` fails before anything
+is spawned, so the retries cost no process and no tokens.
+
+**And the dependency note was wrong in the harmless direction.** `app` already
+depends on `warp_cli` unconditionally, which already carries
+`agent-client-protocol`, so the crate was in every binary before this change; the
+direct edge adds nothing to the link. Which also means T14.6 can widen
+`acp_permission`'s visibility rather than duplicate its allow rules.
+
+**Named unverified.** One agent, one model, six prompts, Linux/WSL. `/compact` is
+not handled (the protocol has no compaction) and falls through. **Cancellation is
+reasoned from the drop chain and still was not exercised** — the ACP client's
+`ChildGuard` is documented to kill the process group on connection drop, on Unix
+only, so a cancelled turn on Windows is entirely unverified and this agent
+*executes tools*. The GUI spawn environment is unverified: the probe ran from a
+login shell and the app spawns from a GUI process whose PATH may lack npm/nvm
+shims. No GUI screenshot was taken; turns were driven and read through
+`warpctrl`. Nothing has run on Windows.
 
 - [ ] **T14.6** Saying yes: the consent surface. What is now paid for:
       **`acp_permission` moves out of `warp_cli` and is shared**, not copied —
@@ -6391,7 +6446,21 @@ Nothing has run on Windows.
       disclosed.
       **`AppendToMessageContent` for token streaming**, once its `FieldMask` path
       is established by running it rather than guessed.
-      **Session resume**, gated on the agent's advertised `loadSession`.
+      **Session resume**, gated on the agent's advertised `loadSession` — this is
+      now *load-bearing*, not a nicety: T14.5 refuses a second turn outright
+      rather than answer it with an amnesiac agent, so until this lands an ACP
+      conversation is one turn long.
+      **Cancellation, verified by running it on both platforms.** T14.5 reasons
+      it from the drop chain and never exercised it, and the client's own
+      `ChildGuard` documents killing the process group on Unix *only*. A
+      cancelled turn that leaks a connection leaks an agent that is executing
+      tools.
+      **The GUI spawn environment.** The app spawns from a process whose PATH may
+      not carry npm/nvm shims — the reason `local_agent::spawn_for` does the
+      `/bin/sh -lc` dance. Either the same treatment or an honest error naming
+      PATH. Whether an ACP agent should run *inside* a WSL distro for a WSL
+      session, as `claude` does for the file-read reason, is a real question this
+      may defer but must name.
 
 - [x] **T14.3** ~~**Warp cannot observe an agent's permission policy, so it must
       not imply one.**~~ **The headline is false and running it is what showed

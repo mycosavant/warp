@@ -303,9 +303,12 @@ winit = { workspace = true }
 wgpu.workspace = true
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
-# The ACP client (`ai::acp_agent`, T14.5). Cheap here: `async-io`, `blocking`,
-# `futures`, `serde_json` and `uuid` are already below, so what this actually
-# adds is the protocol crates, `async-process` and `shell-words`.
+# The ACP client (`ai::acp_agent`, T14.5). This adds **nothing to the link**:
+# `warp_cli` is an unconditional dependency above and already carries
+# `agent-client-protocol = "2.0.0"`, so the crate and its tree are compiled into
+# every warp-oss binary today. What this adds is the direct edge, so the app can
+# name the types. The same fact means T14.6 can widen `warp_cli`'s
+# `acp_permission` visibility rather than duplicate its allow rules.
 agent-client-protocol = "2.0.0"
 app-installation-detection.workspace = true
 async-io.workspace = true

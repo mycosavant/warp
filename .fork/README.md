@@ -1367,9 +1367,8 @@ and ACP's whole point is that there is no default. It outranks
 1.18.25 on OpenRouter — the panel showed the tool calls and the answer, driven
 and read through `warpctrl agent prompt` / `agent read`.
 
-**It can only say no.** Every permission request is denied and the refusal is
-printed in the conversation, so read-only turns work and anything needing consent
-does not:
+**It can only say no** to the questions it is asked. Every permission request is
+denied and the refusal is printed in the conversation:
 
 > `write`
 > Warp denied this: **/tmp/…/out.txt**. This build can only say no to an agent's
@@ -1379,6 +1378,28 @@ does not:
 That is the shape `local_agent` shipped in for the same reason: saying yes needs a
 surface that can show what is being agreed to, and T14.4 measured what goes wrong
 when something says yes without one.
+
+**This is not read-only, and do not read it as one.** Warp answers the questions
+the agent asks, and an agent is free to ask nothing. Measured through this path
+with `opencode` at its own defaults and no user config: it wrote the file and
+Warp was never consulted.
+
+```
+prompt: Create a file called proof.txt containing the word hello.
+`write` `tmp/…/proof.txt` File `proof.txt` created with content `hello`.
+$ ls    proof.txt          ← written, with nothing denied
+```
+
+The T5 spike's identical sentence had a real guarantee behind it — `claude -p`
+refuses its own tools — and that guarantee does not transfer. Use the agent's own
+permission configuration if you want it to ask; `opencode` takes
+`"permission": {"edit": "ask"}`.
+
+**A second turn is refused**, out loud. Every turn starts a fresh session, and an
+agent that answered *"I haven't written to or modified any files yet"* directly
+below the turn where it wrote a file is worse than no answer — so it says it
+cannot continue and asks you to start a new conversation. `session/load` is the
+fix and is on T14.6.
 
 **Two things that will bite, both measured.** The agent *process* inherits Warp's
 working directory, because ACP's spawn config carries a command, args and env and
