@@ -5728,8 +5728,11 @@ ecosystem argument (39 agents, no per-agent integration) survives intact and is
 the reason to adopt; the tool-participation argument is entirely contingent on
 (B), and this run is what proves it rather than assuming it.
 
-**Named unverified.** The `--approve` path has **never been exercised against a
-live agent**, because no agent asked. ~~And none will until the fork advertises
+**Named unverified.** ~~The `--approve` path has **never been exercised against a
+live agent**, because no agent asked.~~ **Exercised in T14.2, and it was broken**:
+it selected `options.first()`, which the flagship agent makes *Deny*, so the flag
+refused while reporting success. Naming the unverified input is what got it
+tested; testing it is what found the bug. ~~And none will until the fork advertises
 the capabilities that make asking meaningful.~~ **That second clause was wrong,
 and T14.2 falsified it the same day**: asking is not capability-gated at all.
 The agent asked with **zero** capabilities advertised, as soon as its own config
@@ -5794,7 +5797,7 @@ request and refuses every mutating one.
 Claude's dist and fired zero times. So a **0** is decisive and a nonzero means
 only "worth one real run". Both directions above are labelled accordingly.
 
-- [ ] **T14.2** `session/request_permission` → Warp's permission model. **The
+- [x] **T14.2** `session/request_permission` → Warp's permission model. **The
       thing worth building was hiding inside (B) and is much smaller than it.**
       Ungated, typed, agent-agnostic, and it needs **zero capabilities
       advertised**. Verified by running: with `{"permissions":{"defaultMode":"default"}}`
@@ -5821,6 +5824,131 @@ only "worth one real run". Both directions above are labelled accordingly.
       `PermissionOption.kind`; allow `allow_once`/`reject_once` remotely and
       never `allow_always`. Same asymmetry the fork already uses: a remote *no*
       is always safe, a remote *yes* should be as small as possible.
+
+### T14.2 — as built
+
+**The ticket's own first line was the thing that failed. `--approve` denied.**
+
+T14.1's probe answered an approval by taking `options.first()`. Run against live
+`claude-agent-acp` on 2026-08-27, the options arrive in this order:
+
+| # | `optionId` | `name` | `kind` | |
+|---|---|---|---|---|
+| 1 | `reject` | Deny | `reject_once` | |
+| 2 | `allow` | Allow Once | `allow_once` | |
+| 3 | `allow_always` | Always Allow | `allow_always` | `_meta.permission.changes` → set `claudeCode` mode to `acceptEdits`, `lifetime: {scope: "session"}` |
+
+**Deny is first.** So the flag named `--approve` refused: no file was written and
+the agent said *"I wasn't able to create the file — the write was denied."* It
+reported success while doing the opposite of its name, against the one agent it
+had ever been run on, in a fork whose thesis is that a person's consent is the
+thing being protected. Nothing in the protocol orders that list and nothing ever
+will — the order is a fact about one agent's UI, exactly like which option a TUI
+highlights. **The point of the typed channel is not that the order is knowable;
+it is that the order does not have to be known.**
+
+It was found by running it, and only by running it: the schema, the docs and the
+option *names* are all silent on order, and the previous session had read the
+right types and still shipped the bug. It also falsifies T14.1's named-unverified
+input in the strongest available way — the input was "`--approve` has never been
+exercised", and exercising it is what broke it.
+
+**What was built.** `crates/warp_cli/src/local_control/acp_permission.rs`, ~110
+lines with the doc comments, plus 9 tests whose fixture is the option list above
+transcribed field for field, order included. One pure function:
+`choose(&RequestPermissionRequest, Decision) -> Choice`.
+
+- Selects by `PermissionOptionKind`, **never by position**.
+- Refuses both always-variants, and additionally refuses **any** option carrying
+  `_meta.permission.changes` whatever its kind — two independent signals, either
+  disqualifying. `_meta` is read only ever to *refuse*, never to grant, which is
+  what keeps it clear of the spec's *"implementations MUST NOT make assumptions
+  about values at these keys"*: no assumption is made about what a change means,
+  only that an option declaring one does more than answer the question.
+- An allow that cannot be expressed safely **becomes a no**, and the reason names
+  what the agent offered — because "no single-shot allow was on offer" is
+  invisible otherwise and indistinguishable from a bug in this code.
+- A deny with no `reject_once` still answers, as `Cancelled`.
+
+**And the deny got more honest on the way past.** It now sends `reject_once`
+rather than `Cancelled`. `Cancelled` is documented as the answer to a
+`session/cancel`, so using it for "the person said no" claims a turn-cancellation
+that did not happen — the same class of lie as `approvals.rs` refusing to report
+`approved: true` when all it did was press a key.
+
+**Re-measured, both directions, against the live agent with the rebuilt binary:**
+`--approve` → `{"outcome":"selected","optionId":"allow"}` and `probe.txt`
+contains `hello`; default → `{"outcome":"selected","optionId":"reject"}` and no
+file. The probe now emits a `permission_answer` record so the transcript says
+what was sent, not just what was asked.
+
+**A claim made and withdrawn in the same session.** I argued the digest is
+redundant here because *"`toolCallId` covers the staleness case for free"*. That
+is wrong, and the advisor's attack lands: **nothing in the schema says one
+`toolCallId` carries at most one permission request.** An agent refused
+`reject_once` may re-ask on the same `toolCallId` with modified content, and an
+answer keyed by it would land on the second question — the `approval_for` doc
+comment's exact failure, one layer up. The structurally unique key is the
+**JSON-RPC request id**: one per ask, gone once answered, a stale answer fails
+loudly. The probe is safe because it answers through the responder, which *is*
+that channel. So the honest sentence is **"the request id makes the digest's job
+structural"**, and the digest is redundant *conditional on the key choice*.
+Unverified either way: neither of us has watched an agent re-ask after a reject;
+the schema merely fails to forbid it.
+
+**Where T14.2 stops, and why that is the answer rather than the leftovers.** It
+stops before any app surface. The ticket said *"→ Warp's permission model"*, and
+measuring what that would mean is what shortened it:
+
+- `PendingApproval.approval_id` is a **pane id** and `agent.approvals` walks
+  `surface_locations`. An ACP session has no pane, so the shape's primary key
+  does not exist for it.
+- `PendingApproval` is derivable from one blocked-session snapshot — `approval_for`
+  is deliberately a pure function. An ACP approval record **cannot be**: the
+  `permission_request`'s `toolCall` carried no `_meta` at all, while the
+  `tool_call`/`tool_call_update` notifications for the same `toolCallId` carried
+  `_meta.claudeCode.toolName: "Write"`. The vendor tool name is only available by
+  correlating the request against the notification stream. A shape needing
+  stateful correlation is a different shape by construction.
+- `AgentApproveParams.digest` is required with no opt-out, so routing ACP answers
+  through `agent.approve` would force either a fabricated digest or a loosened
+  pin.
+
+So what carries forward into the app work is the fork's **consent vocabulary** —
+the approve/deny split with its grant asymmetry, the single-shot remote gate, the
+answer-must-bind-to-question principle — and **not** the record shape. Filed as
+T14.4 rather than smuggled in here.
+
+**The `allow_tools` gate was not exercised and did not need to be.** It applies
+to an ACP *node* in the task graph, and there is none: graph nodes spawn agents
+through `agent.spawn`, which has no ACP link. Recorded on T14.4 rather than
+silently dropped.
+
+- [ ] **T14.4** The app surface, when there is a reason for one. Constraints
+      already paid for, so they should not be rediscovered:
+      **a new approval shape** in `crates/local_control/src/protocol.rs`, sibling
+      to `PendingApproval` and decided next to its consumer — not `PendingApproval`
+      with a session id smuggled into a field documented as a pane id.
+      **Key the pending map on the JSON-RPC request id**, not `toolCallId` and not
+      the session id; key it on either of those and the staleness hazard returns
+      and a digest is needed again.
+      **The app-side shape must keep the diff structured** (`content: [{type:
+      "diff", path, newText}]`), because an in-app diff reviewer is the actual
+      prize; the *remote consent card* may flatten it to text, which is still
+      strictly better than the OSC path, where the person sees the file name and
+      nothing about the contents.
+      **Refuse `allow_tools` on an ACP node** rather than accept and drop it —
+      `local_agent/tools.rs:17-20`'s stated nightmare, *"worse than no allowlist,
+      because it reads as a guarantee."*
+      **Gate on the method, never on `tool_call.kind`**, which is agent-authored
+      and whose unknown case silently becomes `Other` via `#[serde(other)]`.
+      **To measure first:** whether the already-deployed `console.js` renders an
+      approval entry with unfamiliar fields gracefully. It passes
+      `approval_id`/`digest` back opaquely, which was checked; how it handles an
+      unknown `kind` was not. If old clients turn out to need the old shape
+      unmodified, a flatten-to-`PendingApproval` compatibility shim comes back
+      with its warts accepted — that is the one thing that would reopen the
+      decision above.
 
 - [ ] **T14.3** **Warp cannot observe an agent's permission policy, so it must
       not imply one.** `claude-agent-acp` resolves its mode from

@@ -1,5 +1,6 @@
 //! Command-line interface for controlling a running local Warp app.
 mod acp;
+mod acp_permission;
 mod commands;
 mod completions;
 mod graph;
@@ -990,12 +991,16 @@ pub struct AcpProbeArgs {
     #[arg(long = "cwd")]
     pub cwd: Option<PathBuf>,
 
-    /// Answer the agent's permission requests with yes.
+    /// Answer the agent's permission requests with yes, once each.
     ///
     /// Off by default, and deliberately: without it every request is refused
     /// and the refusal is printed. An ACP agent asks permission in order to
     /// write files and run commands, so this is the flag that lets a probe
     /// change the machine.
+    ///
+    /// "Once each" is a promise this keeps rather than a description of intent:
+    /// an option that would widen the session's policy is never selected, even
+    /// if it is the only yes the agent offered. See `acp_permission.rs`.
     #[arg(long = "approve")]
     pub approve: bool,
 }

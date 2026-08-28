@@ -1379,7 +1379,21 @@ warpctrl acp probe --command "…" --prompt "…" | jq -r 'select(.kind=="update
 **Permission requests are denied unless you pass `--approve`.** An ACP agent
 asks permission in order to write files and run commands, so the flag that says
 yes is the one that has to be typed — the same asymmetry as `agent.approve`
-versus `agent.deny`. A denial is printed rather than swallowed.
+versus `agent.deny`. A denial is printed rather than swallowed, and both
+directions now print a `permission_answer` record saying which option was sent.
+
+**`--approve` means "allow once", and that is enforced rather than intended.**
+The option is chosen by its `kind`, never by its position in the list, and any
+option that would widen the session's policy is skipped even if it is the only
+yes on offer — in which case the answer is no and the reason names what the agent
+offered. This is not caution about a hypothetical: `claude-agent-acp` lists
+**Deny first**, `allow_always` third, and the always-variant declares in its
+`_meta` that selecting it sets Claude Code's permission mode to `acceptEdits` for
+the rest of the session. T14.1 took `options.first()`, so `--approve` **denied**
+— silently, reporting success. Measured, fixed and re-measured 2026-08-27
+(T14.2). Composed with `WARP_FORK_REMOTE_APPROVE`, the position bug would have
+been a phone tap that denied, and the always-variant would have been a phone tap
+that authorized every later call the person is never shown.
 
 **`--cwd` defaults to the current directory and is always made absolute.** An
 ACP session carries its working directory explicitly, which is worth using:

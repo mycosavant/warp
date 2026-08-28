@@ -35,7 +35,7 @@ use agent_client_protocol::schema::v1::{
 use agent_client_protocol::{AcpAgent, Agent, ConnectionTo};
 use local_control::protocol::{ControlError, ErrorCode};
 
-use super::AcpProbeArgs;
+use super::{AcpProbeArgs, acp_permission};
 
 fn invalid(message: impl Into<String>) -> ControlError {
     ControlError::new(ErrorCode::InvalidParams, message)
@@ -108,25 +108,32 @@ pub(super) fn run_probe(args: AcpProbeArgs) -> Result<(), ControlError> {
                     // verdicts: saying no can only ever make less happen, so it needs
                     // no switch, and saying yes is the one that does.
                     emit("permission_request", &request);
-                    if !approve {
-                        eprintln!("acp: denied a permission request; pass --approve to allow them");
-                        return responder.respond(RequestPermissionResponse::new(
-                            RequestPermissionOutcome::Cancelled,
-                        ));
-                    }
-                    match request
-                        .options
-                        .first()
-                        .map(|option| option.option_id.clone())
-                    {
-                        Some(id) => responder.respond(RequestPermissionResponse::new(
-                            RequestPermissionOutcome::Selected(SelectedPermissionOutcome::new(id)),
-                        )),
-                        // An approval with nothing to approve is not an approval.
-                        None => responder.respond(RequestPermissionResponse::new(
-                            RequestPermissionOutcome::Cancelled,
-                        )),
-                    }
+                    let decision = if approve {
+                        acp_permission::Decision::Allow
+                    } else {
+                        acp_permission::Decision::Deny
+                    };
+                    // Which option answers a decision is a question with a typed
+                    // answer, and taking `options.first()` got it wrong against the
+                    // one agent it was ever run on. See `acp_permission.rs`.
+                    let outcome = match acp_permission::choose(&request, decision) {
+                        acp_permission::Choice::Select(option_id) => {
+                            if !approve {
+                                eprintln!(
+                                    "acp: denied a permission request; pass --approve to allow them"
+                                );
+                            }
+                            RequestPermissionOutcome::Selected(SelectedPermissionOutcome::new(
+                                option_id,
+                            ))
+                        }
+                        acp_permission::Choice::Cancel { reason } => {
+                            eprintln!("acp: {reason}");
+                            RequestPermissionOutcome::Cancelled
+                        }
+                    };
+                    emit("permission_answer", &outcome);
+                    responder.respond(RequestPermissionResponse::new(outcome))
                 },
                 agent_client_protocol::on_receive_request!(),
             )
