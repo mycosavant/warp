@@ -7275,6 +7275,46 @@ Nothing has run on Windows.
       (T12) has the button and reaches a phone; the panel does not. That is the
       next ergonomic step and it is a smaller one than anything in this ticket.
 
+- [ ] **T14.9** **Run a full working session on the fork, from the fork, and
+      write down what it costs.** Gates T14.8, and the ordering is the point:
+      T14.7 Phase 0 predicted two blockers, got both wrong, and the real one was
+      in neither cell of its table. Every candidate friction below T14.8 is a
+      guess until a real session ranks them.
+
+      Not a demonstration. Take a real item off this board, work it end to end in
+      the panel over as many turns as it actually takes, and keep a friction log
+      — every point where the surface made you reach for something outside Warp,
+      with a count. Seven approvals in three turns is the number that already
+      exists; what matters is which friction dominates at length and whether any
+      of them compounds.
+
+      Known-unmeasured going in: `/compact` is unhandled on the ACP path, so a
+      long session may simply run out of context and it is not known what that
+      looks like from the panel. Replay cost is **not** a candidate — measured
+      flat at 0.34s from one exchange of history to six, with process startup
+      dominating (see `GOAL.md`), though fifty exchanges and large tool outputs
+      in the history are both unverified.
+
+- [ ] **T14.8** **Answer a permission request by pressing something.** Blocked by
+      T14.9, which decides what this actually is.
+
+      The favourite is an in-panel control, and it is well-founded rather than
+      speculative: T14.7's dogfood took seven permission requests over three
+      turns, each answered by copying a `{turn}:{rpc_id}` id and a 64-character
+      digest into a shell. The panel prints the command; nothing there can be
+      pressed. The T12 console already has the button and reaches a phone, which
+      is the odd shape of the current state — the surface a person is *least*
+      likely to be looking at is the one that can be clicked.
+
+      **Consider the cheap alternative before building the expensive one.** There
+      is no `--latest`, no way to address the one pending request without
+      transcribing both strings. If a session shows that most of the cost is
+      transcription rather than modality, cheaper addressing wins on effort by an
+      order of magnitude and should be tried first. The digest is not
+      decoration — it binds the answer to what was shown — so anything cheaper
+      must keep that binding rather than drop it, which is the design question
+      this ticket actually holds.
+
 - [x] **T14.3** ~~**Warp cannot observe an agent's permission policy, so it must
       not imply one.**~~ **The headline is false and running it is what showed
       that — see the as-built below.** The agent declares its mode on the wire,
