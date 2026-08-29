@@ -288,6 +288,8 @@ fn run(command: String, turn: Turn) -> impl Stream<Item = Event> + Send + use<> 
         request_id,
         turn.prompt.clone(),
         started_at,
+        agent_name(&command),
+        turn.working_directory.clone(),
     )));
 
     let driver = drive(

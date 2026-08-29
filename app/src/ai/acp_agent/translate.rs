@@ -45,12 +45,16 @@
 //! is deliberate: this file decides how something is *shown*, and showing must
 //! not be able to authorize.
 
+use std::collections::{HashMap, HashSet};
+
 use agent_client_protocol::schema::v1::{
     ContentBlock, ContentChunk, SessionUpdate, StopReason, ToolCall, ToolCallLocation,
-    ToolCallStatus, ToolCallUpdate,
+    ToolCallStatus, ToolCallUpdate, ToolKind,
 };
 use chrono::{DateTime, Utc};
 use warp_multi_agent_api as api;
+
+use crate::event_log::Entry;
 
 /// How much of the prompt becomes the conversation's name in the history panel.
 ///
@@ -131,6 +135,28 @@ pub(super) struct Translator {
     /// `WARP_FORK_EVENT_LOG` wrote for the same session, the way
     /// `PendingApproval::session_id` already is for CLI agents.
     session_id: Option<String>,
+    /// The program name the event log's `agent` field carries, resolved once from
+    /// `WARP_FORK_ACP_COMMAND` rather than per tool call.
+    ///
+    /// `source` is what separates this path from the others; `agent` is which
+    /// program the pane is talking to. Threaded in because there is no model to
+    /// ask on this path, the same way `TurnContext` resolves its fields at spawn.
+    agent: String,
+    /// The session's working directory, on the log as `cwd`/`project`.
+    ///
+    /// This is the pane directory, which is what decides where the agent resolves
+    /// its own permission rules — the security-relevant input T14.6 measured.
+    cwd: Option<String>,
+    /// Tool call ids whose `tool_start` has been logged, mapped to the kind
+    /// named at the announcement, so a re-announcement is not double-logged and
+    /// a completion that does not repeat the kind can still be named.
+    started: HashMap<String, &'static str>,
+    /// Tool call ids whose `tool_complete` has been logged.
+    ///
+    /// ACP streams several updates per call; the wire names the terminal ones
+    /// (`Completed`/`Failed`), but may echo them, so each id is remembered to
+    /// keep the log from echoing it.
+    completed: HashSet<String>,
     /// Whether the updates arriving right now are history rather than news.
     ///
     /// `session/load` replays the whole conversation as ordinary
@@ -156,6 +182,8 @@ impl Translator {
         request_id: String,
         prompt: String,
         started_at: DateTime<Utc>,
+        agent: String,
+        cwd: Option<String>,
     ) -> Self {
         Self {
             task_id,
@@ -169,6 +197,10 @@ impl Translator {
             locations: Vec::new(),
             opened: false,
             session_id: None,
+            agent,
+            cwd,
+            started: HashMap::new(),
+            completed: HashSet::new(),
             replaying: false,
         }
     }
@@ -287,9 +319,16 @@ impl Translator {
         // anything, only to answer "where does this run" for a parked request.
         match update {
             SessionUpdate::ToolCall(call) => {
+                self.log_tool_start(call);
                 self.note_locations(call.tool_call_id.to_string(), &call.locations);
             }
             SessionUpdate::ToolCallUpdate(update) => {
+                if matches!(
+                    update.fields.status,
+                    Some(ToolCallStatus::Completed | ToolCallStatus::Failed)
+                ) {
+                    self.log_tool_complete(update);
+                }
                 if let Some(locations) = &update.fields.locations {
                     self.note_locations(update.tool_call_id.to_string(), locations);
                 }
@@ -424,6 +463,97 @@ impl Translator {
             .iter()
             .find(|(seen, _)| seen == tool_call_id)
             .map(|(_, paths)| paths.clone())
+    }
+
+    /// Appends a `tool_start` for a call the agent has announced.
+    ///
+    /// A `ToolCall` notification arrives once per call, but a re-announcement
+    /// must not double-post, so the id is remembered. The kind is remembered
+    /// with the id because a completion does not repeat it.
+    fn log_tool_start(&mut self, call: &ToolCall) {
+        if self.started.contains_key(&call.tool_call_id.to_string()) {
+            return;
+        }
+        let kind = kind_name(call.kind);
+        self.started.insert(call.tool_call_id.to_string(), kind);
+        self.log(Entry {
+            v: None,
+            agent: &self.agent,
+            event: "tool_start",
+            source: "acp_agent",
+            session_id: self.session_id.as_deref(),
+            call_id: Some(&call.tool_call_id.to_string()),
+            parent_call_id: None,
+            cwd: self.cwd.as_deref(),
+            project: self.cwd.as_deref().and_then(crate::event_log::project_name),
+            tool_name: Some(kind),
+            // ACP's notification stream has no `rawInput`; that lives on the
+            // permission request, which `mod.rs` handles and which this
+            // module deliberately does not reach. So the preview stays
+            // absent and the log says nothing rather than the wrong thing.
+            tool_input_preview: None,
+            summary: None,
+            // A start is not a failure; a failure, when the wire reports one,
+            // is on the completion.
+            error_type: None,
+            plugin_version: None,
+            applied: true,
+        });
+    }
+
+    /// Appends a `tool_complete` for a call whose status has turned terminal —
+    /// `Completed` or `Failed`.
+    ///
+    /// ACP streams several updates per call; only a terminal one matters here,
+    /// and only once. The completion may not repeat the kind (found by running
+    /// it: the kind rides the announcement and is absent here), so the kind
+    /// remembered at `tool_start` is the fallback; the update's own kind wins
+    /// when it is present, as it is the more recent statement.
+    fn log_tool_complete(&mut self, update: &ToolCallUpdate) {
+        if !self.completed.insert(update.tool_call_id.to_string()) {
+            return;
+        }
+        let tool_name = update
+            .fields
+            .kind
+            .map(kind_name)
+            .or_else(|| self.started.get(&update.tool_call_id.to_string()).copied());
+        self.log(Entry {
+            v: None,
+            agent: &self.agent,
+            event: "tool_complete",
+            source: "acp_agent",
+            session_id: self.session_id.as_deref(),
+            call_id: Some(&update.tool_call_id.to_string()),
+            parent_call_id: None,
+            cwd: self.cwd.as_deref(),
+            project: self.cwd.as_deref().and_then(crate::event_log::project_name),
+            tool_name,
+            tool_input_preview: None,
+            summary: None,
+            // The wire names failure (`ToolCallStatus::Failed`, "the tool call
+            // failed with an error"), so the log says `failed`. local_agent
+            // says `error` only because its stream carries a bare `is_error`;
+            // a reader filtering for a failure must not grep for one word that
+            // this source never writes. A call that failed is a completion,
+            // never a `tool_start` with no partner — which would read as a hang.
+            error_type: (update.fields.status == Some(ToolCallStatus::Failed)).then_some("failed"),
+            plugin_version: None,
+            applied: true,
+        });
+    }
+
+    /// Appends one line to the event log, unless this is a replay of history.
+    ///
+    /// Replayed updates date from a previous turn; logging them would credit
+    /// this turn with tools it never ran (the same reason `on_update` drops
+    /// them before display). `record` itself no-ops when nothing is listening,
+    /// so the work of building the `Entry` is the only thing gated here.
+    fn log(&self, entry: Entry<'_>) {
+        if self.replaying {
+            return;
+        }
+        crate::event_log::record(entry);
     }
 
     fn remember(&mut self, id: String, title: String) {
@@ -585,6 +715,35 @@ fn actions(actions: Vec<api::client_action::Action>) -> api::ResponseEvent {
                     .collect(),
             },
         )),
+    }
+}
+
+/// The wire name of a tool kind, for the log's `tool_name`.
+///
+/// `ToolKind` is a stable enum; the title is a display string the measured
+/// agents correct late, which is the same finding `acp_consent.rs` records, so
+/// the kind is what names a call here. The `_` arm is load-bearing: `ToolKind`
+/// is `#[non_exhaustive]`, so an upstream addition must get a name, not a panic.
+///
+/// This is a near-copy of `acp_consent.rs`'s `kind_name` and it is deliberately
+/// not shared. Those two (`acp_consent`, `acp_permission`) name a kind *for a
+/// person* reading a consent card, where the `_` arm is a sentence; this one
+/// names a kind *for a log*, where the `_` arm must be a token a grep or a join
+/// can match, distinct from the real `ToolKind::Other` ("other"). A shared
+/// function would have to pick one `_` arm for both audiences.
+fn kind_name(kind: ToolKind) -> &'static str {
+    match kind {
+        ToolKind::Read => "read",
+        ToolKind::Edit => "edit",
+        ToolKind::Delete => "delete",
+        ToolKind::Move => "move",
+        ToolKind::Search => "search",
+        ToolKind::Execute => "execute",
+        ToolKind::Think => "think",
+        ToolKind::Fetch => "fetch",
+        ToolKind::SwitchMode => "switch_mode",
+        ToolKind::Other => "other",
+        _ => "unknown",
     }
 }
 

@@ -19,6 +19,8 @@ fn translator() -> Translator {
         "req-1".to_owned(),
         "what is in this directory?".to_owned(),
         DateTime::from_timestamp(1_700_000_000, 0).expect("a valid fixture timestamp"),
+        "test-agent".to_owned(),
+        Some("/tmp/project".to_owned()),
     )
 }
 

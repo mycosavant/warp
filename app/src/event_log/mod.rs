@@ -365,7 +365,7 @@ fn session_key(session_id: Option<&str>) -> String {
 
 /// The working directory's last component, matching what the TUI publisher puts
 /// in `project`.
-fn project_name(cwd: &str) -> Option<&str> {
+pub(crate) fn project_name(cwd: &str) -> Option<&str> {
     std::path::Path::new(cwd)
         .file_name()
         .and_then(|name| name.to_str())

@@ -7275,8 +7275,8 @@ Nothing has run on Windows.
       (T12) has the button and reaches a phone; the panel does not. That is the
       next ergonomic step and it is a smaller one than anything in this ticket.
 
-- [ ] **T14.9** **Run a full working session on the fork, from the fork, and
-      write down what it costs.** Gates T14.8, and the ordering is the point:
+- [x] **T14.9** **Run a full working session on the fork, from the fork, and
+      write down what it costs.** **Run 2026-08-29; see the as-built.** Gates T14.8, and the ordering is the point:
       T14.7 Phase 0 predicted two blockers, got both wrong, and the real one was
       in neither cell of its table. Every candidate friction below T14.8 is a
       guess until a real session ranks them.
@@ -7295,8 +7295,105 @@ Nothing has run on Windows.
       dominating (see `GOAL.md`), though fifty exchanges and large tool outputs
       in the history are both unverified.
 
-- [ ] **T14.8** **Answer a permission request by pressing something.** Blocked by
-      T14.9, which decides what this actually is.
+      **As built — run 2026-08-29, and it reframes T14.8.** A seven-turn session
+      in the panel that made `WARP_FORK_EVENT_LOG` cover the ACP path: plan,
+      implement, two review rounds, and two live verifications, each rebuild
+      driven from inside the conversation. About **thirty-five permission
+      requests**, every one answered from `warpctrl`. The code landed and works;
+      what the session was for is everything else.
+
+      **The dominant finding is not the missing button. It is that a share of
+      requests have no yes behind any button.** `acp_permission::choose` refuses
+      `ToolKind::Other`, because an unknown kind's effect cannot be bounded to
+      the one call — a principled rule, and T14.6 was right to write it. What was
+      unknown until this session is *how often it fires on ordinary work*. Twice,
+      in two separate conversations: a `read` of a dependency's source in
+      `~/.cargo/registry`, and `cat /nonexistent-file-xyz`. In the same turn as
+      the second, `git status --short` arrived as `execute` and was approvable.
+      **The agent decides the kind**, so a person cannot tell in advance which of
+      their commands will be answerable, and when one is not, the request parks
+      with `can_approve: false` and the turn stops until somebody denies it. An
+      in-panel button would be greyed out for exactly these, so building it first
+      would leave the worst case untouched.
+
+      **A wedged turn is indistinguishable from a working one.** One turn ran 36
+      minutes: process alive, 74 seconds of CPU against 2176 elapsed, state `S`,
+      the panel frozen on the same `grep` across two screenshots fifteen minutes
+      apart, and `agent list` reporting `in_progress` throughout. No pending
+      approval, so no question to answer; no output, so nothing to read. The
+      parked-request design has no deadline **on purpose** — right for a question
+      a person will answer — but a turn with neither question nor output has no
+      equivalent signal at all. It was diagnosed with `ps` and a camera.
+
+      **Recovery, by contrast, was total, and this is the finding that makes
+      ongoing use plausible.** `agent cancel` ended the wedge; the next turn's
+      `session/load` restored the whole conversation *including work done in the
+      minutes before it stalled* — it recalled the third copy of `kind_name` it
+      had found seconds before hanging. And the conversation survived Warp itself
+      being closed and rebuilt twice: `agent list` still had it, and it resumed
+      against a new Warp process and a new agent process. **A wedge costs time,
+      not state.**
+
+      **The GUI has the information and the CLI has the control, and neither has
+      both.** The panel streams each tool call as it starts, shows a spinner, and
+      puts a `+137 -2` badge on the tab. `warpctrl agent read` shows nothing at
+      all until the turn ends. That is the same split as the button, pointing the
+      other way, and it is why driving a session from the CLI meant photographing
+      a window to find out whether anything was happening.
+
+      Two smaller ones. Answering approvals from a script needs a polling loop,
+      and two of them ran at once without being noticed — edits landed that the
+      friction log never recorded, which a person pressing a control could not do
+      to themselves. And reviewing what landed meant `git diff` in another
+      terminal: the approval card shows an edit's full diff, and the transcript
+      afterwards does not.
+
+      **What the loop was worth.** The agent's first implementation carried a
+      confident false comment — *"ACP does not say a tool failed"* — when
+      `ToolCallStatus::Failed` is in the pinned schema. Reading found that;
+      running found the next one, that `tool_complete` carried no `tool_name`
+      because the kind rides the initial `ToolCall` and is not repeated, so the
+      log had two sources disagreeing about whether a completion names its tool.
+      Both are fixed and both were verified by running: the final log shows
+      `tool_complete execute error=failed`. **And I made the same class of error
+      myself in the same session** — I told the agent to check schema 1.7.0 when
+      `Cargo.lock` pins 1.5.0, and it went and found the right one.
+
+- [ ] **T14.8** **Give the requests that have no answer an answer, then make
+      answering cheap.** **Reframed by T14.9's run, which is why the ordering
+      mattered.** Was "answer a permission request by pressing something".
+
+      **The first half is the one that changes behaviour.** `acp_permission`
+      refuses `ToolKind::Other` on a rule that is correct — an unknown kind's
+      effect cannot be bounded to the one call — and T14.9 measured it firing
+      twice on ordinary work in a single session, each time parking the turn with
+      no yes available. The question this ticket holds is what a person *can*
+      honestly be offered for a call whose kind the agent would not name. Some
+      candidates, none of them obviously right: show the raw command and let the
+      person's own reading be the bound, since `rawInput` is already on the
+      request and already rendered on the card; treat a missing kind differently
+      from `Other` explicitly sent; or keep refusing and make the refusal *end
+      the turn* instead of parking it, so at least nothing hangs.
+
+      **The second half is the button**, and it stays second because a button
+      over a request with no yes is a greyed-out button. Seven approvals in a
+      three-turn dogfood, about thirty-five in a seven-turn working session, each
+      answered by copying a `{turn}:{rpc_id}` id and a 64-character digest. The
+      cheap alternative still deserves trying first: there is no `--latest`, and
+      if most of the cost is transcription rather than modality it wins on effort
+      by an order of magnitude — provided it keeps the digest binding, which is
+      the design question underneath.
+
+- [ ] **T14.10** **A turn that has wedged should say so.** Opened by T14.9, which
+      lost half an hour to one. A turn with a parked question waits forever *on
+      purpose* and that is right. A turn with no question and no output has no
+      signal at all: `agent list` says `in_progress` whether the agent is
+      thinking or gone, and the only diagnosis available was `ps` showing 74
+      seconds of CPU against 2176 elapsed, plus two screenshots fifteen minutes
+      apart. Recovery is already good — `agent cancel` then `session/load` lost
+      nothing, not even mid-turn work — so this is about *noticing*, not about
+      repairing. Consider what the CLI could report that the panel already shows:
+      time since the last `session/update`, and the last tool call seen.
 
       The favourite is an in-panel control, and it is well-founded rather than
       speculative: T14.7's dogfood took seven permission requests over three
