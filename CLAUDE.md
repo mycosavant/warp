@@ -245,6 +245,20 @@ in `crates/persistence` missing T8.3's `settled`. The persistence one **was
 already red before the merge** — T8.3 shipped a required field without ever
 compiling that crate's tests. A clean `cargo build` proves nothing here.
 
+**Cap the release build: `CARGO_BUILD_JOBS=8 cargo build --release …`.**
+Measured 2026-08-29 on WSL: an uncapped release build **took the whole VM down**
+— the guest came back at `up 1 min` with an empty `dmesg`, which is the
+signature of the VM dying rather than Linux OOM-killing a process. A single
+`rustc` compiling the `warp` crate holds **~8.1 GB RSS**, and cargo defaults to
+one job per core (32 here), so several 8 GB-class crates reach codegen together
+and exhaust the VM's 31 GiB. At `-j 8` the same build finished with 19 GiB still
+free. `[profile.release]`'s own comment in `Cargo.toml` records this hazard from
+the CI side — *"OOM-killing release builds"* — so it is one failure with two
+faces, and the guest-side face is worse because it takes the session with it.
+The host has 64 GB and had **no `.wslconfig` at all**, so the VM's 32 GB was
+WSL2's default half-of-host rather than a chosen value; one now exists with more
+headroom, real swap and `autoMemoryReclaim`.
+
 **Never share `CARGO_TARGET_DIR` between two checkouts of this workspace.**
 Measured 2026-08-24: running a baseline in a `git worktree` with the main tree's
 target directory (to save disk) left artifacts that did not match either tree,
