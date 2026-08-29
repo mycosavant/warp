@@ -244,6 +244,29 @@ fn exchange_window_start(exchange_count: usize, last: Option<u32>) -> usize {
 /// *that* a child finished and never *what it produced*, so an orchestrator
 /// could dispatch work and watch it complete without being able to collect the
 /// result. Handing work along a chain needs the answer, not the status.
+/// The error a finished exchange failed with, if it failed.
+///
+/// **Fork (T14.6).** `format_output_for_copy` goes through
+/// [`AIAgentOutputStatus::output`], and its `Error` arm returns `None` — so an
+/// exchange that failed reads back with no output and no reason, which is
+/// exactly what a successful-but-silent turn looks like. Measured: a
+/// conversation displaying a full error paragraph in the panel read back through
+/// `agent.read` as an exchange with neither.
+///
+/// Only `Finished { Error }` produces a string. A cancelled turn is not an error
+/// — `agent.list` already reports `cancelled`, and its partial output survives
+/// `output()` — and a still-streaming turn has not failed yet.
+fn exchange_error(status: &crate::ai::agent::AIAgentOutputStatus) -> Option<String> {
+    use crate::ai::agent::{AIAgentOutputStatus, FinishedAIAgentOutput};
+
+    match status {
+        AIAgentOutputStatus::Finished {
+            finished_output: FinishedAIAgentOutput::Error { error, .. },
+        } => Some(error.to_string()),
+        _ => None,
+    }
+}
+
 pub fn agent_read(
     instance_id: &Option<InstanceId>,
     params: &serde_json::Value,
@@ -288,6 +311,7 @@ pub fn agent_read(
                 input: (!input.is_empty()).then_some(input),
                 output: (!output.is_empty()).then_some(output),
                 is_complete: exchange.finish_time.is_some(),
+                error: exchange_error(&exchange.output_status),
             }
         })
         .collect::<Vec<_>>();

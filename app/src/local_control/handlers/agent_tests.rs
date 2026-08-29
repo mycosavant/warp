@@ -257,3 +257,54 @@ fn only_in_progress_is_busy() {
         );
     }
 }
+
+/// A failed turn reports its reason, and **nothing else does**.
+///
+/// The first half is why `error` exists: measured on T14.6, a conversation whose
+/// panel was showing a full error paragraph read back through `agent.read` as an
+/// exchange with no `output` and no reason, because
+/// `FinishedAIAgentOutput::output()` returns `None` for the `Error` variant.
+/// A caller could only conclude the agent had answered with silence.
+///
+/// The second half is the hazard the fix introduces, and is the reason this is a
+/// test rather than a sentence in the doc comment. A **cancelled** turn is not a
+/// failed one — `agent.list` already reports `cancelled`, and unlike the error
+/// case its partial output survives — so reporting an error for it would make
+/// every deliberate stop look like a malfunction. Streaming has not failed yet
+/// either.
+#[test]
+fn only_a_failed_exchange_reports_an_error() {
+    use crate::ai::agent::{
+        AIAgentOutputStatus, CancellationReason, FinishedAIAgentOutput, RenderableAIError,
+    };
+
+    let failed = AIAgentOutputStatus::Finished {
+        finished_output: FinishedAIAgentOutput::Error {
+            output: None,
+            error: RenderableAIError::other("the agent could not be started", false),
+        },
+    };
+    assert_eq!(
+        exchange_error(&failed).as_deref(),
+        Some("the agent could not be started"),
+        "a failed turn has to say why, or it is indistinguishable from a silent one"
+    );
+
+    let cancelled = AIAgentOutputStatus::Finished {
+        finished_output: FinishedAIAgentOutput::Cancelled {
+            output: None,
+            reason: CancellationReason::ManuallyCancelled,
+        },
+    };
+    assert_eq!(
+        exchange_error(&cancelled),
+        None,
+        "a turn someone stopped on purpose is not a failure"
+    );
+
+    assert_eq!(
+        exchange_error(&AIAgentOutputStatus::Streaming { output: None }),
+        None,
+        "a turn still running has not failed"
+    );
+}

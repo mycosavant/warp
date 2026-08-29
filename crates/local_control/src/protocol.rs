@@ -545,6 +545,22 @@ pub struct AgentExchangeSummary {
     /// not, and reading it gives a partial answer — worth knowing before
     /// handing it to another agent as a result.
     pub is_complete: bool,
+    /// Why the turn failed, when it did.
+    ///
+    /// **Fork (T14.6).** Without this the read surface *lies by omission*, and it
+    /// was measured doing so: a conversation whose panel was displaying a full
+    /// error paragraph read back as an exchange with no `output` and nothing
+    /// else — because `FinishedAIAgentOutput::output()` returns `None` for the
+    /// `Error` variant, discarding the error *and* whatever the agent had
+    /// already said. A caller polling `agent.read` could only conclude the agent
+    /// had answered with silence.
+    ///
+    /// That matters more than a missing field usually would, because
+    /// `agent.read` is how this fork checks its own agent paths, including from
+    /// another agent. An instrument that reports "no output" for "failed, and
+    /// here is why" sends every future investigation to the wrong place.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
 }
 
 /// The result of `agent.read`.
