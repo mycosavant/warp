@@ -6906,6 +6906,46 @@ Nothing has run on Windows.
       argued. A run against `claude-agent-acp` in plan mode is what would settle
       it, and that is the same "second agent" item already outstanding.
 
+      **The console, photographed in a real browser — and it found a defect no
+      test would have.** Firefox on the Windows side, scratch profile, against a
+      `WARP_FORK_CONTROL_BIND` listener with `WARP_FORK_REMOTE_APPROVE=1`. The
+      row renders:
+
+      ```
+      opencode wants permission
+      echo hello > greeting.txt
+        execute: {"command":"echo hello > greeting.txt"}
+      session directory /tmp/t146/project
+      acts on /tmp/t146/project
+      [        Yes        ]  [        No        ]
+      Yes selects "once" — this call only, nothing after it.
+      ```
+
+      The pairing fragment is erased from the address bar, as designed, and the
+      whole path works: **two fast taps on Yes wrote `greeting.txt` from a
+      browser over the network.** That is remote approve end to end — bind,
+      pair, park, answer, execute.
+
+      **One tap and a two-second pause did nothing at all**, and that is the
+      defect. `renderApprovals` calls `clear()` and rebuilds every row; it runs
+      on a 5s poll and on every agent event, while `ARM_MS` is 4s. A refresh
+      inside the arm window destroyed the armed button and drew a fresh `Yes`,
+      so the tap meant to *confirm* armed the new button instead and the answer
+      never happened. The shape is worse than an outright failure — it reads as
+      an unreliable feature rather than a broken one, which is the T14.2 lesson
+      restated on the surface T14.2's argument was about.
+
+      It fails **safe**: a discarded arm can only ever lose a yes, never invent
+      one. So it is a counter, not a lock — `refreshApprovals` defers while
+      anything is armed, bounded by `ARM_MS`, and a list up to four seconds
+      stale is not a hazard because every answer still carries the digest of
+      what was shown.
+
+      Worth noting how it was found: the first single tap looked like a missed
+      click, and the honest next step was to read `armThenRun` rather than
+      re-aim the mouse. `ARM_MS = 4000` against `setInterval(refreshApprovals,
+      5000)` was the whole answer, sitting in two lines 400 apart.
+
       **A note on the instrument rather than the code.** The release build took
       the whole WSL VM down — the guest came back at `up 1 min` with an empty
       `dmesg`, so the VM died rather than Linux OOM-killing a process. Measured

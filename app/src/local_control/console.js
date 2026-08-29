@@ -35,6 +35,21 @@
   // than waiting to be pressed by a pocket.
   var ARM_MS = 4000;
 
+  // How many controls are waiting for their second tap.
+  //
+  // **Found by tapping Yes in a real browser (T14.6).** `renderApprovals` calls
+  // `clear()` and rebuilds every row, and it runs on a 5s poll as well as on any
+  // agent event — so a refresh landing inside the 4s arm window destroyed the
+  // armed button and drew a fresh `Yes` in its place. The tap that was meant to
+  // confirm then *armed* the new button instead, and the person's answer simply
+  // did not happen. Two fast taps worked; one tap and a pause did not, which is
+  // the worst shape for a bug to have because it looks like an unreliable
+  // feature rather than a broken one — the T14.2 lesson exactly.
+  //
+  // It fails safe rather than dangerous: a discarded arm can only ever lose a
+  // yes, never invent one. That is why this is a counter and not a lock.
+  var armedControls = 0;
+
   // **`localStorage` since T12.3, and the reason is structural rather than a
   // change of mind.** T12.1 chose `sessionStorage` — per tab, so a device token
   // never touches the disk of a phone that may not be only yours — and said it
@@ -291,6 +306,7 @@
   function armThenRun(button, label, run) {
     var timer = null;
     var disarm = function () {
+      if (timer) armedControls -= 1;
       timer = null;
       button.className = 'allow';
       button.textContent = label;
@@ -304,6 +320,9 @@
       }
       button.className = 'allow armed';
       button.textContent = 'tap again to allow';
+      // Counted, because the list refresh rebuilds every row from scratch and
+      // would otherwise throw this button away mid-arm. See `armedControls`.
+      armedControls += 1;
       timer = setTimeout(disarm, ARM_MS);
     });
   }
@@ -449,6 +468,13 @@
     // `unpair` replaces a working page with one printing "not paired" every five
     // seconds in red, which reads as a fault rather than as what was asked for.
     if (!device) return Promise.resolve();
+    // **Never redraw the list out from under a half-given answer.** Rebuilding
+    // the rows destroys an armed button, so a refresh here discarded the arm and
+    // the confirming tap landed on a fresh `Yes`. Deferring is bounded by
+    // `ARM_MS`, and a list that is at most four seconds stale is not a hazard:
+    // every answer still carries the digest of what was shown, so an entry that
+    // moved in the meantime is refused by the server rather than mis-answered.
+    if (armedControls > 0) return Promise.resolve();
     return control(APPROVALS)
       .then(function (data) { renderApprovals((data && data.approvals) || []); })
       .catch(function (err) {

@@ -373,3 +373,38 @@ fn the_directory_is_labelled_by_the_population_the_server_named() {
         );
     }
 }
+
+/// An armed control is not thrown away by the list refresh.
+///
+/// **Found by tapping Yes in Firefox against a live instance (T14.6), not by
+/// reading.** `renderApprovals` clears and rebuilds every row, and it runs on a
+/// 5s poll as well as on every agent event — so a refresh inside the 4s arm
+/// window replaced the armed button with a fresh `Yes`, and the tap meant to
+/// confirm armed the new one instead. One tap and a pause did nothing; two fast
+/// taps worked. That shape is worse than an outright failure, because it reads
+/// as an unreliable feature rather than a broken one.
+///
+/// The counter is pinned rather than the deferral's duration: what matters is
+/// that the refresh consults arm state at all. It fails safe either way — a
+/// discarded arm can only lose a yes, never invent one — which is why this is a
+/// counter and not a lock.
+#[test]
+fn a_refresh_does_not_disarm_a_control_mid_answer() {
+    assert!(
+        CONSOLE_SCRIPT.contains("if (armedControls > 0) return Promise.resolve();"),
+        "the list refresh has to yield while an answer is half-given"
+    );
+    // Armed and disarmed in the same place the button's own state changes, so
+    // the two cannot drift: a counter that is incremented without a matching
+    // decrement would wedge the list permanently.
+    assert_eq!(
+        executable_lines_mentioning(CONSOLE_SCRIPT, "armedControls +=").len(),
+        1,
+        "exactly one place arms"
+    );
+    assert_eq!(
+        executable_lines_mentioning(CONSOLE_SCRIPT, "armedControls -=").len(),
+        1,
+        "exactly one place disarms, and it is `disarm` itself"
+    );
+}
