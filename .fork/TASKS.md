@@ -6815,12 +6815,54 @@ Nothing has run on Windows.
       Hashed as a second length-prefixed list after `options_offered`, with a
       test that a name moving between the two lists does not cancel out.
 
-      **Not yet run against a live agent.** The two tests above are the mechanism;
-      what is unverified is that a real `opencode` permission request finds a
-      location in the map at the moment it parks — i.e. that the ordering the
-      capture showed holds every time rather than once. That is the next thing to
-      measure, and it is a precondition for trusting the line, not merely for
-      trusting the code.
+      **Run, and the join holds live.** Fresh scratch profile, pane in
+      `/tmp/t146/project`, `opencode.json` with `"bash": "ask"`:
+
+      ```
+      $ warpctrl agent approvals
+        approval_id "136109d4-…:0"   agent "opencode"   tool_name "execute"
+        summary   "echo hello > greeting.txt"
+        tool_input {"command":"echo hello > greeting.txt"}
+        cwd       "/tmp/t146/project"        ← Warp's session directory
+        acts_on   ["/tmp/t146/project"]      ← the agent's, via the toolCallId join
+        options_offered ["Allow once","Always allow","Reject"]
+      ```
+
+      So the location *was* in the map at the moment the request parked — the
+      ordering the earlier capture showed is not a one-off, and the surface can
+      answer "where does this run" from the agent's own claim rather than from
+      Warp's directory. The two happen to agree here, which is exactly why the
+      code may not be allowed to conflate them.
+
+      **And the note lands**, which is the check the ticket said not to assume:
+
+      > `bash`
+      > The agent is waiting for permission: **echo hello > greeting.txt**. Warp
+      > cannot say yes to this yet … Answer no with `warpctrl agent deny
+      > 136109d4-…:0`, or from a paired device, or cancel the turn.
+      >
+      > It says this acts on `/tmp/t146/project`.
+      >
+      > This session runs in `/tmp/t146/project` — Warp chose that from the pane.
+      > The agent resolves its own permission rules from there, and Warp cannot
+      > see them.
+
+      Then `deny` with a wrong digest → `invalid_params` naming the fix; with the
+      right one → `decision "deny"`, `keystroke "reject_once"`; the entry
+      disappears; `greeting.txt` was never written; zero `opencode` processes
+      left (checked with `ps -eo comm | grep -c '^opencode$'`, not `pgrep -f`).
+
+      **A note on the instrument rather than the code.** The release build took
+      the whole WSL VM down — the guest came back at `up 1 min` with an empty
+      `dmesg`, so the VM died rather than Linux OOM-killing a process. Measured
+      cause: one `rustc` on the `warp` crate holds **~8.1 GB RSS**, and at
+      cargo's default parallelism (one job per core, 32 here) several 8 GB-class
+      crates reach codegen together. `CARGO_BUILD_JOBS=8` built it with 19 GiB
+      still available. This is the same hazard `[profile.release]`'s own comment
+      records for CI ("OOM-killing release builds"), reached from the other
+      direction. There was no `.wslconfig` at all, so the 32 GB the VM had was
+      WSL2's default of half the host's 64 GB; one is now written with more
+      headroom and real swap, taking effect at the next `wsl --shutdown`.
 
 - [x] **T14.3** ~~**Warp cannot observe an agent's permission policy, so it must
       not imply one.**~~ **The headline is false and running it is what showed
