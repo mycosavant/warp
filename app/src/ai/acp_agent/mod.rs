@@ -683,28 +683,46 @@ fn wait_for_a_person(
         // Held for exactly as long as the wait, so a turn that is cancelled stops
         // advertising a question nobody can answer any more.
         let _waiting = waiting;
-        // **Every path that is not an explicit, permitted yes is a no**, and the
-        // arms are spelled out rather than collapsed so that stays readable.
-        // `Err` is the entry having gone without an answer, which can only happen
-        // if the turn is already ending. `Ok(Allow)` on an entry with nothing to
-        // select cannot be reached — the control plane refuses it by the same
-        // frozen field — and denies here anyway, because failing closed has to be
-        // true at both ends and not only at the one being looked at.
-        let outcome = match answer.await {
-            Ok(registry::Decision::Allow) => match allowed {
-                Some(option_id) => RequestPermissionOutcome::Selected(
-                    SelectedPermissionOutcome::new(PermissionOptionId::from(option_id)),
-                ),
-                None => denial,
-            },
-            Ok(registry::Decision::Deny) | Err(_) => denial,
-        };
+        let outcome = outcome_for(answer.await, allowed, denial);
         // A failure to deliver is the agent having gone away, which is not this
         // task's problem to report — and returning `Err` would take the whole
         // connection down with it, per `ConnectionTo::spawn`'s own docs.
         let _ = responder.respond(RequestPermissionResponse::new(outcome));
         Ok(())
     })
+}
+
+/// What actually goes back to the agent, given how the wait ended.
+///
+/// **Extracted from the waiting task so the fail-closed arms can be tested at
+/// all.** They lived inside an `async` block in a `connection.spawn`, which
+/// nothing can reach; three of the four arms below are refusals, and a refusal
+/// with no test under it is the hazard-in-a-doc-comment this phase has now
+/// produced four times.
+///
+/// **Every path that is not an explicit, permitted yes is a no.**
+///
+/// - `Err` is the sender dropped — the entry went without an answer, which can
+///   only happen if the turn is already ending.
+/// - `Ok(Allow)` with nothing to select should be unreachable, because the
+///   control plane refuses that by reading the very same frozen field. It denies
+///   anyway: failing closed has to hold at both ends, not only at the end
+///   currently being looked at, and increment 1's collision cascade was two
+///   halves of one fix where either alone left the other latent.
+fn outcome_for(
+    answer: Result<registry::Decision, oneshot::Canceled>,
+    allowed: Option<String>,
+    denial: RequestPermissionOutcome,
+) -> RequestPermissionOutcome {
+    match answer {
+        Ok(registry::Decision::Allow) => match allowed {
+            Some(option_id) => RequestPermissionOutcome::Selected(SelectedPermissionOutcome::new(
+                PermissionOptionId::from(option_id),
+            )),
+            None => denial,
+        },
+        Ok(registry::Decision::Deny) | Err(_) => denial,
+    }
 }
 
 /// How to say no to one permission request, and what to tell the person.

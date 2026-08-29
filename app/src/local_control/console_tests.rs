@@ -335,3 +335,41 @@ async fn the_policy_denies_by_default_and_talks_only_to_itself() {
         "no wildcard belongs in this policy: {policy}"
     );
 }
+
+/// `cwd` is labelled from the population the server named, never from a guess.
+///
+/// The field means two different things: a pane's is the agent's own working
+/// directory, an ACP entry's is the directory Warp chose for the session and
+/// sent in `session/new`. T14.6 measured that directory deciding whether the
+/// user's own permission rules loaded at all, and it is *not* necessarily where
+/// the call acts — so an unlabelled path sitting directly under a command, on a
+/// row that now carries a Yes button, is a misreading waiting to happen.
+///
+/// The pin that matters is the second one: the page must read `source`, which
+/// the server states first-hand, rather than infer the population from `tab_id`
+/// or from the shape of `approval_id`. Both of those are incidental fields, and
+/// a structural fact read off one is the failure `PendingApproval::kind`'s own
+/// doc comment warns about.
+#[test]
+fn the_directory_is_labelled_by_the_population_the_server_named() {
+    assert!(
+        CONSOLE_SCRIPT.contains("approval.source === 'acp'"),
+        "the population is stated by the server, not derived on the page"
+    );
+    for label in ["session directory ", "working directory "] {
+        assert!(
+            CONSOLE_SCRIPT.contains(label),
+            "each population's directory says what kind of directory it is: {label}"
+        );
+    }
+    assert!(
+        !CONSOLE_SCRIPT.contains("[approval.project, approval.cwd]"),
+        "the two must not be joined back into one unlabelled line"
+    );
+    for guessed in ["approval.tab_id ?", "approval.tab_id &&", "tab_id) ?"] {
+        assert!(
+            !CONSOLE_SCRIPT.contains(guessed),
+            "the population must not be inferred from an incidental field: {guessed}"
+        );
+    }
+}

@@ -308,6 +308,23 @@ pub struct PendingApproval {
     pub approval_id: String,
     /// Which CLI agent is asking: `claude`, `codex`, `gemini`, …
     pub agent: String,
+    /// Which population this entry came from: `pane` or `acp`.
+    ///
+    /// **Fork (T14.6). Stated by the server, never derived by the client**, and
+    /// that is the whole reason it exists. The two populations are built by two
+    /// different functions that each know first-hand which they are; a client
+    /// guessing from the shape of `approval_id`, or from whether `tab_id` is
+    /// set, would be reading a fact off an incidental field.
+    ///
+    /// It is load-bearing because [`Self::cwd`] means **different things** in
+    /// the two. For `pane` it is the agent's own working directory, reported
+    /// over OSC. For `acp` it is the directory *Warp* chose for the session and
+    /// sent in `session/new` — which is not necessarily where the call acts, and
+    /// on T14.6 was measured deciding whether the user's permission rules loaded
+    /// at all. One label for both would be wrong for one of them, and a card
+    /// that grew a *Yes* button is not a place to be vague about which
+    /// directory is being shown.
+    pub source: String,
     /// `permission` when a tool is named, `question` otherwise.
     ///
     /// **A derivation, not something the agent said.** A permission request and

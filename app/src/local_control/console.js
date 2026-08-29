@@ -352,8 +352,23 @@
         approval.tool_name + (approval.tool_input ? ': ' + approval.tool_input : '')
       ));
     }
-    var where = [approval.project, approval.cwd].filter(Boolean);
-    if (where.length) row.appendChild(text('div', 'meta', where.join(' · ')));
+    // **`cwd` means two different things and must not be drawn as one.** For a
+    // pane it is the agent's own working directory, reported over OSC. For an
+    // ACP request it is the directory *Warp* chose for the session and sent in
+    // `session/new` — which is not necessarily where the call acts, and which
+    // T14.6 measured deciding whether the user's own permission rules loaded at
+    // all. An unlabelled path directly under a command reads as "where this
+    // runs", and this row now grows a Yes button, so the vagueness stopped being
+    // cosmetic. The population is read from `source`, which the server states,
+    // rather than guessed from `tab_id` or from the shape of the id.
+    if (approval.project) row.appendChild(text('div', 'meta', approval.project));
+    if (approval.cwd) {
+      row.appendChild(text(
+        'div',
+        'meta',
+        (approval.source === 'acp' ? 'session directory ' : 'working directory ') + approval.cwd
+      ));
+    }
 
     // Its own line, and never folded into the one above. `cwd` is where the
     // *session* is — for an ACP request that is a directory Warp chose — while

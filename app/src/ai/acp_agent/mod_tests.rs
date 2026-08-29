@@ -424,3 +424,66 @@ fn the_note_offers_yes_only_when_there_is_a_yes_to_offer() {
         "the entry's own reason, not a generic one: {refused}"
     );
 }
+
+/// **Every way the wait can end that is not a permitted yes ends in a no.**
+///
+/// These arms lived inside a `connection.spawn` async block, where nothing could
+/// reach them — so the fork's own rule applied and they were extracted rather
+/// than described. Three of the four are refusals, and this phase has now
+/// produced four separate cases of a hazard written in a comment and shipped
+/// undefended.
+///
+/// The third case is the one worth spelling out: `Allow` on an entry with no
+/// option to select cannot be reached, because the control plane refuses it by
+/// reading the same frozen field. It denies anyway. Increment 1's collision
+/// cascade was two halves of one fix where either alone left the other latent,
+/// and this is the same discipline — fail closed at both ends, not only at the
+/// end being looked at.
+#[test]
+fn only_a_permitted_yes_selects_an_allow() {
+    let denial = RequestPermissionOutcome::Selected(SelectedPermissionOutcome::new(
+        PermissionOptionId::from("reject".to_owned()),
+    ));
+    let selected = |outcome: RequestPermissionOutcome| match outcome {
+        RequestPermissionOutcome::Selected(selected) => selected.option_id.to_string(),
+        RequestPermissionOutcome::Cancelled => "cancelled".to_owned(),
+        _ => "unknown".to_owned(),
+    };
+
+    assert_eq!(
+        selected(outcome_for(
+            Ok(registry::Decision::Allow),
+            Some("once".to_owned()),
+            denial.clone()
+        )),
+        "once",
+        "a permitted yes selects the option that was frozen at park time"
+    );
+    assert_eq!(
+        selected(outcome_for(
+            Ok(registry::Decision::Deny),
+            Some("once".to_owned()),
+            denial.clone()
+        )),
+        "reject",
+        "a no is a no even where a yes was available"
+    );
+    assert_eq!(
+        selected(outcome_for(
+            Err(futures::channel::oneshot::Canceled),
+            Some("once".to_owned()),
+            denial.clone()
+        )),
+        "reject",
+        "a dropped sender is the turn ending, and ending is not consent"
+    );
+    assert_eq!(
+        selected(outcome_for(
+            Ok(registry::Decision::Allow),
+            None,
+            denial.clone()
+        )),
+        "reject",
+        "an Allow for an entry with nothing to select denies rather than guesses"
+    );
+}

@@ -100,6 +100,16 @@ const DENY_BYTES: &[u8] = b"\x1b";
 /// runs.
 const ALLOW_VERIFIED_AGENTS: &[CLIAgent] = &[CLIAgent::Claude];
 
+/// The two values of [`PendingApproval::source`], written once so the server and
+/// its tests cannot drift.
+///
+/// Stated rather than derived, because a client that inferred the population
+/// from the shape of an `approval_id` or from whether `tab_id` is set would be
+/// reading a structural fact off an incidental field — and it needs the answer
+/// to label `cwd`, which means two different things in the two populations.
+const SOURCE_PANE: &str = "pane";
+const SOURCE_ACP: &str = "acp";
+
 /// Which key `agent.approve` and `agent.deny` press.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Decision {
@@ -392,6 +402,7 @@ fn acp_approvals() -> Vec<PendingApproval> {
             let mut approval = PendingApproval {
                 approval_id: parked.approval_id,
                 agent: parked.agent,
+                source: SOURCE_ACP.to_owned(),
                 kind: "permission".to_owned(),
                 summary: parked.title,
                 tool_name: parked.tool_name,
@@ -476,6 +487,7 @@ fn approval_for(session: &CLIAgentSession, pane_id: &str, tab_id: &str) -> Optio
     let mut approval = PendingApproval {
         approval_id: pane_id.to_owned(),
         agent: agent_name(session.agent).to_owned(),
+        source: SOURCE_PANE.to_owned(),
         kind: if tool_name.is_some() {
             "permission"
         } else {
@@ -523,6 +535,9 @@ fn digest_of(approval: &PendingApproval) -> String {
     for field in [
         Some(approval.approval_id.as_str()),
         Some(approval.agent.as_str()),
+        // In the hash because it changes what the person was *shown*: the
+        // console labels `cwd` from it, and the two labels are different claims.
+        Some(approval.source.as_str()),
         Some(approval.kind.as_str()),
         approval.summary.as_deref(),
         approval.tool_name.as_deref(),

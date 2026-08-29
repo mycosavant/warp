@@ -360,6 +360,7 @@ fn an_answer_is_bound_to_the_options_that_were_offered() {
     let base = PendingApproval {
         approval_id: "req-1".to_owned(),
         agent: "opencode".to_owned(),
+        source: "acp".to_owned(),
         kind: "permission".to_owned(),
         summary: Some("echo hello".to_owned()),
         tool_name: Some("execute".to_owned()),
@@ -421,6 +422,7 @@ fn an_answer_is_bound_to_where_the_call_says_it_acts() {
     let base = PendingApproval {
         approval_id: "req-1".to_owned(),
         agent: "opencode".to_owned(),
+        source: "acp".to_owned(),
         kind: "permission".to_owned(),
         summary: Some("rm -rf build".to_owned()),
         tool_name: Some("execute".to_owned()),
@@ -483,6 +485,7 @@ fn an_answer_is_bound_to_the_option_a_yes_would_select() {
     let base = PendingApproval {
         approval_id: "req-1".to_owned(),
         agent: "opencode".to_owned(),
+        source: "acp".to_owned(),
         kind: "permission".to_owned(),
         summary: Some("echo hello".to_owned()),
         tool_name: Some("execute".to_owned()),
