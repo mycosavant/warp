@@ -129,17 +129,21 @@ fn a_request_without_a_title_still_reads_as_a_sentence() {
 /// nothing. Measured: it answered *"I haven't written to or modified any files
 /// yet in this session"* directly below the turn where it wrote one.
 ///
-/// The predicate is here rather than in `handles` on purpose — `handles` says
-/// "this path serves user queries", which is still true, and a request it
-/// declines would fall through to an implementation that would answer it wrongly
-/// in a different way.
+/// **Only for an agent that says it cannot resume.** T14.7 gave the ones that
+/// can a `session/load`, so this is no longer every second turn — which is why
+/// the sentence now has to name the agent: it is the thing that differs between
+/// the conversation that continues and the one that does not.
 #[test]
-fn a_conversation_that_already_has_a_session_is_refused_with_a_reason() {
+fn an_agent_that_cannot_resume_is_refused_with_a_reason() {
     let error = continuation_error();
 
     assert!(
-        error.contains("cannot continue"),
-        "the refusal must say what it is refusing, got: {error}"
+        error.contains("opencode"),
+        "the refusal must name the agent it is about, got: {error}"
+    );
+    assert!(
+        error.contains("no memory of what you see above"),
+        "the refusal must say what it is refusing and why, got: {error}"
     );
     assert!(
         error.contains("Start a new conversation"),
@@ -147,15 +151,49 @@ fn a_conversation_that_already_has_a_session_is_refused_with_a_reason() {
     );
 }
 
+/// …and an agent that *said* it could resume and then failed gets a different
+/// sentence, because the advice differs: "use another agent" would be wrong
+/// advice for an agent that has simply lost the session.
+#[test]
+fn an_agent_that_promised_to_resume_and_failed_says_so_instead() {
+    let error = resume_failed("opencode", "session not found");
+
+    assert!(error.contains("said it could resume"), "got: {error}");
+    assert!(
+        error.contains("session not found"),
+        "the underlying error is the only thing that distinguishes one of these \
+         from another, got: {error}"
+    );
+    assert!(
+        !error.contains("point WARP_FORK_ACP_COMMAND"),
+        "this is not an agent-choice problem, got: {error}"
+    );
+}
+
 /// The refusal text is the only thing a person sees, so it must not name a
 /// mechanism they cannot act on.
+///
+/// **The env var is deducted before the scan rather than removed from the list,
+/// and the difference is the whole rule.** `WARP_FORK_ACP_COMMAND` contains the
+/// letters `ACP`, so naming the one knob the person actually turned would
+/// otherwise trip a check aimed at protocol nouns. Dropping `"ACP"` from the
+/// list to make that go away would stop the test noticing a message that talked
+/// about the Agent Client Protocol; deducting the variable keeps it noticing,
+/// and says out loud that a variable the person set themselves is not jargon.
 #[test]
 fn the_continuation_refusal_explains_itself_without_protocol_jargon() {
     let error = continuation_error();
 
+    assert!(
+        error.contains("WARP_FORK_ACP_COMMAND"),
+        "the person chose this agent with that variable and changes it with that \
+         variable, got: {error}"
+    );
+    let prose = error.replace("WARP_FORK_ACP_COMMAND", "");
+
     for jargon in ["session/load", "loadSession", "ACP", "conversation_token"] {
         assert!(
-            !error.contains(jargon),
+            !prose.contains(jargon),
             "{jargon} means nothing to a person reading a conversation, got: {error}"
         );
     }
@@ -165,10 +203,10 @@ fn the_continuation_refusal_explains_itself_without_protocol_jargon() {
 ///
 /// `Turn::from_request` cannot be called from here — `RequestParams` has a
 /// private field, which is the whole reason `Turn` exists — so these pin the
-/// constant it returns rather than a copy of it. A test that retyped the message
-/// would pass while the shipped one said anything at all.
+/// function the connection calls rather than a copy of its output. A test that
+/// retyped the message would pass while the shipped one said anything at all.
 fn continuation_error() -> String {
-    CANNOT_CONTINUE.to_owned()
+    cannot_resume("opencode")
 }
 
 /// An agent that is not on `PATH` produces a sentence naming the variable, the

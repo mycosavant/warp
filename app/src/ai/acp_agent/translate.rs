@@ -131,6 +131,22 @@ pub(super) struct Translator {
     /// `WARP_FORK_EVENT_LOG` wrote for the same session, the way
     /// `PendingApproval::session_id` already is for CLI agents.
     session_id: Option<String>,
+    /// Whether the updates arriving right now are history rather than news.
+    ///
+    /// `session/load` replays the whole conversation as ordinary
+    /// `session/update` notifications before it answers — measured against
+    /// `opencode`, which sent `user_message_chunk` then `agent_message_chunk`
+    /// for a one-turn history and sent both *before* the reply. Warp already
+    /// holds that transcript (the client sends its whole task list back on
+    /// every request), so replaying it into the stream would draw the
+    /// conversation twice.
+    ///
+    /// **Framed as "until the reply" rather than "the first N", deliberately.**
+    /// The ordering above is measured for one agent and the spec does not
+    /// appear to require it, so a count would be a guess about every other
+    /// agent. A window that closes when the request answers is right whatever
+    /// the agent sends, including nothing at all.
+    replaying: bool,
 }
 
 impl Translator {
@@ -153,7 +169,18 @@ impl Translator {
             locations: Vec::new(),
             opened: false,
             session_id: None,
+            replaying: false,
         }
+    }
+
+    /// Start ignoring updates, because `session/load` is about to replay them.
+    pub(super) fn begin_replay(&mut self) {
+        self.replaying = true;
+    }
+
+    /// Stop ignoring updates: everything from here is this turn's own.
+    pub(super) fn end_replay(&mut self) {
+        self.replaying = false;
     }
 
     /// Warp's own id for this turn — unique per turn, and available from the
@@ -218,6 +245,14 @@ impl Translator {
     /// independently of this fork, so a variant added upstream must not take the
     /// conversation down with it.
     pub(super) fn on_update(&mut self, update: &SessionUpdate) -> Vec<api::ResponseEvent> {
+        // History, not news. Dropped whole rather than merely not emitted: the
+        // bookkeeping below — the accumulating text, the announced titles, the
+        // tool-call locations — all describes *this* turn, and seeding it from a
+        // replay would make a previous turn's tool call the one a permission
+        // request gets lined up against.
+        if self.replaying {
+            return Vec::new();
+        }
         // Text accumulates; anything else is a boundary that flushes it first,
         // so a tool call never lands in the middle of a sentence.
         let text = match update {

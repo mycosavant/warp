@@ -109,9 +109,10 @@ use std::sync::{Arc, Mutex};
 
 use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::schema::v1::{
-    ContentBlock, InitializeRequest, NewSessionRequest, PermissionOption, PermissionOptionId,
-    PermissionOptionKind, PromptRequest, RequestPermissionOutcome, RequestPermissionRequest,
-    RequestPermissionResponse, SelectedPermissionOutcome, SessionNotification, TextContent,
+    ContentBlock, InitializeRequest, LoadSessionRequest, NewSessionRequest, PermissionOption,
+    PermissionOptionId, PermissionOptionKind, PromptRequest, RequestPermissionOutcome,
+    RequestPermissionRequest, RequestPermissionResponse, SelectedPermissionOutcome, SessionId,
+    SessionNotification, TextContent,
 };
 use agent_client_protocol::{AcpAgent, Agent, ConnectionTo};
 use anyhow::{Context as _, anyhow};
@@ -143,14 +144,41 @@ fn query(params: &RequestParams) -> Option<String> {
     })
 }
 
-/// What a person is told when they send a second turn.
+/// What a person is told when the agent cannot pick a conversation back up.
 ///
-/// A constant so the tests pin the sentence that actually ships. It is the only
-/// thing they will see, so it says what happened and what to do, and names no
-/// protocol machinery they cannot act on.
-const CANNOT_CONTINUE: &str = "This build starts a new agent session for every turn, so it cannot continue this \
-     conversation — the agent would answer with no memory of what you see above. Start a new \
-     conversation instead.";
+/// **This used to be a constant, and its sentence used to be about Warp.** It
+/// said *"this build starts a new agent session for every turn"*, which was
+/// true when it shipped and is not any more: a second turn now calls
+/// `session/load`, and what decides whether that works is the agent, which
+/// declares `loadSession` in its `initialize` reply. So the sentence has to
+/// name the agent — the person's next move is to use a different one, or to
+/// start a new conversation, and neither is suggested by a fact about Warp.
+///
+/// It still names no protocol. The person's move is to use a different agent or
+/// start over, and neither is helped by the method name — an error message is
+/// not the place to teach a wire format. That rule predates this change and
+/// survives it unweakened; the test that enforces it is unchanged.
+fn cannot_resume(agent: &str) -> String {
+    format!(
+        "{agent} cannot continue a conversation it has already answered, so this turn would come \
+         back with no memory of what you see above. Start a new conversation, or point \
+         WARP_FORK_ACP_COMMAND at an agent that can resume one."
+    )
+}
+
+/// What a person is told when the agent said it could resume and then could not.
+///
+/// Distinct from [`cannot_resume`] because the advice differs: an agent that
+/// advertises `loadSession` and then fails the call has lost the session — its
+/// own store was cleared, or it keeps sessions per process after all — and
+/// "use a different agent" would be the wrong thing to tell someone.
+fn resume_failed(agent: &str, error: &str) -> String {
+    format!(
+        "{agent} said it could resume this conversation and then could not, so nothing was sent. \
+         The session it was asked for is one it named itself on the first turn; if it no longer \
+         has it, start a new conversation. Underlying error: {error}"
+    )
+}
 
 /// One turn, in ACP's terms rather than Warp's.
 ///
@@ -161,13 +189,11 @@ pub(crate) struct Turn {
     prompt: String,
     /// The ACP session this conversation is already holding, if any.
     ///
-    /// Only ever `None` on a turn that runs: `from_request` refuses a second
-    /// turn. Kept on the struct so a test can assert *that* rather than assert
-    /// the absence of a field, and so `session/load` (T14.6) has its place.
-    #[expect(
-        dead_code,
-        reason = "read by tests; the field is where session/load lands"
-    )]
+    /// `None` opens a new one with `session/new`; `Some` resumes it with
+    /// `session/load`. Warp's own round-tripping is the session store — the id
+    /// goes out as `StreamInit.conversation_id` and comes back as
+    /// `params.conversation_token` — so this module still keeps no state
+    /// between turns.
     session: Option<String>,
     task_id: String,
     task_needs_announcing: bool,
@@ -183,27 +209,19 @@ impl Turn {
             .as_ref()
             .map(|token| token.as_str().to_owned());
 
-        // **Refused rather than silently answered, and that is a correction.**
-        // This shipped starting a fresh ACP session on every turn, with the
-        // limitation recorded in a doc comment. Measured through the panel, the
-        // limitation is not a footnote — it is the agent contradicting the
-        // transcript directly above it:
+        // **The refusal that used to live here has moved, and moving it is the
+        // point of T14.7 Phase 1.** A second turn was rejected outright because
+        // the connection starts a fresh ACP session every time, and answering
+        // one from a fresh session is worse than refusing: Warp shows a
+        // continuous conversation to an agent that remembers none of it, which
+        // is `local_agent`'s own named hazard — "a true sentence about the wrong
+        // conversation" — with the roles swapped.
         //
-        //   turn 1  "Create a file called proof.txt…"  → `write`, file created
-        //   turn 2  "What word did you just put in it?"
-        //           → "I haven't written to or modified any files yet in this session."
-        //
-        // Warp shows one continuous conversation to an agent that remembers none
-        // of it, which is `local_agent`'s own named hazard — "a true sentence
-        // about the wrong conversation" — with the roles swapped. A refusal
-        // cannot mislead; an amnesiac answer presented as continuous can.
-        //
-        // The real fix is `session/load`, which `opencode` advertises
-        // (`loadSession: true`) and which needs a capability check and a decision
-        // about the history it replays. T14.6.
-        if session.is_some() {
-            return Err(anyhow!(CANNOT_CONTINUE));
-        }
+        // It cannot be decided here any more. Whether a conversation can be
+        // resumed is the *agent's* answer, given in its `initialize` reply, and
+        // that reply does not exist until the connection is up. So the check is
+        // in `exchange`, where the capability is known, and this function's job
+        // is now only to carry the id.
 
         // An existing conversation already has a task; a new one does not, and
         // the client learns about it from the CreateTask this mints an id for.
@@ -275,6 +293,7 @@ fn run(command: String, turn: Turn) -> impl Stream<Item = Event> + Send + use<> 
     let driver = drive(
         command,
         turn.prompt,
+        turn.session,
         turn.working_directory,
         Arc::clone(&translator),
         tx.clone(),
@@ -294,6 +313,7 @@ fn run(command: String, turn: Turn) -> impl Stream<Item = Event> + Send + use<> 
 async fn drive(
     command: String,
     prompt: String,
+    session: Option<String>,
     working_directory: Option<String>,
     translator: Arc<Mutex<Translator>>,
     tx: mpsc::UnboundedSender<Event>,
@@ -301,6 +321,7 @@ async fn drive(
     if let Err(error) = exchange(
         command,
         prompt,
+        session,
         working_directory,
         Arc::clone(&translator),
         tx.clone(),
@@ -343,6 +364,7 @@ async fn drive(
 async fn exchange(
     command: String,
     prompt: String,
+    session: Option<String>,
     working_directory: Option<String>,
     translator: Arc<Mutex<Translator>>,
     tx: mpsc::UnboundedSender<Event>,
@@ -363,9 +385,9 @@ async fn exchange(
         Arc::clone(&translator),
         tx.clone(),
         cwd.to_string_lossy().into_owned(),
-        program,
+        program.clone(),
     );
-    let session = (Arc::clone(&translator), tx.clone());
+    let opening = (Arc::clone(&translator), tx.clone(), session, program);
 
     agent_client_protocol::Client
         .builder()
@@ -426,21 +448,50 @@ async fn exchange(
             agent_client_protocol::on_receive_request!(),
         )
         .connect_with(agent, |connection: ConnectionTo<Agent>| async move {
-            let (translator, tx) = session;
-            connection
+            let (translator, tx, resume, program) = opening;
+            let hello = connection
                 .send_request(InitializeRequest::new(ProtocolVersion::V1))
                 .block_task()
                 .await?;
 
-            let new_session = connection
-                .send_request(NewSessionRequest::new(cwd))
-                .block_task()
-                .await?;
+            // New conversation or continued one, and the agent gets a say in
+            // the second case. `load_session` is what it declared it can do;
+            // asking anyway would produce a JSON-RPC error naming a method,
+            // which is not a sentence anyone can act on.
+            let session_id = match resume {
+                None => {
+                    connection
+                        .send_request(NewSessionRequest::new(cwd))
+                        .block_task()
+                        .await?
+                        .session_id
+                }
+                Some(existing) => {
+                    if !hello.agent_capabilities.load_session {
+                        return Err(anyhow!(cannot_resume(&program)).into());
+                    }
+                    let existing = SessionId::from(existing);
+                    // Everything between here and the reply is the agent
+                    // replaying its own history. Warp already has it, so it is
+                    // dropped rather than drawn a second time — see
+                    // `Translator::replaying` for why the window is bounded by
+                    // the reply rather than by a count.
+                    emit(&translator, Translator::begin_replay);
+                    let loaded = connection
+                        .send_request(LoadSessionRequest::new(existing.clone(), cwd))
+                        .block_task()
+                        .await;
+                    emit(&translator, Translator::end_replay);
+                    if let Err(error) = loaded {
+                        return Err(anyhow!(resume_failed(&program, &error.to_string())).into());
+                    }
+                    existing
+                }
+            };
             // The agent's session id becomes Warp's conversation token, and the
             // client hands it back on the next request. Emitted before the
             // prompt so a turn that fails mid-way still leaves the conversation
             // addressable.
-            let session_id = new_session.session_id.clone();
             for event in {
                 let mut translator = translator
                     .lock()
@@ -452,7 +503,7 @@ async fn exchange(
 
             let answer = connection
                 .send_request(PromptRequest::new(
-                    new_session.session_id.clone(),
+                    session_id.clone(),
                     vec![ContentBlock::Text(TextContent::new(prompt))],
                 ))
                 .block_task()

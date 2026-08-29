@@ -476,3 +476,73 @@ fn a_task_description_is_truncated_on_a_character_boundary() {
     assert!(description.ends_with('…'));
     assert_eq!(description.chars().count(), TASK_DESCRIPTION_CHARS + 1);
 }
+
+/// The replay `session/load` sends before it answers is history, and Warp
+/// already has it.
+///
+/// Measured against `opencode` over stdio with no Warp involved: a one-turn
+/// history arrived as `user_message_chunk` then `agent_message_chunk`, both
+/// *before* the `session/load` reply. Emitting those would draw the
+/// conversation twice — the client sends its whole task list back on every
+/// request, so the transcript was never lost and never needed replacing.
+#[test]
+fn what_session_load_replays_is_dropped_rather_than_drawn_again() {
+    let mut translator = translator();
+    translator.begin_replay();
+
+    let replayed = [
+        translator.on_update(&SessionUpdate::UserMessageChunk(text_chunk("turn one"))),
+        translator.on_update(&SessionUpdate::AgentMessageChunk(text_chunk("an answer"))),
+        translator.on_update(&SessionUpdate::ToolCall(
+            ToolCall::new("call_1", "Write a.txt").kind(ToolKind::Edit),
+        )),
+    ];
+
+    for events in &replayed {
+        assert!(events.is_empty(), "replayed history rendered: {events:?}");
+    }
+    assert!(
+        translator.flush().is_empty(),
+        "a replayed chunk was accumulated and would land in the next message"
+    );
+}
+
+/// …and the window closes, so the turn the person actually sent is rendered.
+///
+/// The pairing matters more than either half: a suppression that never lifted
+/// would look exactly like a working agent that had gone silent.
+#[test]
+fn updates_after_the_replay_window_are_rendered_normally() {
+    let mut translator = translator();
+    translator.begin_replay();
+    translator.on_update(&SessionUpdate::AgentMessageChunk(text_chunk("history")));
+    translator.end_replay();
+
+    translator.on_update(&SessionUpdate::AgentMessageChunk(text_chunk("live")));
+
+    assert_eq!(output(&translator.flush()), vec!["live".to_owned()]);
+}
+
+/// A replayed tool call does not become the one a permission request is lined
+/// up against.
+///
+/// `note_locations` accumulates by `toolCallId`, and an agent that reuses an id
+/// across turns — nothing forbids it — would otherwise have a *previous* turn's
+/// paths reported on this turn's approval card as what it acts on. That is the
+/// exact failure T14.6 built `acts_on` to prevent, arriving from a new
+/// direction, which is why the replay is dropped whole rather than merely not
+/// emitted.
+#[test]
+fn a_replayed_tool_call_leaves_no_locations_behind() {
+    let mut translator = translator();
+    translator.begin_replay();
+
+    translator.on_update(&SessionUpdate::ToolCall(
+        ToolCall::new("call_1", "Write a.txt")
+            .kind(ToolKind::Edit)
+            .locations(vec![ToolCallLocation::new("/tmp/from-a-previous-turn.txt")]),
+    ));
+    translator.end_replay();
+
+    assert_eq!(translator.locations_for("call_1"), None);
+}
