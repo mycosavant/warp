@@ -133,7 +133,9 @@ defaults **on** — set it off to get upstream's terminal in the hotkey window),
 the local log; **reach for this before theorising about why something feels
 slow**), `WARP_FORK_EVENT_LOG` (`on`, or a directory — one JSONL file per
 CLI-agent session, appended as events arrive; **reach for this before
-theorising about what an agent did**), `WARP_FORK_CONTROL_BIND` (**the only one
+theorising about what an agent did**, but only on the `local_agent` path: the
+ACP path writes `session_start` and `stop` and **no tool events at all**,
+measured T14.7), `WARP_FORK_CONTROL_BIND` (**the only one
 that reaches off the machine** — one literal IP address, optionally with a port
 (`192.168.1.5:41234`, `[fd00::1]:41234`; pin one if you want the console on a
 home screen, because an ephemeral port makes a saved URL dead on the next
@@ -194,6 +196,16 @@ resolves the whole flag set in a process that opens no window and binds no
 port. That is enough to A/B any *flag*, which is most of what policy-off gets
 used for. Save the GUI run for A/B-ing behaviour. (Put any probe **after**
 `mark_initialized()` — `FeatureFlag::is_enabled` panics before it.)
+
+**An agent in the panel works in the *pane's* directory, and a fresh pane
+starts in `$HOME`.** Not in the directory Warp was launched from. Both agent
+paths read `session_context.current_working_directory()`, so this is identical
+for `local_agent` and `acp_agent`, and the failure is quiet in the worst way:
+measured T14.7, a first turn asked to work on this repo answered "not a git
+repository", created `/home/effatha/target/` and wrote there, and reported
+success. **`warpctrl input submit 'cd /home/effatha/git/warp'` before the first
+prompt**, and for an ACP agent this decides more than the files — the agent
+resolves its own permission config from there too.
 
 **Leave the user's `settings.toml` alone.** For any run that needs different
 settings, point `XDG_CONFIG_HOME`/`XDG_STATE_HOME` at a scratch directory —

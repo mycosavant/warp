@@ -7097,6 +7097,91 @@ Nothing has run on Windows.
       diff rendering — the content is already in `rawInput`, measured on T14.6,
       so that one is legibility and not consent.
 
+
+      **As built — Phase 0, measured 2026-08-29.** Driven through a real GUI
+      Warp on WSLg with a scratch profile, `warpctrl agent
+      prompt/read/approvals/approve`, the same three-step probe on each path:
+      run a command in the allow list, write a file, run a command in the deny
+      list. Then a second turn asking what the first one did, answered from
+      memory with no tool use.
+
+      **The table above is wrong in both of the cells that mattered, and the
+      blocker that actually stops the goal is in neither of them.**
+
+      **The session cwd is the pane's shell cwd, and a fresh pane starts in
+      `$HOME`.** Warp was launched *from* the repo and the pane still came up in
+      `/home/effatha`, so the first run's `git status --short` answered "not a
+      git repository", the agent created `/home/effatha/target/` and wrote its
+      probe file there, and reported success. Nothing lied: the agent said what
+      it did and the path was in its own answer. But a person who asks the panel
+      to change the fork gets their home directory instead, and both paths do
+      this identically because both read
+      `params.session_context.current_working_directory()`. `warpctrl input
+      submit 'cd /home/effatha/git/warp'` fixes it for the next turn, and the
+      second run confirmed `pwd` and `git rev-parse --show-toplevel` both inside
+      the repo. **This is not a code bug and it is the first thing to do in
+      every session** — it was predicted by nothing in this ticket.
+
+      `local_agent` **is much closer than the table said.** Multi-turn works:
+      turn 2 returned the exact absolute path written in turn 1, with no tool
+      call, so `--resume` is carrying the transcript. And its permission story
+      is not a hang. `Write` ran without asking anyone — the user's settings are
+      `defaultMode: auto` and that is a real answer, not an absence of one —
+      while `ssh -V`, which matches `Bash(ssh:*)` in the 30 deny rules, came
+      back as a tool error the agent narrated in prose and then continued past.
+      **So the "silent failure" this ticket named as the thing a guess would get
+      wrong does not exist, and the doc comment in `local_agent/mod.rs` saying
+      "read-only tools work and anything needing approval is denied" is wrong in
+      its first half.** What is true is narrower: Warp is never consulted.
+      `warpctrl agent approvals` stayed empty through the whole run. Consent for
+      this path lives in `~/.claude/settings.json` and Warp cannot see it, which
+      is T14.3's finding arriving again from the other side.
+
+      `acp_agent` refuses the second turn exactly as written, and **Warp retries
+      that refusal three times with backoff before showing it** — the error is
+      classified recoverable, so a deterministic "this build cannot do that"
+      costs about four seconds of pretending it might. Worth fixing where the
+      refusal is raised, not in the retry policy.
+
+      **The T14.6 consent surface is live, and reaching it is the *agent's*
+      decision rather than Warp's.** At its own defaults `opencode` asked
+      nothing and ran `ssh -V` — the same command the Claude path denied, same
+      prompt, opposite outcome. Given an `opencode.json` in the pane's cwd
+      declaring `permission: {edit: "ask", bash: "ask"}`, the same call produced
+      a real `PendingApproval` (`can_approve: true`, `approve_selects: "once"`,
+      digest bound, `acts_on` naming the repo); `warpctrl agent approve <id>
+      --digest <d>` answered it and the command then ran and rendered. The whole
+      loop — asked, answered from outside the GUI, executed — is verified. This
+      is the shape of the answer to "which path can satisfy the goal sentence",
+      and it is worth stating plainly that **Warp cannot make an agent ask**;
+      the config that makes it ask is the user's, in the pane's directory.
+
+      **Phase 1's falsifier was run before Phase 1 was started, and it came
+      back green.** The open questions about `session/load` — whether the
+      agent's session survives the process exiting at all, given that this fork
+      spawns one agent per turn, and what history the load replays — were
+      answered by speaking ACP to `opencode acp` directly over stdio, no Warp
+      involved. It advertises `loadSession: true`; a session created and
+      prompted in one process was loaded by name in a **second, freshly spawned
+      one**, and that second process answered the memory question correctly. So
+      the per-turn process model is not an obstacle. The replay is small and its
+      ordering is the thing that matters: for a one-turn history the agent sent
+      exactly two `session/update` notifications — `user_message_chunk` then
+      `agent_message_chunk` — and it sent them **before** the `session/load`
+      reply. That is what would draw the transcript twice, and it is also what
+      makes suppressing it easy: everything between the request and its reply is
+      history. **Unverified: that any other agent orders it the same way.** The
+      spec does not appear to require it, so the suppression has to be
+      structured as "ignore until the reply" rather than "ignore the first N".
+
+      Two smaller findings, both recorded rather than fixed here. The ACP path
+      writes **no tool events** to `WARP_FORK_EVENT_LOG` — only `session_start`
+      and `stop` — while `local_agent` writes a full `tool_start`/`tool_complete`
+      pair per call; so the instrument this file recommends reaching for before
+      theorising about an agent covers one path of two. And the asking note
+      stays in the transcript after the request is answered, so reading back a
+      finished conversation shows a live-sounding prompt for a call that already
+      ran.
 - [x] **T14.3** ~~**Warp cannot observe an agent's permission policy, so it must
       not imply one.**~~ **The headline is false and running it is what showed
       that — see the as-built below.** The agent declares its mode on the wire,

@@ -42,11 +42,22 @@
 //! **Claude runs its own tools.** Tool activity is reported to Warp as text,
 //! never as a `ToolCall` message — a ToolCall is an instruction, and Warp's
 //! action model would execute a tool Claude had already run. So Warp's diff
-//! review, command approval and block UI do not participate yet; Claude's own
-//! permission prompts govern, and in `-p` mode that means read-only tools work
-//! and anything needing approval is denied. Wiring Warp's tool execution back
-//! in needs `--input-format stream-json` so results can be fed back mid-turn,
-//! and is the next step rather than part of the spike.
+//! review, command approval and block UI do not participate; Claude's own
+//! permission settings govern, and Warp is never consulted —
+//! `warpctrl agent approvals` stays empty for the whole of a turn that writes
+//! files.
+//!
+//! **This paragraph used to end "in `-p` mode that means read-only tools work
+//! and anything needing approval is denied", and running it says otherwise**
+//! (T14.7 Phase 0). `-p` is not read-only: with the user's own
+//! `defaultMode: auto`, `Write` ran and asked nobody, which is that setting
+//! working rather than a gap. And a call the settings *deny* does not hang for
+//! want of a TTY — it comes back as a tool error, which Claude narrates in prose
+//! and continues past. The honest limitation is neither "read-only" nor
+//! "denied": it is that the decision was made in a file Warp never read.
+//! Wiring Warp's tool execution back in needs `--input-format stream-json` so
+//! results can be fed back mid-turn, and is the next step rather than part of
+//! the spike.
 //!
 //! It does mean nothing else in Warp observes those tools, which is why they are
 //! projected to the fork's event log from here instead (T11.1c): `translate.rs`
