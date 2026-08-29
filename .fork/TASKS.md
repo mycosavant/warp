@@ -7064,7 +7064,8 @@ Nothing has run on Windows.
       WSL2's default of half the host's 64 GB; one is now written with more
       headroom and real swap, taking effect at the next `wsl --shutdown`.
 
-- [ ] **T14.7** **Self-hosting: build the fork from inside the fork.** The
+- [x] **T14.7** **Self-hosting: build the fork from inside the fork.** **Met
+      2026-08-29 — commit `cddacfbc7` was made from the panel.** The
       weekend goal, charter in `.fork/GOAL.md`, target Monday 2026-09-01.
 
       **Done means a run, not a diff**: in Warp's own agent panel, in this repo,
@@ -7235,6 +7236,44 @@ Nothing has run on Windows.
       `cannot_resume` branch is **test-covered but never run live**, because both
       agents on this machine advertise `loadSession: true` — `opencode` and
       `claude-agent-acp` alike.
+
+      **As built — Phase 2, run 2026-08-29. The goal is met.** Commit
+      `cddacfbc7` was written by an agent in Warp's own panel, in this repo,
+      across a three-turn conversation, and every clause of the sentence
+      happened rather than being arranged for.
+
+      The work was real and was chosen because it was owed: three claims in
+      `.fork/README.md`'s `WARP_FORK_ACP_COMMAND` section had gone false — "it
+      can only say no", "a second turn is refused", and "not yet: session
+      resume" — each falsified by a commit earlier in this phase that had not
+      updated the doc. Turn 1 made the three corrections and asked permission
+      for each edit; `warpctrl agent approve --digest` answered. Turn 2
+      recalled all three from memory with no tool use, including which item it
+      had removed from the "Not yet" list, and then took a review finding: its
+      own first edit had orphaned the sentence *"That is the shape
+      `local_agent` shipped in"*, whose "That" had pointed at a blockquote it
+      deleted. It fixed the reference. Turn 3 committed.
+
+      **Nobody told it the commit convention.** Asked to follow "this project's
+      own", it read `CLAUDE.md`, then ran `git log -1 --format='%B'` on an
+      earlier commit from this phase to see the house style, and wrote a body
+      that explains what was found rather than what was typed — citing the
+      commit that made its second claim false. That is `opencode.json`'s
+      `instructions` line paying for itself two commits after it was added.
+
+      Seven permission requests over three turns, every one answered from
+      `warpctrl`, none auto-approved. The loop the panel shows is now complete
+      end to end: the asking note, then **"Answered: yes, for this one call.
+      Nothing after it is covered."**, then the command's own output —
+      photographed rather than inferred, because `agent read` is silent about a
+      whole class of state.
+
+      **What the goal does not yet cover, stated plainly rather than left to be
+      discovered.** There is no button. Consent is answered by typing a
+      `warpctrl` command, which is doable *from* Warp — it is a terminal — but
+      it is not clicking a control in the panel that is asking. The console
+      (T12) has the button and reaches a phone; the panel does not. That is the
+      next ergonomic step and it is a smaller one than anything in this ticket.
 
 - [x] **T14.3** ~~**Warp cannot observe an agent's permission policy, so it must
       not imply one.**~~ **The headline is false and running it is what showed

@@ -1,74 +1,38 @@
 # The 24-hour goal: make the fork self-hosting
 
-**Set 2026-08-29 for the weekend. Target: Monday morning 2026-09-01.**
-Delete this file when it is met or abandoned — it is a horizon, not doctrine.
+**Set 2026-08-29 for the weekend. Target was Monday morning 2026-09-01.**
 
-## What "done" means, as a run rather than a diff
+## Met, 2026-08-29, about three hours in
 
 > In **Warp's own agent panel**, in `/home/effatha/git/warp`, hold a
 > **multi-turn** conversation that makes a real change to the fork, asks
 > permission for it, is answered from the panel or from `warpctrl`, and whose
 > **next turn remembers what it did**.
 
-That is the whole thing. Everything below exists to reach that sentence. The
-point is to stop driving this fork from Claude Code and start driving it from
-the fork.
+Commit **`cddacfbc7`** was written that way: three turns, seven permission
+requests, every one answered from `warpctrl`, a real correction to
+`.fork/README.md`, and a commit the agent composed after finding the house
+style on its own. The full account is T14.7's as-built in `TASKS.md`, which is
+where it now lives permanently; this file is the horizon and the horizon has
+been reached.
 
-## Phase 0 — measure, and do it before building anything
+**What it cost, in the order the work actually went:** a measurement that
+overturned the plan (both cells of the two-path table were wrong and the real
+blocker — the pane starting in `$HOME` — was in neither), `session/load` for
+ACP, two defects found by trying to break it, and one small config file that
+turned out to matter more than any of the code.
 
-**This has never been done, and the plan is worthless until it has.** Two agent
-paths serve the panel, and on paper each has exactly the other's blocker:
+## What is left, and it is small
 
-| | multi-turn | interactive approval |
-|---|---|---|
-| `local_agent` (the `claude` CLI) | ✓ `--resume`, `mod.rs:353` | ✗ never emits a `ToolCall`, so `approvals.rs` has no branch to reach |
-| `acp_agent` (any agent) | ✗ refused by `CANNOT_CONTINUE` | ✓ built on T14.6 |
+**There is no button.** The panel shows the question and then tells you to type
+`warpctrl agent approve <id> --digest <d>`. That is answerable *from* Warp —
+it is a terminal — but it is not pressing a control in the pane that is asking.
+The console already has the button and reaches a phone; the panel does not.
 
-That table is **read, not run**. So: drive a genuine multi-turn development task
-through each path — not a one-line prompt, an actual small change to this repo —
-and record what breaks. Two specific unknowns worth naming, because a guess
-about either would set the next twenty hours off in the wrong direction:
+That is the next thing, and it is smaller than anything in T14.7. After it, the
+honest test of "using the fork to build the fork on an ongoing basis" is not a
+feature at all — it is a second and third session driven this way, finding what
+only use finds.
 
-- `local_agent` may already be closer than the table suggests. `claude -p`
-  inherits the user's own settings, which are `defaultMode: auto` with 87 allow
-  rules, so most tools may simply run. **What happens when one falls outside
-  those rules is unmeasured**: `-p` has no TTY to prompt on, and the panel has
-  no approval path, so the failure could be silent.
-- `acp_agent`'s refusal is certain, but whether *anything else* is also missing
-  for real work is not.
-
-Write the answer into T14.7's as-built before writing code.
-
-## Phase 1 — close the gap that Phase 0 names
-
-Most likely one of these; the measurement decides, not this file.
-
-- **`session/load` for ACP**, gated on the agent's advertised `loadSession`
-  (`opencode` advertises it). The real design question is *what history it
-  replays* and whether Warp then draws the transcript twice. Keep the honest
-  refusal for agents that do not advertise it.
-- **an approval path for the `local_agent` panel**, if Phase 0 shows that is
-  the shorter road.
-
-## Phase 2 — dogfood
-
-Use the panel to make a real change to the fork, and commit it from there. Until
-that has happened the goal is not met, however good the code looks.
-
-## Stretch, only after 1 and 2 land and verify
-
-- `AppendToMessageContent` token streaming — its `FieldMask` path must be
-  **established by running it**, never guessed; nothing in this repo uses it.
-- Diff rendering. The content is already there: an `opencode` edit request
-  carries a full unified diff in `rawInput`, measured on T14.6. This is a
-  legibility job, not a consent one.
-
-## Guardrails
-
-- Commit each increment on `dev`, findings in the body. **No push, no PR, no
-  upstream merge** (T10 is a different kind of risk and is not this goal).
-- `CARGO_BUILD_JOBS=8` on every release build — uncapped takes the WSL VM down.
-- Leave no Warp or agent processes running; stop with `warpctrl window close`.
-- Scratch profiles via `XDG_CONFIG_HOME`/`XDG_STATE_HOME` only. **Never** touch
-  `~/.claude/settings.json` or the user's `settings.toml`.
-- Verify by running. Name the inputs that were not verified.
+**Delete this file** when that button lands, or replace it with the next
+horizon. It is not doctrine and it should not outlive being useful.
