@@ -363,6 +363,21 @@ pub struct PendingApproval {
     /// setting or a fault.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub approve_refused_because: Option<String>,
+    /// Every answer the agent itself offered, by name.
+    ///
+    /// **Fork (T14.6).** Data, not controls. An ACP agent sends its options
+    /// typed — `allow_once`, `allow_always`, `reject_once` — and the fact that
+    /// one was *offered* is worth recording even where Warp will not render it:
+    /// "the offer went unrecorded" is the finding `acp_permission`'s
+    /// `is_more_than_an_answer` exists for. An `allow_always` carrying no
+    /// declaration, which is measured to be what `opencode` sends, can never
+    /// become a button — there is nothing to show a person but the name — but it
+    /// can be written down.
+    ///
+    /// Empty for the CLI-agent population, whose prompt is drawn on a PTY and
+    /// whose options Warp never sees.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub options_offered: Vec<String>,
 }
 
 /// Result of `agent.approvals`.

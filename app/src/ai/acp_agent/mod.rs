@@ -95,11 +95,11 @@
 //! configuration works — but nothing here may imply otherwise either, which is
 //! the T14.3 rule. See `.fork/TASKS.md` T14.6.
 
+pub(crate) mod registry;
 mod translate;
 
 use std::str::FromStr as _;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 
 use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::schema::v1::{
@@ -351,7 +351,20 @@ async fn exchange(
     };
 
     let updates = (Arc::clone(&translator), tx.clone());
-    let permissions = (Arc::clone(&translator), tx.clone());
+    // The program name rather than the whole command line: an entry says which
+    // agent is waiting, and the arguments are Warp's configuration, not the
+    // question being asked.
+    let program = command
+        .split_whitespace()
+        .next()
+        .unwrap_or(&command)
+        .to_owned();
+    let permissions = (
+        Arc::clone(&translator),
+        tx.clone(),
+        cwd.to_string_lossy().into_owned(),
+        program,
+    );
     let session = (Arc::clone(&translator), tx.clone());
 
     agent_client_protocol::Client
@@ -375,21 +388,29 @@ async fn exchange(
         )
         .on_receive_request(
             async move |request: RequestPermissionRequest, responder, connection| {
-                let (translator, tx) = &permissions;
-                // No, always, and the reason is in the module docs: nothing here
-                // can show a person what they would be agreeing to, so nothing
-                // here may agree. A denial needs no such surface, which is the
-                // asymmetry T11.5 established and T14.4 measured the cost of
-                // breaking.
-                let (outcome, note) = deny(&request);
-                let event = emit(translator, |translator| translator.note(note));
+                let (translator, tx, directory, program) = &permissions;
+                // Still no, always — nothing here can show a person what they
+                // would be agreeing to, so nothing here may agree. What changed
+                // in T14.6 is *when* the no is said: the request is now listed
+                // as waiting on a person, and a person's `agent.deny` is what
+                // ends it. A denial needs no surface, which is the asymmetry
+                // T11.5 established and T14.4 measured the cost of breaking.
+                let (outcome, _) = deny(&request);
+                let (turn, session) = emit(translator, |t| (t.request_id(), t.session_id()));
+                let parked = parked_request(
+                    responder.id(),
+                    &turn,
+                    &request,
+                    program,
+                    directory.clone(),
+                    session,
+                );
+                let event = emit(translator, |translator| {
+                    translator.note(asking_note(&parked))
+                });
                 let _ = tx.unbounded_send(Ok(event));
 
-                // T14.6's spike: hold the answer, then give the same one.
-                match parked_answer_path() {
-                    Some(path) => park_until_answered(&connection, responder, outcome, path),
-                    None => responder.respond(RequestPermissionResponse::new(outcome)),
-                }
+                wait_for_a_person(&connection, responder, outcome, parked)
             },
             agent_client_protocol::on_receive_request!(),
         )
@@ -467,61 +488,108 @@ fn spawn_failure_or(error: impl std::fmt::Display, command: &str) -> anyhow::Err
     anyhow!("The agent exchange failed: {error}")
 }
 
-/// The file whose appearance answers a parked permission request, if this run is
-/// a T14.6 spike.
-///
-/// **Temporary, and deliberately not a `fork.rs` predicate.** The policy seam is
-/// for things that ship; this is scaffolding for the three falsifiers in
-/// `.fork/TASKS.md` T14.6, and it is read from the environment on each request so
-/// that turning it on does not require a rebuild. Unset — which is every ordinary
-/// run — leaves the answer immediate and the behaviour exactly as T14.5 shipped.
-fn parked_answer_path() -> Option<std::path::PathBuf> {
-    let path = std::env::var("WARP_FORK_ACP_SPIKE_PARK").ok()?;
-    let path = path.trim();
-    (!path.is_empty()).then(|| std::path::PathBuf::from(path))
+/// Describes one permission request the way the control plane needs it.
+fn parked_request(
+    id: &agent_client_protocol::schema::v1::RequestId,
+    turn: &str,
+    request: &RequestPermissionRequest,
+    agent: &str,
+    session_directory: String,
+    session_id: Option<String>,
+) -> registry::ParkedRequest {
+    registry::ParkedRequest {
+        // Scoped to the turn, because a JSON-RPC id is only unique within one
+        // connection — measured, two concurrent agents both opened with `0`.
+        approval_id: format!("{turn}:{id}"),
+        agent: agent.to_owned(),
+        title: request.tool_call.fields.title.clone(),
+        tool_name: request
+            .tool_call
+            .fields
+            .kind
+            .and_then(|kind| serde_json::to_value(kind).ok())
+            .and_then(|kind| kind.as_str().map(str::to_owned)),
+        // Carried verbatim rather than summarised. The measured payload puts the
+        // command here and *not* in `locations`, which arrives empty on a
+        // permission request even when the preceding `tool_call_update` had a
+        // path — so this is the only place the specifics survive.
+        tool_input: request
+            .tool_call
+            .fields
+            .raw_input
+            .as_ref()
+            .map(|input| input.to_string()),
+        session_directory: Some(session_directory),
+        session_id,
+        options_offered: request
+            .options
+            .iter()
+            .map(|option| option.name.clone())
+            .collect(),
+    }
 }
 
-/// Answers a permission request *later*, from a task, without blocking the
+/// What the conversation says while a request is waiting on a person.
+///
+/// Two facts with two attributions, and **no sentence about whose rules
+/// governed this call**, because Warp cannot know that: measured on T14.6, the
+/// pane's directory decides whether the user's own agent configuration loads at
+/// all, and nothing on the wire distinguishes "your rules allowed it" from "the
+/// agent's defaults did".
+fn asking_note(parked: &registry::ParkedRequest) -> String {
+    let what = parked.title.as_deref().unwrap_or("a request to act");
+    let mut note = format!(
+        "The agent is waiting for permission: **{what}**. \
+         Warp cannot say yes to this yet — there is no surface that could show you what \
+         saying yes would allow. Answer no with `warpctrl agent deny {}`, or from a paired \
+         device, or cancel the turn.",
+        parked.approval_id
+    );
+    if let Some(directory) = parked.session_directory.as_deref() {
+        note.push_str(&format!(
+            "\n\nThis session runs in `{directory}` — Warp chose that from the pane. \
+             The agent resolves its own permission rules from there, and Warp cannot see them."
+        ));
+    }
+    note
+}
+
+/// Holds the request open until a person answers it, without blocking the
 /// connection's dispatch loop.
 ///
-/// # What this is testing, and what it is not
+/// The reply happens **here, on the connection's own task**, which is the
+/// arrangement T14.6's spike measured: held 180s, answered within 5s of an
+/// out-of-band signal, survived cancellation, and two of them at once resolved
+/// independently. The only thing that changed since is where the signal comes
+/// from — a `oneshot` from [`registry`] rather than a file appearing.
 ///
-/// The consent design T14.6 settled on needs a `session/request_permission` to
-/// stay outstanding while a person is asked somewhere else — a phone, via
-/// `agent.approve`. Three things could make that impossible and none of them had
-/// been run: the connection deadlocking while a responder is held, the agent
-/// timing out its own request, and Warp abandoning a turn that goes quiet.
-///
-/// So this parks the responder for real and resolves it out-of-band, and then
-/// answers **no** — the same `outcome` the immediate path computed, carried
-/// unchanged. The mechanism is what is under test; the decision is not. Nothing
-/// here can say yes, which keeps the asymmetry intact while the surface that
-/// could justify a yes does not yet exist.
-///
-/// `Responder` is `Send` and its `send_fn` is a boxed `FnOnce`, so moving it into
-/// a task is supported rather than a trick; dropping one for an individual
-/// request sends no reply, which is why the loop below has a deadline instead of
-/// waiting forever.
-fn park_until_answered(
+/// **There is no deadline, and that is deliberate.** The spike had one only
+/// because a file might never appear; here the resolutions are lifecycle events
+/// that all reach through a parked responder — someone answers, the turn is
+/// cancelled, or the connection goes away and drops this task with it. An
+/// auto-denial on a timer would be a decision taken on the person's behalf and
+/// reported as if they had made it, and *no answer is not no* is the grammar
+/// this fork already uses for `permission_requests_received: 0`. The keystroke
+/// path this joins has no timeout either: a CLI agent's prompt waits as long as
+/// it waits.
+fn wait_for_a_person(
     connection: &ConnectionTo<Agent>,
     responder: agent_client_protocol::Responder<RequestPermissionResponse>,
     outcome: RequestPermissionOutcome,
-    path: std::path::PathBuf,
+    request: registry::ParkedRequest,
 ) -> Result<(), agent_client_protocol::Error> {
-    const POLL: Duration = Duration::from_millis(250);
-    const DEADLINE: Duration = Duration::from_secs(300);
+    let (waiting, answer) = registry::park(request);
 
     connection.spawn(async move {
-        let started = std::time::Instant::now();
-        while !path.exists() {
-            if started.elapsed() > DEADLINE {
-                break;
-            }
-            async_io::Timer::after(POLL).await;
-        }
-        // The answer is the one the immediate path already decided. A failure to
-        // deliver it is the agent having gone away, which is not this task's
-        // problem to report — and returning `Err` here would take the whole
+        // Held for exactly as long as the wait, so a turn that is cancelled stops
+        // advertising a question nobody can answer any more.
+        let _waiting = waiting;
+        // Both arms are the same answer today: `Ok(Deny)` is a person saying no,
+        // and `Err` is the entry having gone without one, which can only happen
+        // if the turn is already ending. There is no arm that says yes.
+        let _ = answer.await;
+        // A failure to deliver is the agent having gone away, which is not this
+        // task's problem to report — and returning `Err` would take the whole
         // connection down with it, per `ConnectionTo::spawn`'s own docs.
         let _ = responder.respond(RequestPermissionResponse::new(outcome));
         Ok(())

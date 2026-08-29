@@ -6718,6 +6718,60 @@ Nothing has run on Windows.
       in the wrong state. The spike has to verify the note *lands*, not that it
       was sent.
 
+      **Increment 1 is built and run: parked requests are listed and can be
+      answered no.** `agent.approvals` reports a second population, `agent.deny`
+      resolves a parked responder, `agent.approve` is refused by name. Measured
+      end to end:
+
+      ```
+      $ warpctrl agent approvals
+        approval_id "5a4ecbe3-…:0"  agent "opencode"  tool_name "execute"
+        summary "echo second > second.txt"   cwd "/tmp/t146/project"
+        can_approve false   approve_refused_because "Warp cannot say yes … yet"
+        options_offered ["Allow once","Always allow","Reject"]
+      $ warpctrl agent deny 5a4ecbe3-…:0 --digest …
+        decision "deny"  keystroke "reject_once"
+      ```
+
+      `keystroke: "reject_once"` rather than `escape` because that is what
+      actually happened — the CLI path presses a key because pressing a key is
+      all it can do, and this one selects the agent's own typed option by id.
+      Reporting `escape` would describe a mechanism that was not used, which is
+      the same rule that made T11.5 report *which key it sent* instead of
+      `approved: true`.
+
+      Also verified live: a wrong digest is refused, and refused *differently*
+      from a refused yes — the digest check runs first, so a caller holding a
+      stale answer is not sent off to solve the wrong problem. Cancelling one
+      parked turn withdrew its entry and left a second one parked. Nothing was
+      written in any run and no agent process leaked.
+
+      **And running it found a defect no test would have.** The first build keyed
+      the registry on the JSON-RPC request id alone, as this ticket's own plan
+      said. That id is **per-connection**: two concurrent `opencode` sessions
+      both opened with `0`, and against a process-global map the result was not a
+      lost entry but two wrong answers.
+
+      1. Turn B parks over turn A, dropping A's oneshot sender.
+      2. A's waiter reads a dropped sender as *answered* and denies at once —
+         while the panel still reads "waiting for permission".
+      3. A's cleanup then removes the key, which is now **B's** entry, and B
+         denies too.
+
+      Both turns reported `success`, the tool never ran, and nobody was ever
+      asked. The visible symptom was two conversations that had "asked" and
+      silently answered themselves. Fixed in both halves, because either alone
+      leaves the other latent: the key is scoped to the turn, and a waiter now
+      removes an entry only if it still owns it (a token, compared on drop).
+      `a_reused_key_cannot_make_one_waiter_answer_another` builds the collision
+      by hand and pins the second half.
+
+      The lesson is the ticket's own: the plan said "keyed on the JSON-RPC
+      request id, and keying on request id rather than toolCallId is itself the
+      defense against the re-ask hazard" — correct about the hazard it named, and
+      silent about scope. A globally-unique-sounding phrase for a
+      locally-unique value.
+
       **What finding 2 changes is what the card must say, not what it must be.**
       The session directory — the thing that decided whose rules applied — is
       Warp's own first-hand fact, chosen from the pane and sent in

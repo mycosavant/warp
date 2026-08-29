@@ -163,6 +163,14 @@ pub fn agent_answer(
     let params: AgentApproveParams = serde_json::from_value(params.clone())
         .map_err(|error| ControlError::new(ErrorCode::InvalidParams, error.to_string()))?;
 
+    // The ACP population first, because its ids are JSON-RPC request ids and
+    // would never match a pane — so a miss here costs one map lookup and falling
+    // through is correct, while the other order would report `no_such_approval`
+    // for a request that is sitting right there.
+    if let Some(answered) = answer_acp(instance_id, decision, &params, ctx)? {
+        return Ok(answered);
+    }
+
     let locations = surface_locations(ctx);
     let Some((&terminal_view_id, location)) = locations
         .iter()
@@ -246,10 +254,143 @@ fn pending_approvals(ctx: &mut ModelContext<LocalControlBridge>) -> Vec<PendingA
             approval_for(session, &location.pane_id.to_string(), &location.tab_id)
         })
         .collect::<Vec<_>>();
+    approvals.extend(acp_approvals());
     // Stable across calls, because a `HashMap` walk is not and a caller
     // rendering a list should not have it reshuffle under them between polls.
     approvals.sort_by(|left, right| left.approval_id.cmp(&right.approval_id));
     approvals
+}
+
+/// Answers an ACP permission request, or reports that this id is not one.
+///
+/// `Ok(None)` means "not mine, try the panes". Everything else is a final
+/// answer, including the refusal of a yes.
+#[cfg(not(target_family = "wasm"))]
+fn answer_acp(
+    instance_id: &Option<InstanceId>,
+    decision: Decision,
+    params: &AgentApproveParams,
+    ctx: &mut ModelContext<LocalControlBridge>,
+) -> Result<Option<serde_json::Value>, ControlError> {
+    let _ = ctx;
+    let Some(current) = acp_approvals()
+        .into_iter()
+        .find(|approval| approval.approval_id == params.approval_id)
+    else {
+        return Ok(None);
+    };
+
+    // Same order as the pane path, and for the same reason: a caller holding a
+    // stale digest is asking about a request that is gone, and telling them
+    // "Warp cannot say yes yet" would send them off to solve the wrong problem.
+    if current.digest != params.digest {
+        return Err(ControlError::new(
+            ErrorCode::InvalidParams,
+            format!(
+                "the request `{}` is not the one this digest was taken from; \
+                 read `agent.approvals` again and answer what it reports now",
+                params.approval_id
+            ),
+        ));
+    }
+
+    if decision == Decision::Allow {
+        return Err(ControlError::new(
+            ErrorCode::InsufficientPermissions,
+            ACP_APPROVE_NOT_YET.to_owned(),
+        ));
+    }
+
+    if !crate::ai::acp_agent::registry::answer(
+        &params.approval_id,
+        crate::ai::acp_agent::registry::Decision::Deny,
+    ) {
+        // Between the read above and here the turn ended — cancelled, or the
+        // agent went away. The question is gone rather than unanswered.
+        return Err(no_such_approval(&params.approval_id));
+    }
+
+    let mut response = ack(instance_id, decision.action());
+    merge(
+        &mut response,
+        serde_json::to_value(AgentApproveResult {
+            approval_id: params.approval_id.clone(),
+            decision: decision.as_str().to_owned(),
+            agent: current.agent,
+            // **Not a keystroke.** The CLI path presses Escape because that is
+            // all it can do; this one selects the agent's own `reject_once`
+            // option by id, which is a typed answer rather than a guess about
+            // someone else's TUI. Reported as what it is, because a result that
+            // said "escape" would be describing a mechanism that was not used.
+            keystroke: "reject_once".to_owned(),
+        })
+        .map_err(|error| ControlError::new(ErrorCode::Internal, error.to_string()))?,
+    )?;
+    Ok(Some(response))
+}
+
+#[cfg(target_family = "wasm")]
+fn answer_acp(
+    _instance_id: &Option<InstanceId>,
+    _decision: Decision,
+    _params: &AgentApproveParams,
+    _ctx: &mut ModelContext<LocalControlBridge>,
+) -> Result<Option<serde_json::Value>, ControlError> {
+    Ok(None)
+}
+
+/// Why `agent.approve` refuses an ACP request, in the sentence a person reads.
+///
+/// Not the same refusal as an unverified CLI agent's, and deliberately so: that
+/// one is about *this fork not knowing what Enter would select on someone
+/// else's TUI*, which ACP does not have — its options are typed and carry ids.
+/// This one is about there being no surface that could show what a yes would
+/// allow, which is what T14.6 is for.
+const ACP_APPROVE_NOT_YET: &str = "Warp cannot say yes to an ACP agent's request yet — there is no surface that could show \
+     you what saying yes would allow. `deny` works, and so does cancelling the turn.";
+
+/// The ACP permission requests currently waiting on a person (T14.6).
+///
+/// The second population `agent.approvals` reports, after the CLI-agent panes
+/// this module was written for. They arrive by a completely different route — a
+/// JSON-RPC request parked mid-turn rather than a prompt drawn on a PTY — and
+/// the only thing they share is that a person is what unblocks them, which is
+/// exactly what this action is for.
+#[cfg(not(target_family = "wasm"))]
+fn acp_approvals() -> Vec<PendingApproval> {
+    crate::ai::acp_agent::registry::waiting()
+        .into_iter()
+        .map(|parked| {
+            let mut approval = PendingApproval {
+                approval_id: parked.approval_id,
+                agent: parked.agent,
+                kind: "permission".to_owned(),
+                summary: parked.title,
+                tool_name: parked.tool_name,
+                tool_input: parked.tool_input,
+                // Warp's own fact: it chose this directory from the pane and sent
+                // it in `session/new`. It is **not** a claim about whose rules
+                // governed the call — measured on T14.6, nothing on the wire says
+                // that, and the directory only decides which config the agent
+                // *looked* for.
+                cwd: parked.session_directory,
+                project: None,
+                session_id: parked.session_id,
+                tab_id: None,
+                digest: String::new(),
+                can_approve: false,
+                approve_refused_because: Some(ACP_APPROVE_NOT_YET.to_owned()),
+                options_offered: parked.options_offered,
+            };
+            approval.digest = digest_of(&approval);
+            approval
+        })
+        .collect()
+}
+
+#[cfg(target_family = "wasm")]
+fn acp_approvals() -> Vec<PendingApproval> {
+    Vec::new()
 }
 
 /// The pending approval a session represents, if it is waiting on a person.
@@ -319,6 +460,9 @@ fn approval_for(session: &CLIAgentSession, pane_id: &str, tab_id: &str) -> Optio
         // part of the question the agent asked.
         can_approve: refusal.is_none(),
         approve_refused_because: refusal,
+        // A CLI agent's prompt is drawn on its own terminal; Warp sees a status
+        // and a tool name over OSC 777 and never the options themselves.
+        options_offered: Vec::new(),
     };
     approval.digest = digest_of(&approval);
     Some(approval)
@@ -356,6 +500,15 @@ fn digest_of(approval: &PendingApproval) -> String {
             // actually send.
             None => hasher.update(u64::MAX.to_le_bytes()),
         }
+    }
+    // The options are part of the question, so they are part of what an answer
+    // is bound to: an agent that re-asks offering a different set is asking
+    // something else. Counted first, then length-prefixed like every other
+    // field, so no arrangement of names can collide with another.
+    hasher.update((approval.options_offered.len() as u64).to_le_bytes());
+    for option in &approval.options_offered {
+        hasher.update((option.len() as u64).to_le_bytes());
+        hasher.update(option.as_bytes());
     }
     format!("{:x}", hasher.finalize())
 }

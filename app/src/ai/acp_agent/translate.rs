@@ -119,6 +119,12 @@ pub(super) struct Translator {
     /// measured to vanish completely, panel and log alike. See
     /// [`Self::stream_was_opened`].
     opened: bool,
+    /// The agent's own session id, once it has named one.
+    ///
+    /// Carried so a parked permission request can be lined up with the lines
+    /// `WARP_FORK_EVENT_LOG` wrote for the same session, the way
+    /// `PendingApproval::session_id` already is for CLI agents.
+    session_id: Option<String>,
 }
 
 impl Translator {
@@ -139,7 +145,19 @@ impl Translator {
             pending: None,
             announced: Vec::new(),
             opened: false,
+            session_id: None,
         }
+    }
+
+    /// Warp's own id for this turn — unique per turn, and available from the
+    /// moment the translator is built rather than only after `session/new`.
+    pub(super) fn request_id(&self) -> String {
+        self.request_id.clone()
+    }
+
+    /// The agent's session id, once `session/new` has answered.
+    pub(super) fn session_id(&self) -> Option<String> {
+        self.session_id.clone()
     }
 
     /// Whether a `StreamInit` has been emitted, which decides how a failure has
@@ -157,6 +175,7 @@ impl Translator {
     /// session store and this module keeps no state between turns.
     pub(super) fn open(&mut self, session_id: String) -> Vec<api::ResponseEvent> {
         self.opened = true;
+        self.session_id = Some(session_id.clone());
         let mut events = vec![api::ResponseEvent {
             r#type: Some(api::response_event::Type::Init(
                 api::response_event::StreamInit {

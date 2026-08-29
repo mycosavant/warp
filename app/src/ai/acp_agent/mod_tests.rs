@@ -166,49 +166,6 @@ fn continuation_error() -> String {
     CANNOT_CONTINUE.to_owned()
 }
 
-/// Parking is off unless it is deliberately turned on, and an empty or blank
-/// value is not turning it on.
-///
-/// The spike answers `deny` either way, so this is not guarding a grant — it
-/// guards *when a turn hangs*. A stray or empty `WARP_FORK_ACP_SPIKE_PARK` that
-/// counted as "on" would park every permission request for five minutes waiting
-/// for a file nobody is going to create, and the symptom is an agent that
-/// silently stops. Same parser shape and same reason as `WARP_FORK_REMOTE_APPROVE`:
-/// a typo must not accidentally mean something.
-///
-/// Serialised by construction — it sets a process-global and this is the only
-/// test that reads it.
-#[test]
-fn parking_is_off_unless_a_path_is_actually_named() {
-    // SAFETY: single-threaded within this test; no other test reads this var.
-    unsafe {
-        std::env::remove_var("WARP_FORK_ACP_SPIKE_PARK");
-    }
-    assert!(parked_answer_path().is_none(), "unset means answer now");
-
-    for blank in ["", "   "] {
-        unsafe {
-            std::env::set_var("WARP_FORK_ACP_SPIKE_PARK", blank);
-        }
-        assert!(
-            parked_answer_path().is_none(),
-            "{blank:?} is not a file name and must not park a turn"
-        );
-    }
-
-    unsafe {
-        std::env::set_var("WARP_FORK_ACP_SPIKE_PARK", "/tmp/answer");
-    }
-    assert_eq!(
-        parked_answer_path(),
-        Some(std::path::PathBuf::from("/tmp/answer"))
-    );
-
-    unsafe {
-        std::env::remove_var("WARP_FORK_ACP_SPIKE_PARK");
-    }
-}
-
 /// An agent that is not on `PATH` produces a sentence naming the variable, the
 /// command and `PATH` — not a crate line number and an errno.
 ///

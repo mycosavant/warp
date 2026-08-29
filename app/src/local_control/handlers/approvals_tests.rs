@@ -342,3 +342,62 @@ fn an_entry_reports_the_same_refusal_the_answer_would_give() {
     );
     assert!(refusal.contains("deny"), "it has to name the way out");
 }
+
+/// The options the agent offered are part of the question, so an answer is
+/// bound to them.
+///
+/// An ACP agent sends its options typed, and a re-ask offering a *different* set
+/// is a different question — measured shapes differ even between agents, with
+/// `opencode` putting allow first and `claude-agent-acp` putting deny first. If
+/// the digest ignored them, a yes read off one option list could be replayed
+/// against another, which is the exact hazard the digest was built for one field
+/// over.
+///
+/// Constructed directly rather than through `approval_for`, because the CLI
+/// population never sees options — the prompt is drawn on someone else's PTY.
+#[test]
+fn an_answer_is_bound_to_the_options_that_were_offered() {
+    let base = PendingApproval {
+        approval_id: "req-1".to_owned(),
+        agent: "opencode".to_owned(),
+        kind: "permission".to_owned(),
+        summary: Some("echo hello".to_owned()),
+        tool_name: Some("execute".to_owned()),
+        tool_input: None,
+        cwd: None,
+        project: None,
+        session_id: None,
+        tab_id: None,
+        digest: String::new(),
+        can_approve: false,
+        approve_refused_because: None,
+        options_offered: vec!["Allow once".to_owned(), "Reject".to_owned()],
+    };
+
+    let same = PendingApproval { ..base.clone() };
+    assert_eq!(
+        digest_of(&base),
+        digest_of(&same),
+        "the same question hashes the same way"
+    );
+
+    for changed in [
+        vec![
+            "Allow once".to_owned(),
+            "Always allow".to_owned(),
+            "Reject".to_owned(),
+        ],
+        vec!["Reject".to_owned(), "Allow once".to_owned()],
+        Vec::new(),
+    ] {
+        let other = PendingApproval {
+            options_offered: changed.clone(),
+            ..base.clone()
+        };
+        assert_ne!(
+            digest_of(&base),
+            digest_of(&other),
+            "a different option list is a different question: {changed:?}"
+        );
+    }
+}
