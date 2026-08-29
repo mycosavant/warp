@@ -341,6 +341,28 @@ pub struct PendingApproval {
     pub tab_id: Option<String>,
     /// SHA-256 over the fields above, hex. Hand it back to `agent.approve`.
     pub digest: String,
+    /// Whether `agent.approve` would be accepted for *this* entry.
+    ///
+    /// **Fork (T14.6).** Deliberately below `digest` and deliberately not in it:
+    /// this is a fact about Warp's policy, not about the question the agent
+    /// asked, and folding it into the hash would change a digest without the
+    /// question having changed.
+    ///
+    /// It exists because the listing and the answer disagreed, and the console
+    /// believed the listing. `agent.approvals` reports **every** blocked session,
+    /// `agent.approve` refuses any agent outside the verified set, and
+    /// `console.js` drew its *Yes* from the paired device's action list — a
+    /// per-device fact — with no per-entry check. So a phone with remote approve
+    /// enabled showed a Yes on a `codex` or `opencode` row that could never work.
+    /// The same trap would have swallowed T14.6's ACP entries whole, since none
+    /// of them are approvable yet.
+    #[serde(default)]
+    pub can_approve: bool,
+    /// Why not, when [`Self::can_approve`] is false — in a sentence meant for a
+    /// person, because a screen showing only *No* has to say whether that is a
+    /// setting or a fault.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub approve_refused_because: Option<String>,
 }
 
 /// Result of `agent.approvals`.

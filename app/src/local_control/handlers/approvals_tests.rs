@@ -312,3 +312,33 @@ fn only_agents_whose_prompt_was_watched_can_be_answered_yes() {
     // agent cannot be answered at all.
     assert!(error.message.contains("deny"));
 }
+
+/// The listing and the answer agree about approvability, because they read the
+/// same predicate.
+///
+/// They did not, and the console believed the listing. `agent.approvals` reports
+/// every blocked session; `agent.approve` refuses agents outside
+/// [`ALLOW_VERIFIED_AGENTS`]; and nothing carried that refusal into the entry —
+/// so `console.js`, which took its *Yes* from the paired device's action list,
+/// drew one on rows the handler would always reject. Two facts about the same
+/// row, disagreeing, with the person holding the phone told the wrong one.
+///
+/// This is the assertion that keeps them from drifting again: whatever
+/// `agent.approve` would refuse, the entry says so up front and in the same
+/// words.
+#[test]
+fn an_entry_reports_the_same_refusal_the_answer_would_give() {
+    assert_eq!(
+        approve_refusal(CLIAgent::Claude),
+        None,
+        "a verified agent is approvable and must not carry a reason it is not"
+    );
+
+    let refusal = approve_refusal(CLIAgent::Codex).expect("Codex is not verified");
+    assert_eq!(
+        refusal,
+        unverified_agent(CLIAgent::Codex).message,
+        "the sentence on the entry and the sentence in the error are the same sentence"
+    );
+    assert!(refusal.contains("deny"), "it has to name the way out");
+}

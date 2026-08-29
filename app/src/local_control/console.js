@@ -361,7 +361,13 @@
     buttons.push(deny);
     deny.addEventListener('click', function () { answer(approval, DENY, buttons); });
 
-    if (can(ALLOW)) {
+    // Two independent reasons there may be no Yes, and they are not the same
+    // fact: `can(ALLOW)` is about this *device*, `approval.can_approve` is about
+    // this *entry*. Drawing the button from the device alone was wrong — the
+    // listing reports every blocked session while `agent.approve` refuses
+    // unverified agents, so a phone with remote approve enabled showed a Yes on
+    // rows the handler would always reject.
+    if (can(ALLOW) && approval.can_approve) {
       var allow = text('button', 'allow', 'Yes');
       buttons.push(allow);
       armThenRun(allow, 'Yes', function () { answer(approval, ALLOW, buttons); });
@@ -370,9 +376,13 @@
     answers.appendChild(deny);
     row.appendChild(answers);
 
-    if (!can(ALLOW)) {
-      // Said once per request rather than hidden, because a person looking at a
-      // page with only a No button needs to know that is a setting and not a bug.
+    // Said rather than hidden, because a person looking at a row with only a No
+    // button needs to know whether that is a setting or a fault. The entry's own
+    // reason wins when there is one: it is the more specific truth, and it is
+    // the one that stays true after the device is granted approve.
+    if (!approval.can_approve) {
+      row.appendChild(text('div', 'meta', approval.approve_refused_because || 'This request cannot be approved from here.'));
+    } else if (!can(ALLOW)) {
       row.appendChild(text(
         'div',
         'meta',

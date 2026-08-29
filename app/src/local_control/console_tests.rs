@@ -192,18 +192,49 @@ fn both_of_the_servers_error_shapes_are_read() {
 /// it is off.
 #[test]
 fn yes_is_drawn_only_when_the_server_says_this_device_may_say_it() {
-    for guarded in ["if (can(ALLOW)) {", "if (!can(ALLOW)) {"] {
-        assert!(
-            CONSOLE_SCRIPT.contains(guarded),
-            "the Yes button and its explanation are both behind {guarded}"
-        );
-    }
+    assert!(
+        CONSOLE_SCRIPT.contains("if (can(ALLOW) && approval.can_approve) {"),
+        "the Yes button is behind the device's capability *and* this entry's own"
+    );
+    assert!(
+        CONSOLE_SCRIPT.contains("if (!approval.can_approve) {"),
+        "a row with no Yes has to say why"
+    );
+    assert!(
+        CONSOLE_SCRIPT.contains("} else if (!can(ALLOW)) {"),
+        "…and the device-level explanation survives for entries that are approvable"
+    );
     // `No` has no such guard, and must not grow one: `agent.deny` is pairable
     // unconditionally because saying no can only ever make less happen.
     let denials = executable_lines_mentioning(CONSOLE_SCRIPT, "can(DENY)");
     assert!(
         denials.is_empty(),
         "No is unconditional; gating it would be a regression, not a hardening"
+    );
+}
+
+/// The two reasons a row has no Yes are different facts and must both be
+/// consulted — this is the bug the entry-level check was added for.
+///
+/// `can(ALLOW)` is about the paired *device*: has the machine's owner set
+/// `WARP_FORK_REMOTE_APPROVE`. `approval.can_approve` is about the *entry*:
+/// would `agent.approve` accept this one. Warp lists every blocked session but
+/// approves only verified agents, so drawing the button from the device alone
+/// put a Yes on rows the handler always rejects — the affordance lie T14.3 names,
+/// on the fork's only browser-reachable surface.
+#[test]
+fn the_device_capability_is_not_read_as_the_entrys_approvability() {
+    let device_only = executable_lines_mentioning(CONSOLE_SCRIPT, "can(ALLOW)");
+
+    for line in &device_only {
+        assert!(
+            !line.contains("var allow"),
+            "the Yes button must not be built from a line that only knows about the device: {line}"
+        );
+    }
+    assert!(
+        !CONSOLE_SCRIPT.contains("if (can(ALLOW)) {"),
+        "the device-only guard is what drew a Yes on unapprovable rows; it must not come back"
     );
 }
 

@@ -296,6 +296,7 @@ fn approval_for(session: &CLIAgentSession, pane_id: &str, tab_id: &str) -> Optio
     } else {
         (None, None)
     };
+    let refusal = approve_refusal(session.agent);
     let mut approval = PendingApproval {
         approval_id: pane_id.to_owned(),
         agent: agent_name(session.agent).to_owned(),
@@ -313,6 +314,11 @@ fn approval_for(session: &CLIAgentSession, pane_id: &str, tab_id: &str) -> Optio
         session_id: context.session_id.clone(),
         tab_id: Some(tab_id.to_owned()),
         digest: String::new(),
+        // Set before the digest is taken, and excluded from it — see
+        // `PendingApproval::can_approve`. Whether Warp would accept a yes is not
+        // part of the question the agent asked.
+        can_approve: refusal.is_none(),
+        approve_refused_because: refusal,
     };
     approval.digest = digest_of(&approval);
     Some(approval)
@@ -370,14 +376,30 @@ fn no_such_approval(approval_id: &str) -> ControlError {
     )
 }
 
-fn unverified_agent(agent: CLIAgent) -> ControlError {
-    ControlError::new(
-        ErrorCode::InsufficientPermissions,
+/// Why `agent.approve` would refuse this agent, or `None` if it would not.
+///
+/// **The single source of truth for approvability, and it exists because there
+/// were two.** The listing reported every blocked session, `agent_answer`
+/// refused unverified agents at the point of answering, and nothing carried that
+/// refusal to whatever was drawing the list — so `console.js`, which decides its
+/// *Yes* from the paired device's action list, drew one on rows that could never
+/// be approved. Both callers now read this, so they cannot drift again.
+fn approve_refusal(agent: CLIAgent) -> Option<String> {
+    (!ALLOW_VERIFIED_AGENTS.contains(&agent)).then(|| {
         format!(
             "`allow` presses Enter, and this fork has not verified what {} highlights by default; \
              answer it at the keyboard, or use `deny`, which presses Escape",
             agent.display_name()
-        ),
+        )
+    })
+}
+
+fn unverified_agent(agent: CLIAgent) -> ControlError {
+    ControlError::new(
+        ErrorCode::InsufficientPermissions,
+        approve_refusal(agent).unwrap_or_else(|| {
+            "this agent is verified; nothing should have called this".to_owned()
+        }),
     )
 }
 
