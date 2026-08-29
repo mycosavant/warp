@@ -6946,6 +6946,43 @@ Nothing has run on Windows.
       re-aim the mouse. `ARM_MS = 4000` against `setInterval(refreshApprovals,
       5000)` was the whole answer, sitting in two lines 400 apart.
 
+      **The `edit` case, measured rather than assumed.** `edit` is on
+      `acp_permission`'s allowlist, so an approvable edit whose `rawInput` named
+      only a path would let a person authorize content they never saw — the one
+      place the ticket's "the card has to render the structured diff" could have
+      been a *precondition* rather than a nicety. Captured from a live
+      `opencode` edit request:
+
+      ```json
+      {"filepath": "/tmp/t146/project/notes.txt",
+       "diff": "--- …/notes.txt\n+++ …/notes.txt\n@@ -1,3 +1,3 @@\n alpha\n-beta\n+DELTA\n gamma\n"}
+      ```
+
+      **The content is there**, as a complete unified diff, so the disclosure is
+      whole and diff rendering stays a nicety — no per-entry demotion of `edit`
+      is needed. (And had it been needed, it would have been a per-entry check
+      rather than an edit to the shared allowlist: `--approve` reads that too,
+      and its rule is "confined to this call", not "shown".) `acts_on` named the
+      **file** here rather than the directory, which is better than the `execute`
+      case. Approving it changed `beta` to `DELTA` on disk.
+
+      What is true is that a unified diff inside an escaped JSON string is
+      disclosed but barely legible on a phone. That is the argument for
+      rendering it properly in T14.7, and it is a readability argument, not a
+      consent one.
+
+      **On `PendingApproval::source` versus a label string.** The advisor
+      preferred the server to send the *label* (`cwd_label: "session"`), on the
+      grounds that a taxonomy in the protocol forces the client to map it. The
+      field shipped as `source` because it is one string either way and it is
+      independently useful — a client can finally tell the two populations apart
+      — but the objection had one concrete failure mode and it is closed: the
+      console's first draft was a two-way ternary, which would have labelled a
+      third population "working directory", confidently and wrongly. It is now a
+      lookup, and a `source` with no entry draws the bare path and no claim at
+      all. Saying less is the only safe direction when the whole point of the
+      label is that the two mean different things.
+
       **A note on the instrument rather than the code.** The release build took
       the whole WSL VM down — the guest came back at `up 1 min` with an empty
       `dmesg`, so the VM died rather than Linux OOM-killing a process. Measured

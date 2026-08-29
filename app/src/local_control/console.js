@@ -35,6 +35,18 @@
   // than waiting to be pressed by a pocket.
   var ARM_MS = 4000;
 
+  // What `cwd` is, per population, because the field means two different things.
+  //
+  // A pane entry's is the agent's own working directory, reported over OSC. An
+  // ACP entry's is the directory *Warp* chose for the session and sent in
+  // `session/new` — which is not necessarily where the call acts, and which
+  // T14.6 measured deciding whether the user's own permission rules were loaded
+  // at all. The population comes from `source`, which the server states
+  // first-hand; a key that is missing here draws no label at all rather than
+  // guess, which is what keeps a future third population from being described
+  // as something it is not.
+  var CWD_LABELS = { acp: 'session directory ', pane: 'working directory ' };
+
   // How many controls are waiting for their second tap.
   //
   // **Found by tapping Yes in a real browser (T14.6).** `renderApprovals` calls
@@ -382,11 +394,13 @@
     // rather than guessed from `tab_id` or from the shape of the id.
     if (approval.project) row.appendChild(text('div', 'meta', approval.project));
     if (approval.cwd) {
-      row.appendChild(text(
-        'div',
-        'meta',
-        (approval.source === 'acp' ? 'session directory ' : 'working directory ') + approval.cwd
-      ));
+      // An unknown `source` gets the bare path and no claim about what kind of
+      // directory it is. The first draft was a two-way ternary, which would have
+      // labelled a third population "working directory" — confidently and
+      // wrongly. Saying less is the only safe direction here, because the whole
+      // point of the label is that the two mean different things.
+      var label = CWD_LABELS[approval.source];
+      row.appendChild(text('div', 'meta', label ? label + approval.cwd : approval.cwd));
     }
 
     // Its own line, and never folded into the one above. `cwd` is where the

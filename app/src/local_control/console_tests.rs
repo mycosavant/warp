@@ -353,8 +353,17 @@ async fn the_policy_denies_by_default_and_talks_only_to_itself() {
 #[test]
 fn the_directory_is_labelled_by_the_population_the_server_named() {
     assert!(
-        CONSOLE_SCRIPT.contains("approval.source === 'acp'"),
+        CONSOLE_SCRIPT.contains("CWD_LABELS[approval.source]"),
         "the population is stated by the server, not derived on the page"
+    );
+    // **A population with no label draws none.** The first draft was a two-way
+    // ternary, which would have called a future third population's directory a
+    // "working directory" — confidently and wrongly. The whole point of the
+    // label is that the two mean different things, so an unknown one has to say
+    // less rather than pick.
+    assert!(
+        CONSOLE_SCRIPT.contains("label ? label + approval.cwd : approval.cwd"),
+        "an unrecognised source shows the bare path rather than a guessed label"
     );
     for label in ["session directory ", "working directory "] {
         assert!(
