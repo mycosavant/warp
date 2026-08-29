@@ -99,6 +99,7 @@ mod translate;
 
 use std::str::FromStr as _;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::schema::v1::{
@@ -373,7 +374,7 @@ async fn exchange(
             agent_client_protocol::on_receive_notification!(),
         )
         .on_receive_request(
-            async move |request: RequestPermissionRequest, responder, _connection| {
+            async move |request: RequestPermissionRequest, responder, connection| {
                 let (translator, tx) = &permissions;
                 // No, always, and the reason is in the module docs: nothing here
                 // can show a person what they would be agreeing to, so nothing
@@ -383,7 +384,12 @@ async fn exchange(
                 let (outcome, note) = deny(&request);
                 let event = emit(translator, |translator| translator.note(note));
                 let _ = tx.unbounded_send(Ok(event));
-                responder.respond(RequestPermissionResponse::new(outcome))
+
+                // T14.6's spike: hold the answer, then give the same one.
+                match parked_answer_path() {
+                    Some(path) => park_until_answered(&connection, responder, outcome, path),
+                    None => responder.respond(RequestPermissionResponse::new(outcome)),
+                }
             },
             agent_client_protocol::on_receive_request!(),
         )
@@ -459,6 +465,67 @@ fn spawn_failure_or(error: impl std::fmt::Display, command: &str) -> anyhow::Err
         );
     }
     anyhow!("The agent exchange failed: {error}")
+}
+
+/// The file whose appearance answers a parked permission request, if this run is
+/// a T14.6 spike.
+///
+/// **Temporary, and deliberately not a `fork.rs` predicate.** The policy seam is
+/// for things that ship; this is scaffolding for the three falsifiers in
+/// `.fork/TASKS.md` T14.6, and it is read from the environment on each request so
+/// that turning it on does not require a rebuild. Unset — which is every ordinary
+/// run — leaves the answer immediate and the behaviour exactly as T14.5 shipped.
+fn parked_answer_path() -> Option<std::path::PathBuf> {
+    let path = std::env::var("WARP_FORK_ACP_SPIKE_PARK").ok()?;
+    let path = path.trim();
+    (!path.is_empty()).then(|| std::path::PathBuf::from(path))
+}
+
+/// Answers a permission request *later*, from a task, without blocking the
+/// connection's dispatch loop.
+///
+/// # What this is testing, and what it is not
+///
+/// The consent design T14.6 settled on needs a `session/request_permission` to
+/// stay outstanding while a person is asked somewhere else — a phone, via
+/// `agent.approve`. Three things could make that impossible and none of them had
+/// been run: the connection deadlocking while a responder is held, the agent
+/// timing out its own request, and Warp abandoning a turn that goes quiet.
+///
+/// So this parks the responder for real and resolves it out-of-band, and then
+/// answers **no** — the same `outcome` the immediate path computed, carried
+/// unchanged. The mechanism is what is under test; the decision is not. Nothing
+/// here can say yes, which keeps the asymmetry intact while the surface that
+/// could justify a yes does not yet exist.
+///
+/// `Responder` is `Send` and its `send_fn` is a boxed `FnOnce`, so moving it into
+/// a task is supported rather than a trick; dropping one for an individual
+/// request sends no reply, which is why the loop below has a deadline instead of
+/// waiting forever.
+fn park_until_answered(
+    connection: &ConnectionTo<Agent>,
+    responder: agent_client_protocol::Responder<RequestPermissionResponse>,
+    outcome: RequestPermissionOutcome,
+    path: std::path::PathBuf,
+) -> Result<(), agent_client_protocol::Error> {
+    const POLL: Duration = Duration::from_millis(250);
+    const DEADLINE: Duration = Duration::from_secs(300);
+
+    connection.spawn(async move {
+        let started = std::time::Instant::now();
+        while !path.exists() {
+            if started.elapsed() > DEADLINE {
+                break;
+            }
+            async_io::Timer::after(POLL).await;
+        }
+        // The answer is the one the immediate path already decided. A failure to
+        // deliver it is the agent having gone away, which is not this task's
+        // problem to report — and returning `Err` here would take the whole
+        // connection down with it, per `ConnectionTo::spawn`'s own docs.
+        let _ = responder.respond(RequestPermissionResponse::new(outcome));
+        Ok(())
+    })
 }
 
 /// How to say no to one permission request, and what to tell the person.

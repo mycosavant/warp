@@ -6672,6 +6672,39 @@ Nothing has run on Windows.
       comes back off the shelf and *then* the "resume becomes second-best"
       argument holds.
 
+      **Run. All three survive, and two more besides.** The spike is
+      `park_until_answered`, gated on `WARP_FORK_ACP_SPIKE_PARK` naming a file
+      whose appearance is the out-of-band answer. It parks the responder in a
+      `connection.spawn` task and returns from the callback immediately, then
+      answers with **the same denial the immediate path computed** — the
+      mechanism is what is under test, the decision is not, and nothing in it can
+      say yes.
+
+      | falsifier | result |
+      |---|---|
+      | parked responder deadlocks the connection | **no** — parked 180s, then answered within 5s of the file appearing |
+      | `opencode` times out its own outstanding request | **no** — three minutes, no complaint |
+      | Warp abandons an idle turn | **no** — `in_progress` throughout, then `success` |
+      | *cancel while parked leaks the agent* | **no** — `cancelled`, agent process gone |
+      | *two conversations parked at once* | **both** resolved on one answer, both agents exited |
+
+      Nothing was written in any run, because the answer delivered was still the
+      refusal. The last two rows were not on the advisor's list and are the ones
+      a parked responder makes newly possible: a held request is a held *task*,
+      and cancellation had to be shown still reaching through it.
+
+      **And an instrument lied in the middle of it.** `pgrep -c -f "opencode acp"`
+      reported four agent processes when the true count was one — it was matching
+      the command line of the shell that had launched Warp, which contains the
+      string. Caught by listing the processes instead of counting them; the real
+      check is `ps -eo comm | grep -c '^opencode$'`. Third time this phase that a
+      command ran perfectly and answered a different question than the one asked.
+
+      **Still unverified**, and each is a real gap rather than a formality: parking
+      beyond the spike's five-minute deadline; two requests parked on **one**
+      connection (both agents here were separate processes, so a blocked dispatch
+      loop would not have shown); Windows; and any agent other than `opencode`.
+
       **And the silent-failure defect above is evidence against assuming step two
       works.** "Emit a note saying what is being asked and where to answer" is
       the same kind of event that was just measured vanishing when the turn was
