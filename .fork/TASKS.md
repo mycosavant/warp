@@ -7174,6 +7174,23 @@ Nothing has run on Windows.
       spec does not appear to require it, so the suppression has to be
       structured as "ignore until the reply" rather than "ignore the first N".
 
+      **And the agent sent to build the fork was reading the wrong rules.**
+      Asked in this repo, with no tool use, which instruction files it had been
+      given, `opencode` answered `AGENTS.md` — and nothing else. That file is
+      upstream's. It is right about architecture and testing, which is why this
+      fork keeps it, but it says never to `cargo fmt` where `CLAUDE.md` says
+      that folklore is measurably wrong, and it has never heard of
+      `CARGO_BUILD_JOBS=8` — the rule whose violation took the whole WSL VM down
+      the same morning this was measured. So the first thing self-hosting would
+      have done, following its instructions faithfully, is start an uncapped
+      release build. `opencode.json` at the repo root now carries
+      `"instructions": ["CLAUDE.md"]`; asked again, the agent quoted the capped
+      build command and `warpctrl window close` back correctly. The same file
+      carries the ask policy, so one small file both tells the agent the rules
+      and makes it ask before breaking them — and it means the goal run depends
+      on nothing outside the tree. Checked before adding it: the repo root has
+      no other `opencode.json`, no `.opencode/`, and no ignore rule for either.
+
       Two smaller findings, both recorded rather than fixed here. The ACP path
       writes **no tool events** to `WARP_FORK_EVENT_LOG` — only `session_start`
       and `stop` — while `local_agent` writes a full `tool_start`/`tool_complete`

@@ -197,6 +197,20 @@ port. That is enough to A/B any *flag*, which is most of what policy-off gets
 used for. Save the GUI run for A/B-ing behaviour. (Put any probe **after**
 `mark_initialized()` — `FeatureFlag::is_enabled` panics before it.)
 
+**The agent driving this fork reads `AGENTS.md`, not this file — unless
+`opencode.json` says otherwise.** Measured T14.7 by asking it: in this repo
+`opencode` listed `AGENTS.md` alone. So an agent sent to build the fork gets
+upstream's rules, which say never to `cargo fmt` (folklore this file corrects
+below) and which have never heard of the eight-job cap — the rule whose
+violation took the WSL VM down the same morning. `opencode.json` at the repo
+root now carries `"instructions": ["CLAUDE.md"]`, and after it the agent quoted
+both the capped build command and `warpctrl window close` back correctly. The
+same file carries `permission: {edit: "ask", bash: "ask"}`, which is what makes
+the fork's consent surface reachable at all: **Warp cannot make an agent ask.**
+The agent's own config decides *when* to ask; Warp decides only where the ask
+lands and who may answer it. Committing that config is how the repo stops
+depending on ambient settings for its own safety.
+
 **An agent in the panel works in the *pane's* directory, and a fresh pane
 starts in `$HOME`.** Not in the directory Warp was launched from. Both agent
 paths read `session_context.current_working_directory()`, so this is identical
