@@ -339,6 +339,24 @@ pub struct PendingApproval {
     pub session_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tab_id: Option<String>,
+    /// The paths this request said it would touch, as the *agent* named them.
+    ///
+    /// **Fork (T14.6).** Distinct from [`Self::cwd`], which for an ACP request
+    /// is Warp's own session directory. Measured live, a
+    /// `session/request_permission` arrives with `locations: []` while the
+    /// `tool_call_update` for the same `toolCallId` carried the path moments
+    /// earlier, so this is recovered by joining the two — and the join is not a
+    /// convenience: where a call acts is what decided, in that same session,
+    /// whether the user's own permission rules were loaded at all.
+    ///
+    /// Empty means the agent never said. A surface must show that as unknown
+    /// rather than fall back to `cwd`, because presenting Warp's directory as
+    /// the call's is exactly the certainty this fork does not have.
+    ///
+    /// Always empty for the CLI-agent population: an OSC notification carries a
+    /// tool name and a command preview, never a location list.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub acts_on: Vec<String>,
     /// SHA-256 over the fields above, hex. Hand it back to `agent.approve`.
     pub digest: String,
     /// Whether `agent.approve` would be accepted for *this* entry.

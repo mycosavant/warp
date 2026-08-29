@@ -15,6 +15,7 @@ fn request(id: &str) -> ParkedRequest {
         tool_input: Some("echo hello > greeting.txt".to_owned()),
         session_directory: Some("/tmp/project".to_owned()),
         session_id: Some("ses_1".to_owned()),
+        acts_on: vec!["/tmp/project".to_owned()],
         options_offered: vec!["Allow once".to_owned(), "Reject".to_owned()],
     }
 }

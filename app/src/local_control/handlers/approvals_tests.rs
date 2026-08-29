@@ -368,6 +368,7 @@ fn an_answer_is_bound_to_the_options_that_were_offered() {
         project: None,
         session_id: None,
         tab_id: None,
+        acts_on: vec!["/tmp/project".to_owned()],
         digest: String::new(),
         can_approve: false,
         approve_refused_because: None,
@@ -400,4 +401,68 @@ fn an_answer_is_bound_to_the_options_that_were_offered() {
             "a different option list is a different question: {changed:?}"
         );
     }
+}
+
+/// Where a call acts is part of the question too, so an answer is bound to it.
+///
+/// **This is the field with the strongest claim to being in the hash**, and it
+/// is the one that was not there. T14.6 measured that the session directory
+/// decides whether the user's own permission rules load at all — so "run
+/// `rm -rf build`" in the project and the same string somewhere else are not the
+/// same question, and a digest that ignored the paths would let a yes taken from
+/// one be replayed against the other.
+///
+/// The empty case matters on its own account: an agent that named no location is
+/// asking something less specific than one that named `/home`, and the two must
+/// not hash alike.
+#[test]
+fn an_answer_is_bound_to_where_the_call_says_it_acts() {
+    let base = PendingApproval {
+        approval_id: "req-1".to_owned(),
+        agent: "opencode".to_owned(),
+        kind: "permission".to_owned(),
+        summary: Some("rm -rf build".to_owned()),
+        tool_name: Some("execute".to_owned()),
+        tool_input: None,
+        cwd: Some("/tmp/project".to_owned()),
+        project: None,
+        session_id: None,
+        tab_id: None,
+        acts_on: vec!["/tmp/project".to_owned()],
+        digest: String::new(),
+        can_approve: false,
+        approve_refused_because: None,
+        options_offered: Vec::new(),
+    };
+
+    for changed in [
+        vec!["/home/effatha".to_owned()],
+        vec!["/tmp/project".to_owned(), "/home/effatha".to_owned()],
+        vec!["/tmp/project/".to_owned()],
+        Vec::new(),
+    ] {
+        let other = PendingApproval {
+            acts_on: changed.clone(),
+            ..base.clone()
+        };
+        assert_ne!(
+            digest_of(&base),
+            digest_of(&other),
+            "a call that acts somewhere else is a different question: {changed:?}"
+        );
+    }
+
+    // The two lists are hashed one after the other, so a name moving between
+    // them must not cancel out — the length prefixes are what stop it, and this
+    // is the arrangement that would find it if they did not.
+    let options_carry_it = PendingApproval {
+        acts_on: Vec::new(),
+        options_offered: vec!["/tmp/project".to_owned()],
+        ..base.clone()
+    };
+    assert_ne!(
+        digest_of(&base),
+        digest_of(&options_carry_it),
+        "the same string in a different list is a different question"
+    );
 }

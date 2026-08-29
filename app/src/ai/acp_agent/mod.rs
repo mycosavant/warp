@@ -396,7 +396,17 @@ async fn exchange(
                 // ends it. A denial needs no surface, which is the asymmetry
                 // T11.5 established and T14.4 measured the cost of breaking.
                 let (outcome, _) = deny(&request);
-                let (turn, session) = emit(translator, |t| (t.request_id(), t.session_id()));
+                // One lock for all three, because the locations join reads state
+                // the notification handler writes — taking the lock twice would
+                // leave a window where a `tool_call_update` lands between them.
+                let (turn, session, acts_on) = emit(translator, |t| {
+                    (
+                        t.request_id(),
+                        t.session_id(),
+                        t.locations_for(&request.tool_call.tool_call_id.to_string())
+                            .unwrap_or_default(),
+                    )
+                });
                 let parked = parked_request(
                     responder.id(),
                     &turn,
@@ -404,6 +414,7 @@ async fn exchange(
                     program,
                     directory.clone(),
                     session,
+                    acts_on,
                 );
                 let event = emit(translator, |translator| {
                     translator.note(asking_note(&parked))
@@ -496,6 +507,7 @@ fn parked_request(
     agent: &str,
     session_directory: String,
     session_id: Option<String>,
+    acts_on: Vec<String>,
 ) -> registry::ParkedRequest {
     registry::ParkedRequest {
         // Scoped to the turn, because a JSON-RPC id is only unique within one
@@ -521,6 +533,7 @@ fn parked_request(
             .map(|input| input.to_string()),
         session_directory: Some(session_directory),
         session_id,
+        acts_on,
         options_offered: request
             .options
             .iter()
@@ -545,6 +558,18 @@ fn asking_note(parked: &registry::ParkedRequest) -> String {
          device, or cancel the turn.",
         parked.approval_id
     );
+    // Said before the session directory, because it is the more specific answer
+    // to the question a person is actually asking — *where does this happen* —
+    // and because leaving it out invites reading the session directory as the
+    // answer. When the agent named nothing this stays silent: an absent claim is
+    // not a claim about `$HOME`, and filling it in from the session directory
+    // would be Warp inventing the one fact T14.6 measured as decisive.
+    if !parked.acts_on.is_empty() {
+        note.push_str(&format!(
+            "\n\nIt says this acts on `{}`.",
+            parked.acts_on.join("`, `")
+        ));
+    }
     if let Some(directory) = parked.session_directory.as_deref() {
         note.push_str(&format!(
             "\n\nThis session runs in `{directory}` — Warp chose that from the pane. \

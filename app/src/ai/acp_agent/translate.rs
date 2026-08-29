@@ -46,7 +46,8 @@
 //! not be able to authorize.
 
 use agent_client_protocol::schema::v1::{
-    ContentBlock, ContentChunk, SessionUpdate, StopReason, ToolCall, ToolCallStatus, ToolCallUpdate,
+    ContentBlock, ContentChunk, SessionUpdate, StopReason, ToolCall, ToolCallLocation,
+    ToolCallStatus, ToolCallUpdate,
 };
 use chrono::{DateTime, Utc};
 use warp_multi_agent_api as api;
@@ -110,6 +111,11 @@ pub(super) struct Translator {
     /// title is usually the useless one, and this is what lets the second be
     /// shown without showing both.
     announced: Vec<(String, String)>,
+    /// Where each tool call said it would act, by `toolCallId`.
+    ///
+    /// Accumulated from the notification stream because the permission request
+    /// for the same call does not carry it — see [`Self::note_locations`].
+    locations: Vec<(String, Vec<String>)>,
     /// Whether [`Self::open`] has run, i.e. whether Warp has seen a `StreamInit`
     /// for this turn.
     ///
@@ -144,6 +150,7 @@ impl Translator {
             started_at,
             pending: None,
             announced: Vec::new(),
+            locations: Vec::new(),
             opened: false,
             session_id: None,
         }
@@ -237,6 +244,24 @@ impl Translator {
             };
         }
 
+        // **Before the display dispatch, and deliberately not inside it.** The
+        // update that carries `locations` is a *status* update, and
+        // `tool_update_text` returns early for anything that is not `Completed`
+        // — so recording from there would drop exactly the one this exists for.
+        // Recording is not showing: nothing below reads this map to draw
+        // anything, only to answer "where does this run" for a parked request.
+        match update {
+            SessionUpdate::ToolCall(call) => {
+                self.note_locations(call.tool_call_id.to_string(), &call.locations);
+            }
+            SessionUpdate::ToolCallUpdate(update) => {
+                if let Some(locations) = &update.fields.locations {
+                    self.note_locations(update.tool_call_id.to_string(), locations);
+                }
+            }
+            _ => {}
+        }
+
         let body = match update {
             SessionUpdate::ToolCall(call) => match self.tool_text(call) {
                 Some(text) => {
@@ -324,6 +349,46 @@ impl Translator {
         }
         self.remember(id, title.to_owned());
         Some(format!("`{title}`"))
+    }
+
+    /// Records the file paths a tool call said it would touch.
+    ///
+    /// **The join T14.6 measured the need for.** A `session/request_permission`
+    /// carries a narrower view of the call than the notification stream did:
+    /// captured live, the request had `locations: []` and a `rawInput` with no
+    /// `cwd`, while the `tool_call_update` for the *same* `toolCallId` moments
+    /// earlier carried `locations: [{"path": "/tmp/t146/project"}]`. So a card
+    /// rendering the request alone shows a shell command and cannot say where it
+    /// runs — and where it runs is the fact that decided, in that same session,
+    /// whether the user's own permission rules were loaded at all.
+    ///
+    /// An empty list is not recorded over a known one: agents send `locations`
+    /// on the update that has them and omit it elsewhere, and overwriting with
+    /// nothing would lose the answer between the update and the request.
+    fn note_locations(&mut self, id: String, locations: &[ToolCallLocation]) {
+        if locations.is_empty() {
+            return;
+        }
+        let paths = locations
+            .iter()
+            .map(|location| location.path.to_string_lossy().into_owned())
+            .collect::<Vec<_>>();
+        match self.locations.iter_mut().find(|(seen, _)| seen == &id) {
+            Some(entry) => entry.1 = paths,
+            None => self.locations.push((id, paths)),
+        }
+    }
+
+    /// Where a tool call said it would act, if it ever said.
+    ///
+    /// `None` means the agent never sent a location for this call, which is a
+    /// different thing from it acting nowhere — so a caller must render the
+    /// absence as *unknown* rather than substitute a directory of Warp's own.
+    pub(super) fn locations_for(&self, tool_call_id: &str) -> Option<Vec<String>> {
+        self.locations
+            .iter()
+            .find(|(seen, _)| seen == tool_call_id)
+            .map(|(_, paths)| paths.clone())
     }
 
     fn remember(&mut self, id: String, title: String) {

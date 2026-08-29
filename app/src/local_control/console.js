@@ -355,6 +355,17 @@
     var where = [approval.project, approval.cwd].filter(Boolean);
     if (where.length) row.appendChild(text('div', 'meta', where.join(' · ')));
 
+    // Its own line, and never folded into the one above. `cwd` is where the
+    // *session* is — for an ACP request that is a directory Warp chose — while
+    // this is what the agent said *this call* touches, recovered by joining the
+    // permission request to the tool-call stream. Joining the two strings would
+    // present one as the other, and T14.6 measured that the directory a call
+    // acts in is what decides whose permission rules were consulted at all.
+    // Absent means the agent never said; nothing here fills it in from `cwd`.
+    if (approval.acts_on && approval.acts_on.length) {
+      row.appendChild(text('div', 'meta', 'acts on ' + approval.acts_on.join(', ')));
+    }
+
     var answers = text('div', 'answers');
     var buttons = [];
     var deny = text('button', 'deny', 'No');

@@ -187,14 +187,14 @@ use agent_client_protocol::schema::v1::{
 
 /// Which way the caller wants to answer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum Decision {
+pub enum Decision {
     Allow,
     Deny,
 }
 
 /// What to send back, and what to tell the person.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(super) enum Choice {
+pub enum Choice {
     /// Answer with this option id.
     Select(PermissionOptionId),
     /// Nothing could be selected. Answer `Cancelled` — still a no — and say why.
@@ -320,7 +320,7 @@ pub(super) fn is_more_than_an_answer(
 }
 
 /// Answer one permission request.
-pub(super) fn choose(request: &RequestPermissionRequest, decision: Decision) -> Choice {
+pub fn choose(request: &RequestPermissionRequest, decision: Decision) -> Choice {
     // Before the kind gate, because the kind gate is what got this wrong: the
     // option that changes the session's policy was typed `allow_once` and carried
     // no declaration, so every later test here passes it.

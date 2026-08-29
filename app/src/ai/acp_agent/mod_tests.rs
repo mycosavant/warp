@@ -197,3 +197,49 @@ fn a_failure_that_is_not_a_missing_file_does_not_blame_path() {
     assert!(!error.contains("PATH"), "got: {error}");
     assert!(error.contains("connection closed"), "got: {error}");
 }
+
+fn parked(acts_on: Vec<String>) -> registry::ParkedRequest {
+    parked_request(
+        &agent_client_protocol::schema::v1::RequestId::from(0),
+        "turn-1",
+        &request(as_opencode_sent_it()),
+        "opencode",
+        "/tmp/t146/project".to_owned(),
+        Some("ses_1".to_owned()),
+        acts_on,
+    )
+}
+
+/// The note tells a person where the call acts, when the agent said.
+///
+/// The `toolCallId` join exists for this sentence. Without it the note names a
+/// command and a session directory, and a reader has no way to tell that the
+/// second is not an answer to "where does this happen" — which on T14.6 was
+/// measured to be the question that decided whose permission rules applied.
+#[test]
+fn the_note_says_where_the_call_acts_when_the_agent_said() {
+    let note = asking_note(&parked(vec!["/tmp/t146/project/out.txt".to_owned()]));
+
+    assert!(note.contains("/tmp/t146/project/out.txt"), "got: {note}");
+    assert!(
+        note.contains("acts on"),
+        "the path is labelled as the call's, not left as a bare string: {note}"
+    );
+}
+
+/// **And says nothing at all when the agent named no location.**
+///
+/// The tempting fallback is the session directory, which is right there and
+/// usually correct. It is still Warp's own fact rather than the agent's, and
+/// presenting it as where the call acts would manufacture the one certainty this
+/// fork has repeatedly measured itself not to have. An absent claim stays absent.
+#[test]
+fn a_call_that_named_no_location_is_not_given_one() {
+    let note = asking_note(&parked(Vec::new()));
+
+    assert!(!note.contains("acts on"), "got: {note}");
+    assert!(
+        note.contains("This session runs in `/tmp/t146/project`"),
+        "the session directory is still said, as Warp's own fact: {note}"
+    );
+}

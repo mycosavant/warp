@@ -1,7 +1,16 @@
 //! Command-line interface for controlling a running local Warp app.
 mod acp;
 mod acp_consent;
-mod acp_permission;
+/// **`pub` while every sibling here is private, and that is the point.**
+///
+/// The allow rules for an ACP permission request are written once and read by
+/// both things that can say yes: the non-interactive `--approve` flag in
+/// [`acp`], and the app's consent surface in `ai::acp_agent` (T14.6). Copying
+/// them across the crate boundary would be a second place for an allow rule to
+/// be wrong, which `ai::acp_agent`'s module docs forbid at the point of use.
+/// `app` already depends on `warp_cli` unconditionally, so sharing costs a
+/// visibility keyword and no edge.
+pub mod acp_permission;
 mod commands;
 mod completions;
 mod graph;
@@ -863,30 +872,40 @@ pub enum AgentCommand {
     /// rather than taking one over.
     Reveal(AgentRevealArgs),
 
-    /// List CLI agents that are waiting on you right now.
+    /// List agents that are waiting on you right now.
     ///
     /// A different population from `agent list`, which reports Warp's own
-    /// conversations. This reports the `claude`, `codex` or `gemini` processes
-    /// running in panes — what each one wants to do, in which directory, and
-    /// the `digest` you hand back to answer it.
+    /// conversations. Two things land here: the `claude`, `codex` or `gemini`
+    /// processes running in panes, and the ACP agent
+    /// `WARP_FORK_ACP_COMMAND` names when it asks Warp for permission mid-turn.
+    /// Each entry says what is wanted, where it acts, the answers the agent
+    /// offered, whether `approve` would be accepted for it, and the `digest` you
+    /// hand back to answer it.
     ///
-    /// Empty output means nothing is blocked, not that nothing is running.
+    /// Empty output means nothing is blocked, not that nothing is running — an
+    /// agent is free to ask nothing at all.
     Approvals(TargetArgs),
 
-    /// Say yes: press Return on the agent's prompt.
+    /// Say yes.
     ///
-    /// Return takes the *highlighted* option, so this only works for agents
-    /// whose prompt this fork has actually watched — Claude Code today. It is
-    /// refused by name for the rest rather than guessed at.
+    /// **Two populations, two mechanisms, and the difference decides whether
+    /// this works.** For a CLI agent in a pane it presses Return, which takes
+    /// the *highlighted* option — a fact about someone else's TUI, so it is
+    /// refused by name for every agent whose prompt this fork has not watched
+    /// (Claude Code today). For an ACP request it selects a typed option by id,
+    /// so there is no highlight to guess at.
     ///
-    /// Whether the agent acted on the keystroke is answered by running
-    /// `agent approvals` again, not by this command's output.
+    /// Either way, read `can_approve` on the entry before assuming it will be
+    /// accepted, and confirm the agent moved by running `agent approvals` again
+    /// rather than by this command's output.
     Approve(AgentApproveArgs),
 
-    /// Say no: press Escape on the agent's prompt.
+    /// Say no.
     ///
     /// The safe direction, and the only one of the two a paired device gets
-    /// without `WARP_FORK_REMOTE_APPROVE`.
+    /// without `WARP_FORK_REMOTE_APPROVE`. Escape on a CLI agent's prompt; the
+    /// agent's own `reject_once` option on an ACP request, or a cancelled
+    /// request when it offered none — which is still a no.
     Deny(AgentApproveArgs),
 }
 

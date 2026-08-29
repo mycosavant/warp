@@ -6781,6 +6781,47 @@ Nothing has run on Windows.
       `toolCallId → last-seen fields` join, scoped to pending requests rather
       than built as a general accumulated-tool-state model.
 
+      **Increment 2 is built: the join, and the surface says where a call acts.**
+      `Translator` now records each call's `locations` by `toolCallId`, and a
+      parked request carries them as `acts_on` — through `PendingApproval`, into
+      the digest, onto the console as its own line, and into the in-conversation
+      note. `acp_permission` is `pub` (module, `Decision`, `Choice`, `choose`),
+      which is the sharing the ticket required and `acp_agent/mod.rs` demands at
+      the point of use; nothing reads it from `app` yet.
+
+      **The recording had to move out of the display path, and that is the whole
+      subtlety.** `tool_update_text` returns early for any update that is not
+      `Completed` — which is exactly the update that carries the path, since the
+      capture above shows `locations` arriving on a *pending* call and the
+      permission request arriving with `locations: []`. Recording from where the
+      title is read would therefore have dropped every location and passed its
+      tests. It happens before the display dispatch instead, and
+      `a_location_is_remembered_from_an_update_that_shows_nothing` is the seam:
+      no events emitted, path nonetheless known. A second test pins that a later
+      silent update does not erase a location already known, because agents send
+      the field on the update that has it and omit it elsewhere.
+
+      **What `acts_on` is not allowed to do is fall back to `cwd`.** The session
+      directory is right there and usually correct, which is what makes it the
+      tempting answer to "where does this run" — and it is Warp's fact, not the
+      agent's. Substituting it would manufacture the exact certainty finding 2
+      established this fork does not have. When the agent named no location the
+      note says nothing and the console draws no line;
+      `a_call_that_named_no_location_is_not_given_one` pins the silence.
+
+      `acts_on` is in the digest, and on reflection it has the strongest claim of
+      any field to being there: "run `rm -rf build`" and the same string
+      somewhere else are not the same question, and the paths are the difference.
+      Hashed as a second length-prefixed list after `options_offered`, with a
+      test that a name moving between the two lists does not cancel out.
+
+      **Not yet run against a live agent.** The two tests above are the mechanism;
+      what is unverified is that a real `opencode` permission request finds a
+      location in the map at the moment it parks — i.e. that the ordering the
+      capture showed holds every time rather than once. That is the next thing to
+      measure, and it is a precondition for trusting the line, not merely for
+      trusting the code.
+
 - [x] **T14.3** ~~**Warp cannot observe an agent's permission policy, so it must
       not imply one.**~~ **The headline is false and running it is what showed
       that — see the as-built below.** The agent declares its mode on the wire,

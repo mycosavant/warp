@@ -7,7 +7,7 @@
 
 use agent_client_protocol::schema::v1::{
     AvailableCommandsUpdate, ContentChunk, CurrentModeUpdate, TextContent, ToolCall,
-    ToolCallUpdateFields, ToolKind, UsageUpdate,
+    ToolCallLocation, ToolCallUpdateFields, ToolKind, UsageUpdate,
 };
 
 use super::*;
@@ -212,6 +212,72 @@ fn an_in_progress_update_produces_nothing() {
     )));
 
     assert!(events.is_empty());
+}
+
+/// **An update that renders nothing must still be recorded**, and this is the
+/// pairing that makes the `toolCallId` join work at all.
+///
+/// Measured on T14.6: a `session/request_permission` arrives with
+/// `locations: []`, while the `tool_call_update` carrying the path came moments
+/// earlier — *in progress*, not completed. `tool_update_text` returns early for
+/// anything that is not `Completed`, so recording from the display path would
+/// drop the one update this exists for. Showing and remembering are separate
+/// concerns and this test is the seam between them: no events, and the location
+/// nonetheless known.
+#[test]
+fn a_location_is_remembered_from_an_update_that_shows_nothing() {
+    let mut translator = translator();
+
+    let events = translator.on_update(&SessionUpdate::ToolCallUpdate(ToolCallUpdate::new(
+        "call_1",
+        ToolCallUpdateFields::new()
+            .status(ToolCallStatus::InProgress)
+            .locations(vec![ToolCallLocation::new("/tmp/t146/project")]),
+    )));
+
+    assert!(
+        events.is_empty(),
+        "an in-progress update still shows nothing"
+    );
+    assert_eq!(
+        translator.locations_for("call_1"),
+        Some(vec!["/tmp/t146/project".to_owned()]),
+        "…and the path is nonetheless available to answer 'where does this run'"
+    );
+}
+
+/// A later update that names no location does not erase one that did.
+///
+/// Agents send `locations` on the update that has them and omit the field
+/// elsewhere, so treating every silent update as "nowhere" would lose the answer
+/// in the gap between the tool call and the permission request — which is
+/// precisely the interval the join has to survive.
+#[test]
+fn a_silent_update_does_not_erase_a_location_already_known() {
+    let mut translator = translator();
+
+    translator.on_update(&SessionUpdate::ToolCallUpdate(ToolCallUpdate::new(
+        "call_1",
+        ToolCallUpdateFields::new()
+            .status(ToolCallStatus::InProgress)
+            .locations(vec![ToolCallLocation::new("/tmp/t146/project")]),
+    )));
+    translator.on_update(&SessionUpdate::ToolCallUpdate(ToolCallUpdate::new(
+        "call_1",
+        ToolCallUpdateFields::new()
+            .title("echo hello".to_owned())
+            .status(ToolCallStatus::Completed),
+    )));
+
+    assert_eq!(
+        translator.locations_for("call_1"),
+        Some(vec!["/tmp/t146/project".to_owned()])
+    );
+    assert_eq!(
+        translator.locations_for("call_2"),
+        None,
+        "a call that never named one reports nothing rather than another call's path"
+    );
 }
 
 /// The variants that are deliberately silent. `CurrentModeUpdate` is the one

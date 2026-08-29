@@ -88,6 +88,19 @@ pub(crate) struct ParkedRequest {
     /// The ACP session id, so an entry can be lined up with the lines
     /// `WARP_FORK_EVENT_LOG` wrote for the same session.
     pub session_id: Option<String>,
+    /// The paths this tool call said it would touch, recovered by joining the
+    /// permission request to the notification stream on `toolCallId`.
+    ///
+    /// **Not the same fact as [`Self::session_directory`], and the difference is
+    /// the point.** The session directory is Warp's own — it chose it and sent
+    /// it. This is the agent's claim about where *this call* acts, and measured
+    /// on T14.6 the permission request drops it: the request arrived with
+    /// `locations: []` while the `tool_call_update` for the same call, moments
+    /// earlier, carried the path. Empty means the agent never said, which a
+    /// surface must render as unknown rather than fill in from the session
+    /// directory — substituting one for the other is exactly the invented
+    /// certainty T14.3 forbids.
+    pub acts_on: Vec<String>,
     /// Every option the agent offered, by name, as **data rather than as
     /// controls**.
     ///

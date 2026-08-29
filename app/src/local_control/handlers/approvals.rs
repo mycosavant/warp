@@ -377,6 +377,10 @@ fn acp_approvals() -> Vec<PendingApproval> {
                 project: None,
                 session_id: parked.session_id,
                 tab_id: None,
+                // The agent's own claim about where this call acts, recovered by
+                // the `toolCallId` join — and left empty rather than defaulted to
+                // `cwd` when it never said one.
+                acts_on: parked.acts_on,
                 digest: String::new(),
                 can_approve: false,
                 approve_refused_because: Some(ACP_APPROVE_NOT_YET.to_owned()),
@@ -454,6 +458,9 @@ fn approval_for(session: &CLIAgentSession, pane_id: &str, tab_id: &str) -> Optio
         project: context.project.clone(),
         session_id: context.session_id.clone(),
         tab_id: Some(tab_id.to_owned()),
+        // An OSC notification carries a tool name and a command preview and
+        // never a location list, so there is nothing to report here.
+        acts_on: Vec::new(),
         digest: String::new(),
         // Set before the digest is taken, and excluded from it — see
         // `PendingApproval::can_approve`. Whether Warp would accept a yes is not
@@ -501,14 +508,20 @@ fn digest_of(approval: &PendingApproval) -> String {
             None => hasher.update(u64::MAX.to_le_bytes()),
         }
     }
-    // The options are part of the question, so they are part of what an answer
-    // is bound to: an agent that re-asks offering a different set is asking
-    // something else. Counted first, then length-prefixed like every other
-    // field, so no arrangement of names can collide with another.
-    hasher.update((approval.options_offered.len() as u64).to_le_bytes());
-    for option in &approval.options_offered {
-        hasher.update((option.len() as u64).to_le_bytes());
-        hasher.update(option.as_bytes());
+    // Two lists, hashed the same way and for the same reason as the fields
+    // above: each is part of what the person was shown, so an answer is bound to
+    // it. The options because an agent that re-asks offering a different set is
+    // asking something else; the paths because "run this" and "run this *here*"
+    // are different questions, and where a call acts is the fact T14.6 measured
+    // as deciding whether anyone was asked at all. Counted first, then each
+    // entry length-prefixed, so no arrangement of one list can collide with
+    // another.
+    for list in [&approval.options_offered, &approval.acts_on] {
+        hasher.update((list.len() as u64).to_le_bytes());
+        for entry in list {
+            hasher.update((entry.len() as u64).to_le_bytes());
+            hasher.update(entry.as_bytes());
+        }
     }
     format!("{:x}", hasher.finalize())
 }
