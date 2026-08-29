@@ -393,7 +393,18 @@
     // the one that stays true after the device is granted approve.
     if (!approval.can_approve) {
       row.appendChild(text('div', 'meta', approval.approve_refused_because || 'This request cannot be approved from here.'));
-    } else if (!can(ALLOW)) {
+    } else if (approval.approve_selects) {
+      // What a Yes actually sends, and how far it reaches. The scope sentence is
+      // the load-bearing half: Warp only ever selects a single-shot allow, so a
+      // yes here cannot widen the session's policy — and a person tapping a
+      // button on a phone has no other way to know that.
+      row.appendChild(text(
+        'div',
+        'meta',
+        'Yes selects "' + approval.approve_selects + '" — this call only, nothing after it.'
+      ));
+    }
+    if (approval.can_approve && !can(ALLOW)) {
       row.appendChild(text(
         'div',
         'meta',

@@ -201,8 +201,21 @@ fn yes_is_drawn_only_when_the_server_says_this_device_may_say_it() {
         "a row with no Yes has to say why"
     );
     assert!(
-        CONSOLE_SCRIPT.contains("} else if (!can(ALLOW)) {"),
+        CONSOLE_SCRIPT.contains("if (approval.can_approve && !can(ALLOW)) {"),
         "…and the device-level explanation survives for entries that are approvable"
+    );
+    // **Both explanations, not one.** This was an `else if`, which was right
+    // while an approvable entry had nothing else to say. Now it has: a yes names
+    // the option it sends and the scope it covers, and a device that cannot send
+    // one still has to say so. Chaining them would drop the caveat exactly where
+    // it matters — an approvable row on an unpaired-for-yes phone.
+    assert!(
+        CONSOLE_SCRIPT.contains("} else if (approval.approve_selects) {"),
+        "an approvable entry says what a Yes would select"
+    );
+    assert!(
+        CONSOLE_SCRIPT.contains("this call only, nothing after it"),
+        "…and how far it reaches, because Warp only ever selects a single-shot allow"
     );
     // `No` has no such guard, and must not grow one: `agent.deny` is pairable
     // unconditionally because saying no can only ever make less happen.

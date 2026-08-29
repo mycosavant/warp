@@ -4,7 +4,7 @@
 //! fork's standard, and the reason `warpctrl acp probe` exists (`.fork/TASKS.md`
 //! T14.5).
 
-use agent_client_protocol::schema::v1::{ToolCallUpdate, ToolCallUpdateFields};
+use agent_client_protocol::schema::v1::{ToolCallUpdate, ToolCallUpdateFields, ToolKind};
 
 use super::*;
 
@@ -75,10 +75,15 @@ fn an_agent_offering_no_reject_is_still_refused() {
     assert!(matches!(outcome, RequestPermissionOutcome::Cancelled));
 }
 
-/// **Nothing here may ever select an allow.** This is the property the whole
-/// spike rests on: there is no surface that can show a person what saying yes
-/// would permit, so nothing says yes. A future edit that "helpfully" picks an
-/// `allow_once` when no reject is offered has to come through this test.
+/// **`deny` may never select an allow**, even when an allow is the only thing on
+/// offer.
+///
+/// This used to say "nothing here says yes", which was true of the whole module
+/// until this ticket and is now true only of this function. That is the narrower
+/// and more durable claim anyway: a denial is unconditional, so the one path
+/// that must never widen anything is the one a person reached by saying *no*. A
+/// future edit that "helpfully" picks an `allow_once` when no reject is offered
+/// has to come through this test.
 #[test]
 fn no_option_that_permits_anything_is_ever_selected() {
     let permissive = vec![
@@ -198,16 +203,40 @@ fn a_failure_that_is_not_a_missing_file_does_not_blame_path() {
     assert!(error.contains("connection closed"), "got: {error}");
 }
 
-fn parked(acts_on: Vec<String>) -> registry::ParkedRequest {
+/// The shape a real request has: a kind whose effect stops at the call, and the
+/// `rawInput` that is the only place the specifics survive.
+///
+/// Transcribed from the T14.6 capture rather than invented — `request()` above
+/// is the older fixture and carries neither, which is why it is the *unapprovable*
+/// one here.
+fn an_executable_request(options: Vec<PermissionOption>) -> RequestPermissionRequest {
+    RequestPermissionRequest::new(
+        "session-1",
+        ToolCallUpdate::new(
+            "call_1",
+            ToolCallUpdateFields::new()
+                .title("echo hello > greeting.txt")
+                .kind(ToolKind::Execute)
+                .raw_input(serde_json::json!({"command": "echo hello > greeting.txt"})),
+        ),
+        options,
+    )
+}
+
+fn park_this(request: &RequestPermissionRequest, acts_on: Vec<String>) -> registry::ParkedRequest {
     parked_request(
         &agent_client_protocol::schema::v1::RequestId::from(0),
         "turn-1",
-        &request(as_opencode_sent_it()),
+        request,
         "opencode",
         "/tmp/t146/project".to_owned(),
         Some("ses_1".to_owned()),
         acts_on,
     )
+}
+
+fn parked(acts_on: Vec<String>) -> registry::ParkedRequest {
+    park_this(&an_executable_request(as_opencode_sent_it()), acts_on)
 }
 
 /// The note tells a person where the call acts, when the agent said.
@@ -241,5 +270,157 @@ fn a_call_that_named_no_location_is_not_given_one() {
     assert!(
         note.contains("This session runs in `/tmp/t146/project`"),
         "the session directory is still said, as Warp's own fact: {note}"
+    );
+}
+
+/// **Both measured agents can be approved, and both select the option they
+/// themselves typed `allow_once`.**
+///
+/// The counterpart of `both_measured_agents_are_denied_by_selecting_their_reject_option`,
+/// and it carries the same argument in the direction that can actually do
+/// damage. `opencode` puts allow first and `claude-agent-acp` puts deny first, so
+/// a yes chosen by position would have selected *"Deny"* on one of them — the
+/// T14.2 bug, mirrored. Choosing by kind means the id differs and the meaning
+/// does not.
+#[test]
+fn both_measured_agents_can_be_approved_by_the_option_they_typed_allow_once() {
+    for (options, expected) in [
+        (as_opencode_sent_it(), "once"),
+        (as_claude_sent_it(), "allow"),
+    ] {
+        let parked = park_this(&an_executable_request(options), Vec::new());
+
+        assert_eq!(
+            parked.approve_selects.as_deref(),
+            Some(expected),
+            "a yes selects the agent's own single-shot allow, by kind and never by position"
+        );
+        assert_eq!(parked.approve_refused_because, None);
+    }
+}
+
+/// **A request that shows nothing cannot be approved**, whatever its options say.
+///
+/// With no `rawInput` the only thing any surface can render is the agent's own
+/// one-line title, and approving a title is not approving a command. This is the
+/// one refusal this module adds on top of `acp_permission`'s, and it is about
+/// disclosure rather than scope: the options here are the same ones that are
+/// approvable in the test above.
+#[test]
+fn a_request_that_shows_only_a_title_cannot_be_approved() {
+    let parked = park_this(&request(as_opencode_sent_it()), Vec::new());
+
+    assert_eq!(parked.approve_selects, None);
+    let why = parked
+        .approve_refused_because
+        .expect("a refusal has a reason");
+    assert!(why.contains("no tool input"), "got: {why}");
+    assert!(
+        why.contains("deny") || why.contains("agent"),
+        "a refusal has to name the way out: {why}"
+    );
+}
+
+/// **The escalation `acp_permission` exists to refuse, refused through this
+/// path too.**
+///
+/// A `switch_mode` request asks *which policy should apply*, not whether one
+/// thing may happen — measured on `claude-agent-acp`, whose five options are the
+/// session's mode ids, typed `allow_once` and carrying no `_meta`. A binary yes
+/// cannot honestly mean "and also change the session's policy", so no option
+/// here is selectable and the entry says which kind it could not bound.
+///
+/// This is the shared rule doing its job across a crate boundary, which is the
+/// reason the module is shared rather than copied.
+#[test]
+fn a_request_to_change_the_session_policy_is_never_approvable() {
+    let switch_mode = RequestPermissionRequest::new(
+        "session-1",
+        ToolCallUpdate::new(
+            "call_1",
+            ToolCallUpdateFields::new()
+                .title("Exit plan mode?")
+                .kind(ToolKind::SwitchMode)
+                .raw_input(serde_json::json!({"mode": "default"})),
+        ),
+        vec![
+            option(
+                "default",
+                "Yes, and manually approve edits",
+                PermissionOptionKind::AllowOnce,
+            ),
+            option(
+                "plan",
+                "No, keep planning",
+                PermissionOptionKind::RejectOnce,
+            ),
+        ],
+    );
+
+    let parked = park_this(&switch_mode, Vec::new());
+
+    assert_eq!(
+        parked.approve_selects, None,
+        "an `allow_once` that sets the session's permission mode is still not single-shot"
+    );
+    let why = parked
+        .approve_refused_because
+        .expect("a refusal has a reason");
+    assert!(
+        why.contains("policy"),
+        "the reason names what is actually being asked: {why}"
+    );
+}
+
+/// An agent offering no single-shot allow at all cannot be approved, and the
+/// refusal lists what it *did* offer.
+///
+/// Without the list this is indistinguishable from a bug in Warp — the failure
+/// is agent-specific and invisible otherwise, which is the argument
+/// `no_option_reason` was written under.
+#[test]
+fn an_agent_offering_only_always_cannot_be_approved() {
+    let parked = park_this(
+        &an_executable_request(vec![
+            option("always", "Always allow", PermissionOptionKind::AllowAlways),
+            option("reject", "Reject", PermissionOptionKind::RejectOnce),
+        ]),
+        Vec::new(),
+    );
+
+    assert_eq!(parked.approve_selects, None);
+    let why = parked
+        .approve_refused_because
+        .expect("a refusal has a reason");
+    assert!(
+        why.contains("allow_always"),
+        "it names what was offered: {why}"
+    );
+}
+
+/// The note offers a yes only where there is one to offer, and says why not
+/// otherwise.
+///
+/// It read "Warp cannot say yes to this yet" on every request, which was true
+/// while nothing could be approved and went false the moment something could. A
+/// refusal whose stated reason is false is the T14.2 failure — someone concludes
+/// the feature is broken — so the sentence is derived from the frozen decision.
+#[test]
+fn the_note_offers_yes_only_when_there_is_a_yes_to_offer() {
+    let approvable = asking_note(&parked(Vec::new()));
+    assert!(
+        approvable.contains("warpctrl agent approve turn-1:0"),
+        "got: {approvable}"
+    );
+    assert!(
+        approvable.contains("this one call"),
+        "the scope of the yes is stated, not left to be assumed: {approvable}"
+    );
+
+    let refused = asking_note(&park_this(&request(as_opencode_sent_it()), Vec::new()));
+    assert!(!refused.contains("agent approve"), "got: {refused}");
+    assert!(
+        refused.contains("no tool input"),
+        "the entry's own reason, not a generic one: {refused}"
     );
 }

@@ -381,6 +381,19 @@ pub struct PendingApproval {
     /// setting or a fault.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub approve_refused_because: Option<String>,
+    /// The option id a yes would send back, for an ACP request that has one.
+    ///
+    /// **Fork (T14.6), and unlike its two neighbours this one *is* in the
+    /// digest.** They describe Warp's policy; this describes the answer itself,
+    /// so it is part of what a person is agreeing to and an answer has to be
+    /// bound to it. Binding the id rather than the option's name is deliberate:
+    /// the name is what was read and is already in [`Self::options_offered`],
+    /// while the id is what actually goes on the wire.
+    ///
+    /// `None` for every CLI-agent entry — that path presses a key, and a key has
+    /// no id — and for any ACP request Warp will not approve.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub approve_selects: Option<String>,
     /// Every answer the agent itself offered, by name.
     ///
     /// **Fork (T14.6).** Data, not controls. An ACP agent sends its options

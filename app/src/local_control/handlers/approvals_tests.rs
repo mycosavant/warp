@@ -372,6 +372,7 @@ fn an_answer_is_bound_to_the_options_that_were_offered() {
         digest: String::new(),
         can_approve: false,
         approve_refused_because: None,
+        approve_selects: None,
         options_offered: vec!["Allow once".to_owned(), "Reject".to_owned()],
     };
 
@@ -432,6 +433,7 @@ fn an_answer_is_bound_to_where_the_call_says_it_acts() {
         digest: String::new(),
         can_approve: false,
         approve_refused_because: None,
+        approve_selects: None,
         options_offered: Vec::new(),
     };
 
@@ -464,5 +466,61 @@ fn an_answer_is_bound_to_where_the_call_says_it_acts() {
         digest_of(&base),
         digest_of(&options_carry_it),
         "the same string in a different list is a different question"
+    );
+}
+
+/// The option a yes would select is part of what is being agreed to, so an
+/// answer is bound to it.
+///
+/// **The line this draws is between two neighbouring fields.** `can_approve` and
+/// `approve_refused_because` are Warp's *policy* and are deliberately outside
+/// the hash — folding them in would move a digest without the agent's question
+/// having changed. `approve_selects` is the *answer*: the id that goes back on
+/// the wire. An entry that would send a different option is a different thing to
+/// agree to, so a digest taken before that changed must not still fit.
+#[test]
+fn an_answer_is_bound_to_the_option_a_yes_would_select() {
+    let base = PendingApproval {
+        approval_id: "req-1".to_owned(),
+        agent: "opencode".to_owned(),
+        kind: "permission".to_owned(),
+        summary: Some("echo hello".to_owned()),
+        tool_name: Some("execute".to_owned()),
+        tool_input: Some("{\"command\":\"echo hello\"}".to_owned()),
+        cwd: Some("/tmp/project".to_owned()),
+        project: None,
+        session_id: None,
+        tab_id: None,
+        acts_on: Vec::new(),
+        digest: String::new(),
+        can_approve: true,
+        approve_refused_because: None,
+        approve_selects: Some("once".to_owned()),
+        options_offered: vec!["Allow once".to_owned(), "Reject".to_owned()],
+    };
+
+    for changed in [Some("always".to_owned()), Some("reject".to_owned()), None] {
+        let other = PendingApproval {
+            approve_selects: changed.clone(),
+            ..base.clone()
+        };
+        assert_ne!(
+            digest_of(&base),
+            digest_of(&other),
+            "a yes that would send a different option is a different agreement: {changed:?}"
+        );
+    }
+
+    // …and the two policy fields stay out, because the agent's question is
+    // unchanged when only Warp's willingness to answer it moves.
+    let policy_only = PendingApproval {
+        can_approve: false,
+        approve_refused_because: Some("some reason".to_owned()),
+        ..base.clone()
+    };
+    assert_eq!(
+        digest_of(&base),
+        digest_of(&policy_only),
+        "whether Warp would accept a yes is not part of what the agent asked"
     );
 }

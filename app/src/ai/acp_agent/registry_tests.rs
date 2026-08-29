@@ -17,6 +17,8 @@ fn request(id: &str) -> ParkedRequest {
         session_id: Some("ses_1".to_owned()),
         acts_on: vec!["/tmp/project".to_owned()],
         options_offered: vec!["Allow once".to_owned(), "Reject".to_owned()],
+        approve_selects: Some("once".to_owned()),
+        approve_refused_because: None,
     }
 }
 

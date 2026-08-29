@@ -294,16 +294,28 @@ fn answer_acp(
         ));
     }
 
-    if decision == Decision::Allow {
+    // **The entry's own refusal, not the population's.** This used to reject
+    // every ACP request with one sentence; the sentence has since gone false for
+    // the requests `acp_permission` can bound to a single call. `can_approve` is
+    // frozen at park time from that same decision, so what is refused here and
+    // what the listing showed cannot disagree — which is the bug this module
+    // already fixed once, one population over.
+    if decision == Decision::Allow && !current.can_approve {
         return Err(ControlError::new(
             ErrorCode::InsufficientPermissions,
-            ACP_APPROVE_NOT_YET.to_owned(),
+            current
+                .approve_refused_because
+                .clone()
+                .unwrap_or_else(|| ACP_APPROVE_NOT_APPROVABLE.to_owned()),
         ));
     }
 
     if !crate::ai::acp_agent::registry::answer(
         &params.approval_id,
-        crate::ai::acp_agent::registry::Decision::Deny,
+        match decision {
+            Decision::Allow => crate::ai::acp_agent::registry::Decision::Allow,
+            Decision::Deny => crate::ai::acp_agent::registry::Decision::Deny,
+        },
     ) {
         // Between the read above and here the turn ended — cancelled, or the
         // agent went away. The question is gone rather than unanswered.
@@ -317,12 +329,20 @@ fn answer_acp(
             approval_id: params.approval_id.clone(),
             decision: decision.as_str().to_owned(),
             agent: current.agent,
-            // **Not a keystroke.** The CLI path presses Escape because that is
-            // all it can do; this one selects the agent's own `reject_once`
-            // option by id, which is a typed answer rather than a guess about
-            // someone else's TUI. Reported as what it is, because a result that
-            // said "escape" would be describing a mechanism that was not used.
-            keystroke: "reject_once".to_owned(),
+            // **Not a keystroke — the option id that actually went back to the
+            // agent.** The CLI path presses a key because pressing a key is all
+            // it can do, and reports *which* key for the same reason this
+            // reports which option: a result claiming `approved: true` would
+            // assert an effect this process cannot observe. Here the answer is
+            // typed and carries an id, so naming it is both more precise and
+            // more honest than naming a keystroke that was never sent.
+            keystroke: match decision {
+                Decision::Allow => current
+                    .approve_selects
+                    .clone()
+                    .unwrap_or_else(|| "allow".to_owned()),
+                Decision::Deny => "reject_once".to_owned(),
+            },
         })
         .map_err(|error| ControlError::new(ErrorCode::Internal, error.to_string()))?,
     )?;
@@ -346,8 +366,16 @@ fn answer_acp(
 /// else's TUI*, which ACP does not have — its options are typed and carry ids.
 /// This one is about there being no surface that could show what a yes would
 /// allow, which is what T14.6 is for.
-const ACP_APPROVE_NOT_YET: &str = "Warp cannot say yes to an ACP agent's request yet — there is no surface that could show \
-     you what saying yes would allow. `deny` works, and so does cancelling the turn.";
+/// The fallback sentence for an unapprovable ACP entry that carries no reason of
+/// its own.
+///
+/// Should be unreachable: `acp_permission` writes a reason for every refusal it
+/// makes, and the one refusal this fork adds writes its own. It exists because
+/// an empty explanation on a screen showing only *No* is worse than a vague one
+/// — the person cannot tell a setting from a fault, which is the whole argument
+/// for `approve_refused_because` existing.
+const ACP_APPROVE_NOT_APPROVABLE: &str =
+    "Warp will not say yes to this request. `deny` works, and so does cancelling the turn.";
 
 /// The ACP permission requests currently waiting on a person (T14.6).
 ///
@@ -382,8 +410,11 @@ fn acp_approvals() -> Vec<PendingApproval> {
                 // `cwd` when it never said one.
                 acts_on: parked.acts_on,
                 digest: String::new(),
-                can_approve: false,
-                approve_refused_because: Some(ACP_APPROVE_NOT_YET.to_owned()),
+                // Read off the decision `acp_permission` froze at park time, so
+                // the listing cannot promise a yes the answer path would refuse.
+                can_approve: parked.approve_selects.is_some(),
+                approve_selects: parked.approve_selects,
+                approve_refused_because: parked.approve_refused_because,
                 options_offered: parked.options_offered,
             };
             approval.digest = digest_of(&approval);
@@ -467,6 +498,8 @@ fn approval_for(session: &CLIAgentSession, pane_id: &str, tab_id: &str) -> Optio
         // part of the question the agent asked.
         can_approve: refusal.is_none(),
         approve_refused_because: refusal,
+        // A keystroke has no option id; this path presses Return.
+        approve_selects: None,
         // A CLI agent's prompt is drawn on its own terminal; Warp sees a status
         // and a tool name over OSC 777 and never the options themselves.
         options_offered: Vec::new(),
@@ -497,6 +530,14 @@ fn digest_of(approval: &PendingApproval) -> String {
         approval.cwd.as_deref(),
         approval.project.as_deref(),
         approval.session_id.as_deref(),
+        // **In the hash, unlike its neighbours `can_approve` and
+        // `approve_refused_because`**, and what separates them is what the field
+        // describes. Those two are Warp's policy — folding them in would move a
+        // digest without the agent's question having changed. This is the
+        // *answer*: the id a yes sends back. An entry that would select a
+        // different option is a different thing to agree to, so a digest taken
+        // before that changed must not still fit.
+        approval.approve_selects.as_deref(),
     ] {
         match field {
             Some(value) => {

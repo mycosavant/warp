@@ -25,14 +25,34 @@
 //! [`Parked`]'s `Drop` takes the entry out of the map on the way past. Nothing
 //! has to notice that a turn ended.
 //!
-//! # What is deliberately not here
+//! # Yes, and what it is allowed to mean
 //!
-//! **Yes.** Every entry reports `can_approve: false`, and `agent.approve` refuses
-//! this population by name. Saying yes needs the shared `acp_permission::choose`
-//! and a surface that can show what an option would allow; saying no needs
-//! neither, because refusing is unconditional (T14.5) and a denial can only ever
-//! make less happen. Shipping the half that is honest is not a shortcut — it is
-//! the asymmetry this fork runs on.
+//! Increments 1 and 2 shipped deny-only, with every entry refused by one
+//! sentence: *"there is no surface that could show you what saying yes would
+//! allow."* That sentence has since gone **false**, and a refusal whose stated
+//! reason is false is the T14.2 failure — a person concluding the feature is
+//! broken. Both surfaces now render the tool call: the title, the kind, the
+//! agent's verbatim `rawInput`, the options it offered, and — since the
+//! `toolCallId` join — where it says it acts. `acp_permission`'s own rule is
+//! that *a single-shot option declares only the tool call, which every surface
+//! renders*, so for those entries the condition is met.
+//!
+//! So the gate is **per entry, not per population**, and it is
+//! [`ParkedRequest::approve_selects`]: the shared `acp_permission::choose` picks
+//! the option, or writes down why it would not.
+//!
+//! What that still refuses is unchanged, and none of it is about how attentive
+//! the person is. `choose` declines a `switch_mode` request, an unrecognised or
+//! absent tool kind, and any option declaring a policy change — because a
+//! **binary** yes cannot honestly mean "and also change the session's policy",
+//! whoever is looking at it. A surface that could offer those would have to
+//! render each option separately; that is a different control and a later
+//! ticket. One more condition is added here rather than there: an entry whose
+//! `tool_input` is absent shows only the agent's own one-line summary, and
+//! approving a summary is not approving a tool call.
+//!
+//! The asymmetry the fork runs on survives intact — a **no** needs none of this
+//! and is still unconditional, because declining can only ever make less happen.
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -40,9 +60,16 @@ use std::sync::{LazyLock, Mutex, MutexGuard};
 
 use futures::channel::oneshot;
 
-/// What a person decided. Only one variant today — see the module docs.
+/// What a person decided.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Decision {
+    /// Select the option [`ParkedRequest::approve_selects`] names.
+    ///
+    /// **Only meaningful when that field is `Some`**, and a waiter handed this
+    /// for an entry without one denies instead. The control plane refuses such
+    /// an answer before it gets here; the fallback exists because "fail closed"
+    /// has to be true at both ends, not just at the one being looked at.
+    Allow,
     Deny,
 }
 
@@ -111,6 +138,27 @@ pub(crate) struct ParkedRequest {
     /// sends — cannot be shown to a person in terms of what it would widen,
     /// because there is nothing to show but the name.
     pub options_offered: Vec<String>,
+    /// The option id a **yes** would select, or `None` if this entry cannot be
+    /// approved.
+    ///
+    /// **Decided once, here, while the real `RequestPermissionRequest` is still
+    /// in hand** — by the shared `acp_permission::choose`, plus a check that the
+    /// entry actually shows what the call is. Freezing it is what makes the
+    /// listing's `can_approve` and the answer path the *same* computation rather
+    /// than two that agree today: T14.6's own console bug was a listing and an
+    /// answer disagreeing about approvability, and this is that shape removed at
+    /// the root rather than patched at both ends.
+    ///
+    /// It carries the wire id and not the option's name deliberately. The name
+    /// is what a person reads and is already in [`Self::options_offered`]; the
+    /// id is what actually goes back to the agent, so it is the thing an answer
+    /// has to be bound to.
+    pub approve_selects: Option<String>,
+    /// Why a yes is refused, when [`Self::approve_selects`] is `None`.
+    ///
+    /// Written by `acp_permission` for a person to read — it names the tool kind
+    /// it could not bound, or lists what the agent offered instead.
+    pub approve_refused_because: Option<String>,
 }
 
 /// A parked request, and the way to wake it.

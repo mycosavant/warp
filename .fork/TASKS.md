@@ -6852,6 +6852,60 @@ Nothing has run on Windows.
       disappears; `greeting.txt` was never written; zero `opencode` processes
       left (checked with `ps -eo comm | grep -c '^opencode$'`, not `pgrep -f`).
 
+      **Increment 3: Warp can say yes, and it was run before it was believed.**
+      `acp_permission::choose` is called once at park time, while the real
+      request is in hand; the option id it returns is frozen onto the entry as
+      `approve_selects`, and `can_approve` is simply whether one exists. So the
+      listing's promise and the answer path are the *same* computation rather
+      than two that agree today — which is the console bug of increment 1
+      removed at the root instead of patched at both ends.
+
+      Measured live, and this is the first yes in the fork's history:
+
+      ```
+      $ warpctrl agent approvals
+        summary "echo hello > greeting.txt"   tool_name "execute"
+        acts_on ["/tmp/t146/project"]
+        can_approve true   approve_selects "once"
+      $ warpctrl agent approve 775d60dc-…:0 --digest 332549eb…
+        decision "allow"   keystroke "once"
+      $ cat greeting.txt
+        hello                       ← the agent ran it; nothing else did
+      ```
+
+      The turn then reached `status: "success"`, `is_complete: true`, with the
+      agent's own "Done." in the transcript. A stale digest is refused for a
+      *yes* exactly as for a no, and refused first, so a caller holding an old
+      answer is not told about approvability instead.
+
+      **And the sentence the note makes — "this call only, nothing after it" —
+      was measured rather than asserted.** One turn, two commands: Warp approved
+      `echo one > a.txt` with `once`, and the agent **asked again** for
+      `echo two > b.txt` rather than proceeding. Two parks, two answers, two
+      files. That is the whole argument for refusing `allow_always` doing its
+      job on the wire, and it is the claim a person tapping *Yes* on a phone is
+      relying on.
+
+      What stays refused is unchanged and is decided per entry, never per
+      population: a `switch_mode` request, a tool kind this build cannot bound,
+      an option declaring a policy change — all because a **binary** yes cannot
+      honestly carry them, whoever is looking — plus one rule added here, that a
+      request carrying no `rawInput` shows only the agent's own one-line title,
+      and approving a title is not approving a command.
+
+      `ACP_APPROVE_NOT_YET` is gone, and its removal is the point rather than a
+      tidy-up: its sentence was *"there is no surface that could show you what
+      saying yes would allow"*, which was true when written and went false the
+      moment the surfaces rendered the call. A refusal whose stated reason is
+      false is the T14.2 failure — a person concludes the feature is broken.
+
+      **Still unverified**: every refusal above is pinned by a test and none has
+      been seen on the wire, because `opencode` never sends a `switch_mode` and
+      the fixture requests are transcribed rather than captured. The honest
+      statement is that the *allow* path is measured and the *refusal* path is
+      argued. A run against `claude-agent-acp` in plan mode is what would settle
+      it, and that is the same "second agent" item already outstanding.
+
       **A note on the instrument rather than the code.** The release build took
       the whole WSL VM down — the guest came back at `up 1 min` with an empty
       `dmesg`, so the VM died rather than Linux OOM-killing a process. Measured

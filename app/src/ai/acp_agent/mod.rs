@@ -21,10 +21,20 @@
 //! path is for the other agents — which is also why it was not allowed to be
 //! built until one of them had been run (T14.5's gate: `opencode` 1.18.25).
 //!
-//! # A spike, on the same terms the last one had
+//! # A permission request waits for a person (T14.6)
 //!
-//! **Every permission request is denied**, and the denial is said in the
-//! conversation rather than swallowed.
+//! It is listed by `agent.approvals`, said in the conversation rather than
+//! swallowed, and answered by `agent.deny` — or, for the requests
+//! `acp_permission` can bound to a single call, by `agent.approve`. The
+//! responder is parked on the connection's own task and there is **no
+//! deadline**: no answer is not no.
+//!
+//! Which requests those are is decided once, at park time, by
+//! [`approvable`] — the shared rule, not a copy of it. What stays refused is
+//! anything a *binary* yes cannot honestly carry: a `switch_mode` request, a
+//! tool kind this build cannot bound, an option declaring a policy change, and
+//! a request carrying no `rawInput`, since approving a one-line title is not
+//! approving a command.
 //!
 //! # This is not read-only, and calling it that was measured false
 //!
@@ -49,21 +59,17 @@
 //! machine. Claiming otherwise would be `local_agent/tools.rs:17-20`'s stated
 //! nightmare — *"worse than no allowlist, because it reads as a guarantee."*
 //!
-//! That the denial itself is the shape `local_agent` shipped in still holds — its
-//! module docs say *"Claude's own permission prompts govern,
-//! and in `-p` mode that means read-only tools work and anything needing
-//! approval is denied. Wiring Warp's tool execution back in ... is the next step
-//! rather than part of the spike."* Answering **yes** needs a surface that can
-//! show what is being agreed to, and Warp has none yet; T14.4 measured what goes
-//! wrong when something says yes without one. That surface is T14.6.
+//! **And a yes makes that sharper rather than softer.** Warp can now select a
+//! single-shot allow, which permits exactly the one call a person was shown —
+//! and permits nothing about the calls the agent never asks about, which is
+//! still most of them. The number of unasked calls is not changed by the answer
+//! to an asked one.
 //!
-//! Because this only ever says **no**, it needs none of
-//! `warp_cli`'s `acp_permission` — that module's allowlist, its `switch_mode`
-//! rule and its `_meta` reading all guard the *allow* side, and T14.4 established
-//! that refusing is unconditional: declining leaves the session with the policy
-//! it already had. **When T14.6 can say yes, that module must be shared rather
-//! than reimplemented here**, because a second copy of an allow rule is a second
-//! place for it to be wrong.
+//! `warp_cli`'s `acp_permission` is what decides, and it is **shared rather than
+//! reimplemented**: its allowlist, its `switch_mode` rule and its `_meta`
+//! reading all guard the allow side, and a second copy of an allow rule is a
+//! second place for it to be wrong. That constraint was written here while this
+//! module still said no to everything, and is now discharged by [`approvable`].
 //!
 //! # Also not done
 //!
@@ -103,9 +109,9 @@ use std::sync::{Arc, Mutex};
 
 use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::schema::v1::{
-    ContentBlock, InitializeRequest, NewSessionRequest, PermissionOption, PermissionOptionKind,
-    PromptRequest, RequestPermissionOutcome, RequestPermissionRequest, RequestPermissionResponse,
-    SelectedPermissionOutcome, SessionNotification, TextContent,
+    ContentBlock, InitializeRequest, NewSessionRequest, PermissionOption, PermissionOptionId,
+    PermissionOptionKind, PromptRequest, RequestPermissionOutcome, RequestPermissionRequest,
+    RequestPermissionResponse, SelectedPermissionOutcome, SessionNotification, TextContent,
 };
 use agent_client_protocol::{AcpAgent, Agent, ConnectionTo};
 use anyhow::{Context as _, anyhow};
@@ -113,6 +119,7 @@ use chrono::Utc;
 use futures::channel::{mpsc, oneshot};
 use futures::stream::{self, Stream, StreamExt as _};
 use uuid::Uuid;
+use warp_cli::local_control::acp_permission;
 
 use self::translate::Translator;
 use crate::ai::agent::AIAgentInput;
@@ -509,6 +516,15 @@ fn parked_request(
     session_id: Option<String>,
     acts_on: Vec<String>,
 ) -> registry::ParkedRequest {
+    // Carried verbatim rather than summarised. The measured payload puts the
+    // command here and *not* in `locations`, so this is where the specifics are.
+    let tool_input = request
+        .tool_call
+        .fields
+        .raw_input
+        .as_ref()
+        .map(|input| input.to_string());
+    let (approve_selects, approve_refused_because) = approvable(request, tool_input.is_some());
     registry::ParkedRequest {
         // Scoped to the turn, because a JSON-RPC id is only unique within one
         // connection — measured, two concurrent agents both opened with `0`.
@@ -521,16 +537,7 @@ fn parked_request(
             .kind
             .and_then(|kind| serde_json::to_value(kind).ok())
             .and_then(|kind| kind.as_str().map(str::to_owned)),
-        // Carried verbatim rather than summarised. The measured payload puts the
-        // command here and *not* in `locations`, which arrives empty on a
-        // permission request even when the preceding `tool_call_update` had a
-        // path — so this is the only place the specifics survive.
-        tool_input: request
-            .tool_call
-            .fields
-            .raw_input
-            .as_ref()
-            .map(|input| input.to_string()),
+        tool_input,
         session_directory: Some(session_directory),
         session_id,
         acts_on,
@@ -539,6 +546,48 @@ fn parked_request(
             .iter()
             .map(|option| option.name.clone())
             .collect(),
+        approve_selects,
+        approve_refused_because,
+    }
+}
+
+/// What a **yes** on this request would select, or why it is refused.
+///
+/// Decided here, once, while the real request is in hand — see
+/// [`registry::ParkedRequest::approve_selects`] for why freezing it matters.
+///
+/// **Two gates, and only one of them is this fork's own.** The first is the
+/// shared `acp_permission::choose`, which is `warp_cli`'s and is reused rather
+/// than reimplemented — a second copy of an allow rule is a second place for it
+/// to be wrong. It declines a `switch_mode` request, a tool kind this build
+/// cannot bound to one call, and any option declaring a policy change, all
+/// because a *binary* yes cannot honestly carry those. It also writes the
+/// refusal sentence, which is why none is written here.
+///
+/// The second gate is local and is about disclosure rather than about scope: an
+/// entry with no `rawInput` shows a person the agent's own one-line title and
+/// nothing else, and approving a title is not approving a tool call. The module
+/// rule this enforces is `acp_permission`'s — *an option may only be selected by
+/// a surface capable of showing what that option declares* — applied to the one
+/// case where the surface has nothing to show.
+fn approvable(
+    request: &RequestPermissionRequest,
+    shows_the_call: bool,
+) -> (Option<String>, Option<String>) {
+    if !shows_the_call {
+        return (
+            None,
+            Some(
+                "this request carries no tool input, so the only thing Warp could show you is \
+                 the agent's own one-line summary — and approving a summary is not approving a \
+                 command. Answer it at the agent, or deny."
+                    .to_owned(),
+            ),
+        );
+    }
+    match acp_permission::choose(request, acp_permission::Decision::Allow) {
+        acp_permission::Choice::Select(option_id) => (Some(option_id.to_string()), None),
+        acp_permission::Choice::Cancel { reason } => (None, Some(reason)),
     }
 }
 
@@ -551,12 +600,34 @@ fn parked_request(
 /// agent's defaults did".
 fn asking_note(parked: &registry::ParkedRequest) -> String {
     let what = parked.title.as_deref().unwrap_or("a request to act");
+    let id = &parked.approval_id;
+    // **Per entry, not per population.** This said "Warp cannot say yes to this
+    // yet" on every request, which was true when nothing could be approved and
+    // became false the moment something could. A refusal whose stated reason has
+    // gone false is the T14.2 failure — a person concluding the feature is
+    // broken — so the sentence is derived from the frozen decision rather than
+    // asserted.
+    let how = match &parked.approve_selects {
+        Some(_) => format!(
+            "Answer yes with `warpctrl agent approve {id}` or no with \
+             `warpctrl agent deny {id}` — both take the `digest` that \
+             `warpctrl agent approvals` reports. A yes covers this one call and \
+             nothing after it."
+        ),
+        None => {
+            let why = parked
+                .approve_refused_because
+                .as_deref()
+                .unwrap_or("Warp cannot say yes to this one");
+            format!(
+                "Warp will not say yes to this: {why} \
+                 Answer no with `warpctrl agent deny {id}`, or cancel the turn."
+            )
+        }
+    };
     let mut note = format!(
-        "The agent is waiting for permission: **{what}**. \
-         Warp cannot say yes to this yet — there is no surface that could show you what \
-         saying yes would allow. Answer no with `warpctrl agent deny {}`, or from a paired \
-         device, or cancel the turn.",
-        parked.approval_id
+        "The agent is waiting for permission: **{what}**. {how} A paired device can \
+                 answer too, though *yes* only travels there when WARP_FORK_REMOTE_APPROVE is set."
     );
     // Said before the session directory, because it is the more specific answer
     // to the question a person is actually asking — *where does this happen* —
@@ -600,19 +671,34 @@ fn asking_note(parked: &registry::ParkedRequest) -> String {
 fn wait_for_a_person(
     connection: &ConnectionTo<Agent>,
     responder: agent_client_protocol::Responder<RequestPermissionResponse>,
-    outcome: RequestPermissionOutcome,
+    denial: RequestPermissionOutcome,
     request: registry::ParkedRequest,
 ) -> Result<(), agent_client_protocol::Error> {
+    // Resolved before the request is handed to the registry, because after that
+    // it is the map's and a caller could already be answering it.
+    let allowed = request.approve_selects.clone();
     let (waiting, answer) = registry::park(request);
 
     connection.spawn(async move {
         // Held for exactly as long as the wait, so a turn that is cancelled stops
         // advertising a question nobody can answer any more.
         let _waiting = waiting;
-        // Both arms are the same answer today: `Ok(Deny)` is a person saying no,
-        // and `Err` is the entry having gone without one, which can only happen
-        // if the turn is already ending. There is no arm that says yes.
-        let _ = answer.await;
+        // **Every path that is not an explicit, permitted yes is a no**, and the
+        // arms are spelled out rather than collapsed so that stays readable.
+        // `Err` is the entry having gone without an answer, which can only happen
+        // if the turn is already ending. `Ok(Allow)` on an entry with nothing to
+        // select cannot be reached — the control plane refuses it by the same
+        // frozen field — and denies here anyway, because failing closed has to be
+        // true at both ends and not only at the one being looked at.
+        let outcome = match answer.await {
+            Ok(registry::Decision::Allow) => match allowed {
+                Some(option_id) => RequestPermissionOutcome::Selected(
+                    SelectedPermissionOutcome::new(PermissionOptionId::from(option_id)),
+                ),
+                None => denial,
+            },
+            Ok(registry::Decision::Deny) | Err(_) => denial,
+        };
         // A failure to deliver is the agent having gone away, which is not this
         // task's problem to report — and returning `Err` would take the whole
         // connection down with it, per `ConnectionTo::spawn`'s own docs.
@@ -630,9 +716,8 @@ fn wait_for_a_person(
 /// no yes here to withhold.
 fn deny(request: &RequestPermissionRequest) -> (RequestPermissionOutcome, String) {
     let note = format!(
-        "Warp denied this: **{}**. This build can only say no to an agent's permission \
-         requests — there is no surface yet that could show you what saying yes would allow. \
-         Run the agent directly if you need it to make changes.",
+        "Warp denied this: **{}**. Run the agent directly if you need it to act without being \
+         asked each time.",
         request
             .tool_call
             .fields
