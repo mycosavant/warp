@@ -6451,7 +6451,11 @@ shell and the app spawns from a GUI process whose PATH may lack npm/nvm shims.
 No GUI screenshot was taken; turns were driven and read through `warpctrl`.
 Nothing has run on Windows.
 
-- [ ] **T14.6** Saying yes: the consent surface. What is now paid for:
+- [x] **T14.6** Saying yes: the consent surface. **Done 2026-08-29** — deny, then
+      the `toolCallId` join, then a working yes, verified against two agents and
+      photographed in a browser. Session resume, token streaming and diff
+      rendering split to **T14.7** on an advisor's finding that none of them is a
+      precondition of approve. What was paid for:
       **`acp_permission` moves out of `warp_cli` and is shared**, not copied —
       `acp_agent/mod.rs` says so at the point of use.
       **The approval card is the surface**, not a mode picker (T14.4).
@@ -7059,6 +7063,39 @@ Nothing has run on Windows.
       direction. There was no `.wslconfig` at all, so the 32 GB the VM had was
       WSL2's default of half the host's 64 GB; one is now written with more
       headroom and real swap, taking effect at the next `wsl --shutdown`.
+
+- [ ] **T14.7** **Self-hosting: build the fork from inside the fork.** The
+      weekend goal, charter in `.fork/GOAL.md`, target Monday 2026-09-01.
+
+      **Done means a run, not a diff**: in Warp's own agent panel, in this repo,
+      a *multi-turn* conversation that makes a real change to the fork, asks
+      permission for it, is answered, and whose next turn remembers what it did.
+
+      **Phase 0 is a measurement and it gates everything else.** Two paths serve
+      the panel and on paper each has exactly the other's blocker —
+      `local_agent` has `--resume` and no approval path it can ever reach
+      (`approvals.rs` says so: it never emits a `ToolCall`), `acp_agent` has the
+      T14.6 consent surface and refuses a second turn outright. **That table is
+      read, not run.** Drive a real development task through each, not a one-line
+      prompt, and write down what actually breaks before writing any code.
+
+      The specific thing a guess would get wrong: `claude -p` inherits the user's
+      own settings — `defaultMode: auto`, 87 allow rules — so `local_agent` may
+      already do most of the work. What happens to a tool call *outside* those
+      rules is unmeasured, and it has no TTY to prompt on, so the failure may be
+      silent. That is the same shape as the spawn failure T14.6 found: the bug
+      class this fork's method cannot catch by reading.
+
+      Phase 1 closes whichever gap Phase 0 names — most likely `session/load`
+      gated on the agent's advertised `loadSession`, whose open question is what
+      history it replays and whether Warp then draws the transcript twice.
+      Phase 2 is the dogfood, and until it has happened the goal is not met
+      however good the code looks.
+
+      Stretch only after those verify: `AppendToMessageContent` streaming, whose
+      `FieldMask` path must be established by running rather than guessed, and
+      diff rendering — the content is already in `rawInput`, measured on T14.6,
+      so that one is legibility and not consent.
 
 - [x] **T14.3** ~~**Warp cannot observe an agent's permission policy, so it must
       not imply one.**~~ **The headline is false and running it is what showed

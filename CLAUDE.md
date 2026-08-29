@@ -351,8 +351,13 @@ instrument and it is silent about a whole class of state.
 
 ## Where to read
 
-Four files in `.fork/`, in the order a cold start wants them.
+Five files in `.fork/`, in the order a cold start wants them.
 
+- **`GOAL.md`** — **read this first if it exists.** A dated, deliberately
+  temporary horizon: what the fork is being driven toward right now and what
+  "done" means as a *run*. It outranks the board's ordering while it stands, and
+  it is meant to be deleted when met or abandoned. Absent means there is no
+  standing horizon and `TASKS.md` is the plan.
 - **`README.md`** — the operating manual: how to build and run on each platform,
   the full `warpctrl` surface, Warp Drive, WSL integration, and the gotchas that
   cost hours. Reach for it whenever you need to *use* something rather than
