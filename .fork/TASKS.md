@@ -6593,13 +6593,20 @@ Nothing has run on Windows.
       as recoverable and **retries three times before surfacing it**, as T14.5
       measured for a refused continuation — harmless, because a failed spawn
       fails instantly, but it is three spawn attempts rather than one. And
-      `warpctrl agent read` still reports **no output at all** for this
-      conversation: the error renders as an error block, not as an exchange
-      output, so the read surface does not carry it. That is a `warpctrl` gap
-      rather than an app bug, and it is exactly why the screenshot was worth
-      taking — the CLI said "no message" while the GUI was showing a paragraph.
-      Anything that judges this path by `agent read` alone will keep being wrong
-      in that direction.
+      `warpctrl agent read` reported **no output at all** for this conversation
+      while the GUI was showing a paragraph — which is exactly why the screenshot
+      was worth taking, and which made the first write-up of this very defect
+      wrong ("no message in the panel and none in the log" — there was a
+      paragraph in the panel).
+
+      **Since fixed, because the defect was in the instrument.**
+      `FinishedAIAgentOutput::output()` returns `None` for its `Error` variant,
+      discarding the reason *and* whatever the agent had already said, so
+      `format_output_for_copy` yields nothing and the summary omits `output`
+      entirely — a failed turn is indistinguishable from a silent one.
+      `AgentExchangeSummary` now carries `error`. This is load-bearing beyond
+      T14.6: `agent read` is how this fork checks its own agent paths, including
+      from another agent that cannot see the window.
 
       **The design, after an advisor falsified the first one.** The scoping
       conclusion this ticket was about to be built on — *"saying yes requires the
