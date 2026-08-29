@@ -41,14 +41,31 @@ But whether the answer is a button, a cheaper way to *address* the pending
 request from a shell, or something the session surfaces that nobody has thought
 of, is exactly what a real run decides.
 
-## Candidates, ranked by present evidence rather than by conviction
+## Ranked by a session rather than by conviction — T14.9 has now run
 
-- **No button.** Consent is answered by typing `warpctrl agent approve <id>
-  --digest <d>`. Doable from Warp, because Warp is a terminal. Not comfortable.
-- **No cheap addressing.** There is no `--latest`. The id and digest are opaque
-  and long, and both must be copied exactly. This may capture most of the
-  friction for a fraction of the button's cost, which is why it is listed
-  *against* the button and not beside it.
+**The list below used to lead with the button. It does not any more, and the
+reordering is the whole reason T14.9 came first.**
+
+- **Some requests have no yes at all.** `acp_permission` refuses
+  `ToolKind::Other` on a correct rule — an unknown kind's effect cannot be bounded
+  to one call — and it fired **twice on ordinary work in one session**: reading a
+  dependency's source, and `cat /nonexistent-file-xyz`. `git status --short` in
+  the same turn was approvable. The agent decides the kind, so nobody can tell in
+  advance which commands will be answerable, and an unanswerable one parks the
+  turn until somebody denies it. **A button over these would be greyed out**,
+  which is why it is no longer first. T14.8.
+- **A wedged turn is silent.** One turn burned 36 minutes: alive, 74s of CPU
+  against 2176 elapsed, panel frozen, `agent list` saying `in_progress`
+  throughout. Diagnosed with `ps` and two screenshots. T14.10.
+- **No button.** Still real — roughly thirty-five approvals in a seven-turn
+  session, each answered by copying an id and a 64-character digest. Second half
+  of T14.8.
+- **No cheap addressing.** There is no `--latest`. If most of the cost is
+  transcription rather than modality this wins on effort by an order of
+  magnitude, provided it keeps the digest binding.
+- **The GUI has the information, the CLI has the control, neither has both.** The
+  panel streams tool calls and badges the tab `+137 -2`; `agent read` says nothing
+  until the turn ends. Driving from the CLI meant photographing a window.
 - **The event log is blind on this path.** `CLAUDE.md` says to reach for
   `WARP_FORK_EVENT_LOG` before theorising about what an agent did. On the ACP
   path it writes `session_start` and `stop` and nothing between them, so the
@@ -59,6 +76,15 @@ of, is exactly what a real run decides.
   model select, so the protocol already offers it.
 - **A deterministic refusal is retried three times** with backoff before it is
   shown. Small, and now rare.
+
+## Confirmed working, and this is what makes the destination reachable
+
+**Recovery is total.** `agent cancel` ended the wedge and the next turn's
+`session/load` restored the conversation *including work done in the minutes
+before it stalled*. The conversation also survived Warp being closed and rebuilt
+twice, resuming against a new Warp process and a new agent process. **A wedge
+costs time, not state** — which is the property a long working relationship with
+this surface actually depends on.
 
 ## Ruled out, with the measurement that ruled it out
 
