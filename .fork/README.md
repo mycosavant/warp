@@ -1367,15 +1367,12 @@ and ACP's whole point is that there is no default. It outranks
 1.18.25 on OpenRouter — the panel showed the tool calls and the answer, driven
 and read through `warpctrl agent prompt` / `agent read`.
 
-**It can only say no** to the questions it is asked. Every permission request is
-denied and the refusal is printed in the conversation:
+**It can say yes to one call.** A permission request is listed by `warpctrl
+agent approvals`, and `warpctrl agent approve <id> --digest <d>` selects the
+agent's allow-once option. Everything else is denied. Denying still needs no
+switch.
 
-> `write`
-> Warp denied this: **/tmp/…/out.txt**. This build can only say no to an agent's
-> permission requests — there is no surface yet that could show you what saying
-> yes would allow.
-
-That is the shape `local_agent` shipped in for the same reason: saying yes needs a
+`local_agent` shipped in the same shape for the same reason: saying yes needs a
 surface that can show what is being agreed to, and T14.4 measured what goes wrong
 when something says yes without one.
 
@@ -1395,11 +1392,9 @@ refuses its own tools — and that guarantee does not transfer. Use the agent's 
 permission configuration if you want it to ask; `opencode` takes
 `"permission": {"edit": "ask"}`.
 
-**A second turn is refused**, out loud. Every turn starts a fresh session, and an
-agent that answered *"I haven't written to or modified any files yet"* directly
-below the turn where it wrote a file is worse than no answer — so it says it
-cannot continue and asks you to start a new conversation. `session/load` is the
-fix and is on T14.6.
+**A second turn calls `session/load`**, gated on the agent's advertised
+`loadSession` capability. An agent that does not advertise it still gets an
+honest refusal naming the agent.
 
 **The pane's directory decides which agent configuration loads — including its
 permissions.** This is the one to know. The session directory comes from the
@@ -1427,8 +1422,7 @@ The agent *process* does still inherit Warp's working directory, because ACP's
 spawn config carries a command, args and env and no cwd. That is real but much
 less interesting than it looked.
 
-**Not yet:** session resume (every turn is a new session), `/compact`, model
-selection, and Warp's own tools.
+**Not yet:** `/compact`, model selection, and Warp's own tools.
 
 ### Talking to an agent that is not Warp's: `warpctrl acp probe`
 
