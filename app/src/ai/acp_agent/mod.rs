@@ -443,7 +443,14 @@ async fn exchange(
                 });
                 let _ = tx.unbounded_send(Ok(event));
 
-                wait_for_a_person(&connection, responder, outcome, parked)
+                wait_for_a_person(
+                    &connection,
+                    responder,
+                    outcome,
+                    parked,
+                    Arc::clone(translator),
+                    tx.clone(),
+                )
             },
             agent_client_protocol::on_receive_request!(),
         )
@@ -786,6 +793,8 @@ fn wait_for_a_person(
     responder: agent_client_protocol::Responder<RequestPermissionResponse>,
     denial: RequestPermissionOutcome,
     request: registry::ParkedRequest,
+    translator: Arc<Mutex<Translator>>,
+    tx: mpsc::UnboundedSender<Event>,
 ) -> Result<(), agent_client_protocol::Error> {
     // Resolved before the request is handed to the registry, because after that
     // it is the map's and a caller could already be answering it.
@@ -796,13 +805,48 @@ fn wait_for_a_person(
         // Held for exactly as long as the wait, so a turn that is cancelled stops
         // advertising a question nobody can answer any more.
         let _waiting = waiting;
-        let outcome = outcome_for(answer.await, allowed, denial);
+        let answer = answer.await;
+        let settled = answered_note(&answer);
+        let outcome = outcome_for(answer, allowed, denial);
+        // The asking note stays in the transcript, so without this one a
+        // finished conversation reads as though it is still waiting — and after
+        // a cancelled turn it reads worse than that, because the id it tells the
+        // person to type has already been dropped from the registry. Measured
+        // T14.7: `warpctrl agent approve` on it answers `missing_target`. A
+        // second note rather than an edit of the first, because amending a
+        // message needs `UpdateTaskMessage`'s `FieldMask` path, which nothing in
+        // this repo uses and which this module has twice declined to guess.
+        let event = emit(&translator, |translator| translator.note(settled));
+        let _ = tx.unbounded_send(Ok(event));
         // A failure to deliver is the agent having gone away, which is not this
         // task's problem to report — and returning `Err` would take the whole
         // connection down with it, per `ConnectionTo::spawn`'s own docs.
         let _ = responder.respond(RequestPermissionResponse::new(outcome));
         Ok(())
     })
+}
+
+/// What the transcript says once the question has stopped being open.
+///
+/// It reports **what was answered, not what the agent will now do**. A yes here
+/// is a yes to one call; whether the call then succeeds is the agent's business
+/// and shows up as the tool's own output. That distinction is the same one
+/// `approvals.rs` makes by reporting the keystroke it sent rather than
+/// `approved: true`.
+fn answered_note(answer: &Result<registry::Decision, oneshot::Canceled>) -> String {
+    match answer {
+        Ok(registry::Decision::Allow) => {
+            "Answered: **yes**, for this one call. Nothing after it is covered.".to_owned()
+        }
+        Ok(registry::Decision::Deny) => "Answered: **no**.".to_owned(),
+        // The sender was dropped rather than used, which happens when the turn
+        // is torn down around the wait — a cancellation, or the agent exiting.
+        // Saying "no" here would credit a person with a decision nobody made.
+        Err(_) => {
+            "This request ended without an answer, because the turn did. Nothing was allowed."
+                .to_owned()
+        }
+    }
 }
 
 /// What actually goes back to the agent, given how the wait ended.

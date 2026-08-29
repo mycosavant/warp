@@ -592,3 +592,52 @@ fn a_refusal_reads_as_sentences_however_the_reason_was_written() {
         "an unterminated reason gets one: {bare}"
     );
 }
+
+/// The transcript has to say the question stopped being open.
+///
+/// The asking note stays where it was written, so without a second note a
+/// finished conversation reads as though it is still waiting — and after a
+/// cancelled turn it reads worse, because the id it tells the person to type
+/// has already left the registry. Measured T14.7: `warpctrl agent approve` on
+/// that id answers `missing_target`.
+#[test]
+fn every_way_a_permission_question_can_end_says_so_in_the_transcript() {
+    let allowed = answered_note(&Ok(registry::Decision::Allow));
+    let denied = answered_note(&Ok(registry::Decision::Deny));
+    let dropped = answered_note(&Err(oneshot::Canceled));
+
+    assert!(allowed.contains("yes"), "got: {allowed}");
+    assert!(
+        allowed.contains("one call"),
+        "a yes that does not say how far it reaches is the thing T14.6 exists to \
+         prevent, got: {allowed}"
+    );
+    assert!(denied.contains("no"), "got: {denied}");
+    assert!(
+        !dropped.contains("no"),
+        "nobody said no — crediting a person with a decision they did not make is \
+         the same error as claiming a policy Warp cannot see, got: {dropped}"
+    );
+    assert!(dropped.contains("without an answer"), "got: {dropped}");
+}
+
+/// …and none of them claims the call then happened.
+///
+/// A yes is a yes to one request. Whether the tool succeeds is the agent's
+/// business and shows up as its own output — the same distinction `approvals.rs`
+/// makes by reporting the keystroke it sent rather than `approved: true`.
+#[test]
+fn the_answer_note_reports_the_answer_and_not_the_outcome() {
+    for note in [
+        answered_note(&Ok(registry::Decision::Allow)),
+        answered_note(&Ok(registry::Decision::Deny)),
+        answered_note(&Err(oneshot::Canceled)),
+    ] {
+        for claim in ["ran", "succeeded", "was executed", "completed"] {
+            assert!(
+                !note.contains(claim),
+                "the note may only report what was answered, got: {note}"
+            );
+        }
+    }
+}

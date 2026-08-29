@@ -588,12 +588,22 @@ fn agent_name(agent: CLIAgent) -> &'static str {
     agent.command_prefixes().first().copied().unwrap_or("?")
 }
 
+/// **The word here used to be "pane", and it was wrong for half the entries.**
+/// Approval ids were pane ids when this was written; an ACP entry's id is
+/// `{turn}:{rpc_id}`, which names no pane at all, so the sentence told a person
+/// their approval id was something it is not.
+///
+/// The second clause is the more useful half and is measured rather than
+/// guessed (T14.7): cancelling a turn drops its pending request from the
+/// registry, so an id that worked a moment ago stops existing without anyone
+/// having answered it. Someone hitting this has usually not mistyped.
 fn no_such_approval(approval_id: &str) -> ControlError {
     ControlError::new(
         ErrorCode::MissingTarget,
         format!(
-            "nothing is waiting on pane `{approval_id}`; `agent.approvals` reports the requests \
-             that exist right now"
+            "nothing is waiting under the approval id `{approval_id}`. A request stops waiting \
+             when it is answered, and also when its turn is cancelled or the agent goes away — \
+             `agent.approvals` reports the ones that exist right now"
         ),
     )
 }

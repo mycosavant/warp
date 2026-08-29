@@ -7199,6 +7199,43 @@ Nothing has run on Windows.
       stays in the transcript after the request is answered, so reading back a
       finished conversation shows a live-sounding prompt for a call that already
       ran.
+      **As built — Phase 1, verified live 2026-08-29.** A conversation in the
+      panel, in this repo: turn 1 asked to write a file, `opencode` asked
+      permission for it, `warpctrl agent approve --digest` said yes, the file
+      appeared. Turn 2 asked what it had written and it answered the path and
+      the contents from memory. That is every clause of the goal sentence in one
+      conversation except one — the change was to `target/`, not to the fork,
+      which is Phase 2's job and is not claimed here.
+
+      The thing most likely to have broken did not. The falsifier replayed a
+      *text-only* history; this replay carried a tool call, which is the case
+      where the translator's bookkeeping could have leaked. `agent approvals`
+      stayed empty for the whole of turn 2, so no replayed permission-shaped
+      update minted an answerable entry, and the transcript came back with two
+      exchanges and turn 1 drawn once.
+
+      **Cancelling a turn mid-question leaves nothing behind, and finding that
+      out cost two defects.** With a request pending, `agent cancel` dropped the
+      entry and the agent process exited — no orphan to approve, and the dead id
+      answers `missing_target`. But that error called the approval id *a pane*,
+      which it has not been since ACP entries started being `{turn}:{rpc_id}`;
+      and worse, the transcript still carried the asking note, so a person
+      reading back a cancelled conversation is told to type a command with an id
+      that no longer exists. The note now has an answer beside it — a *second*
+      note rather than an edit of the first, because amending a message needs
+      `UpdateTaskMessage`'s `FieldMask` path, which nothing in this repo uses and
+      which this module has now twice declined to guess at.
+
+      Two things were probed and left alone. `cd`ing the pane between turns did
+      **not** break resume: `opencode` accepted a `session/load` whose `cwd` no
+      longer matched the session's, though the spec's own wording suggests a
+      stricter agent may refuse. Pinning the cwd to the session would fix that
+      by silently ignoring a `cd` the person typed, which is worse than the
+      refusal it prevents, and the refusal is already actionable. And the
+      `cannot_resume` branch is **test-covered but never run live**, because both
+      agents on this machine advertise `loadSession: true` — `opencode` and
+      `claude-agent-acp` alike.
+
 - [x] **T14.3** ~~**Warp cannot observe an agent's permission policy, so it must
       not imply one.**~~ **The headline is false and running it is what showed
       that — see the as-built below.** The agent declares its mode on the wire,
