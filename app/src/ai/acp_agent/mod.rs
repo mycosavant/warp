@@ -77,10 +77,23 @@
 //! **The agent's process inherits Warp's working directory**, because
 //! `AcpAgentConfig` carries a command, args and env and no cwd. The *session*
 //! cwd is carried properly, in `session/new`, and that is what the agent's tools
-//! use — measured. What it can change is where an agent looks for its **own**
-//! configuration: `opencode` reads `opencode.json` from the process directory.
-//! Named rather than solved, because solving it per agent is what ACP exists to
-//! avoid.
+//! use — measured.
+//!
+//! **And the session cwd is also where the agent finds its own configuration,
+//! which makes the pane's directory a security-relevant input.** An earlier
+//! version of this comment said `opencode` reads `opencode.json` from the
+//! *process* directory; that was wrong, and only looked right because Warp had
+//! been launched from the same place the pane was in. Measured properly, with
+//! the process directory held fixed and only the pane's cwd varied: in a
+//! directory with no `opencode.json` the agent ran on a fallback model **and
+//! with default permissions**, executing a shell command in `$HOME` without
+//! sending a single `session/request_permission`; in a directory with one, the
+//! same prompt produced a request that reached Warp and was denied.
+//!
+//! So the user's own agent policy applies or does not apply depending on a
+//! directory Warp chose. Nothing here can fix that — it is how project-scoped
+//! configuration works — but nothing here may imply otherwise either, which is
+//! the T14.3 rule. See `.fork/TASKS.md` T14.6.
 
 mod translate;
 
@@ -286,18 +299,35 @@ async fn drive(
     )
     .await
     {
-        // A `StreamFinished` rather than an `Err`: the client synthesizes an
+        // **Which of these two you need depends on whether the stream exists,
+        // and getting it wrong loses the error in silence.** Measured on T14.6
+        // by putting the agent binary out of `PATH`: the conversation went to
+        // `status: "error"` with no message in the panel *and none in the log*,
+        // because `Translator::open` runs only once the agent has named its
+        // session, so a failure to spawn produced a `StreamFinished` addressed
+        // to a stream Warp had never been told about.
+        //
+        // After `open`, a `StreamFinished` is right: the client synthesizes an
         // "unexpected EOF" for a stream that stops without one, which reads as a
-        // Warp bug rather than as the agent failing to start.
-        // Flush first here too: a turn that fails part-way should still show
-        // whatever the agent had already said.
-        let closing = emit(&translator, |translator| {
-            let mut events = translator.flush();
-            events.push(translator.failed(format!("{error:#}")));
-            events
-        });
-        for event in closing {
-            let _ = tx.unbounded_send(Ok(event));
+        // Warp bug rather than as the agent failing. Flush first, because a turn
+        // that fails part-way should still show whatever the agent had said.
+        //
+        // Before `open`, the only thing Warp is holding is the stream itself, so
+        // the error has to *be* an item — the same shape `generate` already uses
+        // for a refused continuation, which T14.5 measured reaching the log
+        // verbatim.
+        let opened = emit(&translator, |translator| translator.stream_was_opened());
+        if opened {
+            let closing = emit(&translator, |translator| {
+                let mut events = translator.flush();
+                events.push(translator.failed(format!("{error:#}")));
+                events
+            });
+            for event in closing {
+                let _ = tx.unbounded_send(Ok(event));
+            }
+        } else {
+            let _ = tx.unbounded_send(Err(Arc::new(AIApiError::Other(error))));
         }
     }
 }
@@ -403,7 +433,32 @@ async fn exchange(
             Ok(())
         })
         .await
-        .map_err(|error| anyhow!("The agent exchange failed: {error}"))
+        .map_err(|error| spawn_failure_or(error, &command))
+}
+
+/// Turns a connection error into something a person can act on.
+///
+/// The raw error for an agent that is not on `PATH` is
+/// `Internal error: {"spawned_at": "…/jsonrpc.rs:1732:39", "data": "No such file
+/// or directory (os error 2)"}` — a crate's line number and an errno, naming
+/// neither the command nor the reason. Measured on T14.6.
+///
+/// The `PATH` sentence is added only for the errno that actually means it, and
+/// it is a *guess named as one*: the same errno would arise if the agent existed
+/// and its own launcher were missing. Warp cannot tell those apart, so it does
+/// not claim to.
+fn spawn_failure_or(error: impl std::fmt::Display, command: &str) -> anyhow::Error {
+    let error = error.to_string();
+    if error.contains("os error 2") || error.contains("No such file or directory") {
+        return anyhow!(
+            "Could not start the agent named by WARP_FORK_ACP_COMMAND ({command:?}): \
+             no such file or directory. The usual cause is that the program is not on \
+             the PATH of the process Warp was launched from, which is often shorter \
+             than the PATH in a terminal — `nvm` and other version managers add their \
+             shims from a login shell only. Underlying error: {error}"
+        );
+    }
+    anyhow!("The agent exchange failed: {error}")
 }
 
 /// How to say no to one permission request, and what to tell the person.

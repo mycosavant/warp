@@ -1401,13 +1401,31 @@ below the turn where it wrote a file is worse than no answer — so it says it
 cannot continue and asks you to start a new conversation. `session/load` is the
 fix and is on T14.6.
 
-**Two things that will bite, both measured.** The agent *process* inherits Warp's
-working directory, because ACP's spawn config carries a command, args and env and
-no cwd — so `opencode`, which reads `opencode.json` from the process directory,
-takes its model config from wherever Warp was launched. The *session* directory is
-separate and correct: it comes from the pane, which for a conversation started by
-`warpctrl agent prompt` is a fresh pane in `$HOME`. `cd` first, or the agent
-reports your files missing and the transcript gives no hint why.
+**The pane's directory decides which agent configuration loads — including its
+permissions.** This is the one to know. The session directory comes from the
+pane, and `opencode` resolves its project config from the session directory, so
+a pane sitting somewhere without an `opencode.json` gets a fallback model **and
+default permissions**. Measured, with everything else held fixed and only the
+pane's cwd varied:
+
+| pane cwd | project config | model | `"bash": "ask"` honoured |
+|---|---|---|---|
+| `$HOME` | not loaded | a fallback | **no** — ran `bash` in `$HOME`, Warp never asked |
+| the project | loaded | as configured | yes — Warp got the request and denied it |
+
+So `cd` first is not only about the agent reading the right tree; it is about
+your own permission rules being in force at all. A conversation started by
+`warpctrl agent prompt` gets the **active** pane — which is a fresh one in
+`$HOME` only on a fresh profile, and otherwise whatever you last left it as, and
+Warp restores that across relaunches. Check it rather than assume it.
+
+(An earlier version of this section said `opencode` reads its config from the
+*process* directory, i.e. wherever Warp was launched. That was wrong; the two
+had never been varied independently.)
+
+The agent *process* does still inherit Warp's working directory, because ACP's
+spawn config carries a command, args and env and no cwd. That is real but much
+less interesting than it looked.
 
 **Not yet:** session resume (every turn is a new session), `/compact`, model
 selection, and Warp's own tools.

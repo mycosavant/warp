@@ -165,3 +165,35 @@ fn the_continuation_refusal_explains_itself_without_protocol_jargon() {
 fn continuation_error() -> String {
     CANNOT_CONTINUE.to_owned()
 }
+
+/// An agent that is not on `PATH` produces a sentence naming the variable, the
+/// command and `PATH` — not a crate line number and an errno.
+///
+/// Measured before this existed: the raw error was
+/// `Internal error: {"spawned_at": "…/jsonrpc.rs:1732:39", "data": "No such file
+/// or directory (os error 2)"}`, and the app dropped even that.
+#[test]
+fn an_agent_that_is_not_on_path_is_reported_as_being_not_on_path() {
+    let error = spawn_failure_or(
+        "Internal error: {\"spawned_at\": \"jsonrpc.rs:1732:39\", \
+         \"data\": \"No such file or directory (os error 2)\"}",
+        "opencode acp",
+    )
+    .to_string();
+
+    assert!(error.contains("WARP_FORK_ACP_COMMAND"), "got: {error}");
+    assert!(error.contains("opencode acp"), "got: {error}");
+    assert!(error.contains("PATH"), "got: {error}");
+}
+
+/// …and every *other* failure keeps the generic wording, because guessing `PATH`
+/// at an error that has nothing to do with it would send a person to the wrong
+/// place. The rule that earned this test is T14.4's: a fix shaped like the hole
+/// it fixes.
+#[test]
+fn a_failure_that_is_not_a_missing_file_does_not_blame_path() {
+    let error = spawn_failure_or("connection closed before initialize", "opencode acp").to_string();
+
+    assert!(!error.contains("PATH"), "got: {error}");
+    assert!(error.contains("connection closed"), "got: {error}");
+}

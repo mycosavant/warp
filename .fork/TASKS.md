@@ -6343,11 +6343,17 @@ it will be reading.
 **The process cwd is a separate thing, and it is Warp's.** `AcpAgentConfig`
 carries a command, args and env and **no cwd**, so the agent process inherits
 Warp's. The session cwd is carried properly in `session/new` and is what the
-agent's *tools* use — measured. What it changes is where an agent looks for its
-**own** configuration: `opencode` reads `opencode.json` from the process
-directory, which is why the model had to be configured beside where Warp was
-launched. Named rather than solved, because solving it per agent is what ACP
-exists to avoid.
+agent's *tools* use — measured.
+
+~~What it changes is where an agent looks for its **own** configuration:
+`opencode` reads `opencode.json` from the process directory, which is why the
+model had to be configured beside where Warp was launched.~~ **False, and
+corrected under T14.6 by reading the agent's own log.** `opencode` resolves its
+project configuration from the **session** directory. It only looked like the
+process directory because Warp had been launched from the same place the pane
+was sitting in — the two were never varied independently. What follows from the
+corrected version is much worse than a note about where to put a config file,
+and is written up in T14.6.
 
 **No task, no thread, no executor borrowed.** `agent-client-protocol` runs a
 connection through a scoped `connect_with(agent, |connection| async { … })`,
@@ -6427,14 +6433,23 @@ direct edge adds nothing to the link. Which also means T14.6 can widen
 `acp_permission`'s visibility rather than duplicate its allow rules.
 
 **Named unverified.** One agent, one model, six prompts, Linux/WSL. `/compact` is
-not handled (the protocol has no compaction) and falls through. **Cancellation is
-reasoned from the drop chain and still was not exercised** — the ACP client's
+not handled (the protocol has no compaction) and falls through. ~~**Cancellation
+is reasoned from the drop chain and still was not exercised** — the ACP client's
 `ChildGuard` is documented to kill the process group on connection drop, on Unix
-only, so a cancelled turn on Windows is entirely unverified and this agent
-*executes tools*. The GUI spawn environment is unverified: the probe ran from a
-login shell and the app spawns from a GUI process whose PATH may lack npm/nvm
-shims. No GUI screenshot was taken; turns were driven and read through
-`warpctrl`. Nothing has run on Windows.
+only, so a cancelled turn on Windows is entirely unverified.~~ **Exercised under
+T14.6, and the reading of `ChildGuard` was wrong.** `warpctrl agent cancel` on a
+running turn killed the agent within 2s and settled the conversation to
+`cancelled` with its partial output kept. And `ChildGuard::terminate`
+(`agent-client-protocol-2.0.0/src/acp_agent.rs:308`) does *two* things: a
+Unix-only `kill_process_group`, **and an unconditional `drop(self.0.kill())`**.
+So the Windows gap is not "no cleanup", it is "no *process-group* cleanup" — the
+direct child dies everywhere, and what can survive on Windows is a grandchild
+behind a wrapper launcher (`npx → node`). `opencode` is a single binary with no
+children, so it would not have exercised that even on Unix. Still unverified on
+Windows. The GUI spawn environment is unverified: the probe ran from a login
+shell and the app spawns from a GUI process whose PATH may lack npm/nvm shims.
+No GUI screenshot was taken; turns were driven and read through `warpctrl`.
+Nothing has run on Windows.
 
 - [ ] **T14.6** Saying yes: the consent surface. What is now paid for:
       **`acp_permission` moves out of `warp_cli` and is shared**, not copied —
@@ -6461,6 +6476,216 @@ shims. No GUI screenshot was taken; turns were driven and read through
       PATH. Whether an ACP agent should run *inside* a WSL distro for a WSL
       session, as `claude` does for the file-read reason, is a real question this
       may defer but must name.
+
+      **Measured before building any of it** (2026-08-28, `opencode` 1.18.25,
+      Linux/WSL). Four runs, and two of them reframe the ticket.
+
+      **Cancellation works, and the ticket's own premise about it was wrong.**
+      See the correction folded into T14.5's as-built above: the agent dies
+      within 2s on Linux, and `ChildGuard` kills on *every* platform — only the
+      process-*group* kill is Unix-only. This item shrinks to "verify on
+      Windows, with a wrapper-launcher agent", which is the only case that can
+      actually leak.
+
+      **The user's own agent permission configuration is resolved from the
+      session directory — which is Warp's pane cwd.** Same Warp process, same
+      `opencode.json` on disk, only the pane's directory differing. The evidence
+      is the agent's own log, `~/.local/share/opencode/log/opencode.log`, which
+      records each config file it loads and the `directory=` of each session:
+
+      | pane cwd | project config loaded | model actually used | `"bash": "ask"` honoured |
+      |---|---|---|---|
+      | `/home/effatha` | **no** | `big-pickle` (a fallback) | **no** — ran `bash`, wrote `~/greeting.txt`, Warp never asked |
+      | `/tmp/t146/project` | yes | `z-ai/glm-4.6` (as configured) | yes — the request reached Warp, Warp denied it, nothing was written |
+
+      So *whether the user's policy applies at all* is decided by a directory,
+      and in Warp that directory is chosen by Warp. This is T14.3's principle
+      with a mechanism under it at last: Warp must not imply a policy it cannot
+      observe, and here it does not merely fail to observe the policy — **it is
+      an input to which policy loads.** A consent surface is therefore necessary
+      and nowhere near sufficient; the case it cannot help with is the case
+      where it is never invoked.
+
+      Before that run, at defaults, the same agent ran
+      `mkdir -p /home/effatha/essays && ls -la /home/effatha` and two
+      `websearch` calls, unattended, in a fork whose thesis begins "no
+      telemetry". T14.5's "it wrote a file" understates what asking nothing
+      buys. (Artifacts removed.)
+
+      **Method note against myself, because the near-miss is the lesson.** A
+      follow-up run in what I *believed* was a fresh `$HOME` pane got asked, and
+      I took that as falsifying the hypothesis above and nearly recorded the
+      opposite. `agent prompt` without `--pane` uses the **active** pane, which
+      I had `cd`'d earlier, and Warp restores pane cwd across a relaunch. The
+      command ran perfectly and reported honestly; the error was one step
+      upstream, in an input I assumed rather than checked — the exact shape
+      `CLAUDE.md` records for the 5x divergence miscount. The agent's log is
+      what settled it, not another run.
+
+      **The permission request is a narrower view than the tool call it refers
+      to, and it drops the field that matters most.** Captured:
+
+      ```json
+      {"toolCall":{"toolCallId":"call_29448bf5…","kind":"execute","status":"pending",
+        "title":"echo hello > greeting.txt","locations":[],
+        "rawInput":{"command":"echo hello > greeting.txt"}},
+       "options":[{"optionId":"once","name":"Allow once","kind":"allow_once"},
+                  {"optionId":"always","name":"Always allow","kind":"allow_always"},
+                  {"optionId":"reject","name":"Reject","kind":"reject_once"}]}
+      ```
+
+      The `tool_call_update` for that same `toolCallId`, moments earlier, carried
+      `locations:[{"path":"/tmp/t146/project"}]` and a `rawInput` with `cwd`. The
+      request has neither. So a card rendering the request alone shows a shell
+      command **with no indication of where it runs** — and by the finding above,
+      where it runs is the thing that decided whether anyone was asked. The card
+      must therefore join the request to accumulated `tool_call` state by
+      `toolCallId` rather than render the request on its own, which makes that
+      map's freshness a correctness concern and not a convenience.
+
+      **The spawn-environment item is not a worry, it is a shipped defect: the
+      app path loses the error entirely.** Measured by launching Warp with
+      nothing changed but `PATH` stripped of the nvm shims, so `opencode` is not
+      resolvable. The conversation goes to `status: "error"` with **no message at
+      all** — nothing in the panel, and nothing in `warp-oss.log` beyond
+      `has_active_stream=false status=Error`. A person in that state has a
+      conversation that failed for no stated reason. The probe, on the same
+      `PATH`, does surface it, which is how the cause was confirmed:
+
+      ```
+      error: internal: the agent exchange failed: Internal error: {
+        "spawned_at": "…/agent-client-protocol-2.0.0/src/jsonrpc.rs:1732:39",
+        "data": "No such file or directory (os error 2)"
+      }
+      ```
+
+      So there are two things to fix and they are different sizes. The small one
+      is that even where the error *is* surfaced it names a crate's line number
+      and an errno, not the command or `PATH`. The real one is that the app
+      swallows it — which is worth contrasting with T14.5's measured behaviour
+      that a `CANNOT_CONTINUE` refusal reaches the log verbatim. Errors raised
+      before the stream exists are evidently not on the same path as errors
+      raised from `Turn::from_request`. Find out which, because a silent failure
+      is the one bug class this fork's method cannot catch by running things.
+
+      **Fixed in the same sitting, because it was small and the silence was the
+      bad part.** `Translator` now tracks whether `open` has run, and `drive`
+      picks its reporting shape from that: after `open`, a `StreamFinished` as
+      before; before it, `Err(Arc::new(AIApiError::Other(..)))` as a stream item,
+      which is the shape T14.5 measured surfacing for a refused continuation.
+      The error text names `WARP_FORK_ACP_COMMAND`, the command and `PATH` — and
+      only for the errno that actually means it, because a fix that guessed
+      `PATH` at every failure would be T14.4's mistake again, a fix shaped like
+      the hole. Pinned by `a_stream_is_not_open_until_it_has_been_opened`,
+      `an_agent_that_is_not_on_path_is_reported_as_being_not_on_path` and
+      `a_failure_that_is_not_a_missing_file_does_not_blame_path`.
+
+      **Verified by re-running the case that produced the silence, and then by
+      looking at the window** — the first GUI screenshot of the ACP path, which
+      T14.5 shipped without. The panel now reads *"I'm sorry, I couldn't complete
+      that request. Request failed with error: Other(Could not start the agent
+      named by WARP_FORK_ACP_COMMAND ("opencode acp"): no such file or directory.
+      The usual cause is that the program is not on the PATH of the process Warp
+      was launched from…"*, and the same text is in the log. Before the fix, both
+      were empty.
+
+      Two things the run showed that reading would not have. Warp classifies this
+      as recoverable and **retries three times before surfacing it**, as T14.5
+      measured for a refused continuation — harmless, because a failed spawn
+      fails instantly, but it is three spawn attempts rather than one. And
+      `warpctrl agent read` still reports **no output at all** for this
+      conversation: the error renders as an error block, not as an exchange
+      output, so the read surface does not carry it. That is a `warpctrl` gap
+      rather than an app bug, and it is exactly why the screenshot was worth
+      taking — the CLI said "no message" while the GUI was showing a paragraph.
+      Anything that judges this path by `agent read` alone will keep being wrong
+      in that direction.
+
+      **The design, after an advisor falsified the first one.** The scoping
+      conclusion this ticket was about to be built on — *"saying yes requires the
+      ACP connection to outlive a single turn, held in a registry keyed by
+      conversation id"* — is **wrong**, and wrong in an embarrassing way worth
+      recording: it conflated two lifetimes. Warp's transport genuinely is
+      stateless per turn, and the human's answer to a native action genuinely
+      does arrive on a *new* call as `AIAgentInput::ActionResult`. But a
+      `session/request_permission` does not arrive between turns. It arrives
+      **while `session/prompt` is still outstanding** — the agent is blocked, the
+      stream from `generate_multi_agent_output` is still open and still being
+      polled, and the poller is what drives the connection. T14.5's own denials
+      already answered at exactly that moment. Nothing has to be held across
+      anything.
+
+      What is actually missing is an **out-of-band input into a live turn**, and
+      the fork already owns one — the gate that was not looked for, which is the
+      single most repeated finding in this fork and was repeated again here:
+      **T11.5's `agent.approvals` / `agent.approve` / `agent.deny`**. Digest-bound
+      so a stale answer is refused, reachable from a paired phone, and remote
+      *yes* already gated on `WARP_FORK_REMOTE_APPROVE` keyed at
+      `ActionKind::AgentApprove` in `pairing.rs`, so a new population answered
+      through the same action inherits the gate rather than needing a new one.
+      Today it presses keys on CLI-agent panes; ACP would add a second
+      population whose "answer" resolves a parked responder instead.
+
+      **And on one axis the ACP path is strictly better than the keystroke path,
+      which is worth saying because T14 has mostly gone the other way.**
+      `agent.approve` is refused for agents outside `ALLOW_VERIFIED_AGENTS`, and
+      `approvals.rs` gives the honest reason: Return means *take the highlighted
+      option*, and which option that is "is a fact about someone else's TUI".
+      ACP options are **typed and carry ids**, so answering selects a named
+      option rather than a position. That is the T14.2 bug — `options.first()`,
+      which denied on one agent and would have approved on the other — inverted
+      into a structural property. `ALLOW_VERIFIED_AGENTS` therefore has no
+      analogue here, and `acp_permission`'s kind allowlist is what stands in its
+      place. Verified by reading `approvals.rs` and `pairing.rs` rather than
+      taking it on report: `REMOTE_APPROVE_ACTION` is `ActionKind::AgentApprove`
+      and `pairable_actions()` adds it only when `fork::remote_approve_enabled()`.
+
+      `PendingApproval` itself is **not** the type to reuse — it is keyed on a
+      pane because a CLI agent "has no `AIConversation` and nothing in Warp's
+      history model", and its fields are derived from an OSC notification. T14.4
+      already filed this: a new shape, keyed on the JSON-RPC request id.
+
+      The mechanism, read out of the vendored crate rather than assumed:
+      `Responder`'s send fn is a boxed `FnOnce … + Send`
+      (`agent-client-protocol-2.0.0/src/jsonrpc.rs:3680`), so a responder can be
+      moved into a task, and `ConnectionTo::spawn` (jsonrpc.rs:3173) is the
+      crate's own documented escape from "this callback blocks further message
+      processing until it completes". So `deny(&request)` becomes: register a
+      pending approval keyed on the JSON-RPC request id, digesting everything
+      shown; say in the conversation what is being asked and where to answer;
+      park the responder; resolve it with whatever the shared
+      `acp_permission::choose` returns for the human's decision. Same stream, no
+      `session/load`, no connection registry, no new GUI surface, and no new
+      `warpctrl` action.
+
+      **Three falsifiers, to be run as a spike before any of it is built** — this
+      design is reasoned from source, which is exactly the standard T14 keeps
+      failing:
+      (a) a parked responder plus `spawn` deadlocks the single-task connection;
+      (b) `opencode` times out its own outstanding request while a person thinks
+      — its timeout behaviour is entirely unmeasured;
+      (c) Warp aborts or mis-renders a turn left idle for minutes (grepped
+      `response_stream.rs` and found only token-refresh timeouts, but grepping is
+      not tracing).
+      A spike that parks one request, answers it from `warpctrl`, and watches the
+      file appear settles all three. If any fails, the held-connection design
+      comes back off the shelf and *then* the "resume becomes second-best"
+      argument holds.
+
+      **And the silent-failure defect above is evidence against assuming step two
+      works.** "Emit a note saying what is being asked and where to answer" is
+      the same kind of event that was just measured vanishing when the turn was
+      in the wrong state. The spike has to verify the note *lands*, not that it
+      was sent.
+
+      **What finding 2 changes is what the card must say, not what it must be.**
+      The session directory — the thing that decided whose rules applied — is
+      Warp's own first-hand fact, chosen from the pane and sent in
+      `NewSessionRequest`; it is already sitting in `Turn::working_directory` and
+      needs no map to disclose. The per-call `cwd`/`locations` from the preceding
+      `tool_call_update` are agent-authored enrichment and are what needs the
+      `toolCallId → last-seen fields` join, scoped to pending requests rather
+      than built as a general accumulated-tool-state model.
 
 - [x] **T14.3** ~~**Warp cannot observe an agent's permission policy, so it must
       not imply one.**~~ **The headline is false and running it is what showed

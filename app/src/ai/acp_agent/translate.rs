@@ -110,6 +110,15 @@ pub(super) struct Translator {
     /// title is usually the useless one, and this is what lets the second be
     /// shown without showing both.
     announced: Vec<(String, String)>,
+    /// Whether [`Self::open`] has run, i.e. whether Warp has seen a `StreamInit`
+    /// for this turn.
+    ///
+    /// **This is a correctness flag, not bookkeeping.** Every other event this
+    /// type produces is addressed to a stream Warp is already tracking, and a
+    /// failure before `open` has no such stream to be reported into — it was
+    /// measured to vanish completely, panel and log alike. See
+    /// [`Self::stream_was_opened`].
+    opened: bool,
 }
 
 impl Translator {
@@ -129,7 +138,14 @@ impl Translator {
             started_at,
             pending: None,
             announced: Vec::new(),
+            opened: false,
         }
+    }
+
+    /// Whether a `StreamInit` has been emitted, which decides how a failure has
+    /// to be reported. See [`Self::opened`].
+    pub(super) fn stream_was_opened(&self) -> bool {
+        self.opened
     }
 
     /// The events that open the stream, emitted once the agent has named its
@@ -140,6 +156,7 @@ impl Translator {
     /// as `params.conversation_token`, so Warp's own round-tripping is the
     /// session store and this module keeps no state between turns.
     pub(super) fn open(&mut self, session_id: String) -> Vec<api::ResponseEvent> {
+        self.opened = true;
         let mut events = vec![api::ResponseEvent {
             r#type: Some(api::response_event::Type::Init(
                 api::response_event::StreamInit {

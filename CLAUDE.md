@@ -118,10 +118,13 @@ upstream and rebasable.
 
 Environment variables the fork adds: `WARP_FORK_ACP_COMMAND` (**name an agent and
 it answers the agent panel** — `"opencode acp"`; naming the command *is* the
-switch, there is no second flag, and it outranks `WARP_FORK_LOCAL_AGENT`. The
-agent process inherits Warp's cwd, so an agent that reads its own config from the
-working directory reads it from wherever Warp was launched; the *session* cwd
-comes from the pane), `WARP_FORK_POLICY` (set `0`/`off`/`false`
+switch, there is no second flag, and it outranks `WARP_FORK_LOCAL_AGENT`. **The
+session cwd comes from the pane, and that is where the agent finds its own
+config — so the pane's directory decides whether the user's permission rules
+load at all.** Measured: the same agent in a directory without its config file
+ran a shell command in `$HOME` and sent no permission request; in a directory
+with one it asked, and Warp denied. This corrects an earlier claim here that the
+config came from wherever Warp was launched), `WARP_FORK_POLICY` (set `0`/`off`/`false`
 to run stock upstream behaviour without rebuilding — use this to A/B a suspected
 fork regression), `WARP_FORK_LOCAL_AGENT`, `WARP_FORK_AGENT_SPAWN_DEPTH`,
 `WARP_FORK_ALLOW_TELEMETRY_EGRESS`, `WARP_FORK_QUAKE_VISOR` (the one that
@@ -309,6 +312,26 @@ cancelled the drag, while `use_computer text "echo …"` into a focused terminal
 input produced nothing at all. So cancel keys and shortcuts are drivable and
 typing is not. `Key::Keycode(n)` is an X **keysym** on this backend, not a
 keycode — Escape is `0xff1b`.
+
+**Screenshotting on WSLg: capture the window, never the root.** Same failure as
+the Windows `CopyFromScreen` case and worth the two lines it costs:
+
+```
+DISPLAY=:0 xwininfo -root -children     # the app is the child with a real geometry
+DISPLAY=:0 import -window 0x20006d /tmp/shot.png
+```
+
+`scrot`/`import -window root` return a **solid black frame** — the surface is
+GPU-composited and the root window never held its pixels. `import -window <id>`
+gets the real contents without raising or focusing anything. The id changes every
+launch, so read it rather than remember it; Warp is the child sized like a window
+(`1246x802+1089+596`), among Weston's own 1x1 and 10x10 stubs.
+
+**And take the screenshot before believing `warpctrl agent read`.** Measured on
+T14.6: a conversation whose panel was displaying a full error paragraph read back
+through `agent read` as an exchange with **no output field at all**, because the
+error renders as an error block rather than as output. The CLI is the faster
+instrument and it is silent about a whole class of state.
 
 ---
 

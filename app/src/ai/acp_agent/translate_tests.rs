@@ -260,6 +260,25 @@ fn opening_reports_the_session_id_and_announces_the_task_once() {
     );
 }
 
+/// **The flag that decides how a failure gets reported.** A `StreamFinished`
+/// sent before any `StreamInit` is addressed to a stream Warp was never told
+/// about, and it was measured to vanish — no message in the panel, none in the
+/// log. `drive` reads this to choose between finishing the stream and failing
+/// the item; if it ever reports `true` too early, that silence comes back.
+#[test]
+fn a_stream_is_not_open_until_it_has_been_opened() {
+    let mut translator = translator();
+
+    assert!(
+        !translator.stream_was_opened(),
+        "nothing has been emitted yet, so there is no stream to finish"
+    );
+
+    translator.open("ses_abc".to_owned());
+
+    assert!(translator.stream_was_opened());
+}
+
 fn creates_a_task(event: &api::ResponseEvent) -> bool {
     match &event.r#type {
         Some(api::response_event::Type::ClientActions(actions)) => {
