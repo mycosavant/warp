@@ -358,14 +358,7 @@ async fn exchange(
     };
 
     let updates = (Arc::clone(&translator), tx.clone());
-    // The program name rather than the whole command line: an entry says which
-    // agent is waiting, and the arguments are Warp's configuration, not the
-    // question being asked.
-    let program = command
-        .split_whitespace()
-        .next()
-        .unwrap_or(&command)
-        .to_owned();
+    let program = agent_name(&command);
     let permissions = (
         Arc::clone(&translator),
         tx.clone(),
@@ -506,6 +499,62 @@ fn spawn_failure_or(error: impl std::fmt::Display, command: &str) -> anyhow::Err
     anyhow!("The agent exchange failed: {error}")
 }
 
+/// Runners that are not the agent, and whose next non-flag argument is.
+///
+/// Deliberately short and deliberately a *display* heuristic. It is allowed to
+/// be incomplete because its worst case is the old behaviour — an entry named
+/// after the launcher — and it can never name the wrong *agent*, only a less
+/// specific true thing. Nothing about consent reads this.
+const AGENT_LAUNCHERS: &[&str] = &["npx", "bunx", "pnpx", "uvx", "dlx", "pipx"];
+
+/// The name to show for the agent that is asking.
+///
+/// **The first token is the agent for a direct command and the launcher for an
+/// indirect one**, which is how a card came to read *"npx wants permission"* —
+/// measured on T14.6 against `claude-agent-acp`, which is normally reached as
+/// `npx -y @agentclientprotocol/claude-agent-acp`. That is accurate and useless:
+/// every agent run through `npx` would say the same thing, so the one field
+/// whose job is *which agent is waiting* stopped answering it.
+///
+/// Naming this a heuristic rather than dressing it up: for a launcher, the first
+/// argument that is not a flag is taken as the package, and its scope and
+/// version are trimmed. `@agentclientprotocol/claude-agent-acp@0.70.0` becomes
+/// `claude-agent-acp`. Anything unrecognised falls back to the first token,
+/// which is what shipped before, so the failure mode is *less* information and
+/// never wrong information.
+fn agent_name(command: &str) -> String {
+    let mut tokens = command.split_whitespace();
+    let Some(first) = tokens.next() else {
+        return command.to_owned();
+    };
+    if !AGENT_LAUNCHERS.contains(&first) {
+        return first.to_owned();
+    }
+    tokens
+        .find(|token| !token.starts_with('-'))
+        .map(package_name)
+        .unwrap_or_else(|| first.to_owned())
+}
+
+/// `@scope/name@version` → `name`, and anything simpler through unchanged.
+///
+/// The version is trimmed from the right and the scope from the left, in that
+/// order, because a scoped package contains two `@` and stripping from the left
+/// first would eat the scope marker rather than the version.
+fn package_name(spec: &str) -> String {
+    let without_version = match spec.rfind('@') {
+        // Not index 0: `@scope/name` with no version starts with `@`, and that
+        // one is the scope marker rather than a version separator.
+        Some(at) if at > 0 => &spec[..at],
+        _ => spec,
+    };
+    without_version
+        .rsplit(['/', '\\'])
+        .next()
+        .unwrap_or(without_version)
+        .to_owned()
+}
+
 /// Describes one permission request the way the control plane needs it.
 fn parked_request(
     id: &agent_client_protocol::schema::v1::RequestId,
@@ -615,12 +664,25 @@ fn asking_note(parked: &registry::ParkedRequest) -> String {
              nothing after it."
         ),
         None => {
+            // Terminated explicitly rather than trusting the reason to end in
+            // one. Measured on T14.6 against a live `switch_mode` refusal, the
+            // note read "…the policy it already had Answer no with…" — two
+            // sentences run together, in the one paragraph a person reads to
+            // decide something. The reasons now end in a full stop; this makes
+            // that a property of the sentence rather than of every writer of a
+            // reason, including the shared module in another crate.
             let why = parked
                 .approve_refused_because
                 .as_deref()
-                .unwrap_or("Warp cannot say yes to this one");
+                .unwrap_or("Warp cannot say yes to this one.")
+                .trim_end();
+            let stop = if why.ends_with(['.', '!', '?']) {
+                ""
+            } else {
+                "."
+            };
             format!(
-                "Warp will not say yes to this: {why} \
+                "Warp will not say yes to this: {why}{stop} \
                  Answer no with `warpctrl agent deny {id}`, or cancel the turn."
             )
         }

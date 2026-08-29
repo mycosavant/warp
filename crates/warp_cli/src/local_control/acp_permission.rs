@@ -226,18 +226,18 @@ fn unconfined_reason(request: &RequestPermissionRequest) -> String {
     match request.tool_call.fields.kind {
         Some(ToolKind::SwitchMode) => {
             "the agent is asking which permission policy should apply, not whether one thing may \
-             happen; no option there is single-shot whatever its kind says, so --approve declines \
-             and the session keeps the policy it already had"
+             happen; no option there is single-shot whatever its kind says, so Warp declines and \
+             the session keeps the policy it already had."
                 .to_owned()
         }
         Some(kind) => format!(
             "the call's kind is `{}`, whose effect this build cannot bound to this one call, so \
-             --approve declines; a kind it knows would have been answered",
+             Warp declines; a kind it knows would have been answered.",
             tool_kind_name(kind)
         ),
         None => {
             "the request says nothing about the call's kind, so this build cannot tell whether \
-                 saying yes stops at this call, and --approve declines rather than guess"
+             saying yes stops at this call, and Warp declines rather than guess."
                 .to_owned()
         }
     }
@@ -436,13 +436,17 @@ fn no_option_reason(request: &RequestPermissionRequest, decision: Decision) -> S
     } else {
         offered
     };
+    // Terminated like the others: these are concatenated into a paragraph by
+    // `acp_agent`'s conversation note, and shown on their own by the console and
+    // by `warpctrl`. A reason that trails off after a list reads as truncated
+    // output rather than as a sentence.
     match decision {
         Decision::Allow => format!(
-            "the agent offered no single-shot allow, so the answer is no; it offered: {offered}"
+            "the agent offered no single-shot allow, so the answer is no; it offered: {offered}."
         ),
         Decision::Deny => {
             format!(
-                "the agent offered no single-shot reject, so the turn was cancelled, which is still a no; it offered: {offered}"
+                "the agent offered no single-shot reject, so the turn was cancelled, which is still a no; it offered: {offered}."
             )
         }
     }

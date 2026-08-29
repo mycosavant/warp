@@ -487,3 +487,70 @@ fn only_a_permitted_yes_selects_an_allow() {
         "an Allow for an entry with nothing to select denies rather than guesses"
     );
 }
+
+/// The card names the **agent**, not whatever launched it.
+///
+/// **Measured on T14.6**: a live `claude-agent-acp` request came up as
+/// *"npx wants permission"*, because the command that reaches it is
+/// `npx -y @agentclientprotocol/claude-agent-acp` and the first token is the
+/// runner. Accurate and useless — every agent run through `npx` would say the
+/// same, so the one field whose job is *which agent is waiting* had stopped
+/// answering it.
+///
+/// The last case is the guarantee that makes the heuristic acceptable: anything
+/// unrecognised falls back to the first token, which is what shipped before, so
+/// the failure mode is less information and never wrong information.
+#[test]
+fn the_agent_is_named_rather_than_its_launcher() {
+    for (command, expected) in [
+        // The measured one.
+        (
+            "npx -y @agentclientprotocol/claude-agent-acp",
+            "claude-agent-acp",
+        ),
+        // Pinned versions and scopes both come off.
+        (
+            "npx -y @agentclientprotocol/claude-agent-acp@0.70.0",
+            "claude-agent-acp",
+        ),
+        ("bunx some-agent@1.2.3", "some-agent"),
+        // A direct command is already right and must not be touched.
+        ("opencode acp", "opencode"),
+        ("/usr/local/bin/my-agent --acp", "/usr/local/bin/my-agent"),
+        // Degenerate shapes fall back rather than panic or empty out.
+        ("npx", "npx"),
+        ("npx -y", "npx"),
+        ("", ""),
+    ] {
+        assert_eq!(agent_name(command), expected, "for {command:?}");
+    }
+}
+
+/// The refusal reads as sentences, because it is one paragraph a person uses to
+/// decide something.
+///
+/// **Measured on T14.6**, against a live `switch_mode` request: the note read
+/// *"…so Warp declines and the session keeps the policy it already had Answer no
+/// with `warpctrl agent deny …`"*. The reasons come from a shared module in
+/// another crate, so the terminator is added here rather than assumed there —
+/// and not doubled when it is already present.
+#[test]
+fn a_refusal_reads_as_sentences_however_the_reason_was_written() {
+    let terminated = asking_note(&registry::ParkedRequest {
+        approve_refused_because: Some("it ends in a full stop.".to_owned()),
+        ..park_this(&request(as_opencode_sent_it()), Vec::new())
+    });
+    assert!(
+        terminated.contains("full stop. Answer no with"),
+        "an already-terminated reason is not given a second stop: {terminated}"
+    );
+
+    let bare = asking_note(&registry::ParkedRequest {
+        approve_refused_because: Some("it does not".to_owned()),
+        ..park_this(&request(as_opencode_sent_it()), Vec::new())
+    });
+    assert!(
+        bare.contains("it does not. Answer no with"),
+        "an unterminated reason gets one: {bare}"
+    );
+}

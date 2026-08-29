@@ -493,3 +493,57 @@ fn an_option_with_no_meta_declares_nothing() {
         Declaration::None
     );
 }
+
+/// **A shared reason may not name one surface's mechanism.**
+///
+/// These sentences were written for the `--approve` flag and said so. Since
+/// T14.6 the same strings are `PendingApproval::approve_refused_because` — they
+/// reach a Warp conversation, a `warpctrl` error and a phone card, none of which
+/// have a `--approve` flag. Measured against a live `switch_mode` request, the
+/// panel read *"…so --approve declines and the session keeps the policy it
+/// already had"*, naming a command-line option to someone reading a chat.
+///
+/// This is the rule `the_continuation_refusal_explains_itself_without_protocol_jargon`
+/// already applies one crate over: a refusal must not name a mechanism the
+/// reader cannot act on. Sharing the module is what made these strings owe it.
+///
+/// They also have to end in a full stop, because callers concatenate them into
+/// a paragraph — `acp_agent` terminates defensively, but a reason that ends
+/// mid-thought reads badly wherever it is shown on its own.
+#[test]
+fn a_shared_refusal_names_no_surface_of_its_own() {
+    let mut unknown_kind = request(as_opencode_sent_it());
+    unknown_kind.tool_call.fields.kind = Some(ToolKind::Other);
+    let mut no_kind = request(as_opencode_sent_it());
+    no_kind.tool_call.fields.kind = None;
+    // …and the "nothing on offer" branch, which is a different function.
+    let mut only_always = request(vec![option(
+        "always",
+        "Always allow",
+        PermissionOptionKind::AllowAlways,
+    )]);
+    only_always.tool_call.fields.kind = Some(ToolKind::Execute);
+
+    let mut requests = vec![
+        as_claude_asked_to_leave_plan_mode(),
+        unknown_kind,
+        no_kind,
+        only_always,
+    ];
+
+    for request in &mut requests {
+        let Choice::Cancel { reason } = choose(request, Decision::Allow) else {
+            panic!("each of these is refused");
+        };
+        for flag in ["--approve", "--deny", "warpctrl"] {
+            assert!(
+                !reason.contains(flag),
+                "{flag} means nothing to someone reading a conversation, got: {reason}"
+            );
+        }
+        assert!(
+            reason.trim_end().ends_with('.'),
+            "a reason is concatenated into a paragraph, so it ends a sentence: {reason}"
+        );
+    }
+}

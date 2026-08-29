@@ -6983,6 +6983,71 @@ Nothing has run on Windows.
       all. Saying less is the only safe direction when the whole point of the
       label is that the two mean different things.
 
+      **The refusal path is measured now, against the second agent.** The commit
+      that shipped the yes said plainly that the allow path was measured and
+      every refusal only argued — no `switch_mode` had ever been seen on the
+      wire, because `opencode` does not send one. So `claude-agent-acp@0.70.0`
+      was run through the app path, in a scratch project whose **own**
+      `.claude/settings.json` sets `defaultMode: plan` (the user's global says
+      `auto`, and was not touched — project settings outrank user settings,
+      which is the same session-directory mechanism finding 2 established).
+
+      Asked to create a file, it planned, then sent `ExitPlanMode`:
+
+      ```
+      tool_name  "switch_mode"     summary "Ready to code?"
+      can_approve false
+      approve_refused_because "the agent is asking which permission policy
+        should apply, not whether one thing may happen; …"
+      options_offered
+        "Yes, and bypass permissions"      "Yes, and use \"auto\" mode"
+        "Yes, and auto-accept edits"       "Yes, and manually approve edits"
+        "No, keep planning"
+      ```
+
+      Exactly the five options T14.2 captured, including the `allow_once` that
+      T14.2's `--approve` selected — the bug that started this whole line of
+      work. `agent approve` answered `insufficient_permissions` with that
+      reason; `agent deny` selected `reject_once`; `plan.txt` was never created
+      and the session kept plan mode. **The T14.2 defect, inverted into a
+      defence and now measured rather than argued.** `acts_on` was absent, which
+      is correct — a mode switch acts nowhere.
+
+      **Three defects on the consent surface, all found by looking at what the
+      card actually said.**
+
+      *The card named the launcher.* `agent` read **`npx`**, because the program
+      was the first whitespace token of `WARP_FORK_ACP_COMMAND` and the command
+      is `npx -y @agentclientprotocol/claude-agent-acp`. Accurate and useless:
+      every agent reached through `npx` would say the same, so the one field
+      whose job is *which agent is waiting* had stopped answering it. Now a
+      named launcher is skipped and the package trimmed to
+      `claude-agent-acp`, with the first token as fallback — so the failure mode
+      is less information, never wrong information.
+
+      *The refusal named a flag that does not exist here.* The reason read
+      *"…so --approve declines…"* in a Warp conversation. Sharing
+      `acp_permission` between the CLI flag and the app is what made its
+      sentences owe the rule `the_continuation_refusal_explains_itself_without_protocol_jargon`
+      already applies: a refusal must not name a mechanism the reader cannot act
+      on. They say *"Warp declines"* now, and a test pins that no shared reason
+      names `--approve`, `--deny` or `warpctrl`.
+
+      *Two sentences ran together.* *"…the policy it already had Answer no
+      with…"*, in the paragraph a person reads to decide. The reasons terminate
+      now and the note terminates defensively anyway — and writing that test
+      immediately found a **fourth** reason, `no_option_reason`, trailing off
+      after a list.
+
+      **And the agent wrote into `~/.claude/plans/` before asking anything.**
+      The permission request's `rawInput` carried
+      `planFilePath: /home/effatha/.claude/plans/…md`, and the file was there.
+      Not Warp's doing, and not a leak of the scratch profile — plan files are
+      global to the agent. It is one more instance of this module's own caveat,
+      on the flagship agent: **Warp only ever answers the questions an agent
+      chooses to ask**, and the write that mattered was not one of them.
+      (Artifact removed; the pre-existing plan file beside it was left alone.)
+
       **A note on the instrument rather than the code.** The release build took
       the whole WSL VM down — the guest came back at `up 1 min` with an empty
       `dmesg`, so the VM died rather than Linux OOM-killing a process. Measured
