@@ -298,6 +298,42 @@ rather than assumed. So the fork's thesis path has working remote consent today:
 Claude asks, the plugin reports over OSC 777, Warp surfaces it, a paired device
 answers.
 
+**TR-EVENTS-B measured 2026-08-30, and the answer is "absent but recoverable".**
+The `PermissionRequest` payload was captured verbatim with a second hook
+registered beside the plugin's own (`.fork/tools/dump-hook-stdin.sh`; a hook
+event runs every command registered for it, so this needs no edit to the
+vendored plugin). Ten keys arrive:
+
+```
+cwd  effort  hook_event_name  permission_mode  permission_suggestions
+prompt_id  session_id  tool_input  tool_name  transcript_path
+```
+
+- **There is no `tool_use_id`.** The claim recorded in three files is correct.
+- **But `transcript_path` is on the payload**, pointing at Claude Code's own
+  session JSONL, whose assistant messages carry `tool_use` blocks with
+  `toolu_…` ids.
+- **And the entry is written *before* the hook fires** — measured, transcript
+  entries at `22:33:13.86–13.99Z` against a dump at `22:33:15Z`. So the id is
+  available at decision time, not only afterwards.
+- **The obvious join does not work.** Matching on `tool_input` alone is
+  ambiguous: the same command resolved to **two** ids in one session, because
+  an agent re-runs commands. The usable key is the *most recent* `tool_use`,
+  disambiguated by `tool_name` + input among calls not yet resolved. **Not
+  verified**: what happens with parallel tool calls, where one assistant message
+  carries several `tool_use` blocks and "most recent" stops being a single
+  answer.
+
+**Two fields nobody knew were there, and one of them changes I18.**
+`permission_mode` is on the payload, so Warp can *know* the mode a CLI agent is
+in rather than infer it. And `permission_suggestions` carries Claude Code's own
+proposed rule additions, shaped
+`{type: addRules, rules: [...], behavior: allow, destination: session}` — a
+first-class, **session-scoped** persistent grant. That is direct evidence for
+I18's central claim: the "allow all for this session" affordance is not
+something the fork would be inventing, it is something already offered and
+currently dropped. `effort: {level: …}` is the third, unexamined.
+
 **Two facts about it that change what the fork can do** (read 2026-08-30, T14.20):
 the permission hook is **observational only** — it reports and exits, so Warp is
 told and cannot answer — and the payload carries **no call id**, which is
