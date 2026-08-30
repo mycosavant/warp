@@ -54,6 +54,8 @@ pub mod request_usage_model;
 pub(crate) mod restored_conversations;
 pub(crate) mod runner_display;
 pub(crate) mod skills;
+/// The fork's answer to T14.13: a conversation on disk the agent can grep.
+pub(crate) mod transcript;
 #[cfg(not(target_family = "wasm"))]
 pub(crate) mod tui_api_keys;
 pub(crate) mod voice;

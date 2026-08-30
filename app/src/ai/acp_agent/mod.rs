@@ -537,7 +537,9 @@ async fn exchange(
             // T14.18 both were read for a session id alone -- which is how a
             // panel session came to run in whatever mode the agent picked,
             // unreported, for its whole life.
-            let mut advertised = None;
+            // Not initialised: every path below either assigns it or returns,
+            // so an initial `None` would be a dead store the compiler warns about.
+            let mut advertised;
             let session_id = match resume {
                 None => {
                     let opened = connection

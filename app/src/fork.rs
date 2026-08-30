@@ -449,6 +449,49 @@ fn event_log_dir_from(value: Option<&str>) -> Option<std::path::PathBuf> {
     }
 }
 
+const TRANSCRIPT_ENV_VAR: &str = "WARP_FORK_TRANSCRIPT";
+
+/// Where a conversation's transcript is written so the agent can grep its own
+/// history back, or `None` to keep it in memory as upstream does (T14.19).
+///
+/// **This exists because of a divergence, not a missing feature.** Measured in
+/// T14.13: an ACP agent compacts its own context on its own policy — at ~70% of
+/// a 200k window for one measured agent — and neither the agent nor the protocol
+/// has any way to say so. Warp's transcript stays complete while the agent's
+/// does not, and the panel renders Warp's copy, so a person sees turns the agent
+/// can no longer see.
+///
+/// The fix routes *around* detection rather than waiting for it. Warp holds the
+/// record either way, so it can put a searchable copy on disk and name the path
+/// once. Recovery then works whether or not a compaction is ever noticed, which
+/// matters because there is no protocol event to notice one with.
+///
+/// **Off by default, and deliberately so.** This writes conversation text to
+/// disk, and a fork whose thesis is that nothing leaves the machine should not
+/// start persisting what was said without being asked. `WARP_FORK_TRANSCRIPT=on`
+/// writes under [`state_dir`]; any other value is the directory to write in.
+/// `off`/`0`/`false`/empty is the same as unset.
+pub fn transcript_dir() -> Option<std::path::PathBuf> {
+    if !is_active() {
+        return None;
+    }
+    transcript_dir_from(std::env::var(TRANSCRIPT_ENV_VAR).ok().as_deref())
+}
+
+/// Split from the environment for the same reason [`event_log_dir_from`] is: so
+/// the decision can be asserted without setting a process-global from a test
+/// that runs beside others.
+fn transcript_dir_from(value: Option<&str>) -> Option<std::path::PathBuf> {
+    match value.map(str::trim) {
+        None | Some("") | Some("0") | Some("off") | Some("false") => None,
+        Some("on") | Some("true") => Some(state_dir().join("transcripts")),
+        // A path, not a typo — same reasoning as the event log: "write it
+        // somewhere I chose" is the second thing anyone wants, and guessing the
+        // default would put the conversation somewhere the caller did not name.
+        Some(path) => Some(std::path::PathBuf::from(path)),
+    }
+}
+
 const CONTROL_BIND_ENV_VAR: &str = "WARP_FORK_CONTROL_BIND";
 
 /// What `WARP_FORK_CONTROL_BIND` asked the control server to listen on (T11.4).
