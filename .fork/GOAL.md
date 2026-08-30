@@ -1,136 +1,139 @@
-# The horizon: use the fork to build the fork, as the default
+# The horizon: the fork builds the fork, and keeps going when nobody is watching
 
-**Set 2026-08-29. Supersedes the 24-hour self-hosting goal, which was met the
-same day.** Delete this file when it is met or abandoned — it is a horizon, not
-doctrine.
+**Set 2026-08-29, replacing the horizon met the same day.** Delete this file when
+it is met or abandoned — it is a horizon, not doctrine. **Read it first; it
+outranks `TASKS.md`'s ordering while it stands.**
 
 ---
 
 ## Where this starts
 
-The previous goal — *one* multi-turn conversation in Warp's own panel that
-changed the fork, asked permission, was answered from `warpctrl`, and remembered
-itself on the next turn — was met by commit `cddacfbc7`. The account is T14.7's
-as-built in `TASKS.md`.
+The previous horizon asked for *one* multi-turn conversation in Warp's own panel
+that changed the fork, asked permission, was answered, and remembered itself.
+That was met, and then three tickets went at what it cost:
 
-That proved it is **possible**. This goal is about it becoming what actually
-happens, which is a different and less glamorous problem.
+- **T14.7** proved it possible. **T14.9** ran seven turns of real work and
+  produced the friction log everything since has aimed at.
+- **T14.8** answered the worst of it. A permission request Warp could not answer
+  turned out to be one agent's way of asking to leave the project directory —
+  knowable in advance, fixable in the agent's own config, and now refused in
+  words that say what Warp *cannot tell* rather than implying the call is
+  dangerous. Answering the ones it can is now a single paste.
+- **T14.10** gave a silent turn a voice: `quiet_for_seconds` and
+  `last_activity`, plus the discovery that a wedged turn blocks `window close`
+  until you cancel it.
+
+So the loop works and the sharp edges named by one real session are filed off.
+**What has never happened is a second real session.**
 
 ## Destination
 
-> **A full working session on the fork, driven entirely from the fork.** Not a
-> demonstration: a real item off this board, taken end to end in the panel, long
-> enough to meet what only length reveals — and with consent answered by
-> *pressing* something rather than by copying two seventy-character strings.
+> **A working day on the fork, driven from the fork.** Not one conversation and
+> not a demonstration: enough real work, over enough turns, that the friction log
+> stops being a list of blockers and becomes a list of preferences.
 
-Met when a commit lands that was produced that way and the session's own
-friction log is short enough that a person would choose to do it again.
+Met when **T14.11** produces a commit made that way *and* its friction log
+contains nothing that stops a turn. Frictions that merely annoy are the success
+condition, not a failure — that is the whole difference between this horizon and
+the last one.
 
-## The order, and why this order
+## The order, and why
 
-**T14.9 first: run the long session before building anything for it.** This is
-the whole lesson of T14.7 Phase 0, where the two blockers everyone predicted
-were both wrong and the real one — the pane starting in `$HOME` — was in neither
-cell of the table. Every candidate below is a guess about which friction
-dominates until a real session ranks them.
+**T14.11 first, again.** Two rounds of fixes have landed on a measurement nobody
+has re-taken. Running first has overturned the plan twice in T14 — Phase 0's
+table was wrong in both cells, and T14.9 demoted the button that everyone was
+sure about — so the prior is strong and it is cheap to honour.
 
-**T14.8 second: build whatever T14.9 puts at the top.** ~~The current favourite
-is an in-panel approval control.~~ **Both have now run.** T14.9 moved the
-button off the top; T14.8 then found that the thing above it was not a missing
-capability but a wrong sentence and a missing line of output, and that the
-button's own case was mostly transcription. Two rounds, and neither built what
-was predicted before the run — which is the third time this ordering has paid
-in T14.
+The session's *own* task should be **T14.12** (`agent read` says nothing until a
+turn ends), because it is the friction that a long session feels most and the
+one T14.10 only half-answered. **T14.13** (context runs out and nothing knows)
+and **T14.14** (model selection, already offered by the protocol) follow, and
+T14.13 outranks T14.14 the moment a session actually hits a context wall.
 
-## Ranked by a session rather than by conviction — T14.9 has now run
+**Reorder this list if a run says to.** That is what it is for.
 
-**The list below used to lead with the button. It does not any more, and the
-reordering is the whole reason T14.9 came first.**
+## Working unattended
 
-- ~~**Some requests have no yes at all.**~~ **Answered by T14.8: a person yes is
-  viable but declined, and the problem is smaller than it looked.**
-  `other` is what `opencode` sends before any call that would reach *outside the
-  project directory*; everything inside arrives as an ordinary approvable kind,
-  and the agent resolves paths rather than matching strings. So the predicate is
-  knowable in advance, which T14.9 said it was not. `claude-agent-acp` sends the
-  same command as one plain `execute` and never asks this at all. The remedy is
-  a line in the agent's own config (`external_directory` for opencode, verified
-  by running for both the command and the file-read variant), not a relaxation of
-  Warp's allowlist — which stands, because `#[serde(other)]` makes a deliberate
-  `other` and an unread future kind the same value. A digest-bound *person* yes
-  on a shown request would have been sound and is left on the shelf, with the
-  counts that would trigger building it written into the ticket; what it buys
-  back no longer pays for widening what a phone tap may approve. What changed is
-  the refusal: it says what Warp cannot tell rather than implying the call is
-  dangerous, and it names the move.
-- ~~**A wedged turn is silent.**~~ **Done in T14.10.** `agent list` now reports
-  `quiet_for_seconds` and `last_activity` for a turn Warp is driving — measured
-  live at 14 → 59 → 105 seconds against a stalling agent built for the purpose,
-  with `last_activity` naming the frozen call. It reports a symptom and decides
-  nothing: a long compile and a dead agent look identical, and recovery is
-  already total. The reproduction also found that **a wedged turn blocks
-  `window close`** — cancel first, then close, now recorded in `CLAUDE.md`.
-- ~~**No cheap addressing.**~~ **Done in T14.8, and it absorbed the button's
-  case.** `agent approvals` renders each waiting request as a block ending in
-  the exact `warpctrl agent approve|deny '<id>' --digest <d>` line that answers
-  it — no `--latest`, and the digest binding untouched, because the digest is
-  still the one this listing displayed.
-- **No button.** Still open, but the argument for it is now weaker and narrower:
-  the measured cost of ~35 approvals in a seven-turn session was *transcription*,
-  and that is gone without adding a surface. What remains is a claim about
-  modality, which needs another long session to test honestly rather than a
-  conviction.
-- **The GUI has the information, the CLI has the control, neither has both.** The
-  panel streams tool calls and badges the tab `+137 -2`; `agent read` says nothing
-  until the turn ends. Driving from the CLI meant photographing a window.
-- **The event log is blind on this path.** `CLAUDE.md` says to reach for
-  `WARP_FORK_EVENT_LOG` before theorising about what an agent did. On the ACP
-  path it writes `session_start` and `stop` and nothing between them, so the
-  fork's own recommended instrument does not work on the path the fork now uses.
-- **No `/compact`.** A day's work will outgrow a context window; `local_agent`
-  handles compaction and the ACP path does not.
-- **No model selection.** `session/load`'s reply carries `configOptions` with a
-  model select, so the protocol already offers it.
-- **A deterministic refusal is retried three times** with backoff before it is
-  shown. Small, and now rare.
+**This section is the charter, and it exists because the maintainer is away.**
+Everything below is already true of this fork; it is written down here because
+the usual backstop — someone reading the next message — is missing.
 
-## Confirmed working, and this is what makes the destination reachable
+**Proceed without asking:** measuring and probing locally; editing fork-owned
+files; tests; release builds **capped at `CARGO_BUILD_JOBS=8`**; committing each
+increment on `dev` with the findings in the body; launching and stopping Warp
+under scratch `XDG_CONFIG_HOME`/`XDG_STATE_HOME`; driving agents locally;
+enlisting the advisor for decisions.
 
-**Recovery is total.** `agent cancel` ended the wedge and the next turn's
-`session/load` restored the conversation *including work done in the minutes
-before it stalled*. The conversation also survived Warp being closed and rebuilt
-twice, resuming against a new Warp process and a new agent process. **A wedge
-costs time, not state** — which is the property a long working relationship with
-this surface actually depends on.
+**Stop and write it up instead of doing it:**
 
-## Ruled out, with the measurement that ruled it out
+- **push, PR, or upstream merge.** Standing, and unchanged.
+- **any further change to permission posture.** `opencode.json` gained one line
+  by explicit approval; that approval covers that line. A second one is a new
+  question, and "the last one was fine" is not consent.
+- the user's `~/.claude/settings.json` or `settings.toml`; **anything outside
+  this repo and the scratch directories.**
+- installing packages or fetching from the network beyond what is already
+  cached.
+- deleting or rewriting history, and `kill` on a Warp that `window close` would
+  stop — cancel the turn first.
 
-**Replay cost at length is not a problem.** The worry was that spawning an agent
-per turn and replaying the whole history through `session/load` would make long
-conversations progressively slower. Measured 2026-08-29 over stdio, no Warp:
-`session/load` took **0.34s at one exchange of history and 0.34s at six**, with
-process startup (~0.7s) dominating. Replayed notifications grow exactly two per
-exchange, which is linear and cheap. Unverified: the same at fifty exchanges, and
-with large tool outputs in the history rather than short text.
+**Stop conditions — put the work down and report:**
+
+- gates red beyond the known-flaky set (`gh`-dependent git tests, secret
+  redaction, terminal view). **Diff membership, never counts.**
+- **two consecutive failed attempts at the same thing.** Write down what was
+  tried and move to the next item. Thrashing overnight produces a long
+  transcript and no findings.
+- any finding that contradicts a security claim in this fork's own docs. Those
+  claims are the reason the fork exists; one going false outranks whatever
+  ticket was in hand.
+- anything that would leave a Warp or agent process running at the end.
+
+**And the rule that makes unattended work worth reading in the morning:** every
+commit body says what was *found*, including what was found to be wrong. A night
+of green tests with no findings is a night that produced nothing.
+
+## Confirmed working — what makes this reachable
+
+**Recovery is total.** `agent cancel` ends a wedge and the next turn's
+`session/load` restores the conversation *including work done in the minutes
+before it stalled*. Conversations survived Warp being closed and rebuilt twice.
+**A wedge costs time, not state** — and since T14.10 it costs less time, because
+the CLI now says one is happening.
+
+**Answering is cheap.** `agent approvals` prints the exact command that answers
+each request, with the yes omitted where there is none and the digest carried
+through, so consent is a paste rather than two transcriptions.
+
+## Ruled out, with the measurement
+
+**Replay cost at length is not a problem.** `session/load` took 0.34s at one
+exchange of history and 0.34s at six, with process startup dominating. Growth is
+two notifications per exchange. Unverified: fifty exchanges, and large tool
+outputs rather than short text.
+
+**Relaxing the permission allowlist is not the answer to unanswerable requests.**
+A person's yes on a shown request would be sound — that machinery exists and was
+checked — but after the config remedy the residual is one agent, outside the
+project, unconfigured, once. Left on the shelf with the counts that would justify
+building it, in T14.8.
 
 ## Not this weekend
 
-T10's upstream merge and I18's OpenRouter provider are real and are not this.
-Merging upstream while the agent surface is changing under it would confuse two
-kinds of breakage, and the merge cost is paid by deferral rather than by
-divergence — so it is a deliberate wait, not an oversight.
+T10's upstream merge and I18's OpenRouter provider. Merging while the agent
+surface moves would confuse two kinds of breakage; the merge cost is paid by
+deferral, not by divergence. A deliberate wait.
 
 ## Guardrails
-
-Unchanged from the goal this replaces, and they earned their place:
 
 - Commit each increment on `dev`, findings in the body. **No push, no PR, no
   upstream merge.**
 - `CARGO_BUILD_JOBS=8` on every release build — uncapped takes the WSL VM down.
-- Leave no Warp or agent processes running; stop with `warpctrl window close`.
+- Leave no Warp or agent processes running. Stop with `warpctrl window close`,
+  and **cancel a wedged turn first or it will not close**.
 - Scratch profiles via `XDG_CONFIG_HOME`/`XDG_STATE_HOME` only. **Never** touch
   `~/.claude/settings.json` or the user's `settings.toml`.
 - **`cd` the pane into the repo before the first prompt.** A fresh pane starts in
   `$HOME`, both agent paths take the session cwd from the pane, and for an ACP
   agent that directory also decides whether its permission rules load at all.
-- Verify by running. Name the inputs that were not verified.
+- Verify by running. **Name the inputs that were not verified.**

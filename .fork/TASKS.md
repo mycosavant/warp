@@ -7826,6 +7826,69 @@ mode descriptions is the first legitimate instance of `acp_permission.rs`'s
 *"a surface capable of showing what the option declares"* — the sentence
 *"nothing that exists today can"* now has a designated successor.
 
+- [ ] **T14.11** **Run the working session again, and see whether the fixes
+      moved the number.** T14.9 measured a seven-turn session and produced the
+      friction log everything since has been aimed at. Two rounds have landed on
+      it — T14.8 made every answerable request one paste and reworded the
+      unanswerable ones, T14.10 gave a silent turn a number — and **neither has
+      been tested at length by anyone doing real work.** Unit tests and a live
+      one-shot are not the same instrument as an afternoon.
+
+      Same protocol as T14.9, deliberately: take a real item off this board, work
+      it end to end in the panel over as many turns as it takes, keep a friction
+      log with counts, and land a commit that was produced that way. The item
+      should be one of T14.12–T14.14, so the session is building the thing it is
+      also measuring.
+
+      **What would make this a success is not a green run.** It is a ranked list
+      of what still hurts, and the honest possibility is that the top of it is
+      something none of the tickets below name — which has now happened twice
+      (T14.7 Phase 0, and T14.9 reordering T14.8). Treat a session that produces
+      no surprise as weak evidence rather than as a finish line.
+
+- [ ] **T14.12** **`agent read` should say something before the turn ends.**
+      T14.9's third finding, and the one the board has not touched: the panel
+      streams each tool call as it starts, shows a spinner, and badges the tab
+      `+137 -2`, while `warpctrl agent read` shows **nothing at all** until the
+      turn is over. So the GUI has the information and the CLI has the control,
+      and a person driving from the CLI had to photograph a window to find out
+      whether anything was happening.
+
+      T14.10 took the first bite — `agent list` now reports `quiet_for_seconds`
+      and `last_activity`, so a turn is no longer *mute*. What it still cannot
+      do is show the work: the output so far, the tool calls in order, the diff
+      an edit is proposing. Note that the approval card already shows an edit's
+      full diff and the transcript afterwards does not, which is its own oddity
+      recorded in T14.9 and probably the same fix.
+
+      **Look for the gate first.** The translator already produces exactly these
+      events and hands them to a stream Warp is consuming; the question is whether
+      anything retains them where `agent.read` can reach, or whether the answer is
+      that `agent.read` reads a finished conversation by construction.
+
+- [ ] **T14.13** **A day's work will outgrow the context window, and the ACP path
+      does not know it.** `local_agent` handles compaction; the ACP path has no
+      `/compact` and no idea how close it is. T14.9 named this as known-unmeasured
+      going in and did not reach it — seven turns was not enough.
+
+      **Measure before building, and the measurement is cheap**: drive a session
+      long enough to hit the limit against a real agent and record what the panel
+      does. It may be graceful, it may be a wall, and nobody knows which. The
+      shape of the fix depends entirely on that, and every design written before
+      it would be a guess. Note the protocol angle: an agent that resumes through
+      `session/load` replays *its own* history, so whose context fills first —
+      Warp's or the agent's — is itself an open question.
+
+- [ ] **T14.14** **Let a person choose the model the agent uses.**
+      `session/load`'s reply carries `configOptions`, which measured against a
+      live agent includes a model select — so the protocol already offers this and
+      the fork simply does not read it. Small, self-contained, and the first
+      thing on this board that makes the ACP path *better* than the panel's own
+      controls rather than merely equal to them.
+
+      The constraint to carry: a model list is the agent's claim about itself, so
+      it is rendered, never validated, and a selection is passed back verbatim.
+
 ## T15 — Loose ends carried, not forgotten
 
 - [ ] **Re-check `ALLOW_VERIFIED_AGENTS` against a real prompt** (from T11.5).
