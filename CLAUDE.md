@@ -322,6 +322,26 @@ explicit approval:
 
 The plain string form (`"bash": "ask"`) has no such hazard, and is what this was.
 
+**But the trailing `*` is not a prefix a compound command can ride, and that was
+a real worry worth killing.** The obvious reading of `"git status*": "allow"` is
+a glob over the whole command string, which would mean `git status && rm -rf ~`
+matches and runs unasked. Measured 2026-08-30, calibrated both ways in one
+session:
+
+| command | result |
+|---|---|
+| `git status --short && echo COMPOUND_RAN_UNASKED` | **asked** — `echo` is not allowed |
+| `git status --short && git log --oneline -1` | **ran unasked** — both segments allowed |
+
+So `opencode` **decomposes a compound command and requires every segment to match
+independently**. The allowlist cannot be smuggled past with `&&`.
+
+That materially changes what widening it costs. Adding read-only commands does
+not open a door for whatever is chained after them, because whatever is chained
+after them is matched on its own. The remaining argument against any particular
+entry is about that command alone — `ls` and `wc` take arbitrary paths, so an
+allow is wider than it reads — and not about composition.
+
 **How to check one, because the obvious check cannot fail.** Confirming that an
 allowed command runs unasked proves nothing on its own: a map missing its
 `"*": "ask"` lead allows *everything*, so the allow-list appears to work
