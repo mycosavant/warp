@@ -30,6 +30,19 @@ the project is built on, and it is stated here because it keeps paying:
 When something here has only been read, say so. `.fork/IDEAS.md` marks its
 unverified claims at the top of the file; keep that habit.
 
+**And a claim marked *measured* is measured as of its date, not measured now —
+re-run it before building on it.** This is the subtler failure, because "measured
+2026-08-27" reads like ground truth and is treated as exempt from the doubt
+applied to everything else. Twice on 2026-08-29, hours apart: T14.9's *"`agent
+read` shows nothing until the turn ends"* was true when written and had stopped
+being true, and T14.7's *"the ACP path writes no tool events at all"* had been
+fixed by T14.9 without this file being updated. Each was about to fund a night of
+building something that already worked, and the second misled an advisor who was
+reading carefully and had no way to know. The fork's own docs are the most
+dangerous stale input available, precisely because they are the ones written to
+be trusted. A measured claim you are about to spend a day on costs ten minutes to
+re-run.
+
 **…but running it does not save you if you guessed one of its inputs. Name the
 inputs you did not verify.** Measured 2026-08-24: the fork's divergence from
 upstream was published as 1168 files and 515 commits when it is 204 and 141 —
