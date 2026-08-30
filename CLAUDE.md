@@ -220,6 +220,16 @@ Windows). Killing the process leaves a stale discovery record and a
 crash-recovery sibling holding the ports, so the next launch fails. Ordinary
 shutdown cleans both up.
 
+**…and a CLI agent running in a pane blocks it too, with none of the wedge's
+tells.** Measured 2026-08-30: with `claude` alive in a pane, `window close`
+answered `ok: true` and the process stayed up — while `agent list` reported **no
+conversations** and `agent approvals` reported **nothing waiting**, because a CLI
+agent in a pane is neither. So T14.10's instruments, which exist precisely to
+answer "why will it not close", are silent on this case. Three instances
+accumulated this way in one session, and stale instances make every later
+`warpctrl` call answer `ambiguous_instance` — which a check that greps only for
+`"ok"` sails straight past. **End the agent in the pane first**, then close.
+
 **…and cancel a wedged ACP turn first, or it will not close at all.** Measured
 T14.10 against an agent built to stall: with a turn in flight that has stopped
 answering, `window close` returns `ok: true` and Warp stays up — reproduced on
