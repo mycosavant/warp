@@ -748,6 +748,38 @@ available is a **word until one calibrated test** — a sandboxed command
 attempting a write outside the project and a network call, both confirmed to
 fail — has been run.
 
+**There is a second binary, it is upstream's, and fork policy does not reach
+it — but the telemetry backstop does.** `crates/warp_tui` builds
+`warp-tui-oss`, described as *"Warp Agent CLI"*. Built and run for the first
+time 2026-08-30; nothing in this repo's docs had mentioned it.
+
+- **Build it the way `script/run-tui` does**: `--features standalone`, without
+  which `bundled_resources_dir()` cannot find the sibling `resources/` and the
+  binary cannot locate its skills. 9m18s at `-j 8`.
+- **It runs.** Alt-screen, mouse tracking, and then a spinner. **Unverified**
+  what the spinner waits on — the plausible answer is a model credential, since
+  the binary offers `--set-provider-api-key <openai|anthropic|google|grok>` and
+  `--api-key` (`WARP_API_KEY`), but nobody has confirmed it.
+- **It is not a fork surface.** `grep -rn "fork::" crates/warp_tui/src/` returns
+  **nothing**, and so does a grep for `acp_agent`, `local_agent` and
+  `generate_multi_agent_output`. So `WARP_FORK_ACP_COMMAND`, the account-gate
+  bypass, `FORCE_ENABLED` and every predicate in `app/src/fork.rs` are simply
+  absent there. Do not assume a fork behaviour holds in the TUI because it holds
+  in the GUI.
+- **The one thing that does carry over is the important one.** The telemetry
+  deny-list is in `crates/http_client` — `lib.rs:378`, backed by `egress.rs` —
+  and `egress::is_active()` reads *only* `WARP_FORK_ALLOW_TELEMETRY_EGRESS`,
+  with no reference to the app's `fork::is_active()`. `warp_tui` takes
+  `http_client.workspace = true`. **So the backstop is on by default in any
+  binary that links the shared client, including this one.** Putting that policy
+  in the HTTP client rather than in the app's seam is why the fork's strongest
+  claim survives into a binary the fork never edited — worth remembering the
+  next time a policy could go in either place.
+- **On-thesis, with a caveat.** `--set-provider-api-key` is the user's own key,
+  stored locally, which is the thesis nearly verbatim. But the agent behind it
+  is *upstream's*, not the fork's, so a TUI session is a different stack from a
+  panel session and none of T14's consent work applies to it.
+
 **There is a browser, and it is on the Windows side.** `/mnt/c/Program Files`
 holds Firefox, Brave and Zen, and Windows reaches the WSL wide listener — so a
 page served by `WARP_FORK_CONTROL_BIND` can be loaded in a real engine and
