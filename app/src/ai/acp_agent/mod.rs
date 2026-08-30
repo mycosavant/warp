@@ -102,6 +102,7 @@
 //! the T14.3 rule. See `.fork/TASKS.md` T14.6.
 
 pub(crate) mod liveness;
+pub(crate) mod mode;
 pub(crate) mod registry;
 mod translate;
 
@@ -113,7 +114,7 @@ use agent_client_protocol::schema::v1::{
     ContentBlock, InitializeRequest, LoadSessionRequest, NewSessionRequest, PermissionOption,
     PermissionOptionId, PermissionOptionKind, PromptRequest, RequestPermissionOutcome,
     RequestPermissionRequest, RequestPermissionResponse, SelectedPermissionOutcome, SessionId,
-    SessionNotification, SessionUpdate, TextContent,
+    SessionNotification, SessionUpdate, SetSessionModeRequest, TextContent,
 };
 use agent_client_protocol::{AcpAgent, Agent, ConnectionTo};
 use anyhow::{Context as _, anyhow};
@@ -178,6 +179,22 @@ fn resume_failed(agent: &str, error: &str) -> String {
         "{agent} said it could resume this conversation and then could not, so nothing was sent. \
          The session it was asked for is one it named itself on the first turn; if it no longer \
          has it, start a new conversation. Underlying error: {error}"
+    )
+}
+
+/// What a person is told when a mode they asked for was refused (T14.18).
+///
+/// **Not fatal, and the wording has to carry that**, because the turn goes on:
+/// the request failed, the session is in whatever mode the disclosure note
+/// beside this one names, and the work still runs. A person reading only this
+/// sentence must not conclude their turn was cancelled.
+///
+/// The id was already checked against `availableModes`, so this is the agent
+/// refusing a mode it advertised rather than a typo — which is why the advice is
+/// to look at the agent rather than at the spelling.
+fn mode_request_failed(agent: &str, error: &str) -> String {
+    format!(
+        "{agent} advertised the mode WARP_FORK_ACP_MODE asked for and then refused to switch to          it, so this session is still in the mode named above and the turn is running in it.          Underlying error: {error}"
     )
 }
 
@@ -415,9 +432,16 @@ async fn exchange(
         tx.clone(),
         cwd.to_string_lossy().into_owned(),
         program.clone(),
-        conversation_id,
+        conversation_id.clone(),
     );
-    let opening = (Arc::clone(&translator), tx.clone(), session, program);
+    let conversation = conversation_id;
+    let opening = (
+        Arc::clone(&translator),
+        tx.clone(),
+        session,
+        program,
+        conversation,
+    );
 
     agent_client_protocol::Client
         .builder()
@@ -497,7 +521,7 @@ async fn exchange(
             agent_client_protocol::on_receive_request!(),
         )
         .connect_with(agent, |connection: ConnectionTo<Agent>| async move {
-            let (translator, tx, resume, program) = opening;
+            let (translator, tx, resume, program, conversation_id) = opening;
             let hello = connection
                 .send_request(InitializeRequest::new(ProtocolVersion::V1))
                 .block_task()
@@ -507,13 +531,19 @@ async fn exchange(
             // the second case. `load_session` is what it declared it can do;
             // asking anyway would produce a JSON-RPC error naming a method,
             // which is not a sentence anyone can act on.
+            // Captured, not dropped. Both replies carry `modes`, and until
+            // T14.18 both were read for a session id alone -- which is how a
+            // panel session came to run in whatever mode the agent picked,
+            // unreported, for its whole life.
+            let mut advertised = None;
             let session_id = match resume {
                 None => {
-                    connection
+                    let opened = connection
                         .send_request(NewSessionRequest::new(cwd))
                         .block_task()
-                        .await?
-                        .session_id
+                        .await?;
+                    advertised = opened.modes.clone();
+                    opened.session_id
                 }
                 Some(existing) => {
                     if !hello.agent_capabilities.load_session {
@@ -531,8 +561,15 @@ async fn exchange(
                         .block_task()
                         .await;
                     emit(&translator, Translator::end_replay);
-                    if let Err(error) = loaded {
-                        return Err(anyhow!(resume_failed(&program, &error.to_string())).into());
+                    match loaded {
+                        Err(error) => {
+                            return Err(anyhow!(resume_failed(&program, &error.to_string())).into());
+                        }
+                        // A resumed session has a mode too, and it is the one
+                        // case where the mode in force was decided by a
+                        // previous run -- so it is the case a person is least
+                        // likely to have in mind and most worth saying.
+                        Ok(loaded) => advertised = loaded.modes.clone(),
                     }
                     existing
                 }
@@ -547,6 +584,43 @@ async fn exchange(
                     .expect("the translator lock is uncontended");
                 translator.open(session_id.to_string())
             } {
+                let _ = tx.unbounded_send(Ok(event));
+            }
+
+            // **Before the prompt**, for the reason `acp.rs` already gives about
+            // its own `--mode`: a mode asked for after the work is done governs
+            // nothing. The note goes out either way, because the case worth
+            // reporting is precisely the one where Warp asked for nothing and
+            // the agent decided for itself.
+            // Remembered before anything is sent, because a
+            // `current_mode_update` can arrive as soon as the mode request does
+            // and the notification carries an id with no description of its own.
+            emit(&translator, |translator| {
+                translator.remember_modes(advertised.clone())
+            });
+            let decision = mode::Decision::of(
+                &conversation_id,
+                advertised.as_ref(),
+                crate::fork::acp_mode().as_deref(),
+            );
+            if let Some(mode) = decision.mode() {
+                // A failure to set the mode is reported and not fatal. The turn
+                // can still run, the note already says a request was made, and
+                // taking the conversation down over a mode would be a worse
+                // outcome than running in the mode the note names.
+                if let Err(error) = connection
+                    .send_request(SetSessionModeRequest::new(session_id.clone(), mode.clone()))
+                    .block_task()
+                    .await
+                {
+                    let event = emit(&translator, |translator| {
+                        translator.note(mode_request_failed(&program, &error.to_string()))
+                    });
+                    let _ = tx.unbounded_send(Ok(event));
+                }
+            }
+            if let Some(note) = decision.note() {
+                let event = emit(&translator, |translator| translator.note(note.to_owned()));
                 let _ = tx.unbounded_send(Ok(event));
             }
 

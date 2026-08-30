@@ -231,6 +231,37 @@ pub fn acp_agent_command() -> Option<String> {
     (!command.is_empty()).then(|| command.to_owned())
 }
 
+/// The session mode to ask an ACP agent for, by the agent's own id for it:
+/// `WARP_FORK_ACP_MODE=default`.
+const ACP_MODE_ENV_VAR: &str = "WARP_FORK_ACP_MODE";
+
+/// Which session mode to request from the ACP agent, if any (T14.18).
+///
+/// **There is no default, and that is the design rather than an omission.** A
+/// mode id is an opaque string the agent invents: the protocol's own example
+/// set is `"ask"`, `"architect"`, `"code"`, while `claude-agent-acp` uses
+/// `auto`, `default`, `acceptEdits`, `plan`, `dontAsk`, `bypassPermissions` and
+/// `opencode` advertises none at all. Measured T14.14, two agents both ship a
+/// `mode` control meaning opposite things — one selects permission policy, the
+/// other selects an agent persona. So **Warp cannot know which mode makes an
+/// agent ask**, and a built-in default would be this fork guessing one vendor's
+/// vocabulary on every other vendor's behalf.
+///
+/// What Warp does unasked is disclose: `ai::acp_agent::mode` reports the mode a
+/// session started in, in the agent's own words. Choosing one is the person's,
+/// and this is where they say so.
+///
+/// Blank is unset, matching [`acp_agent_command`], for the same reason: a
+/// person clearing the variable means "stop asking for one".
+pub fn acp_mode() -> Option<String> {
+    if !is_active() {
+        return None;
+    }
+    let mode = std::env::var(ACP_MODE_ENV_VAR).ok()?;
+    let mode = mode.trim();
+    (!mode.is_empty()).then(|| mode.to_owned())
+}
+
 /// Set to a number to change how deep `warpctrl agent spawn` may nest.
 const SPAWN_DEPTH_ENV_VAR: &str = "WARP_FORK_AGENT_SPAWN_DEPTH";
 

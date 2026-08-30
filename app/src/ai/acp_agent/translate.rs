@@ -193,6 +193,12 @@ pub(super) struct Translator {
     /// agent. A window that closes when the request answers is right whatever
     /// the agent sends, including nothing at all.
     replaying: bool,
+    /// What the agent said its modes were when this session opened (T14.18).
+    ///
+    /// Held only so a `current_mode_update` — which carries an id and nothing
+    /// else — can be reported in the agent's own words rather than as a bare
+    /// identifier. Never read to decide anything.
+    modes: Option<agent_client_protocol::schema::v1::SessionModeState>,
 }
 
 impl Translator {
@@ -224,6 +230,7 @@ impl Translator {
             started: HashMap::new(),
             completed: HashSet::new(),
             replaying: false,
+            modes: None,
         }
     }
 
@@ -261,6 +268,14 @@ impl Translator {
     /// session id does on the other path: the client stores it and hands it back
     /// as `params.conversation_token`, so Warp's own round-tripping is the
     /// session store and this module keeps no state between turns.
+    /// Remember what the agent advertised, for [`super::mode::changed`].
+    pub(super) fn remember_modes(
+        &mut self,
+        modes: Option<agent_client_protocol::schema::v1::SessionModeState>,
+    ) {
+        self.modes = modes;
+    }
+
     pub(super) fn open(&mut self, session_id: String) -> Vec<api::ResponseEvent> {
         self.opened = true;
         self.session_id = Some(session_id.clone());
@@ -371,6 +386,17 @@ impl Translator {
                 }
                 None => return Vec::new(),
             },
+            // The agent moved its own session's policy. The spec permits this
+            // outright -- "Agents may also change modes autonomously and notify
+            // the client via `current_mode_update`" -- so a mode Warp disclosed
+            // at session start is not a mode that stays true, and a silent
+            // change is T14.18's hazard returning through a door nobody
+            // watched. Drawn as an ordinary note, in the agent's own words.
+            SessionUpdate::CurrentModeUpdate(update) => {
+                api::message::Message::AgentOutput(api::message::AgentOutput {
+                    text: super::mode::changed(self.modes.as_ref(), &update.current_mode_id),
+                })
+            }
             _ => return Vec::new(),
         };
         let mut events = self.flush();

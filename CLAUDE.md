@@ -122,7 +122,7 @@ upstream and rebasable.
 | `app/src/fork.rs` | **the policy seam.** `is_active()`, `FORCE_ENABLED`/`FORCE_DISABLED` feature flags, and ~a dozen predicates (`local_agent_enabled`, `local_drive_enabled`, `account_gate_bypassed`, …). Start here. |
 | `crates/http_client/src/egress.rs` | the telemetry deny-list. The "nothing escapes" claim rests on this. |
 | `app/src/ai/local_agent/` | a local implementation of the one agent-transport function, answering from the `claude` CLI. |
-| `app/src/ai/acp_agent/` | the same function again, answering from **whatever agent `WARP_FORK_ACP_COMMAND` names**, over the Agent Client Protocol (T14.5). It denies every permission request it receives — but **that is not read-only and must never be described as it**: measured, an agent at its own defaults wrote a file and asked nothing, so Warp denied nothing. T14.8 names that mechanism: `claude-agent-acp` starts in session mode **`auto`**, which it describes itself as *"use a model classifier to approve/deny permission prompts"* — so the thing deciding was a model, and Warp was never in the loop. `session/set_mode` to `default` is what makes it ask. **Re-measured 2026-08-30 at 0.70.0: still `auto` by default, now six modes.** And it is *that agent's* feature, not the protocol's — `modes` is protocol-level and `SessionModeId` is an opaque string, so `opencode` 1.18.25 answers `modes: null` and has no auto-anything to set. Do not generalise a mode id across agents. **And the panel path sends no `set_mode` at all** (T14.18): `acp_agent` sends `session/new` with a cwd and nothing else, so with `claude-agent-acp` a panel session runs in `auto` for its whole life and Warp is asked nothing — measured, 0 permission requests and the file written, against 2 requests when `default` is sent first. The fork's permission model is not too tight there; it is **unreached**. This has stayed hidden because every panel session on the board used `opencode`, which has no modes to be in. |
+| `app/src/ai/acp_agent/` | the same function again, answering from **whatever agent `WARP_FORK_ACP_COMMAND` names**, over the Agent Client Protocol (T14.5). It denies every permission request it receives — but **that is not read-only and must never be described as it**: measured, an agent at its own defaults wrote a file and asked nothing, so Warp denied nothing. T14.8 names that mechanism: `claude-agent-acp` starts in session mode **`auto`**, which it describes itself as *"use a model classifier to approve/deny permission prompts"* — so the thing deciding was a model, and Warp was never in the loop. `session/set_mode` to `default` is what makes it ask. **Re-measured 2026-08-30 at 0.70.0: still `auto` by default, now six modes.** And it is *that agent's* feature, not the protocol's — `modes` is protocol-level and `SessionModeId` is an opaque string, so `opencode` 1.18.25 answers `modes: null` and has no auto-anything to set. Do not generalise a mode id across agents. **And the panel path sends no `set_mode` at all** (T14.18): `acp_agent` sends `session/new` with a cwd and nothing else, so with `claude-agent-acp` a panel session runs in `auto` for its whole life and Warp is asked nothing — measured, 0 permission requests and the file written, against 2 requests when `default` is sent first. The fork's permission model is not too tight there; it is **unreached**. This has stayed hidden because every panel session on the board used `opencode`, which has no modes to be in. **T14.18 answers it by disclosing, not by choosing**: the mode a session starts in is now reported in the panel in the agent's own words, and `WARP_FORK_ACP_MODE` requests one — with no default, because a mode id is opaque and the protocol's own examples are `ask`/`architect`/`code`. Warp says which mode is in force; it never picks one for you. |
 | `app/src/drive/local_sync/` | account-free Warp Drive: snapshot, apply, git-backed sync. |
 | `app/src/ai/mcp/tool_digest.rs` | what each MCP server's tools claimed to be, hashed at connect. The tool rug-pull warning rests on this. |
 | `app/src/local_control/console.*` | the console (T12) — the fork's **only** browser-reachable surface. Four unauthenticated routes serving four constants (page, script, manifest, icon), under `default-src 'none'; script-src 'self'`. The script never assigns `innerHTML` and a test pins that; keep it that way, because everything it draws was authored by an agent. **After editing it run `node --check app/src/local_control/console.js`** — it is `include_str!`d, so a syntax error compiles fine, passes every Rust test, and breaks the whole page at runtime. And remember the page draws from `PendingApproval`: a control there must be gated on what the *entry* permits, not only on what the device may do (T14.6). |
@@ -139,7 +139,7 @@ ran a shell command in `$HOME` and sent no permission request; in a directory
 with one it asked, and Warp denied. This corrects an earlier claim here that the
 config came from wherever Warp was launched), `WARP_FORK_POLICY` (set `0`/`off`/`false`
 to run stock upstream behaviour without rebuilding — use this to A/B a suspected
-fork regression), `WARP_FORK_LOCAL_AGENT`, `WARP_FORK_AGENT_SPAWN_DEPTH`,
+fork regression), `WARP_FORK_ACP_MODE` (**the session mode to ask the ACP agent for, by that agent's own id for it** — `default` for `claude-agent-acp`, which is how you make it ask rather than let its `auto` classifier answer. Unset by default and deliberately so: ids are opaque and vendor-specific, so Warp discloses the mode in force and never chooses one. An id the agent did not advertise is reported, not sent), `WARP_FORK_LOCAL_AGENT`, `WARP_FORK_AGENT_SPAWN_DEPTH`,
 `WARP_FORK_ALLOW_TELEMETRY_EGRESS`, `WARP_FORK_QUAKE_VISOR` (the one that
 defaults **on** — set it off to get upstream's terminal in the hotkey window),
 `WARP_FORK_FRAME_LOG` (`on`, or a threshold in ms — slow-frame accounting to
@@ -340,6 +340,25 @@ a known answer first (`wedged-agent.py` is the pattern — fire on the known
 present, stay silent on the known absent), and confirm on a second instrument
 when one exists, which is the general form of *take the screenshot before
 believing `warpctrl agent read`*.
+
+**A live run measures the binary, not your source — check the timestamp.**
+Measured 2026-08-30 and it cost a rebuild plus a wrong conclusion: a release
+build was started, then a fix was written while it compiled, and the run that
+followed exercised the *pre-fix* binary. The feature looked broken, the unit
+test for it passed, and the gap between those two facts is exactly the shape of
+a real bug — so the next twenty minutes went into the wrong place. `date -r
+target/release/warp-oss` against the newest file you touched settles it in one
+second. This is the read-back rule (above) applied to a build: **after any
+mutation, confirm the mutation before believing the next reading**, and a
+compile is a mutation with a long latency and no completion signal of its own.
+
+**And never `pgrep -f` a pattern your own command line contains.** From the same
+session: `until ! pgrep -f "release/warp-oss"; do sleep 2; done` never exits,
+because the `bash -c` running the loop has that string in its own argv and
+matches itself. It waited 34 minutes for itself to die and never ran the build
+it was guarding. Match on something narrower (`pgrep -f "release/warp-oss$"`),
+or check for the thing you actually care about — the discovery record, a port,
+a file.
 
 **Diff test-failure membership, not counts.** Measure a same-session baseline on
 a stashed tree and compare *which* tests failed. There is a known pre-existing

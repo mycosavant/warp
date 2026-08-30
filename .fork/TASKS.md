@@ -8316,26 +8316,99 @@ mode descriptions is the first legitimate instance of `acp_permission.rs`'s
       to `default` is what makes it ask"* — true, and next to no code that sends
       it.
 
-      **What to send, and the argument for sending anything.** Not a picker;
-      that is T14.14's separate control and it is about `category: "model"`.
-      The minimal correct thing is to request the mode in which the agent
-      **asks** — `default` where the agent offers it — and to do nothing where
-      it offers no modes, which is the opencode case and must stay silent rather
-      than error.
+      **What to send — and the first plan for this was wrong, caught before a
+      line was written.** The pitch was: request `default`, the mode where the
+      agent asks, since moving `auto` → `default` **narrows** and a narrowing
+      move needs no consent machinery, the same asymmetry that lets
+      `agent.deny` work with no switch while `agent.approve` needs
+      `WARP_FORK_REMOTE_APPROVE`.
 
-      This is the fork *narrowing*, not widening, and that is what makes it
-      admissible without consent machinery: moving `auto` → `default` can only
-      cause more requests to be raised and never fewer, which is the same
-      asymmetry that lets `agent.deny` work with no switch while
-      `agent.approve` needs `WARP_FORK_REMOTE_APPROVE`. A person who wants the
-      classifier back should get it from a mode surface built deliberately, and
-      it belongs behind a `fork.rs` predicate either way.
+      The asymmetry is real and the plan still fails, because picking `default`
+      by id is Warp generalising one vendor's word — the error established
+      hours earlier by this very phase's own mode survey. Checked rather than
+      assumed: the protocol's doc comment for `session/set_mode` gives its
+      example ids as **`"ask"`, `"architect"`, `"code"`**, not one of which is
+      `default` or `auto`, and `SessionModeId` is an opaque `Arc<str>`. A safe
+      direction is no help when you cannot tell which way you are facing.
+
+      **So: disclose always, request only when told.** Built 2026-08-30 as
+      `app/src/ai/acp_agent/mode.rs`:
+
+      - **Disclosure.** The mode a session started in is reported into the
+        conversation, quoting the agent's **own `description` verbatim** — the
+        `Declaration::Changes` rule, for its reason: Warp cannot see an agent's
+        permission policy, so the only honest thing it can say about one is what
+        the agent put on the wire. The note says outright that Warp did not
+        choose the mode and cannot tell what it permits. An agent advertising no
+        modes gets no note at all, because a note per session saying an agent has
+        no modes trains a person to skip the notes that matter.
+      - **Request.** `WARP_FORK_ACP_MODE` names an id, with **no default value**,
+        and Warp sends `session/set_mode` only for an id the agent actually
+        advertised. An unadvertised id is *reported and not sent*: the spec
+        requires the id be one of `availableModes`, so sending it buys a protocol
+        error instead of a sentence, and failing silently would leave a person
+        believing a mode was requested when it was not.
+      - **Autonomous changes.** The spec permits an agent to change modes on its
+        own and notify by `current_mode_update`. That is the same hazard through
+        an unwatched door, so it is disclosed too — and since the notification
+        carries an **id and nothing else**, the translator remembers what the
+        agent advertised so the note can still use the agent's own words.
+
+      **This overturns a decision recorded in T14.3/T14.4 and pinned by a test.**
+      `translate_tests.rs` asserted `CurrentModeUpdate` renders nothing, on the
+      argument that a mode is the agent's claim and does not predict per-call
+      gating, so rendering it would be Warp restating a governance fact it
+      cannot check. Right about the hazard, wrong about the remedy — and the
+      wrong remedy is measured above at zero requests with nobody told. Silence
+      is not neutrality when the thing unsaid is what decides whether anything
+      gets asked. The hazard is now defended by wording under test rather than
+      by saying nothing.
+
+      **What this deliberately is not**: a claim that Warp is now in the loop. In
+      a mode where the agent does not ask, Warp still sees nothing and decides
+      nothing. The person is merely told so, which they previously were not.
+
+      **Verified by running it, and the whole chain shows in one frame.** With
+      `WARP_FORK_ACP_MODE=default` and `claude-agent-acp` in the panel, asked to
+      write a file: the note says the session started in `auto` and that the
+      variable asks for `default`, *"Standard behavior, prompts for dangerous
+      operations"*, so Warp is requesting it; the agent then **asks**; the
+      request parks with its `rawInput` verbatim
+      (`{"file_path":".../probe.txt","content":"hello"}`); and T14.16's card
+      renders **Yes, once** / **No** under it. Denied from the CLI, read back as
+      gone from `agent approvals`, and `probe.txt` was never written. Same agent,
+      same prompt, that wrote the file unasked before this ticket.
+
+      **The disclosure is once per conversation, and proving that took two
+      tries.** Every turn after the first resumes with `session/load`, whose
+      reply carries `modes` too, so the first cut printed the paragraph above
+      every turn. A `DISCLOSED` map keyed on Warp's conversation id — the
+      `liveness` pattern — rations the *telling* while the mode request is still
+      re-sent each turn, because `session/set_mode` is idempotent and a resumed
+      session may not come back where it left. Confirmed across four turns: one
+      note, and a later turn that answered *"Fourteen."* carried none.
+
+      **Two process errors on the way, both worth more than the fix.** The first
+      live run measured a binary built *before* the gate was written — the
+      feature looked broken while its unit test passed, which is the shape of a
+      real bug, and twenty minutes went into the wrong place. Then the rebuild
+      never started, because `until ! pgrep -f "release/warp-oss"` matched the
+      `bash -c` running the loop: it waited 34 minutes for itself. Both are now
+      in `CLAUDE.md`, and both are the read-back rule wearing new coats — *after
+      any mutation, confirm the mutation*, where the mutations were a compile and
+      a process exit.
 
       **Named as unverified:** whether `session/set_mode` is accepted between
       `session/new` and the first prompt on every agent that advertises modes —
-      one agent, one ordering, is what has been run. And whether a mode
-      requested at session start survives `session/load` on resume, which the
-      fork's recovery story depends on and nothing here tested.
+      one agent, one ordering, is what has been run. Whether a mode requested at
+      session start survives `session/load` on resume; the request is re-sent
+      each turn precisely because that is untested. And **an unexplained
+      flakiness seen twice in four turns**: a turn that produced no output at
+      all, no note and no answer, with the event log showing a `session_start`
+      and no `stop`. It predates this ticket as far as anything here shows, it is
+      not the mode path, and it is recorded rather than explained — chasing it is
+      its own ticket, and calling it fixed or harmless would be inventing a
+      finding.
 
 ## T15 — Loose ends carried, not forgotten
 

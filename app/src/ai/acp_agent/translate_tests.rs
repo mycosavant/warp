@@ -6,7 +6,7 @@
 //! by reading the schema.
 
 use agent_client_protocol::schema::v1::{
-    AvailableCommandsUpdate, ContentChunk, CurrentModeUpdate, TextContent, ToolCall,
+    AvailableCommandsUpdate, ContentChunk, CurrentModeUpdate, SessionModeId, TextContent, ToolCall,
     ToolCallLocation, ToolCallUpdateFields, ToolKind, UsageUpdate,
 };
 
@@ -283,16 +283,31 @@ fn a_silent_update_does_not_erase_a_location_already_known() {
     );
 }
 
-/// The variants that are deliberately silent. `CurrentModeUpdate` is the one
-/// that matters: T14.3 and T14.4 established that the mode is the agent's claim
-/// and does not predict per-call gating, so rendering it in a conversation would
-/// be Warp restating a governance fact it cannot check.
+/// The variants that are deliberately silent.
+///
+/// **`CurrentModeUpdate` used to be on this list, and T14.18 took it off.** The
+/// argument for its silence was that a mode is the agent's claim and does not
+/// predict per-call gating, so rendering it would be Warp restating a governance
+/// fact it cannot check. That is right about the hazard and wrong about the
+/// remedy, and the cost of the wrong remedy was measured: with no
+/// `session/set_mode` anywhere in the panel path, a session ran in whatever mode
+/// the agent chose — `auto` for `claude-agent-acp`, where its own classifier
+/// answers — and raised **zero** permission requests, with nothing anywhere
+/// telling the person that the fork's entire consent surface was idle.
+///
+/// Silence is not neutrality when the thing unsaid is what decides whether
+/// anything gets asked. What `super::mode` renders instead is the agent's own
+/// `description` verbatim, with Warp saying explicitly that it cannot tell what
+/// the mode permits — which discloses an agent's claim *as* an agent's claim
+/// rather than restating it as fact. The hazard the old rule named is real and
+/// is now defended by wording under test rather than by saying nothing.
+///
+/// The other three stay silent and their reasons are untouched.
 #[test]
 fn the_updates_warp_deliberately_does_not_render_produce_nothing() {
     let mut translator = translator();
 
     for update in [
-        SessionUpdate::CurrentModeUpdate(CurrentModeUpdate::new("plan")),
         SessionUpdate::AvailableCommandsUpdate(AvailableCommandsUpdate::new(vec![])),
         SessionUpdate::UsageUpdate(UsageUpdate::new(1, 2)),
         SessionUpdate::UserMessageChunk(text_chunk("what is in this directory?")),
@@ -302,6 +317,35 @@ fn the_updates_warp_deliberately_does_not_render_produce_nothing() {
             "{update:?} should render nothing"
         );
     }
+}
+
+/// **And the one that was moved off it speaks now** (T14.18).
+///
+/// Asserted here as well as in `mode_tests` because the two failures are
+/// different: that module can be right about the sentence while this dispatch
+/// never calls it, which is precisely the state this file pinned for two
+/// phases.
+#[test]
+fn a_mode_the_agent_changed_on_its_own_is_rendered() {
+    let mut translator = translator();
+
+    let events = translator.on_update(&SessionUpdate::CurrentModeUpdate(CurrentModeUpdate::new(
+        SessionModeId::from("bypassPermissions".to_owned()),
+    )));
+
+    assert!(
+        !events.is_empty(),
+        "a session's policy moving is not a thing to be silent about"
+    );
+    let rendered = format!("{events:?}");
+    assert!(
+        rendered.contains("bypassPermissions"),
+        "and it names the mode: {rendered}"
+    );
+    assert!(
+        rendered.contains("on its own"),
+        "attributing the change to the agent, since Warp did not ask: {rendered}"
+    );
 }
 
 /// The stream has to open with the session id, because the client stores it as
