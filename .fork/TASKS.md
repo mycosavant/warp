@@ -8169,6 +8169,63 @@ mode descriptions is the first legitimate instance of `acp_permission.rs`'s
       because a single cheap gesture should not be able to say yes. Named here
       rather than added quietly.
 
+- [ ] **T14.17** **The ACP path logs what the agent did and never what it
+      asked.** Found 2026-08-30 while trying to answer *"is our permission model
+      too tight?"* from data, and failing — which is the finding.
+
+      **Measured.** `translate.rs` emits exactly two event names: `tool_start`
+      and `tool_complete`. Counted across every ACP session recorded in this
+      repo — 11 `session_start`, 35 `tool_start` — the event kinds present are
+      `session_start`, `prompt_submit`, `tool_start`, `tool_complete`, `stop`,
+      `stop_failure`. **Zero permission events, because none is ever written.**
+      The ask and the answer become *conversation notes* — transcript prose a
+      person reads live and nothing durable — while `outcome_for` sends the
+      decision to the agent and records nothing.
+
+      **Warp's own agent path already does this.** `event_log/warp_agent.rs`
+      emits `permission_request` and `permission_replied`, joined to the call by
+      a stable id, with a test pinning that a question to the user is not a
+      permission request. So the ACP path — the path this fork exists for, the
+      one with the consent architecture built on it — is behind the path it was
+      meant to surpass, on exactly the axis that matters.
+
+      **It also quietly breaks the charter.** `.fork/GOAL.md`'s second unattended
+      rule is *"Log every decision with the `tool_input` that was shown, so each
+      landed edit can be traced tomorrow to the answer that let it happen."* On
+      the ACP path that log does not exist. T14.15 unified the two event files an
+      ACP turn used to write — into a file that never contained a permission
+      event to begin with, which is why unifying them did not surface this.
+
+      **What it costs today, concretely.** The tool kinds that appeared in real
+      recorded work are `edit` (12), `read` (11), `execute` (9) and `search` (1)
+      — every one on `effect_is_confined_to_this_call`'s allowlist. That looks
+      like evidence the allowlist is not too tight, and it is not, because the
+      log records tool *calls* and a refused request never becomes one. T14.8
+      measured exactly that shape: refusing opencode's `other` precondition means
+      the `execute` behind it is never sent. **So the one number that would
+      settle the tightness question — how often a request was refused, and for
+      what kind — is the number the fork does not keep.**
+
+      **Scope.** Two event names on the ACP translator, mirroring
+      `warp_agent`'s vocabulary rather than inventing one: `permission_request`
+      carrying the kind, the title and the `tool_input` excerpt that was shown,
+      and `permission_replied` carrying what was answered and by which surface
+      — CLI, console, panel button, or `--approve`. Joined to the call by
+      `tool_call_id`, which `translate.rs` already tracks for the locations
+      remembering in T14.6.
+
+      **The constraint, and it is the whole design.** This log must record what
+      *Warp* did — the request it received, the answer it relayed, the surface
+      the answer came from. It must not claim anything about *why* a person
+      answered, and it must not present Warp's refusal as a judgement about the
+      call: `unconfined_reason`'s wording was corrected in T14.8 for exactly that
+      overreach, and a log line is read later with less context than a panel
+      message, not more.
+
+      **Unverified, and named:** whether an `--approve` run and a panel tap are
+      distinguishable at the point the entry is written, or whether the surface
+      has to be threaded down from the answering call. Nothing has been read yet.
+
 ## T15 — Loose ends carried, not forgotten
 
 - [ ] **Re-check `ALLOW_VERIFIED_AGENTS` against a real prompt** (from T11.5).
