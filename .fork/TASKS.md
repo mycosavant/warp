@@ -7924,6 +7924,39 @@ mode descriptions is the first legitimate instance of `acp_permission.rs`'s
       The constraint to carry: a model list is the agent's claim about itself, so
       it is rendered, never validated, and a selection is passed back verbatim.
 
+- [ ] **T14.15** **One ACP turn writes two event-log files that never name each
+      other.** Found 2026-08-29 while checking whether an advisor's queue
+      recommendation rested on a stale doc. It did, and underneath it was a real
+      defect nobody had seen.
+
+      Measured, one turn with `WARP_FORK_EVENT_LOG` set:
+
+      ```text
+      <conversation-uuid>.jsonl   session_start, stop        agent: warp
+      <acp-session-id>.jsonl      tool_start, tool_complete  agent: opencode
+      ```
+
+      Neither file references the other. So opening the conversation file alone
+      shows **a session with nothing between its ends** — which is word for word
+      the claim `CLAUDE.md` carried from T14.7 and which T14.9 was thought to have
+      fixed. T14.9 *did* fix it; the events simply landed in the other file, and
+      the wrong sentence stayed believable for a day because the file a person
+      naturally opens is the one keyed by the id they already had.
+
+      **Why this outranks the rest of the queue right now.** An unattended run has
+      an orchestrator answering the in-panel agent's permission prompts, and that
+      is only defensible if each approval can be traced afterwards to the edit it
+      produced. That is an audit trail, it is the thing this log is *for*, and
+      today it is split.
+
+      The fix is probably small — the writer already knows both ids, since the
+      parked-approval path carries `session_id` precisely so a request can be
+      lined up with these lines. Candidates: one file per conversation with the
+      ACP session recorded inside it, or a `session_start` in each naming the
+      other. **Check first whether the CLI-agent path has the same split**; it
+      keys on its own session id and may already be coherent, in which case match
+      it rather than invent.
+
 ## T15 — Loose ends carried, not forgotten
 
 - [ ] **Re-check `ALLOW_VERIFIED_AGENTS` against a real prompt** (from T11.5).

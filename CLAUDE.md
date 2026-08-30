@@ -132,10 +132,16 @@ defaults **on** — set it off to get upstream's terminal in the hotkey window),
 `WARP_FORK_FRAME_LOG` (`on`, or a threshold in ms — slow-frame accounting to
 the local log; **reach for this before theorising about why something feels
 slow**), `WARP_FORK_EVENT_LOG` (`on`, or a directory — one JSONL file per
-CLI-agent session, appended as events arrive; **reach for this before
-theorising about what an agent did**, but only on the `local_agent` path: the
-ACP path writes `session_start` and `stop` and **no tool events at all**,
-measured T14.7), `WARP_FORK_CONTROL_BIND` (**the only one
+agent session, appended as events arrive; **reach for this before theorising
+about what an agent did**. T14.9 gave the ACP path tool events, so the "no tool
+events at all" recorded here from T14.7 is **no longer true** — but read the
+next sentence before trusting one file. **One ACP turn writes two files that
+never reference each other**: `<conversation-uuid>.jsonl` gets `session_start`
+and `stop` under `agent: warp`, and `<acp-session-id>.jsonl` gets
+`tool_start`/`tool_complete` under the agent's own name. So opening the
+conversation file alone shows a session with nothing between its ends, which is
+exactly the sentence this bullet used to carry — measured T14.14's opening, and
+ticketed as T14.15), `WARP_FORK_CONTROL_BIND` (**the only one
 that reaches off the machine** — one literal IP address, optionally with a port
 (`192.168.1.5:41234`, `[fd00::1]:41234`; pin one if you want the console on a
 home screen, because an ephemeral port makes a saved URL dead on the next

@@ -46,8 +46,13 @@ has re-taken. Running first has overturned the plan twice in T14 — Phase 0's
 table was wrong in both cells, and T14.9 demoted the button that everyone was
 sure about — so the prior is strong and it is cheap to honour.
 
-The session's own task should be **T14.13** (context runs out and nothing knows),
-with **T14.14** (model selection, already offered by the protocol) behind it.
+The session's own task should be **T14.15** (the event log writes two files with
+no join key), then **T14.13** (context runs out and nothing knows), with
+**T14.14** (model selection, already offered by the protocol) behind them.
+T14.15 goes first because it is the audit trail: an unattended run in which an
+orchestrator answers an agent's permission prompts is only defensible if every
+approval can be traced afterwards to the edit it produced, and today that trail
+is split across two files that do not name each other.
 **T14.12 is closed without being built** — polled through a live turn, `agent
 read` streams after all (0 → 675 → 742 → 838 characters, `is_complete: false`
 throughout), so T14.9's claim that it shows nothing until a turn ends was simply
@@ -68,12 +73,38 @@ increment on `dev` with the findings in the body; launching and stopping Warp
 under scratch `XDG_CONFIG_HOME`/`XDG_STATE_HOME`; driving agents locally;
 enlisting the advisor for decisions.
 
+**Answering the in-panel agent's permission prompts is part of the job, and it
+is the one allowance that needs rules.** Unattended, an orchestrator answering an
+agent short-circuits the consent architecture: the digest binds the answer to
+what was shown, but nothing was shown to a *person*. Two rules make it
+defensible, and both are cheap.
+
+1. **Approve only what the charter itself allows.** An edit inside the repo, a
+   local read, a capped build — yes. Anything else, and **anything Warp marks
+   `can_approve: false`, is denied.** Never route around a refusal: if Warp
+   would not say yes, an orchestrator saying yes on its behalf is the whole
+   safeguard defeated.
+2. **Log every decision with the `tool_input` that was shown**, so each landed
+   edit can be traced tomorrow to the answer that let it happen. T14.9 measured
+   the failure this prevents: two polling loops answered at once and edits landed
+   that the friction log never recorded.
+
+Two more, from measured failures rather than from caution. **Single writer:**
+while the panel session is editing the tree, the orchestrator does not. **Single
+build:** never overlap an orchestrator build with a panel-triggered one — two
+capped builds is sixteen effective jobs on a VM that died at thirty-two.
+
 **Stop and write it up instead of doing it:**
 
 - **push, PR, or upstream merge.** Standing, and unchanged.
-- **any further change to permission posture.** `opencode.json` gained one line
-  by explicit approval; that approval covers that line. A second one is a new
-  question, and "the last one was fine" is not consent.
+- **any further change to permission posture, and this beats "edits to
+  fork-owned files" wherever they meet.** They meet at exactly one place and it
+  is worth naming, because an agent optimising for progress at 3am will find it:
+  `opencode.json` **is** a fork-owned file, and the obvious fix for a permission
+  stall is one line shaped exactly like the line the maintainer approved. The
+  freeze wins. It covers `opencode.json`'s `permission` block, anything under
+  `.claude/`, and both settings files. One approved line is consent for that
+  line; it is not a pattern to continue.
 - the user's `~/.claude/settings.json` or `settings.toml`; **anything outside
   this repo and the scratch directories.**
 - installing packages or fetching from the network beyond what is already
@@ -85,6 +116,28 @@ enlisting the advisor for decisions.
 
 - gates red beyond the known-flaky set (`gh`-dependent git tests, secret
   redaction, terminal view). **Diff membership, never counts.**
+- **a wedge, with a number now that there is one.** `quiet_for_seconds` past
+  about ten minutes with **no** pending approval — `waiting_for_you` is the field
+  that tells those apart — means `agent cancel`, log it, and resume once through
+  `session/load`, which is measured to lose nothing. A second wedge on the same
+  task is a write-up, not a third attempt. **Cancel before `window close`**, or
+  it will not close.
+- **context exhaustion is a finding, not a failure.** Nobody has seen what it
+  looks like from the panel. Record it, then start a fresh session rather than
+  fight it.
+- **disk.** Scratch profiles, event logs and release artifacts accumulate over
+  hours. Check free space before each build and stop below a floor rather than
+  discovering it mid-link.
+- **a measurement whose apparatus could have produced it.** The failure that
+  actually happened today: a polling loop passed the digest positionally, the
+  turn parked, and it looked exactly like a wedge — with the instrument that
+  distinguishes them sitting right there. Before writing any surprising
+  observation down as a finding, ask what in the harness would produce that
+  observation if the phenomenon were absent, and rule it out. Unattended, a false
+  finding committed at 3am is worse than no finding, because it will be believed
+  in the morning.
+- **commit before each risky phase**, so a silent death still leaves a coherent
+  trail on `dev`.
 - **two consecutive failed attempts at the same thing.** Write down what was
   tried and move to the next item. Thrashing overnight produces a long
   transcript and no findings.
