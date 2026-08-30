@@ -127,6 +127,16 @@ fn a_paired_device_cannot_reach_the_actions_that_execute() {
 /// the first write here and earns it by being monotone — Escape on an agent
 /// that is already waiting, so the most it can cause is that something proposed
 /// does not happen.
+///
+/// T14.21 grew it by one, and sharpened the criterion in doing so. "Monotone"
+/// is too loose to be the test — `kill` and `rm -rf` both make less happen. The
+/// real line is that an action may only prevent *proposed future effects* and
+/// may not destroy *existing durable state*, which is what keeps `window.close`
+/// out (it discards unsaved panes) while letting `agent.cancel` in. Cancel is
+/// Stop and not Kill, it completes a loop whose read half — `agent.list`'s
+/// `quiet_for_seconds` — was already granted, and its honest delta from deny is
+/// that it can land mid-side-effect; the module docs carry that argument in
+/// full.
 #[test]
 fn a_paired_device_gets_the_read_surface_and_the_safe_half_of_answering() {
     assert_eq!(
@@ -137,6 +147,7 @@ fn a_paired_device_gets_the_read_surface_and_the_safe_half_of_answering() {
             ActionKind::EventsSubscribe,
             ActionKind::AgentApprovals,
             ActionKind::AgentDeny,
+            ActionKind::AgentCancel,
         ]
         .as_slice()
     );

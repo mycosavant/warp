@@ -29,6 +29,10 @@
   var APPROVALS = 'agent.approvals';
   var ALLOW = 'agent.approve';
   var DENY = 'agent.deny';
+  // Stop, not kill. Pairable on the same argument as DENY and one tap for the
+  // same reason: it can only prevent what was proposed, never destroy what
+  // exists. See `pairing.rs` for the full argument and its honest delta.
+  var CANCEL = 'agent.cancel';
 
   // How long an armed Yes stays armed. Long enough to be a deliberate second
   // tap, short enough that an armed button left on screen disarms itself rather
@@ -533,7 +537,38 @@
       if (c.settled) meta.push('settled');
       if (c.is_hidden) meta.push('hidden');
       if (c.pane_id) meta.push('pane ' + c.pane_id);
+      // The wedge signal, drawn next to the only control that answers it. It is
+      // a symptom and not a verdict — a long compile and a dead agent look
+      // identical from here — so it is shown and never acted on automatically.
+      if (typeof c.quiet_for_seconds === 'number') {
+        meta.push('quiet ' + c.quiet_for_seconds + 's');
+      }
       row.appendChild(text('div', 'meta', meta.join(' · ')));
+
+      // Two facts again, not one: `can(CANCEL)` is about this *device*,
+      // `c.is_busy` is about this *entry*. `is_busy` is true for `in_progress`
+      // alone, so the button appears only where there is a turn to stop —
+      // drawing it from the device would offer to cancel finished work.
+      if (can(CANCEL) && c.is_busy) {
+        var stopRow = text('div', 'answers');
+        var stop = text('button', 'deny', 'Stop');
+        stop.addEventListener('click', function () {
+          stop.disabled = true;
+          control(CANCEL, { conversation_id: c.conversation_id })
+            .then(answerSucceeded)
+            .catch(function (err) { answerFailed(String(err.message || err)); })
+            .then(refreshState, refreshState);
+        });
+        stopRow.appendChild(stop);
+        row.appendChild(stopRow);
+        // Said plainly, because the button cannot do the other half. Restarting
+        // needs `agent.prompt`, which causes effects and so is never pairable.
+        row.appendChild(text(
+          'div',
+          'meta',
+          'Stopping keeps the conversation — picking the work back up happens at the machine.'
+        ));
+      }
       el.agents.appendChild(row);
     });
     // Recorded on screen rather than only in a doc, because it is the first

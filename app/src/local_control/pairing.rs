@@ -70,12 +70,52 @@ use chrono::{DateTime, Duration, Utc};
 ///   already waiting, so the most it can cause is that something proposed does
 ///   not happen. There is no argument in which a stolen device token doing this
 ///   is worse than the agent proceeding.
+/// * `agent.cancel` (T14.21) completes a loop whose *read* half was already
+///   granted, and the argument for it needs the criterion stated more carefully
+///   than "monotone" — see below, because the loose form admits `kill`.
+///
+/// **The criterion, said precisely.** The load-bearing test is not "makes less
+/// happen" — `kill` and `rm -rf` both pass that. It is that an action can only
+/// prevent **proposed future effects** and cannot destroy **existing durable
+/// state**. `agent.deny` passes exactly: Escape on a prompt that has not run
+/// touches nothing that exists. `window.close` fails it, which is why it is in
+/// the refused list rather than here: it discards unsaved panes, and that is
+/// state no routine mechanism already destroys.
+///
+/// `agent.cancel` passes *approximately*, and the delta is written down rather
+/// than smoothed over. Cancelling interrupts a turn that may be mid-side-effect
+/// — a rebase half-applied, a file half-written — and a hostile token holder
+/// watching `events.subscribe`, which is already pairable and already carries
+/// tool calls live, could time one to land at the worst moment. What settles it
+/// is that interruption is an authority the environment *already* holds over
+/// every in-flight operation: Ctrl-C, a lost connection, the stop button in the
+/// panel. A tool run that cannot survive being interrupted is already broken by
+/// things no token gates. The handler is also Stop and not Kill — the
+/// conversation survives, the transcript stays readable, the pane is not
+/// discarded — and it emits the same event the panel's own stop button does.
+///
+/// **Not behind `WARP_FORK_REMOTE_APPROVE`, deliberately.** Cancel is
+/// deny-shaped, and gating it beside `agent.approve` would imply the approve
+/// argument applies to it. That argument is about *causing* what an agent
+/// proposed; this action can only stop it.
+///
+/// **And it is one-way, which the console must not hide.** Restarting a
+/// cancelled turn needs `agent.prompt`, which causes effects and so can never
+/// be pairable. A phone can stop a runaway; picking the work back up happens at
+/// the machine.
+///
+/// **What it does not fix**, so it is not sold as a general recovery verb: a
+/// CLI agent running in a *pane* is not a conversation, so cancel cannot reach
+/// it, and the remedy there is keystrokes into a PTY — which is the boundary
+/// this list exists to hold. See T14.20: that limitation is a hook that does
+/// not answer yet, not something to tunnel through pairing.
 pub(super) const PAIRABLE_ACTIONS: &[ActionKind] = &[
     ActionKind::AppPing,
     ActionKind::AgentList,
     ActionKind::EventsSubscribe,
     ActionKind::AgentApprovals,
     ActionKind::AgentDeny,
+    ActionKind::AgentCancel,
 ];
 
 /// What a paired device may obtain a credential for only when the machine's
