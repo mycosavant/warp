@@ -2265,18 +2265,36 @@ written. This is the second kind. **Unverified:** whether the login demand is a
 feature flag the TUI consults at all, or a hard requirement in its startup path.
 That is the first thing to find out and it is a reading job.
 
-## The cheap alternative that might make all of it moot
+## The cheap alternative, tried — and it does not work
 
-The binary offers `--set-provider-api-key <openai|anthropic|google|grok>` and
-`--api-key` (`WARP_API_KEY`). A user's own provider key is the fork's thesis
-nearly verbatim, so **if setting one removes the login demand, the TUI is
-on-thesis today with no fork changes at all.** Nobody has tried it. **Do this
-before scoping anything**, because it is one command and it could delete the
-entry.
+`--set-provider-api-key <openai|anthropic|google|grok>` was the hope: a user's
+own provider key is this fork's thesis nearly verbatim, so if it removed the
+login demand the TUI would be on-thesis today with no fork changes at all.
 
-If it does *not* remove the demand, then the login is about Warp's own account
-rather than about model access, and that is a different and more interesting
-finding.
+**Measured 2026-08-30, and it does not.** With a key stored (a deliberately
+invalid one, since the question was about the *gate* and not about model
+access), the TUI still opens on:
+
+```
+Welcome to Warp
+● Waiting for login...
+Visit https://app.warp.dev/device?user_code=…&source=warp-agent-cli
+```
+
+A **device-code OAuth flow against `app.warp.dev`**. So the gate is Warp's own
+**account**, not model access, and no provider key will ever satisfy it. The
+more interesting branch is the one that happened.
+
+**And the fork does not block it, which is the right scoping.** `warp.dev` is
+**not** on `BLOCKED_HOST_SUFFIXES` — that list is telemetry and analytics
+(sentry, segment, amplitude, posthog, datadog, statsig, …). So the login would
+succeed for anyone holding an account. **This is therefore a policy question and
+not a technical one**: the TUI is usable today by signing in, and the reason not
+to is the fork's thesis rather than any obstacle.
+
+**What it also proves: the TUI itself works on a phone.** Rendered over SSH in
+Termux it lays out correctly, the type is legible, the key row is usable. The
+account is the *only* blocker between here and a working phone client.
 
 ## What is already true, and worth not losing
 
@@ -2299,9 +2317,10 @@ phone" sounds like the same product and would not be.
 
 ## The smallest version that is still the idea
 
-1. **Try the API key.** One command; may end this entry.
-2. If it does not, **read the startup path** for what the login gates — a flag,
-   or a hard requirement.
+1. ~~Try the API key.~~ **Done — it does not lift the gate.**
+2. **Read the startup path** for what the login actually gates: whether any
+   feature flag is consulted, or whether it is unconditional. This is the open
+   step, and it is a reading job.
 3. Only then decide whether a second fork surface is worth a phone-sized
    terminal, given SSH already gives a shell with all 114 `warpctrl` actions and
    the full fork behaviour behind it.
