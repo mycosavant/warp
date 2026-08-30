@@ -2305,15 +2305,50 @@ never edited — because that policy was put in the shared HTTP client rather th
 in the app's policy seam. Recorded here because it is the argument for where the
 *next* policy should live.
 
-## What it would cost, if it comes to that
+## What it would cost — **corrected, because the first estimate was wrong**
 
-A **second fork surface**, in a crate the fork has never touched. That is not
-fatal but it is not free either: another file set to keep rebasable against
-upstream, and a binary where **none of T14's consent work applies** — no ACP, no
-permission parking, no console, no pairing. A TUI session would be Warp's own
-agent on the user's key, with the fork's telemetry posture and none of its
-consent posture. Say that out loud before building it, because "run Warp on my
-phone" sounds like the same product and would not be.
+This entry originally said un-gating would mean "a second fork surface in a crate
+the fork has never touched." **That is wrong**, found by doing the reading job
+the entry itself asked for. The decision point is not in `crates/warp_tui` at
+all:
+
+```rust
+// app/src/tui/mod.rs:240
+fn has_validated_identity(auth_state: &AuthState) -> bool {
+    auth_state.is_logged_in() && auth_state.user_id().is_some()
+}
+fn initial_login_phase(auth_state: &AuthState) -> TuiLoginPhase {
+    if has_validated_identity(auth_state) { LoggedIn } else { SignedOutWelcome }
+}
+```
+
+That is the **app** crate, where `app/src/fork.rs` already lives and is trivially
+reachable. `TuiUserInfoSnapshot` (`app/src/tui/user_info.rs:24`) takes
+`is_logged_in` from the same function at `:76`. And `app/src/tui/*.rs` has zero
+`fork::` references, so `account_gate_bypassed()` is simply never asked — **no
+feature flag is consulted anywhere in this path.** It is a plain predicate on
+`AuthState`.
+
+So the shape is the fork's most familiar one after all, and in reach.
+
+**But the cost that actually matters is not where the code lives.** Two things
+stand, and the second is the one to settle before anyone edits a line:
+
+1. **A TUI session would carry the fork's telemetry posture and none of its
+   consent posture** — no ACP, no permission parking, no console, no pairing,
+   none of T14. "Warp on my phone" would look like the same product and be
+   something else. That is a disclosure problem before it is a code problem.
+2. **Unknown, and it decides everything: is the gate cosmetic or load-bearing?**
+   `warp_tui` has no fork agent seam, so its agent is presumably Warp's *own*
+   cloud agent, which would need the account regardless of what the UI shows. If
+   so, lifting the gate buys a nicer failure rather than a feature. Note that
+   `logged_in` also guards `activate_global_mcp_servers` and
+   `load_current_account` in the same function, which is evidence it gates real
+   machinery rather than a screen. **Under review; do not build against either
+   answer until it is settled.**
+
+And if the login turns out to be a commercial control rather than a technical
+one, the answer is to leave it alone and say so.
 
 ## The smallest version that is still the idea
 
