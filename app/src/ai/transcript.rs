@@ -37,6 +37,25 @@
 //! and it still wants a protocol signal that does not exist. This makes the
 //! divergence *survivable*; it does not make it *visible*.
 //!
+//! ## Where it goes decides whether it works at all
+//!
+//! **Measured 2026-08-30, and it is the finding that shapes this feature.** With
+//! the transcript written outside the pane's directory — which the `on` default
+//! under [`crate::fork::state_dir`] always is — `opencode` asking to read it
+//! arrives as `tool: other`, the kind `acp_permission` **cannot say yes to**.
+//! Not "asks and waits": Warp offers no yes at all, so a person at the panel
+//! could not approve it either. The recovery is unreachable by construction.
+//!
+//! With the same file inside the pane's directory it is an ordinary read, the
+//! agent's native search tool finds it, and it works with **zero** permission
+//! requests — verified end to end by planting a passphrase in one turn and
+//! having the agent grep it back out of the file in the next.
+//!
+//! So the useful default is *not* the tidy one, and this is left as the caller's
+//! choice rather than guessed at: writing into someone's repository without
+//! being asked is worse than a path they had to name. What the docs owe the
+//! reader is the sentence above, not a clever default.
+//!
 //! ## Off by default
 //!
 //! This writes what was said to disk. A fork whose thesis is that nothing leaves
@@ -202,7 +221,9 @@ pub(crate) fn observe(
     use warpui::SingletonEntity as _;
 
     use crate::ai::agent::conversation::ConversationStatus;
-    use crate::ai::blocklist::{BlocklistAIHistoryEvent, BlocklistAIHistoryModel};
+    use crate::ai::blocklist::{
+        BlocklistAIHistoryEvent, BlocklistAIHistoryModel, ConversationStatusUpdate,
+    };
 
     let Some(dir) = crate::fork::transcript_dir() else {
         return;
@@ -219,12 +240,28 @@ pub(crate) fn observe(
     // wrong.
     let BlocklistAIHistoryEvent::UpdatedConversationStatus {
         conversation_id,
+        update,
         new_status,
         ..
     } = event
     else {
         return;
     };
+    // **A restore is not a turn ending, and skipping it is not cosmetic.**
+    // Measured 2026-08-30: relaunching Warp rewrote a transcript for a
+    // conversation from the previous run, because a restore re-announces a
+    // status that was reached before the process started. On a history of any
+    // size that is a write storm at startup, for turns that ended days ago.
+    // `event_log::warp_agent::status_event` guards the same way for the same
+    // reason -- "logging it would put yesterday's `stop` in today's file".
+    let ConversationStatusUpdate::Changed { prev_status } = update else {
+        return;
+    };
+    // `Changed` does not mean changed: the status is re-emitted as every action
+    // starts, so without this a busy turn rewrites the file once per action.
+    if prev_status == new_status {
+        return;
+    }
     if !matches!(
         new_status,
         ConversationStatus::Success | ConversationStatus::Error | ConversationStatus::Cancelled

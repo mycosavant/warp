@@ -8107,6 +8107,52 @@ mode descriptions is the first legitimate instance of `acp_permission.rs`'s
       *"ACP has no way for an agent to report that it compacted"* upstream remains
       the honest fix.
 
+      **As built 2026-08-30, and running it changed the design twice.**
+
+      `app/src/ai/transcript.rs` writes one markdown file per conversation, keyed
+      by Warp's conversation id (matching the event log, so T14.15's split is not
+      reintroduced), rewritten whole on each terminal status and renamed into
+      place so a mid-write grep sees the previous complete version. Tool results
+      are excluded — a transcript carrying every file read would be larger than
+      the context that ran out. The pointer rides **every** prompt as its own
+      `ContentBlock`, so the user's text is never edited; the panel is told
+      **once**, because that block is invisible there and the agent would
+      otherwise be acting on an instruction the person never saw.
+
+      **Verified end to end**: a passphrase planted in one turn, grepped back out
+      of the file by the agent's own search tool in the next, reported correctly,
+      **zero permission requests**.
+
+      **Finding 1, and it decides where this feature is usable.** With the
+      transcript outside the pane's directory — which the `on` default always is
+      — `opencode` asking to read it arrives as **`tool: other`, the one kind
+      `acp_permission` cannot say yes to.** Not "asks and waits": Warp offers no
+      yes, so a person at the panel could not approve it either, and the recovery
+      is unreachable by construction. Inside the pane's directory the same read
+      is ordinary and needs nothing. **This is T14.8's `external_directory`
+      finding arriving through a new door**, and it means the tidy default is the
+      broken one. Left as the caller's choice rather than guessed at — writing
+      into someone's repository unasked is worse than a path they had to name —
+      with the sentence documented instead.
+
+      **Finding 2, a real defect the compiler could not see.** The first cut
+      wrote on any terminal status, and relaunching Warp rewrote a transcript for
+      a conversation from the *previous run*: a restore re-announces a status
+      reached before the process started, so on a history of any size that is a
+      write storm at startup for turns that ended days ago. Fixed by matching
+      `event_log::warp_agent`'s existing guard, which was put there for the same
+      reason and which the first draft simply had not read.
+
+      **Not measured:** whether recovery survives an actual compaction. The
+      passphrase test proves the *mechanism* — the agent can find, search and
+      quote the file — but the run was two turns and nothing was compacted. The
+      case this exists for is still only argued.
+
+      **Still open:** the transcript captures the panel's own chrome, because
+      `format_output_for_copy` includes the fork's notes and permission prose. So
+      an agent grepping its history reads Warp's announcement about keeping a
+      transcript, quoted back at it. Harmless but circular, and worth trimming.
+
       **Named, not assumed.** Whether `claude-agent-acp` compacts on the same
       cadence is **unmeasured** — it has its own policy, and this run deliberately
       did not use it (see T14.11). The detector above is **unbuilt and

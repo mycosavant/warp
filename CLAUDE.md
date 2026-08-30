@@ -171,7 +171,18 @@ conversation id, tool events under the agent's session id — so opening the
 obvious one showed a session with nothing between its ends. Now everything for a
 turn is filed under **Warp's conversation id**, the way `local_agent` always
 did, with the agent's own id on each line as `linked_session_id`. One turn, one
-file), `WARP_FORK_CONTROL_BIND` (**the only one
+file), `WARP_FORK_TRANSCRIPT` (**writes the conversation to disk so the agent can grep
+back what its own compaction discarded** — `on` for `state_dir/transcripts`, or a
+directory. Off by default, because persisting what was said is not something a
+no-telemetry fork should start doing unasked. **Where you point it decides
+whether it works**: measured, a transcript outside the pane's directory makes
+`opencode` ask with `tool: other`, which `acp_permission` cannot say yes to — so
+the recovery is unreachable and *no* person at the panel can approve it either.
+Inside the pane's directory it is an ordinary read and works with zero requests,
+verified by planting a passphrase and grepping it back out. The pointer rides
+every prompt as its own content block, so your text is never edited, and the
+panel says once that it is happening),
+`WARP_FORK_CONTROL_BIND` (**the only one
 that reaches off the machine** — one literal IP address, optionally with a port
 (`192.168.1.5:41234`, `[fd00::1]:41234`; pin one if you want the console on a
 home screen, because an ephemeral port makes a saved URL dead on the next
