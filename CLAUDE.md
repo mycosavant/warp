@@ -468,6 +468,42 @@ still raise a request. And pick a passing case whose output the agent actually
 needs, or it will answer without running anything and 0 asks will look like a
 pass.
 
+**The fork's transports emit tool calls as *text*, never as `Action` messages —
+and wanting them structured is a trap with a name.** `AIAgentOutputMessageType::
+Action` / `api::message::Message::ToolCall` is an **instruction**: Warp's action
+model executes it and returns a result. An ACP or `local_agent` agent has
+*already run* the tool, so emitting one runs it a second time.
+`acp_agent/translate.rs`'s module docs say this, note it was inherited from
+`local_agent/translate.rs` "which found it the hard way", and say it is restated
+because **T14 produced three separate instances of a hazard being recorded in
+prose and then built against anyway.** A fourth was started on 2026-08-30 and
+stopped at the advisor.
+
+The consequence, so it is not rediscovered as a bug: `Exchange.tools` in the
+transcript is **always empty** on both fork paths, and `get_action_result` is
+structurally empty for them — the only writer in the app is
+`shared_session.rs:368`, the collaboration path. That is by design, not an
+omission.
+
+**So the trap, refused by name: any design whose success criterion is
+*"`get_action_result` returns `Some` on the ACP path"*.** Including the
+disguised form — registering a *synthetic* finished action through
+`apply_finished_action_result` so the record looks populated. It never
+dispatches, but it inserts entries into an executor's model and bets nothing
+upstream ever walks them as pending work; that bet cannot be settled by reading.
+The correct success criterion is **"the transcript prose contains the
+outcome"**, because on these paths *the prose is the record* — which is exactly
+how refusals are already kept (`transcript_tests.rs`, and verified in real
+transcripts on disk).
+
+**What is genuinely missing is one word.** `tool_update_text` early-returns on
+anything that is not `Completed`, so a **`Failed` call emits no text at all** and
+reads exactly like a success. Everything else the ticket wanted already works:
+tool names are in the prose, and refusals are in the prose with their reason.
+Before building even the marker, run the ten-minute measurement — ask an agent
+to `cat` a nonexistent file and read the transcript. If the failure is already
+legible in the agent's own narration, this is won't-fix.
+
 **An agent in the panel works in the *pane's* directory, and a fresh pane
 starts in `$HOME`.** Not in the directory Warp was launched from. Both agent
 paths read `session_context.current_working_directory()`, so this is identical
