@@ -3,6 +3,7 @@
   "instructions": ["CLAUDE.md"],
   "permission": {
     "edit": "ask",
-    "bash": "ask"
+    "bash": "ask",
+    "external_directory": { "~/.cargo/**": "allow" }
   }
 }

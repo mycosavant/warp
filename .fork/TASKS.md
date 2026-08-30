@@ -7541,6 +7541,22 @@ Nothing has run on Windows.
       `external_directory` the `other` fires; **with** `/home/effatha/.cargo/*`
       granted, no permission request at all. The remedy covers both variants.
 
+      **The remedy is now applied to this repo, on the maintainer's call.**
+      `opencode.json` grants `external_directory: {"~/.cargo/**": "allow"}`,
+      because reading a dependency's source is ordinary work here and was the
+      measured stall. Four things were run before committing it, since this file
+      *is* the repo's consent posture: `~` expands, so the file is not
+      machine-specific; `**` alone suffices, so the grant is one line rather than
+      a cargo-culted pair; the file parses with comments, so it can be annotated
+      later; and — the one that decides whether the grant is safe — **the grant
+      is scope, not action.** With it in place, a write to `~/.cargo/…` still
+      raised an `edit` request and a shell command still raised an `execute` one,
+      both approvable, and neither ran. So it grants the agent nothing unasked;
+      it converts requests Warp *cannot* answer into ones it can, which is the
+      whole point. Verified last against the real repo config: the read that
+      stalled T14.9 now raises no permission request at all. `~/.rustup/**` is
+      deliberately not granted — it has not bitten.
+
       **Enlisting a second opinion earned its keep, and it argued the other way
       first.** Sent (b) — build the person yes — on the first two rounds, then
       reversed to (e) on the two later measurements, and the reversal came with

@@ -226,6 +226,19 @@ lives in the agent: opencode calls this permission `external_directory`, and
 so **which requests are answerable is a fact about the agent you named**. Check
 that before suspecting Warp when a session stalls on ordinary work.
 
+**This repo's `opencode.json` grants `external_directory: {"~/.cargo/**":
+"allow"}`, and what that does is narrower than it reads.** It is there because
+reading a dependency's source is ordinary work here and it was the measured
+stall. **The grant is scope, not action**: measured 2026-08-29 with it in place,
+a write to `~/.cargo/…` still raised an `edit` request and a shell command still
+raised an `execute` one, both approvable, and neither ran. So it does not let the
+agent do anything unasked — it converts requests Warp *cannot* answer into
+requests it can. `~` expands, `**` alone is enough without a sibling `*`, and
+the file parses with comments if you ever want to annotate it (all three run,
+not assumed). Widen it only for somewhere you would also be content to answer
+`edit` prompts about, and add `~/.rustup/**` if toolchain sources start stalling
+— that one has not bitten yet, so it is not granted.
+
 **An agent in the panel works in the *pane's* directory, and a fresh pane
 starts in `$HOME`.** Not in the directory Warp was launched from. Both agent
 paths read `session_context.current_working_directory()`, so this is identical
