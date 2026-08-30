@@ -7,10 +7,15 @@
 use super::*;
 
 fn request(id: &str) -> ParkedRequest {
+    conversation_request(id, "conv-1")
+}
+
+fn conversation_request(id: &str, conversation: &str) -> ParkedRequest {
     ParkedRequest {
         approval_id: id.to_owned(),
         agent: "opencode".to_owned(),
         title: Some("echo hello > greeting.txt".to_owned()),
+        conversation_id: conversation.to_owned(),
         tool_name: Some("execute".to_owned()),
         tool_input: Some("echo hello > greeting.txt".to_owned()),
         session_directory: Some("/tmp/project".to_owned()),
@@ -159,4 +164,25 @@ fn a_reused_key_cannot_make_one_waiter_answer_another() {
 
     assert!(answer(id, Decision::Deny));
     assert_eq!(second.try_recv().ok().flatten(), Some(Decision::Deny));
+}
+
+/// A panel showing one conversation gets that conversation's questions only.
+///
+/// There are three ids on a `ParkedRequest` and only one of them answers "is
+/// this mine": the agent's `session_id` and Warp's `session_directory` are both
+/// wrong for this, and both are the kind of near-miss a caller filtering by hand
+/// would reach for. So the filter lives here rather than at the call site.
+#[test]
+fn a_conversations_questions_are_its_own() {
+    let (_mine, _m) = park(conversation_request("registry-conv-mine", "conv-mine"));
+    let (_theirs, _t) = park(conversation_request("registry-conv-theirs", "conv-theirs"));
+
+    let mine = waiting_for("conv-mine");
+
+    assert_eq!(mine.len(), 1, "one question belongs to this conversation");
+    assert_eq!(mine[0].approval_id, "registry-conv-mine");
+    assert!(
+        waiting_for("conv-nobody").is_empty(),
+        "a conversation with no question waiting gets an empty list, not everyone else's"
+    );
 }

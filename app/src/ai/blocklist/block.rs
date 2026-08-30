@@ -111,6 +111,7 @@ use crate::ai::blocklist::block::keyboard_navigable_buttons::{
 use crate::ai::blocklist::context_model::AttachmentType;
 #[cfg(feature = "agent_mode_debug")]
 use crate::ai::blocklist::diff_types::FileDiff;
+use crate::ai::blocklist::inline_action::acp_approval::{AcpApprovalView, AcpApprovalViewEvent};
 use crate::ai::blocklist::inline_action::ask_user_question_view::{
     self, AskUserQuestionView, AskUserQuestionViewEvent,
 };
@@ -1107,6 +1108,16 @@ pub struct AIBlock {
     terminal_view_handle: WeakViewHandle<TerminalView>,
 
     ask_user_question_view: Option<ViewHandle<AskUserQuestionView>>,
+
+    /// The panel's control for an ACP permission request (fork, T14.16).
+    ///
+    /// Present only while this conversation has a question parked. Unlike its
+    /// neighbours it is **not** created from a stream update, because the
+    /// request never arrives as one: an ACP agent blocks mid-turn on a JSON-RPC
+    /// call and the fork posts a note about it, which reaches the renderer as
+    /// ordinary prose. So it is synced from `registry::waiting_for` whenever the
+    /// output changes — see `sync_acp_approval_view`.
+    acp_approval_view: Option<ViewHandle<AcpApprovalView>>,
 }
 
 struct EmbeddedCodeEditorView {
@@ -1574,6 +1585,7 @@ impl AIBlock {
             resolved_blocklist_image_sources: Default::default(),
             terminal_view_handle,
             ask_user_question_view: None,
+            acp_approval_view: None,
         };
         me.run_secret_redaction_on_user_query(me.client_ids.conversation_id, ctx);
         me.spawn_link_detection(ctx);
@@ -1988,8 +2000,67 @@ impl AIBlock {
                 self.finish(FinishReason::Error, ctx);
             }
         }
+        self.sync_acp_approval_view(ctx);
         ctx.emit(AIBlockEvent::AIOutputUpdated);
         ctx.notify();
+    }
+
+    /// Creates or drops the ACP approval control to match the registry (fork,
+    /// T14.16).
+    ///
+    /// **Synced rather than created from a stream update, because there is no
+    /// update to key on.** Every neighbouring inline view is built from an
+    /// `AIAgentAction` the agent sent; an ACP permission request is not one. It
+    /// is a JSON-RPC call the agent is blocked on, parked in a process-global
+    /// registry, and the only thing that reaches the renderer is the prose note
+    /// the fork writes about it. Keying on the *text* of that note would be a
+    /// renderer inferring meaning from wording, which is exactly the kind of
+    /// coupling that breaks the first time the sentence is improved.
+    ///
+    /// So the registry is the source of truth and this reconciles to it. The
+    /// call sits on the output-update path because that is when the note
+    /// arrives, and again when the answered note does — the request parks and is
+    /// answered on the same edge the panel already redraws on.
+    ///
+    /// **Only the latest exchange gets the control.** A conversation is drawn as
+    /// several blocks, one per exchange, and every one of them would otherwise
+    /// find the same pending request and draw its own pair of buttons. The
+    /// question belongs to the turn being answered now.
+    fn sync_acp_approval_view(&mut self, ctx: &mut ViewContext<Self>) {
+        let has_question = !crate::ai::acp_agent::registry::waiting_for(
+            &self.client_ids.conversation_id.to_string(),
+        )
+        .is_empty()
+            && self.model.is_latest_visible_exchange_in_root_task(ctx);
+
+        match (has_question, self.acp_approval_view.is_some()) {
+            (true, false) => {
+                let conversation_id = self.client_ids.conversation_id.to_string();
+                let view = ctx
+                    .add_typed_action_view(move |_| AcpApprovalView::new(conversation_id.clone()));
+                ctx.subscribe_to_view(&view, move |me, _, event, ctx| match event {
+                    // Dropped on the answer rather than on the next output
+                    // update, so the buttons stop being on screen the moment
+                    // they stop being answerable. Waiting for the agent's next
+                    // message would leave a live-looking control over a question
+                    // that has already been decided.
+                    AcpApprovalViewEvent::Answered => {
+                        me.acp_approval_view = None;
+                        ctx.notify();
+                    }
+                });
+                self.acp_approval_view = Some(view);
+                ctx.notify();
+            }
+            (false, true) => {
+                // Answered from `warpctrl`, from the console, or the turn ended.
+                // Three surfaces can answer one question and the panel must not
+                // be the one still asking it.
+                self.acp_approval_view = None;
+                ctx.notify();
+            }
+            _ => {}
+        }
     }
 
     fn handle_updated_output(&mut self, output: &AIAgentOutput, ctx: &mut ViewContext<Self>) {

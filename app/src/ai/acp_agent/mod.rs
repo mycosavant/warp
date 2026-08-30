@@ -472,6 +472,7 @@ async fn exchange(
                     directory.clone(),
                     session,
                     acts_on,
+                    conversation.clone(),
                 );
                 let event = emit(translator, |translator| {
                     translator.note(asking_note(&parked))
@@ -721,6 +722,7 @@ fn parked_request(
     session_directory: String,
     session_id: Option<String>,
     acts_on: Vec<String>,
+    conversation_id: String,
 ) -> registry::ParkedRequest {
     // Carried verbatim rather than summarised. The measured payload puts the
     // command here and *not* in `locations`, so this is where the specifics are.
@@ -746,6 +748,7 @@ fn parked_request(
         tool_input,
         session_directory: Some(session_directory),
         session_id,
+        conversation_id,
         acts_on,
         options_offered: request
             .options

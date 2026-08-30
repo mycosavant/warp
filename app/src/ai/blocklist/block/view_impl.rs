@@ -1151,6 +1151,15 @@ impl View for AIBlock {
             app,
         ));
 
+        // The ACP permission control, when this conversation has a question
+        // parked (fork, T14.16). Appended after the output rather than threaded
+        // into `output::render`'s message loop, because it belongs to the
+        // *turn* and not to any one message the agent sent — there is no
+        // message to hang it on, which is the whole difficulty this path has.
+        if let Some(view) = self.acp_approval_view.as_ref() {
+            contents.add_child(warpui::presenter::ChildView::new(view).finish());
+        }
+
         let should_use_transparent_overlay = InputSettings::as_ref(app)
             .is_universal_developer_input_enabled(app)
             || FeatureFlag::AgentView.is_enabled();

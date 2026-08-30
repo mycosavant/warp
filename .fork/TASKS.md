@@ -8052,6 +8052,82 @@ mode descriptions is the first legitimate instance of `acp_permission.rs`'s
       the file key is derived inside `record` from the `session_id` field, and
       that field is the thing a future edit would get wrong.
 
+- [x] **T14.16** **The panel can answer.** Built 2026-08-30, at the maintainer's
+      request, and verified by clicking it.
+
+      **Why it stopped being second.** T14.8 shelved the button on a good
+      argument — a button over a request with no yes is a greyed-out button —
+      and two things then argued it back. The `other`-kind population turned out
+      to be one agent's convention rather than a protocol fact, so the greyed-out
+      case is narrower than it looked. And T14.11 found that an *unattended*
+      answerer is not available at all: the orchestrating session's own
+      permission layer refuses to run one, correctly. So a present person
+      answering cheaply is not a convenience. It is the only mechanism there is.
+
+      **What it shows, and the rule that decides that.** `acp_permission`'s
+      sentence governs the panel exactly as it governs the flag: *an option may
+      only be selected by a surface capable of showing what that option
+      declares.* The control shows the agent, the title, the verbatim
+      `tool_input`, where the call said it would act, and every option offered.
+      So it may offer the single-shot yes and nothing else — the always-variants
+      are not rendered at all, because a button that sets a session policy would
+      authorise something never shown.
+
+      **Gated per entry on `approve_selects`**, which is frozen when the request
+      parks. That is T14.6's bug and this is the third surface with a chance to
+      make it; an entry Warp will not approve shows the reason instead of a
+      button, because a greyed control says *not now* and the honest message is
+      *not by Warp, and here is why*.
+
+      **The click carries the id it was drawn with.** Three surfaces can answer
+      one question and a turn can end under any of them, so between reading a
+      request and clicking it the request can be gone and another parked in its
+      place. Looking it up again at click time would answer the newcomer with a
+      decision made about its predecessor — the stale-answer hazard the control
+      plane's digest exists to prevent. Capturing the id at render time gets the
+      same property structurally, since here the surface that displayed it is the
+      surface that answers it. Arming holds an *id*, not a bool, for the same
+      reason, and that rule has the one unit test that does not need a view.
+
+      **Two taps for yes, one for no** — the console's asymmetry for the console's
+      reason. A misclick on *No* costs the agent a retry; a misclick on *Yes*
+      costs whatever it asked for.
+
+      **Synced from the registry, not from a stream update**, which is the one
+      structurally awkward thing here and is worth naming. Every neighbouring
+      inline view is built from an `AIAgentAction` the agent sent. A permission
+      request is not one: it is a JSON-RPC call the agent is blocked on, and the
+      only thing reaching the renderer is the prose note the fork writes about
+      it. Keying on the *text* of that note would be a renderer inferring meaning
+      from wording. So `sync_acp_approval_view` reconciles against
+      `registry::waiting_for` on the output-update edge — which is exactly when
+      the asking note arrives, and again when the answered note does. Only the
+      latest visible exchange draws it, or every block in the conversation would
+      draw its own pair of buttons for the same question.
+
+      **Verified by running it, twice, and the first run found a bug.** Yes and
+      No both rendered; the unapprovable case correctly showed *No* alone with
+      the reason. But the reason ran off the right edge of the panel — the one
+      field whose whole purpose is explaining why there is no yes was the field a
+      person could not finish reading. Cause: `Text::new_inline`, copied from a
+      neighbouring inline view, whose own doc comment says it is deprecated and
+      that "all usages have not been audited". `Text::new` soft-wraps. Fixed and
+      re-run; the sentence now wraps to four readable lines.
+
+      Then driven with `use_computer click` against the X11 window: one tap armed
+      *Yes* (*"tap again to allow"*), the second answered it, the panel printed
+      *"Answered: yes, for this one call"*, the buttons vanished, and the agent
+      ran `git status --short` — whose output listed the files this feature is
+      written in. *No* answered in a single tap. **This is the first fork feature
+      whose UI was verified by a synthetic click rather than by reading a
+      screenshot.**
+
+      **Not built, deliberately:** keyboard bindings. Every neighbouring view
+      registers them in an `init`, and binding *Enter* to a permission grant is a
+      decision with its own argument — the two-tap arming exists precisely
+      because a single cheap gesture should not be able to say yes. Named here
+      rather than added quietly.
+
 ## T15 — Loose ends carried, not forgotten
 
 - [ ] **Re-check `ALLOW_VERIFIED_AGENTS` against a real prompt** (from T11.5).

@@ -115,6 +115,16 @@ pub(crate) struct ParkedRequest {
     /// The ACP session id, so an entry can be lined up with the lines
     /// `WARP_FORK_EVENT_LOG` wrote for the same session.
     pub session_id: Option<String>,
+    /// Warp's own id for the conversation this request belongs to.
+    ///
+    /// **T14.16, and it is what lets the panel draw the question next to the
+    /// conversation that asked it.** The control plane addresses a request by
+    /// `approval_id` and never needs this; a panel does, because it is showing
+    /// one conversation and has to decide whether *this* request is that
+    /// conversation's. Every other id here answers a different question:
+    /// `session_id` is the agent's, and `session_directory` is where Warp told
+    /// it to work.
+    pub conversation_id: String,
     /// The paths this tool call said it would touch, recovered by joining the
     /// permission request to the notification stream on `toolCallId`.
     ///
@@ -231,6 +241,20 @@ impl Drop for Waiting {
 
 /// Everything currently waiting on a person, oldest key first so a caller
 /// polling it does not get a reshuffled list between calls.
+/// The requests a single conversation is blocked on, oldest first.
+///
+/// Separate from [`waiting`] rather than filtered by the caller, because the
+/// panel asks this on every render of a conversation and the whole-process list
+/// is the wrong shape for that question — and because a caller filtering by hand
+/// is a caller that can filter by the wrong field. There are three ids on a
+/// `ParkedRequest` and only one of them answers "is this mine".
+pub(crate) fn waiting_for(conversation_id: &str) -> Vec<ParkedRequest> {
+    waiting()
+        .into_iter()
+        .filter(|parked| parked.conversation_id == conversation_id)
+        .collect()
+}
+
 pub(crate) fn waiting() -> Vec<ParkedRequest> {
     let registry = registry();
     let mut requests = registry
