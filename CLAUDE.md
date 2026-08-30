@@ -172,7 +172,12 @@ obvious one showed a session with nothing between its ends. Now everything for a
 turn is filed under **Warp's conversation id**, the way `local_agent` always
 did, with the agent's own id on each line as `linked_session_id`. One turn, one
 file), `WARP_FORK_TRANSCRIPT` (**writes the conversation to disk so the agent can grep
-back what its own compaction discarded** — `on` for `state_dir/transcripts`, or a
+back what its own compaction discarded — measured across two real compactions:
+the agent answered "I DO NOT HAVE IT" from memory and then found the same detail
+in the file, with zero permission requests.** Note *what* it recovers: compaction
+is not indiscriminate, and a fact flagged as important survives inside the
+summary. What is lost, and what this is for, is the bulky incidental detail a
+working session is actually made of** — `on` for `state_dir/transcripts`, or a
 directory. Off by default, because persisting what was said is not something a
 no-telemetry fork should start doing unasked. **Where you point it decides
 whether it works**: measured, a transcript outside the pane's directory makes

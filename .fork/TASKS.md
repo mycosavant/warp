@@ -8143,10 +8143,37 @@ mode descriptions is the first legitimate instance of `acp_permission.rs`'s
       `event_log::warp_agent`'s existing guard, which was put there for the same
       reason and which the first draft simply had not read.
 
-      **Not measured:** whether recovery survives an actual compaction. The
-      passphrase test proves the *mechanism* — the agent can find, search and
-      quote the file — but the run was two turns and nothing was compacted. The
-      case this exists for is still only argued.
+      **Measured 2026-08-30, and it survives.** The gap above is closed: a run
+      driven until `opencode` compacted **twice** (confirmed from its own log and
+      from two `type: "compaction"` parts in its database, tails starting at
+      messages 20 and 37 of 49), then calibrated in both directions.
+
+      | probe | result |
+      |---|---|
+      | recall an incidental detail from memory, no tools | **"I DO NOT HAVE IT"** — genuinely gone |
+      | grep the transcript for the same detail | **"84 … corrected to 88"**, quoted with its line number, correct |
+      | permission requests | **0** |
+
+      Twelve exchanges, an 88 KB transcript. The detail — T1.5a's action count
+      from the first fill turn — was chosen because it is bulky and incidental,
+      which matters for the reason below.
+
+      **The first probe was badly designed and failed to fail.** A codeword
+      planted in turn 1 as *"note this for later"* was still recalled perfectly
+      after both compactions. Checking the database rather than assuming showed
+      why: **both compaction summaries contained it verbatim**. The summariser
+      had done exactly its job on a fact explicitly flagged as worth keeping, and
+      the probe had been built to be memorable and then tested for being
+      forgotten.
+
+      **That correction is the more useful finding.** Compaction is not
+      indiscriminate loss. What survives is what the summariser judges salient —
+      so the transcript's value is precisely for the **incidental and bulky**,
+      which is also exactly what T14.13's original loss was (three audited claims
+      with their file:line citations, not a flagged secret). A feature justified
+      by "the agent forgets things" would have been justified too broadly; it
+      forgets a *particular class* of thing, and that class is the one a working
+      session is made of.
 
       **Still open:** the transcript captures the panel's own chrome, because
       `format_output_for_copy` includes the fork's notes and permission prose. So
