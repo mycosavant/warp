@@ -141,3 +141,68 @@ fn the_announcement_names_the_path_and_how_to_stop() {
     assert!(text.contains("/t/conv.md"), "{text}");
     assert!(text.contains("WARP_FORK_TRANSCRIPT"), "{text}");
 }
+
+#[test]
+fn warps_own_words_are_not_attributed_to_the_agent() {
+    // The first cut shipped this misattribution: the announcement is emitted as
+    // agent output, so it landed under `### Agent` and an agent grepping its own
+    // history read Warp's words as its own.
+    let text = render(
+        "conv",
+        &[Exchange {
+            input: "q".to_owned(),
+            output: format!("{CHROME} Warp is keeping a transcript.\nThe real answer is 42."),
+        }],
+    );
+    assert!(text.contains("The real answer is 42."), "{text}");
+    assert!(
+        !text.contains("Warp is keeping a transcript"),
+        "Warp's own aside was attributed to the agent:\n{text}"
+    );
+}
+
+#[test]
+fn a_refusal_is_kept_because_the_agents_own_store_does_not_have_it() {
+    // Measured T14.19: opencode records a denied call as `status=error` with no
+    // notion that anything said no. If this transcript dropped the refusal too,
+    // the history would show failures where there were decisions, and an agent
+    // reading it back would reasonably retry.
+    let text = render(
+        "conv",
+        &[Exchange {
+            input: "run it".to_owned(),
+            output: "The agent is waiting for permission: wc -l\nAnswered: **no**.".to_owned(),
+        }],
+    );
+    assert!(text.contains("Answered: **no**."), "{text}");
+    assert!(text.contains("waiting for permission"), "{text}");
+}
+
+#[test]
+fn an_exchange_that_was_only_warp_chrome_reads_as_no_output() {
+    let text = render(
+        "conv",
+        &[Exchange {
+            input: "q".to_owned(),
+            output: format!("{CHROME} an aside and nothing else"),
+        }],
+    );
+    assert!(text.contains("(no output recorded)"), "{text}");
+}
+
+#[test]
+fn the_default_lands_in_the_sessions_own_project() {
+    // Reachability, not tidiness: outside the session's directory opencode's
+    // read of this file arrives as `tool: other`, which Warp cannot answer.
+    use crate::fork::TranscriptLocation;
+    assert_eq!(
+        TranscriptLocation::InSessionProject.resolve(Path::new("/home/x/proj")),
+        Path::new("/home/x/proj/.warp/transcripts")
+    );
+    assert_eq!(
+        TranscriptLocation::Fixed(PathBuf::from("/tmp/elsewhere"))
+            .resolve(Path::new("/home/x/proj")),
+        Path::new("/tmp/elsewhere"),
+        "a named directory is used as given"
+    );
+}

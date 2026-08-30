@@ -650,7 +650,11 @@ async fn exchange(
             // -- every turn, because the compaction it exists for would eat a
             // pointer sent only once.
             let mut blocks = vec![ContentBlock::Text(TextContent::new(prompt))];
-            if let Some(dir) = crate::fork::transcript_dir() {
+            if let Some(location) = crate::fork::transcript_dir() {
+                // Resolved against this session's directory, which is the pane's
+                // — the same directory the write side uses, or the pointer would
+                // name a file that is not there.
+                let dir = location.resolve(std::path::Path::new(&cwd_text));
                 let path = crate::ai::transcript::path_for(&dir, &conversation_id);
                 blocks.insert(
                     0,

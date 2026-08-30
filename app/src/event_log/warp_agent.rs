@@ -112,7 +112,7 @@ pub(crate) fn subscribe<T: Entity>(
         // with its own switch, and hanging it off this one would mean a person
         // who wanted their history greppable had to also turn on an event log
         // they never asked for.
-        crate::ai::transcript::observe(terminal_surface_id, event, ctx);
+        crate::ai::transcript::observe(&session, terminal_surface_id, event, ctx);
         record_history_event(&session, terminal_surface_id, event, ctx);
     });
 }

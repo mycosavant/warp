@@ -171,22 +171,26 @@ conversation id, tool events under the agent's session id — so opening the
 obvious one showed a session with nothing between its ends. Now everything for a
 turn is filed under **Warp's conversation id**, the way `local_agent` always
 did, with the agent's own id on each line as `linked_session_id`. One turn, one
-file), `WARP_FORK_TRANSCRIPT` (**writes the conversation to disk so the agent can grep
+file), `WARP_FORK_TRANSCRIPT` (`on` writes to **`.warp/transcripts/` under the pane's own
+directory** — not `state_dir`, because outside the session's directory the
+agent's read of the file arrives as `tool: other` and *no* answer exists, so the
+tidy location is the unusable one. `.warp/` is upstream's project directory and
+is tracked, so `/.warp/transcripts/` is gitignored. Any other value is taken as
+the directory, and the caller owns reachability. **Writes the conversation to disk so the agent can grep
 back what its own compaction discarded — measured across two real compactions:
 the agent answered "I DO NOT HAVE IT" from memory and then found the same detail
 in the file, with zero permission requests.** Note *what* it recovers: compaction
 is not indiscriminate, and a fact flagged as important survives inside the
 summary. What is lost, and what this is for, is the bulky incidental detail a
-working session is actually made of** — `on` for `state_dir/transcripts`, or a
-directory. Off by default, because persisting what was said is not something a
-no-telemetry fork should start doing unasked. **Where you point it decides
-whether it works**: measured, a transcript outside the pane's directory makes
-`opencode` ask with `tool: other`, which `acp_permission` cannot say yes to — so
-the recovery is unreachable and *no* person at the panel can approve it either.
-Inside the pane's directory it is an ordinary read and works with zero requests,
-verified by planting a passphrase and grepping it back out. The pointer rides
-every prompt as its own content block, so your text is never edited, and the
-panel says once that it is happening),
+working session is actually made of**. Off by default, because persisting what
+was said is not something a no-telemetry fork should start doing unasked. The
+pointer rides every prompt as its own content block, so your text is never
+edited; the panel says once that it is happening, and Warp's own asides are
+marked `[Warp]` and kept out of the file so an agent never reads them as its own
+words. **What it holds that the agent's own store does not is the reason a call
+failed**: measured, `opencode` records a denied command as `status=error` with no
+notion that anything refused it, so an agent reading its own history sees a
+failure where there was a decision. Warp keeps the refusal),
 `WARP_FORK_CONTROL_BIND` (**the only one
 that reaches off the machine** — one literal IP address, optionally with a port
 (`192.168.1.5:41234`, `[fd00::1]:41234`; pin one if you want the console on a

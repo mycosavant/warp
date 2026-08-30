@@ -8175,10 +8175,66 @@ mode descriptions is the first legitimate instance of `acp_permission.rs`'s
       forgets a *particular class* of thing, and that class is the one a working
       session is made of.
 
-      **Still open:** the transcript captures the panel's own chrome, because
-      `format_output_for_copy` includes the fork's notes and permission prose. So
-      an agent grepping its history reads Warp's announcement about keeping a
-      transcript, quoted back at it. Harmless but circular, and worth trimming.
+      **Both fixed 2026-08-30, on the maintainer's reading.**
+
+      **The default now lands in `.warp/transcripts/` under the pane's own
+      directory**, and the reasoning is reachability rather than taste. `~/.warp/`
+      is home-level, which puts the file back outside the session and into the
+      unanswerable `other` request. `.opencode` was never a candidate: measured,
+      `opencode` keeps *nothing* in-project — its whole store is one global
+      SQLite database — so there is no file to collide with and writing there
+      would be inventing a directory inside another tool's namespace. `.warp/`
+      is upstream's own project directory, already holding tracked workflows and
+      skills, so it is convention rather than invention; `/.warp/transcripts/` is
+      gitignored because that directory is *meant* to be committed.
+
+      **And Warp's own words are no longer attributed to the agent.** The
+      announcement is emitted as agent output, so it landed under `### Agent` and
+      an agent grepping its history read Warp's sentence as its own. Warp's
+      editorial asides now carry a `[Warp]` marker and are stripped from the
+      file. **Permission prose deliberately stays** — see the comparison below.
+
+      **What Warp's transcript holds that the agent's own store does not,
+      measured on one run with both captured.** The question was whether pointing
+      an agent at its own history would do just as well.
+
+      | | Warp's | `opencode`'s |
+      |---|---|---|
+      | prompt and final answer | yes | yes |
+      | model reasoning | **no** | yes |
+      | tool call structure | no | `tool=bash status=error input={…}` |
+      | **why a call failed** | **`Answered: no`**, with what was offered | **`status=error` and nothing else** |
+
+      **The fourth row is the answer.** On a denied `wc -l`, `opencode` recorded
+      only that the tool errored. It has no notion that anything *refused* it. So
+      an agent re-reading its own store sees a failure where there was a
+      decision, and would reasonably retry. Warp's layer is the only one holding
+      the consent record, which is why the permission prose is kept and why
+      pointing at the agent's own store would actively misinform.
+
+      Neither is a superset: `opencode` retains reasoning that Warp never keeps.
+
+      **Reasoning is absent by inheritance, not by decision — worth recording
+      because it looked deliberate.** Warp *does* receive it
+      (`AgentThoughtChunk` → `AgentReasoning`, `translate.rs:329`). It dies in
+      upstream's `format_for_copy`, which carries a bare
+      `AIAgentOutputMessageType::Reasoning { .. } => continue`. That is upstream's
+      judgment about what belongs on a **clipboard**, adopted here silently by
+      reusing the function `agent_read` uses. The tool-result exclusion, by
+      contrast, *was* a fork decision — the `None` action model — argued from size
+      and not measured. Note the API offers no middle: `Some` emits full result
+      payloads and the `Action` arm never emits the tool's *name*, so
+      "tool name and outcome" does not exist to be chosen and would have to be
+      built. Open question, with the argument in the commit body.
+
+      **Two harness failures worth more than the fixes**, both self-inflicted and
+      both the read-back rule again. Three Warp instances accumulated because
+      `window close` was answering `ambiguous_instance` while the check grepped
+      only for `"ok"` — so several "the transcript was not written" results were
+      measuring whichever instance happened to answer. And `agent list` reporting
+      `success` fires *before* the history event that triggers the write, so a
+      check immediately after it reads an empty directory and looks exactly like
+      a broken feature. Neither was a defect in the code under test.
 
       **Named, not assumed.** Whether `claude-agent-acp` compacts on the same
       cadence is **unmeasured** — it has its own policy, and this run deliberately

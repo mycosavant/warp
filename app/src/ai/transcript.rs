@@ -104,6 +104,22 @@ pub(crate) fn pointer(path: &Path) -> String {
     )
 }
 
+/// Marks a line as Warp's own voice rather than the agent's.
+///
+/// **This exists because of a misattribution the first cut shipped.** Warp's
+/// announcement is emitted as agent output — that is how it reaches the panel —
+/// so it landed in the transcript under `### Agent`, and an agent grepping its
+/// own history read Warp's words as its own. In a file whose entire purpose is
+/// to be trusted as a record, that is worse than noise.
+///
+/// **Only Warp's editorial asides are stripped, never the record of what
+/// happened.** Permission prose stays: that a call was requested and refused is
+/// the one thing this transcript holds that the agent's own store does not —
+/// measured T14.19, `opencode` records a denied call as `status=error` with no
+/// notion that anything said no. Dropping it would leave a history in which
+/// refusals look like failures, and an agent reading that would reasonably retry.
+pub(crate) const CHROME: &str = "[Warp]";
+
 /// Renders exchanges to the file's text.
 ///
 /// Markdown with stable, greppable headers: a searcher wants to find a turn and
@@ -120,17 +136,30 @@ pub(crate) fn render(conversation_id: &str, exchanges: &[Exchange]) -> String {
         out.push_str(&format!("\n\n## Exchange {}\n\n### User\n\n", index + 1));
         out.push_str(exchange.input.trim());
         out.push_str("\n\n### Agent\n\n");
+        let spoken = strip_chrome(&exchange.output);
         // An exchange still running, or one that errored before saying anything,
         // has no output. Recording that plainly beats an empty section that
         // reads like the agent said nothing when it was never asked.
-        if exchange.output.trim().is_empty() {
+        if spoken.trim().is_empty() {
             out.push_str("(no output recorded)");
         } else {
-            out.push_str(exchange.output.trim());
+            out.push_str(spoken.trim());
         }
     }
     out.push('\n');
     out
+}
+
+/// Drops Warp's own announcements, keeping everything the agent actually said.
+///
+/// Line-based rather than clever: the marker starts a line, so a paragraph the
+/// agent wrote that happens to quote the marker mid-sentence is untouched.
+fn strip_chrome(output: &str) -> String {
+    output
+        .lines()
+        .filter(|line| !line.trim_start().starts_with(CHROME))
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 /// Writes the transcript, replacing whatever was there.
@@ -188,9 +217,9 @@ pub(crate) fn needs_announcing(conversation_id: &str) -> bool {
 /// What the panel says, once, when the pointer starts riding along.
 pub(crate) fn announcement(path: &Path) -> String {
     format!(
-        "Warp is keeping a transcript of this conversation at {} and telling the \
-         agent it can search it. Nothing else is added to your prompts. Unset \
-         `WARP_FORK_TRANSCRIPT` to stop.",
+        "{CHROME} Warp is keeping a transcript of this conversation at {} and \
+         telling the agent it can search it. Nothing else is added to your \
+         prompts. Unset `WARP_FORK_TRANSCRIPT` to stop.",
         path.display()
     )
 }
@@ -214,6 +243,9 @@ pub(crate) fn forget(conversation_id: &str) {
 /// exchange in the file, and the agent that greps it cannot tell a turn still
 /// running from one that stopped there.
 pub(crate) fn observe(
+    active_session: &warpui::ModelHandle<
+        crate::terminal::model::session::active_session::ActiveSession,
+    >,
     terminal_surface_id: warpui::EntityId,
     event: &crate::ai::blocklist::BlocklistAIHistoryEvent,
     ctx: &warpui::AppContext,
@@ -225,8 +257,30 @@ pub(crate) fn observe(
         BlocklistAIHistoryEvent, BlocklistAIHistoryModel, ConversationStatusUpdate,
     };
 
-    let Some(dir) = crate::fork::transcript_dir() else {
+    let Some(location) = crate::fork::transcript_dir() else {
         return;
+    };
+    // **Asked for only when the location needs it.** The first cut looked the
+    // session's directory up unconditionally, which silently gated `Fixed` too:
+    // a caller who named an absolute directory got nothing whenever the pane
+    // reported no cwd. Found by running, not by a test -- every unit test hands
+    // `resolve` a directory, so none of them can see this.
+    //
+    // For `InSessionProject` a missing cwd is a real stop: Warp does not know
+    // which project this is, and guessing would write the conversation
+    // somewhere nobody named.
+    let dir = match &location {
+        crate::fork::TranscriptLocation::Fixed(path) => path.clone(),
+        crate::fork::TranscriptLocation::InSessionProject => {
+            let Some(cwd) = active_session
+                .as_ref(ctx)
+                .current_working_directory()
+                .cloned()
+            else {
+                return;
+            };
+            location.resolve(std::path::Path::new(&cwd))
+        }
     };
     if event
         .terminal_surface_id()

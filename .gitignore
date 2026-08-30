@@ -70,3 +70,8 @@ __pycache__/
 # Project notes
 .note/
 .claude/scheduled_tasks.lock
+
+# Fork (T14.19): conversation transcripts Warp writes so an agent can grep
+# back what its own compaction discarded. Runtime data, never committed --
+# `.warp/` itself is upstream's and holds tracked workflows and skills.
+/.warp/transcripts/

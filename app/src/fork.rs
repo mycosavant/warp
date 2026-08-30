@@ -471,24 +471,59 @@ const TRANSCRIPT_ENV_VAR: &str = "WARP_FORK_TRANSCRIPT";
 /// start persisting what was said without being asked. `WARP_FORK_TRANSCRIPT=on`
 /// writes under [`state_dir`]; any other value is the directory to write in.
 /// `off`/`0`/`false`/empty is the same as unset.
-pub fn transcript_dir() -> Option<std::path::PathBuf> {
+pub fn transcript_dir() -> Option<TranscriptLocation> {
     if !is_active() {
         return None;
     }
     transcript_dir_from(std::env::var(TRANSCRIPT_ENV_VAR).ok().as_deref())
 }
 
+/// Where the transcript goes, before a session's directory is known.
+///
+/// **Two variants because reachability, not tidiness, decides this.** Measured
+/// T14.19: a transcript outside the pane's directory is one `opencode` cannot
+/// read — the request arrives as `tool: other`, which `acp_permission` will not
+/// answer and which no person at the panel can approve either. So the default
+/// has to resolve against the session's own directory, which is not known here.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TranscriptLocation {
+    /// `.warp/transcripts` under whatever directory the session is working in.
+    ///
+    /// `.warp/` is Warp's own project directory — upstream already keeps
+    /// workflows and skills there — so this borrows an established convention
+    /// rather than inventing a dotfile, and it never writes inside another
+    /// agent's namespace.
+    InSessionProject,
+    /// Exactly this directory, wherever it is. The caller took responsibility
+    /// for reachability by naming it.
+    Fixed(std::path::PathBuf),
+}
+
+impl TranscriptLocation {
+    /// The directory to write in, given the session's working directory.
+    pub fn resolve(&self, session_cwd: &std::path::Path) -> std::path::PathBuf {
+        match self {
+            Self::InSessionProject => session_cwd.join(".warp").join("transcripts"),
+            Self::Fixed(path) => path.clone(),
+        }
+    }
+}
+
 /// Split from the environment for the same reason [`event_log_dir_from`] is: so
 /// the decision can be asserted without setting a process-global from a test
 /// that runs beside others.
-fn transcript_dir_from(value: Option<&str>) -> Option<std::path::PathBuf> {
+fn transcript_dir_from(value: Option<&str>) -> Option<TranscriptLocation> {
     match value.map(str::trim) {
         None | Some("") | Some("0") | Some("off") | Some("false") => None,
-        Some("on") | Some("true") => Some(state_dir().join("transcripts")),
+        // **Not `state_dir()`, and that was the first design.** It is the tidy
+        // answer and it is the broken one: outside the session's directory the
+        // agent's own read of the file is refused, so the recovery this exists
+        // for cannot happen. Reachability wins over tidiness.
+        Some("on") | Some("true") => Some(TranscriptLocation::InSessionProject),
         // A path, not a typo — same reasoning as the event log: "write it
         // somewhere I chose" is the second thing anyone wants, and guessing the
         // default would put the conversation somewhere the caller did not name.
-        Some(path) => Some(std::path::PathBuf::from(path)),
+        Some(path) => Some(TranscriptLocation::Fixed(std::path::PathBuf::from(path))),
     }
 }
 
