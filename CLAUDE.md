@@ -285,6 +285,22 @@ the file does not exist, then merge the key into what Warp wrote; it has real
 content. This recipe has cost three sessions a restart while being correctly
 recorded in `.fork/TASKS.md` each time, which is why it is here.
 
+**Read back a state-changing step before measuring what follows it.** The
+merge-base trap has a second form and it bit on 2026-08-29: a driver script
+answered an approval with the digest passed positionally instead of as
+`--digest`, so nothing was delivered, the turn parked, and `quiet_for_seconds`
+honestly reported 171 seconds of silence — which reads exactly like the wedge
+that field exists to detect. As with `git diff A...B` against an assumed base,
+the measurement was correct and the input to it was not. **After any mutation,
+confirm the mutation before believing the next reading**: after `agent approve`,
+check the request has left `agent approvals`. One extra call, and it turns a
+three-minute misdiagnosis into a two-second one. Two dearer checks are worth it
+before a *surprising* finding goes into a doc: calibrate a new instrument against
+a known answer first (`wedged-agent.py` is the pattern — fire on the known
+present, stay silent on the known absent), and confirm on a second instrument
+when one exists, which is the general form of *take the screenshot before
+believing `warpctrl agent read`*.
+
 **Diff test-failure membership, not counts.** Measure a same-session baseline on
 a stashed tree and compare *which* tests failed. There is a known pre-existing
 failure set (`gh`-dependent git tests, flaky secret-redaction globals, terminal

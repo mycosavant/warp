@@ -128,14 +128,29 @@ capped builds is sixteen effective jobs on a VM that died at thirty-two.
 - **disk.** Scratch profiles, event logs and release artifacts accumulate over
   hours. Check free space before each build and stop below a floor rather than
   discovering it mid-link.
-- **a measurement whose apparatus could have produced it.** The failure that
-  actually happened today: a polling loop passed the digest positionally, the
-  turn parked, and it looked exactly like a wedge — with the instrument that
-  distinguishes them sitting right there. Before writing any surprising
-  observation down as a finding, ask what in the harness would produce that
-  observation if the phenomenon were absent, and rule it out. Unattended, a false
+- **a measurement whose apparatus could have produced it.** Unattended, a false
   finding committed at 3am is worse than no finding, because it will be believed
-  in the morning.
+  in the morning. The failure that actually happened: a polling loop passed the
+  digest positionally, the turn parked, and it looked exactly like a wedge — with
+  the instrument that distinguishes them sitting right there.
+
+  **This is the merge-base lesson wearing a new coat.** There, `git diff A...B`
+  ran perfectly and reported honestly about a base that had been assumed rather
+  than computed. Here, `quiet_for_seconds` reported honestly downstream of an
+  input that had been assumed: *that the approval was delivered*. Three tiers,
+  cheapest first:
+
+  1. **Read back every state-changing step before measuring what follows.** After
+     `approve`, confirm the request has left `agent approvals` — or that the turn
+     resumed — before believing any number about the turn. One extra read per
+     action, run every time. It would have caught this in seconds, because the
+     request was still sitting in the list.
+  2. **Calibrate a new instrument against a known answer before trusting it.**
+     `tmp/t1410/wedged-agent.py` is the model: make it fire on a known-present
+     phenomenon and stay silent on a known-absent one.
+  3. **No surprising finding enters a doc on one instrument's word** when a
+     second exists. Already fork doctrine — *take the screenshot before believing
+     `warpctrl agent read`* — and it generalises.
 - **commit before each risky phase**, so a silent death still leaves a coherent
   trail on `dev`.
 - **two consecutive failed attempts at the same thing.** Write down what was
