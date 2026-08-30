@@ -9,7 +9,9 @@
       "git diff*": "allow",
       "git log*": "allow",
       "cargo test*": "allow",
-      "cargo check*": "allow"
+      "cargo check*": "allow",
+      "ls*": "allow",
+      "wc*": "allow"
     },
     "external_directory": { "~/.cargo/**": "allow" }
   }

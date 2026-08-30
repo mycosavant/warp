@@ -432,6 +432,42 @@ controls. `wc`, `ls`, `find` and `cat` are read-only and all ask; `git log` and
 `cargo check`, which do far more, do not. The allowlist is drawn around commands
 the maintainer named, not around what a command can do.
 
+**Answered 2026-08-30, and the four commands did not get the same answer.**
+`ls*` and `wc*` are now allowed; `find*`, `cat*` and `grep*` are deliberately
+refused, and the split is the argument rather than a convenience:
+
+- **`find` is disqualified outright.** `-exec` makes `find*: allow` an
+  arbitrary-command allow wearing a read-only name.
+- **`cat` and `grep` reveal file *contents* at arbitrary paths.** Inside the
+  project that adds nothing — the agent's own read tool already reads there
+  unasked. The differential is *outside* it, and this is the measured hazard
+  recorded above: `external_directory` gates the file-tool door, and the bash
+  door to the same place is separate and does not compose. Allowing `cat*`
+  reopens through bash exactly the hole that grant closes. Note also that
+  `egress.rs` is **Warp's** HTTP client, not the agent's — so the agent's own
+  API channel is an exfil path the deny-list does not cover.
+- **`ls` and `wc` leak metadata and counts, not contents.** `wc -l
+  ~/.ssh/id_ed25519` discloses that the file exists and is 27 lines. That is a
+  real cost, and it is the one worth paying, because these two are precisely the
+  measured turn-killers.
+
+**And steering does more here than the allow does.** Both measured incidents
+were the agent *sizing a file before reading it* — something its own read tool
+does without asking. So, as an instruction to any agent reading this file:
+
+> **Read files with your read tool. Do not size them with `wc` or probe with
+> `ls` first, and do not shell out for something a native tool already does.**
+
+That removes the ask at zero security cost, which is smaller than any allow.
+
+**Check it with the case that must *ask*, not the case that must pass.** A map
+missing its `"*": "ask"` lead allows everything, so an allow-list appears to work
+perfectly while the catch-all stands wide open — the confirming test cannot fail
+and proves nothing. The firing case is `cat ~/.bashrc` through bash, which must
+still raise a request. And pick a passing case whose output the agent actually
+needs, or it will answer without running anything and 0 asks will look like a
+pass.
+
 **An agent in the panel works in the *pane's* directory, and a fresh pane
 starts in `$HOME`.** Not in the directory Warp was launched from. Both agent
 paths read `session_context.current_working_directory()`, so this is identical
