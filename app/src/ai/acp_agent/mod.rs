@@ -184,17 +184,18 @@ fn resume_failed(agent: &str, error: &str) -> String {
 
 /// What a person is told when a mode they asked for was refused (T14.18).
 ///
-/// **Not fatal, and the wording has to carry that**, because the turn goes on:
-/// the request failed, the session is in whatever mode the disclosure note
-/// beside this one names, and the work still runs. A person reading only this
-/// sentence must not conclude their turn was cancelled.
+/// **Fatal, and the wording has to carry that** — the first draft of this said
+/// the turn was still running, which was true of the first cut and is a lie now.
 ///
 /// The id was already checked against `availableModes`, so this is the agent
-/// refusing a mode it advertised rather than a typo — which is why the advice is
-/// to look at the agent rather than at the spelling.
+/// refusing a mode it advertised rather than a typo, which is why the advice
+/// points at the agent rather than at the spelling. Nothing runs, because the
+/// alternative is running under a policy the person did not choose.
 fn mode_request_failed(agent: &str, error: &str) -> String {
     format!(
-        "{agent} advertised the mode WARP_FORK_ACP_MODE asked for and then refused to switch to          it, so this session is still in the mode named above and the turn is running in it.          Underlying error: {error}"
+        "{agent} advertised the mode WARP_FORK_ACP_MODE asked for and then refused to switch to \
+         it, so nothing was run rather than run under a mode you did not choose. Underlying \
+         error: {error}"
     )
 }
 
@@ -441,6 +442,7 @@ async fn exchange(
         session,
         program,
         conversation,
+        cwd.to_string_lossy().into_owned(),
     );
 
     agent_client_protocol::Client
@@ -521,7 +523,7 @@ async fn exchange(
             agent_client_protocol::on_receive_request!(),
         )
         .connect_with(agent, |connection: ConnectionTo<Agent>| async move {
-            let (translator, tx, resume, program, conversation_id) = opening;
+            let (translator, tx, resume, program, conversation_id, cwd_text) = opening;
             let hello = connection
                 .send_request(InitializeRequest::new(ProtocolVersion::V1))
                 .block_task()
@@ -603,21 +605,38 @@ async fn exchange(
                 advertised.as_ref(),
                 crate::fork::acp_mode().as_deref(),
             );
+            // **A refusal stops the turn**, correcting the first cut, which
+            // noted the problem and ran anyway. A note scrolls; what it is a
+            // note about is a session running under a policy the person did not
+            // choose, which is the failure this ticket exists to end.
+            // `WARP_FORK_ACP_MODE` is CONTROL_BIND-shaped -- a typo would
+            // otherwise silently mean something -- and unlike CONTROL_BIND,
+            // refusing here costs nothing but the turn.
+            // **Before the refusal, not after.** A turn stopped because of a
+            // mode is precisely the turn an audit reader will be asking about,
+            // and logging only the turns that proceeded would leave the record
+            // silent about every one that did not.
+            mode::log(&conversation_id, &program, &cwd_text, advertised.as_ref());
+            if let Some(reason) = decision.refusal() {
+                return Err(anyhow!(reason.to_owned()).into());
+            }
             if let Some(mode) = decision.mode() {
-                // A failure to set the mode is reported and not fatal. The turn
-                // can still run, the note already says a request was made, and
-                // taking the conversation down over a mode would be a worse
-                // outcome than running in the mode the note names.
+                // The same argument one step later: the person named a policy
+                // and the agent declined to enter it, so running would run under
+                // a policy nobody chose -- the case above, reached by the
+                // agent's answer instead of by a typo.
                 if let Err(error) = connection
                     .send_request(SetSessionModeRequest::new(session_id.clone(), mode.clone()))
                     .block_task()
                     .await
                 {
-                    let event = emit(&translator, |translator| {
-                        translator.note(mode_request_failed(&program, &error.to_string()))
-                    });
-                    let _ = tx.unbounded_send(Ok(event));
+                    return Err(anyhow!(mode_request_failed(&program, &error.to_string())).into());
                 }
+                // Only now, and only because the agent said yes. Recording the
+                // request rather than the acknowledgement is what would make
+                // `agent.list` claim a mode the session might never have
+                // entered.
+                mode::acknowledged(&conversation_id, mode);
             }
             if let Some(note) = decision.note() {
                 let event = emit(&translator, |translator| translator.note(note.to_owned()));

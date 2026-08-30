@@ -8398,6 +8398,58 @@ mode descriptions is the first legitimate instance of `acp_permission.rs`'s
       any mutation, confirm the mutation*, where the mutations were a compile and
       a process exit.
 
+      **Reviewed after shipping, and four things changed** (advisor, 2026-08-30).
+      Two of its points were already built and one it could not have known —
+      the pinned-test correction it flagged had been found and made
+      independently, and re-sending the mode after `session/load` was already
+      how the news gate works. What was genuinely missing:
+
+      - **The note listed mode ids and not their descriptions**, which is a
+        problem shown to the person: `auto, default, acceptEdits, plan, dontAsk,
+        bypassPermissions` still requires guessing which one asks, and `dontAsk`
+        and `auto` both *sound* like not-asking while only one is. The list now
+        carries the agent's own description of each. The note stops being "you
+        have a problem" and becomes the lever, with Warp still recommending
+        nothing.
+      - **An unadvertised id noted the problem and ran the turn anyway.** That
+        was wrong and the advisor's argument beats the one written here: the
+        thing the note is *about* is a session running under a policy the person
+        did not choose. `WARP_FORK_ACP_MODE` is `WARP_FORK_CONTROL_BIND`-shaped
+        — a typo would otherwise silently mean something — and unlike
+        `CONTROL_BIND`, where refusing to start would take away `warpctrl window
+        close`, refusing here costs only the turn. It now refuses, and so does a
+        `set_mode` the agent rejects. **A refusal is not rationed by the news
+        gate**: the gate spares a reader a repeated paragraph, and a refusal is
+        not read-and-continued-past.
+      - **`session_mode` in the event log.** This is T14.17's direction and its
+        sharpest case: a session with no permission events reads identically
+        whether nothing needed asking or the agent's classifier was answering,
+        and the mode is the line that tells a morning-after reader which. Written
+        every turn, unlike the note, because a log is read by something that does
+        not tire.
+      - **`session_mode` on `agent.list`.** The orchestrator's surface, and it
+        sits with `quiet_for_seconds`/`waiting_for_you` for their reason: a
+        session working and asking nothing is a silence those two cannot explain.
+        Verbatim and **not a safety signal** — Warp does not rank modes.
+
+      **And running the review's own additions found a bug in one of them.**
+      `agent.list` reported `session_mode: auto` for a session Warp had *just*
+      moved to `default`: the recorded mode came from `session/new`'s reply and
+      nothing updated it when the request was acknowledged. A status field that
+      is confidently wrong is worse than an absent one — an orchestrator reading
+      `auto` concludes the classifier is answering, on the one session where it
+      demonstrably is not. Recorded on acknowledgement now, never on request,
+      because what belongs there is the mode the session is in rather than the
+      one Warp hoped for. **Two of the three surfaces added in this pass were
+      wrong or missing until they were run**, which is the argument for the rule
+      in one line.
+
+      One citation is worth pinning because the advisor could not find it: the
+      protocol's example mode ids are at **`agent.rs:5038`** of
+      `agent-client-protocol-schema` **1.5.0**, the version `Cargo.lock` pins.
+      The advisor read 1.7.0, which this fork does not compile. The conclusion is
+      unchanged either way, since opacity is what carries it.
+
       **Named as unverified:** whether `session/set_mode` is accepted between
       `session/new` and the first prompt on every agent that advertises modes —
       one agent, one ordering, is what has been run. Whether a mode requested at

@@ -112,23 +112,98 @@ fn a_requested_mode_the_agent_offers_is_sent() {
 /// advertised, so an unknown one buys a protocol error instead of a sentence —
 /// and a *silent* failure would leave a person believing a mode was requested
 /// when it was not, which is strictly worse than the error.
+/// **Refused, not noted — and this is a correction to the first cut.**
+///
+/// That version printed the problem and ran the turn anyway, reasoning that the
+/// note said plainly what had happened. But the thing the note is *about* is a
+/// session running under a policy the person did not choose, which is the
+/// failure this module exists to end. `WARP_FORK_ACP_MODE` is
+/// `WARP_FORK_CONTROL_BIND`-shaped: a typo would otherwise silently mean
+/// something. Unlike `CONTROL_BIND` — where refusing to start would take away
+/// `warpctrl window close` — refusing here costs only the turn.
 #[test]
-fn a_requested_mode_the_agent_does_not_offer_is_reported_and_not_sent() {
+fn a_requested_mode_the_agent_does_not_offer_refuses_the_turn() {
     let decision = Decision::of("conv-unknown", Some(&claude_modes()), Some("architect"));
 
     assert_eq!(decision.mode(), None, "nothing is sent");
-    let note = decision.note().expect("this is exactly when to speak up");
+    assert_eq!(
+        decision.note(),
+        None,
+        "and this is not a note, it is a stop"
+    );
+    let reason = decision.refusal().expect("the turn must not run");
     assert!(
-        note.contains("`architect`") && note.contains("does not offer"),
-        "names what was asked for and why it did not happen: {note}"
+        reason.contains("`architect`") && reason.contains("does not offer"),
+        "names what was asked for and why it did not happen: {reason}"
     );
     assert!(
-        note.contains("`auto`"),
-        "and says which mode is actually in force: {note}"
+        reason.contains("rather than run under a mode you did not choose"),
+        "and says why refusing beats continuing: {reason}"
     );
     assert!(
-        note.contains("`bypassPermissions`"),
-        "the offered list is the evidence for the claim about what is available: {note}"
+        reason.contains("`bypassPermissions`"),
+        "the offered list is the evidence for the claim about what is available: {reason}"
+    );
+}
+
+/// A refusal is never rationed by the news gate.
+///
+/// The gate spares a *reader* a repeated paragraph. A refusal is not read and
+/// then continued past — it stops the turn — so a second attempt with the same
+/// typo must fail exactly as loudly as the first, or the second turn would run.
+#[test]
+fn a_refusal_repeats_for_every_turn_that_earns_it() {
+    let conversation = "conv-refuse-twice";
+    forget(conversation);
+
+    let first = Decision::of(conversation, Some(&claude_modes()), Some("architect"));
+    let second = Decision::of(conversation, Some(&claude_modes()), Some("architect"));
+
+    assert!(first.refusal().is_some());
+    assert!(
+        second.refusal().is_some(),
+        "a second turn under the same typo must not quietly run"
+    );
+}
+
+/// The offered list carries the agent's descriptions, not just its ids.
+///
+/// Ids alone are not a usable lever: `dontAsk` and `auto` both sound like
+/// not-asking and only one of them is. The person picks from the agent's own
+/// words, and Warp recommends nothing.
+#[test]
+fn the_offered_modes_carry_their_descriptions() {
+    let decision = Decision::of("conv-lever", Some(&claude_modes()), None);
+
+    let note = decision.note().expect("modes exist");
+    assert!(
+        note.contains("`default` (“Standard behavior, prompts for dangerous operations”)"),
+        "the id a person would set, with what the agent says it does: {note}"
+    );
+    assert!(
+        note.contains("WARP_FORK_ACP_MODE"),
+        "and the lever that sets it: {note}"
+    );
+}
+
+/// `agent.list` reports the mode even when nothing was said to anyone.
+///
+/// The two answer different questions: the note is rationed because a human
+/// reader tires, and an orchestrator polling a status field must not inherit
+/// that rationing.
+#[test]
+fn the_current_mode_is_readable_after_the_note_goes_quiet() {
+    let conversation = "conv-status";
+    forget(conversation);
+
+    let _first = Decision::of(conversation, Some(&claude_modes()), None);
+    let second = Decision::of(conversation, Some(&claude_modes()), None);
+
+    assert_eq!(second.note(), None, "the second turn says nothing");
+    assert_eq!(
+        current_for(conversation).as_deref(),
+        Some("auto"),
+        "but the status field still knows"
     );
 }
 
@@ -152,7 +227,7 @@ fn a_mode_the_agent_did_not_describe_is_not_described_by_warp() {
         "says the description is missing: {note}"
     );
     assert!(
-        !note.contains("\"\""),
+        !note.contains("“”"),
         "and does not render an empty pair of quotes as though it were one: {note}"
     );
 }
@@ -195,9 +270,19 @@ fn a_current_mode_missing_from_the_list_is_said_plainly() {
         note.contains("did not include"),
         "and says why there is nothing to show for it: {note}"
     );
+    // Scoped to the sentence about the *current* mode rather than the whole
+    // note, and the difference is the finding: since the offered list started
+    // carrying descriptions, `plan`'s appears legitimately further down. The
+    // invariant was never "this string is absent" — it is "`ghost` is not
+    // described using another mode's words" — and a whole-note assertion
+    // conflated the two, then failed on correct behaviour.
+    let about_the_current_mode = note
+        .split_once("Warp did not choose it")
+        .expect("the disclosure always says this")
+        .0;
     assert!(
-        !note.contains("Planning mode"),
-        "and does not borrow another mode's description: {note}"
+        !about_the_current_mode.contains("Planning mode"),
+        "and does not borrow another mode's description: {about_the_current_mode}"
     );
 }
 
@@ -212,7 +297,7 @@ fn an_autonomous_change_names_the_agent_as_the_one_who_made_it() {
     let mut state = claude_modes();
     state.current_mode_id = SessionModeId::from("bypassPermissions".to_owned());
 
-    let note = changed(Some(&state), &state.current_mode_id);
+    let note = changed("conv-autonomous", Some(&state), &state.current_mode_id);
 
     assert!(
         note.contains("changed this session's mode on its own"),
@@ -235,7 +320,11 @@ fn an_autonomous_change_names_the_agent_as_the_one_who_made_it() {
 fn a_change_to_an_unadvertised_mode_reports_the_id_and_says_so() {
     let state = claude_modes();
 
-    let note = changed(Some(&state), &SessionModeId::from("surprise".to_owned()));
+    let note = changed(
+        "conv-surprise",
+        Some(&state),
+        &SessionModeId::from("surprise".to_owned()),
+    );
 
     assert!(note.contains("`surprise`"), "names it: {note}");
     assert!(
@@ -312,5 +401,34 @@ fn a_repeated_request_is_still_sent_while_the_note_goes_quiet() {
         second.mode().map(|id| id.0.to_string()),
         Some("default".to_owned()),
         "but the mode is still requested"
+    );
+}
+
+/// **The status field must report where the session ended up, not where it
+/// started** — found by running it, on a session `agent.list` called `auto`
+/// moments after Warp had moved it to `default`.
+///
+/// The recorded mode came from `session/new`'s reply and nothing updated it on
+/// success. A confidently wrong status field is worse than an absent one: an
+/// orchestrator reading `auto` concludes a classifier is answering, on the one
+/// session where it demonstrably is not.
+#[test]
+fn an_acknowledged_mode_becomes_the_reported_one() {
+    let conversation = "conv-ack";
+    forget(conversation);
+
+    let decision = Decision::of(conversation, Some(&claude_modes()), Some("default"));
+    assert_eq!(
+        current_for(conversation).as_deref(),
+        Some("auto"),
+        "before the agent answers, the session is still where it opened"
+    );
+
+    acknowledged(conversation, decision.mode().expect("a mode was requested"));
+
+    assert_eq!(
+        current_for(conversation).as_deref(),
+        Some("default"),
+        "and after it answers, the status field says so"
     );
 }

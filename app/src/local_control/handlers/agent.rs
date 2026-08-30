@@ -170,6 +170,7 @@ fn conversation_summary(
     // Read once, here, rather than in two field initialisers: the two halves of
     // a liveness report have to describe the same instant, or a listing could
     // pair a quiet time with a tool call from a turn that ended between them.
+    let session_mode = crate::ai::acp_agent::mode::current_for(&conversation.id().to_string());
     let (quiet, last_activity, waiting_for_you) =
         match crate::ai::acp_agent::liveness::quiet_for(&conversation.id().to_string()) {
             Some((quiet, tool, waiting)) => (Some(quiet), tool, waiting),
@@ -207,6 +208,7 @@ fn conversation_summary(
         quiet_for_seconds: quiet,
         last_activity,
         waiting_for_you,
+        session_mode,
     }
 }
 

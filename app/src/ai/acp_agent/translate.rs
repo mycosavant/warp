@@ -394,7 +394,11 @@ impl Translator {
             // watched. Drawn as an ordinary note, in the agent's own words.
             SessionUpdate::CurrentModeUpdate(update) => {
                 api::message::Message::AgentOutput(api::message::AgentOutput {
-                    text: super::mode::changed(self.modes.as_ref(), &update.current_mode_id),
+                    text: super::mode::changed(
+                        &self.conversation_id,
+                        self.modes.as_ref(),
+                        &update.current_mode_id,
+                    ),
                 })
             }
             _ => return Vec::new(),

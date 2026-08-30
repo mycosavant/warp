@@ -637,6 +637,26 @@ pub struct AgentConversationSummary {
     /// Omitted when false, so an ordinary listing is unchanged.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub waiting_for_you: bool,
+    /// The session mode an ACP agent is running this conversation in (T14.18).
+    ///
+    /// **The field that explains a quiet conversation**, and it belongs beside
+    /// the three above for the reason they belong beside each other: an
+    /// orchestrator sees a session doing work and asking nothing, and
+    /// `quiet_for_seconds` cannot tell it whether that is a wedge, a turn that
+    /// needed no permission, or an agent whose own mode answers on the person's
+    /// behalf. Measured: `claude-agent-acp` defaults to `auto`, a model
+    /// classifier, and in it a whole turn wrote a file with Warp never asked.
+    ///
+    /// The agent's own id, verbatim and uninterpreted. **Not a safety signal**:
+    /// Warp does not rank modes and cannot tell what any of them permits, so a
+    /// reader comparing two ids is comparing two words the agent chose. What
+    /// each one means is in the conversation note and the event log, in the
+    /// agent's own description.
+    ///
+    /// Omitted when there is none — the local agent, Warp's own, and any ACP
+    /// agent advertising no modes — so an ordinary listing is unchanged.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_mode: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

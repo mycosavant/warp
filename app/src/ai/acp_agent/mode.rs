@@ -89,8 +89,65 @@ use agent_client_protocol::schema::v1::{SessionMode, SessionModeId, SessionModeS
 /// **Process-global, like [`super::liveness`]'s map and for the same reason:**
 /// a turn's translator lives and dies with the turn, and this fact has to
 /// outlive one. Keyed on Warp's conversation id.
-static DISCLOSED: LazyLock<Mutex<HashMap<String, SessionModeId>>> =
+static DISCLOSED: LazyLock<Mutex<HashMap<String, Known>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
+
+/// What is known about one conversation's mode.
+///
+/// Two ids and not one, because they answer different questions. `current` is
+/// what the session is in, and `agent.list` reports it every turn whether or not
+/// anything was said. `told` is the last one disclosed, and only it decides
+/// whether there is anything new to say. Collapsing them would make the
+/// orchestrator's answer depend on whether a person had already been told,
+/// which is nobody's idea of a status field.
+#[derive(Debug, Clone)]
+struct Known {
+    current: SessionModeId,
+    told: Option<SessionModeId>,
+}
+
+/// The mode a conversation is in, for `agent.list` (T14.18).
+///
+/// **This is the orchestrator's surface, and it exists because of a silence.**
+/// An unattended run polls `agent.list`, and a session in a classifier mode
+/// produces exactly the quiet `quiet_for_seconds` cannot explain — no requests,
+/// no waiting, work happening. The mode is the machine-readable *why*.
+pub(crate) fn current_for(conversation_id: &str) -> Option<String> {
+    let disclosed = DISCLOSED.lock().ok()?;
+    disclosed
+        .get(conversation_id)
+        .map(|known| known.current.0.to_string())
+}
+
+/// Record that a mode Warp requested was acknowledged (T14.18).
+///
+/// **Found by running it.** `agent.list` reported `auto` for a session Warp had
+/// just moved to `default`, because the recorded mode came from `session/new`'s
+/// reply and nothing updated it when the request succeeded. A status field that
+/// is confidently wrong is worse than one that is absent — an orchestrator
+/// reading `auto` would conclude the classifier was answering, on the one
+/// session where it demonstrably was not.
+///
+/// Only called after the agent acknowledges, never before: what is recorded is
+/// the mode the session is in, not the mode Warp hoped for. A refused request
+/// leaves the old value standing, which is correct, because that is still the
+/// mode in force.
+pub(crate) fn acknowledged(conversation_id: &str, mode: &SessionModeId) {
+    observe(conversation_id, mode);
+}
+
+/// Record the mode a conversation is now in, whatever the reason.
+fn observe(conversation_id: &str, current: &SessionModeId) {
+    if let Ok(mut disclosed) = DISCLOSED.lock() {
+        disclosed
+            .entry(conversation_id.to_owned())
+            .and_modify(|known| known.current = current.clone())
+            .or_insert_with(|| Known {
+                current: current.clone(),
+                told: None,
+            });
+    }
+}
 
 /// Whether this conversation still needs telling, recording that it was told.
 ///
@@ -112,13 +169,18 @@ fn needs_telling(conversation_id: &str, current: &SessionModeId) -> bool {
         // because of an unrelated panic is not.
         return true;
     };
-    match disclosed.get(conversation_id) {
-        Some(told) if told == current => false,
-        _ => {
-            disclosed.insert(conversation_id.to_owned(), current.clone());
-            true
-        }
+    let known = disclosed
+        .entry(conversation_id.to_owned())
+        .or_insert_with(|| Known {
+            current: current.clone(),
+            told: None,
+        });
+    known.current = current.clone();
+    if known.told.as_ref() == Some(current) {
+        return false;
     }
+    known.told = Some(current.clone());
+    true
 }
 
 /// Forget a conversation, so a test does not inherit another's disclosure.
@@ -152,6 +214,22 @@ pub(crate) enum Decision {
     /// print: this one is the steady state of a long conversation, and reading
     /// it in a match should say so.
     RequestQuietly { mode: SessionModeId },
+    /// The person named a mode this agent does not offer. Run nothing.
+    ///
+    /// **This variant is a correction**, and the reasoning is worth keeping
+    /// because the first cut got it wrong. That version noted the problem and
+    /// ran the turn anyway, on the grounds that the note said plainly what had
+    /// happened. But a note scrolls, and what it is a note *about* is the
+    /// session running under a policy the person did not choose — which is the
+    /// precise failure this whole module exists to end. The parser shape is
+    /// `WARP_FORK_CONTROL_BIND`'s, not `WARP_FORK_REMOTE_APPROVE`'s: a typo here
+    /// would otherwise silently mean something, so it must be refused loudly.
+    ///
+    /// And unlike `CONTROL_BIND` — where refusing to start would take out
+    /// `warpctrl window close` and so cannot be done — refusing here costs
+    /// nothing but the turn. The asymmetry that made that one forgiving is
+    /// exactly what makes this one strict.
+    Refuse { reason: String },
 }
 
 impl Decision {
@@ -160,6 +238,7 @@ impl Decision {
         match self {
             Self::NothingToSay | Self::RequestQuietly { .. } => None,
             Self::Disclose { note } | Self::Request { note, .. } => Some(note),
+            Self::Refuse { .. } => None,
         }
     }
 
@@ -167,6 +246,14 @@ impl Decision {
     pub(crate) fn mode(&self) -> Option<&SessionModeId> {
         match self {
             Self::Request { mode, .. } | Self::RequestQuietly { mode } => Some(mode),
+            _ => None,
+        }
+    }
+
+    /// Why the turn must not run, if it must not.
+    pub(crate) fn refusal(&self) -> Option<&str> {
+        match self {
+            Self::Refuse { reason } => Some(reason),
             _ => None,
         }
     }
@@ -225,17 +312,72 @@ impl Decision {
                 // person believing a mode was requested when it was not, which
                 // is the worse of the two by the margin this whole module is
                 // about.
-                None if !news => Self::NothingToSay,
-                None => Self::Disclose {
-                    note: format!(
-                        "{current} `WARP_FORK_ACP_MODE` asks for `{asked}`, which this agent does \
-                         not offer, so nothing was requested and the mode above is the one in \
-                         force. This agent offers: {offered}."
+                // Not gated on `news`: a refusal stops the turn, and a turn
+                // that does not run cannot be spared a repeated explanation.
+                None => Self::Refuse {
+                    reason: format!(
+                        "WARP_FORK_ACP_MODE asks for `{asked}`, which this agent does not offer, \
+                         so nothing was run rather than run under a mode you did not choose. \
+                         {current} This agent offers: {offered}"
                     ),
                 },
             },
         }
     }
+}
+
+/// The `agent` value on the line this module writes, matching `translate.rs`.
+const SOURCE: &str = "acp_agent";
+
+/// Write one `session_mode` line into the event log (T14.18, serving T14.17).
+///
+/// **This is the audit reader's surface, and it exists to explain a zero.**
+/// T14.17 found the ACP path records what an agent did and never what it asked;
+/// the worst version of that gap is a session with *no* permission events at
+/// all, which reads identically whether the person was never asked because
+/// nothing needed asking or because the agent's own classifier was answering.
+/// The mode is the line that tells those apart, and without it a morning-after
+/// reader cannot.
+///
+/// Written whether or not anything was disclosed to a person, and on every turn
+/// rather than only the first: the conversation note is rationed because a human
+/// reader tires, and a log is read by something that does not.
+pub(crate) fn log(
+    conversation_id: &str,
+    agent: &str,
+    cwd: &str,
+    advertised: Option<&SessionModeState>,
+) {
+    let Some(state) = advertised.filter(|state| !state.available_modes.is_empty()) else {
+        return;
+    };
+    // The whole picture on one line: which mode, and what the agent said every
+    // mode means. A reader asking "could this session have asked me?" needs the
+    // descriptions as much as the current id, and a log line is the one place
+    // there is no cost to carrying both.
+    let summary = format!(
+        "current `{}`; offered {}",
+        state.current_mode_id.0,
+        offered_list(state)
+    );
+    crate::event_log::record(crate::event_log::Entry {
+        v: None,
+        agent,
+        event: "session_mode",
+        source: SOURCE,
+        session_id: Some(conversation_id),
+        linked_session_id: None,
+        call_id: None,
+        parent_call_id: None,
+        cwd: Some(cwd),
+        project: crate::event_log::project_name(cwd),
+        tool_name: None,
+        tool_input_preview: None,
+        summary: Some(&summary),
+        error_type: None,
+        plugin_version: None,
+        applied: true,
+    });
 }
 
 /// The note for a mode change the agent made on its own.
@@ -256,7 +398,15 @@ impl Decision {
 /// `advertised` is `None` when the session opened without a mode list, in which
 /// case the id is all there is and the note says so rather than pretending
 /// otherwise.
-pub(crate) fn changed(advertised: Option<&SessionModeState>, now: &SessionModeId) -> String {
+pub(crate) fn changed(
+    conversation_id: &str,
+    advertised: Option<&SessionModeState>,
+    now: &SessionModeId,
+) -> String {
+    // Recorded as well as announced. Without this, `agent.list` would keep
+    // reporting the mode the session opened in after the agent moved it --
+    // a status field that is confidently wrong, which is worse than absent.
+    observe(conversation_id, now);
     let described = advertised
         .and_then(|state| state.available_modes.iter().find(|mode| &mode.id == now))
         .map(described)
@@ -298,7 +448,7 @@ fn describe_current(state: &SessionModeState) -> String {
 fn described(mode: &SessionMode) -> String {
     match mode.description.as_deref().map(str::trim) {
         Some(description) if !description.is_empty() => format!(
-            "the agent's `{}` mode, which the agent describes as \"{description}\"",
+            "the agent's `{}` mode, which the agent describes as “{description}”",
             mode.id.0
         ),
         _ => format!(
@@ -308,16 +458,35 @@ fn described(mode: &SessionMode) -> String {
     }
 }
 
-/// Every id the agent offered, so a person choosing one does not have to guess
-/// its spelling — and so the note carries the evidence for its own claim about
-/// what is available.
+/// Every mode the agent offered, **with the agent's own description of each**.
+///
+/// **Ids alone were not enough, and that is the point of the whole note.** A
+/// person shown `auto, default, acceptEdits, plan, dontAsk, bypassPermissions`
+/// still has to guess which of those is the one where the agent asks — and
+/// guessing wrong here means choosing a permission policy by the sound of its
+/// name. `dontAsk` and `auto` both sound like not-asking; only one of them is,
+/// and the agent has already said which in a sentence Warp is free to quote.
+///
+/// So the note carries the lever rather than only the problem: the person picks
+/// from the agent's own words, and Warp recommends nothing. Which is the same
+/// division this fork keeps everywhere — **Warp cannot make an agent ask**, so
+/// what it can do is show the person the switch and stand back.
 fn offered_list(state: &SessionModeState) -> String {
     state
         .available_modes
         .iter()
-        .map(|mode| format!("`{}`", mode.id.0))
+        .map(|mode| match mode.description.as_deref().map(str::trim) {
+            Some(description) if !description.is_empty() => {
+                // Typographic quotes, not ASCII: this sentence also travels the
+                // error path when a mode is refused, and there `"` comes out as
+                // `\"`. A surface whose whole job is being read should not be
+                // littered with escapes -- measured on the refusal screenshot.
+                format!("`{}` (“{description}”)", mode.id.0)
+            }
+            _ => format!("`{}` (no description given)", mode.id.0),
+        })
         .collect::<Vec<_>>()
-        .join(", ")
+        .join("; ")
 }
 
 #[cfg(test)]
