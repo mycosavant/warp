@@ -447,10 +447,7 @@ compiling that crate's tests. A clean `cargo build` proves nothing here.
 Measured 2026-08-29 on WSL: an uncapped release build **took the whole VM down**
 — the guest came back at `up 1 min` with an empty `dmesg`, which is the
 signature of the VM dying rather than Linux OOM-killing a process. A single
-`rustc` compiling the `warp` crate holds **~8.1 GB RSS** (measured 2026-08-29;
-**re-measured 2026-08-30 at 13.7 GB**, so treat 8 GB as a floor and the `-j 8`
-margin as thinner than it reads — at the peak the VM had 1 GB of RAM and 3 GB of
-swap left), and cargo defaults to
+`rustc` compiling the `warp` crate holds **~8.1 GB RSS**, and cargo defaults to
 one job per core (32 here), so several 8 GB-class crates reach codegen together
 and exhaust the VM's 31 GiB. At `-j 8` the same build finished with 19 GiB still
 free. `[profile.release]`'s own comment in `Cargo.toml` records this hazard from
@@ -459,6 +456,15 @@ faces, and the guest-side face is worse because it takes the session with it.
 The host has 64 GB and had **no `.wslconfig` at all**, so the VM's 32 GB was
 WSL2's default half-of-host rather than a chosen value; one now exists with more
 headroom, real swap and `autoMemoryReclaim`.
+
+**And read the two numbers above as pre-fix.** The 32 GB and the `-j 8` that was
+landed on after repeated OOM crashes both describe the VM *before* the
+`.wslconfig` existed. Today `memory=40GB` with `swap=16GB`, so the cap is running
+with headroom it was not chosen against. A single `rustc` was sampled at
+**13.7 GB RSS** on 2026-08-30 with swap at 12.8/16 GB — but **which crate that
+was compiling was not verified**, so it is not a like-for-like replacement for
+the 8.1 GB figure and is recorded only as evidence that 8 GB is a floor rather
+than a ceiling. Re-measure properly before re-tuning the cap.
 
 **Never share `CARGO_TARGET_DIR` between two checkouts of this workspace.**
 Measured 2026-08-24: running a baseline in a `git worktree` with the main tree's

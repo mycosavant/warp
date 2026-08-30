@@ -8020,13 +8020,31 @@ mode descriptions is the first legitimate instance of `acp_permission.rs`'s
       assume otherwise. The answers stay fluent and confident throughout, which is
       what makes it dangerous rather than merely lossy.
 
-      **And it is not a cliff, it is a metronome.** `opencode`'s own log records
-      `agent=compaction`; correlated against turn completion times, it fired
-      during exchanges **8, 14 and 19** — every five or six turns, the first by
-      turn eight. So this is not something a long day eventually reaches. **T14.9's
-      seven-turn session sat right at the first boundary**, which means the
-      friction log this entire phase was built on was taken across a compaction
-      nobody knew had happened.
+      **It fired three times — during exchanges 8, 14 and 19 — and the trigger is
+      a real threshold, measured from the agent's own database.** Context climbed
+      to 140,773 / 140,464 / 145,004 tokens and reset to 33,443 / 34,537 / 19,226
+      at each of the three `agent=compaction` log lines. The model is
+      `big-pickle`, **200,000-token context**. So it compacts at about **70%**,
+      discarding with ~55k still free — an aggressive policy, and opencode's own,
+      configurable via `compaction: {auto, prune}` and `OPENCODE_DISABLE_AUTOCOMPACT`.
+
+      > **Retracted, same day, on the maintainer's challenge: an earlier version
+      > of this entry called the cadence "a metronome … every five or six turns"
+      > and said T14.9's seven-turn session "sat right at the first boundary".
+      > Both were wrong, and the error was mine rather than the instrument's.**
+      > The cadence is a property of *this run's payload*, not of ordinary work.
+      > The session was deliberately built to consume context — repeated
+      > 1200-line reads of `.fork/TASKS.md` — and it shows: **seven messages
+      > carried more than 40,000 input tokens each, the largest 105,331**, out of
+      > 1,138,762 input tokens total. Ordinary turns are one to three thousand.
+      > Nothing here licenses a claim about T14.9, whose turns read nothing of the
+      > kind, and the comparison has been withdrawn rather than rescaled — the
+      > honest statement is that **the compaction cadence under ordinary work is
+      > unmeasured.**
+      >
+      > This is the apparatus rule from `GOAL.md` firing on its author: a
+      > deliberately context-hostile payload produced a number, and the number was
+      > reported as though the payload were typical.
 
       **This reframes the ticket rather than answering it.** T14.13 was written as
       *"`local_agent` handles compaction; the ACP path has no `/compact` and no
@@ -8039,6 +8057,55 @@ mode descriptions is the first legitimate instance of `acp_permission.rs`'s
       is more than the agent is likely carrying; it cannot know the truth without
       a protocol signal that does not exist. The finding worth carrying upstream
       is *"an ACP agent has no way to report that it compacted"*.
+
+- [ ] **T14.19** **Hand the agent back the transcript Warp already owns.**
+      Proposed by the maintainer 2026-08-30 on reading T14.13, and it is the
+      right shape because it **routes around the detection problem instead of
+      solving it**.
+
+      T14.13 concluded that Warp cannot know when an agent compacts, because ACP
+      defines no update kind to carry the news. That framing quietly assumed the
+      fix must be triggered *by* a signal. It need not be. **Warp holds the
+      complete transcript either way** — measured, 21 exchanges and 159,747
+      characters still intact at the moment the agent could no longer recall its
+      first eleven turns. The agent has lost it; Warp has not. So Warp can simply
+      make its copy reachable and say so once, at session start, and the recovery
+      works whether or not anyone ever detects a compaction.
+
+      **Grep, not read** — the maintainer's word, and it is the load-bearing
+      detail. Handing back a 160,000-character transcript would consume the very
+      budget that ran out; a *searchable* transcript costs only the hits. The
+      agent that said "point me back at the record and I'll re-read it and report
+      exactly what was found" was describing this feature.
+
+      **What has to be checked first, in order:**
+
+      1. **Does Warp already persist the transcript in greppable form?** The
+         event log does **not** — measured, it carries `tool_start`,
+         `tool_complete`, `stop`, `prompt_submit`, `session_start` and no
+         assistant text. `warpctrl agent read` reconstructs from Warp's own store,
+         so something has it; whether a file exists to point at, or one must be
+         written, is unverified and decides the whole size of this ticket.
+      2. **Where does the pointer go?** The prompt is the only channel the fork
+         controls, so it is a preamble on the first prompt of a session. That is a
+         real cost — it is words in someone else's context window — and it should
+         be one line naming a path, not an explanation.
+      3. **Whether it is wanted per-session.** Some agents manage their own
+         history well; this should be a disclosure the user can decline, in the
+         same spirit as `WARP_FORK_ACP_MODE` having no default.
+
+      **The trap to avoid, named in advance.** This must not become Warp
+      *managing* the agent's context. It writes a file and names it once; the
+      agent decides whether to look. Anything more — injecting recovered context,
+      re-prompting after a detected compaction — puts Warp in the business of
+      editing someone else's conversation, which is the same overreach
+      `acp_permission` refuses on `switch_mode`.
+
+      **Related, unbuilt:** a compaction *signal* would still be worth having, to
+      say in the panel that the agent's view and Warp's have diverged. That is
+      T14.13's disclosure half and it is independent of this. Carrying
+      *"ACP has no way for an agent to report that it compacted"* upstream remains
+      the honest fix.
 
       **Named, not assumed.** Whether `claude-agent-acp` compacts on the same
       cadence is **unmeasured** — it has its own policy, and this run deliberately
