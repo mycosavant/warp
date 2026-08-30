@@ -134,7 +134,27 @@ pub(super) struct Translator {
     /// Carried so a parked permission request can be lined up with the lines
     /// `WARP_FORK_EVENT_LOG` wrote for the same session, the way
     /// `PendingApproval::session_id` already is for CLI agents.
+    ///
+    /// **It no longer names the event log's file** — see [`Self::conversation_id`].
     session_id: Option<String>,
+    /// Warp's own id for this conversation, which is what the event log files
+    /// under.
+    ///
+    /// **T14.15, and `local_agent` had already written down why.** Its
+    /// `TurnContext::session_id` carries this same value with the comment *"Not
+    /// Claude's session id … filing under it would put a turn's tools in a
+    /// different file from its frame"* — and the ACP path then did exactly that.
+    /// Measured: one turn wrote `session_start`/`stop` into
+    /// `<conversation>.jsonl` and `tool_start`/`tool_complete` into
+    /// `<acp-session>.jsonl`, with neither naming the other, so opening the
+    /// obvious file showed a session with nothing between its ends.
+    ///
+    /// Filing under Warp's id also takes an agent-controlled string out of the
+    /// filename, which [`event_log::session_key`] otherwise has to sanitise
+    /// precisely because a session id of `../../.bashrc` would be a plugin
+    /// choosing where Warp writes. The agent's id is still recorded, as
+    /// `linked_session_id`, where it cannot pick a path.
+    conversation_id: String,
     /// The program name the event log's `agent` field carries, resolved once from
     /// `WARP_FORK_ACP_COMMAND` rather than per tool call.
     ///
@@ -184,6 +204,7 @@ impl Translator {
         started_at: DateTime<Utc>,
         agent: String,
         cwd: Option<String>,
+        conversation_id: String,
     ) -> Self {
         Self {
             task_id,
@@ -197,6 +218,7 @@ impl Translator {
             locations: Vec::new(),
             opened: false,
             session_id: None,
+            conversation_id,
             agent,
             cwd,
             started: HashMap::new(),
@@ -481,7 +503,8 @@ impl Translator {
             agent: &self.agent,
             event: "tool_start",
             source: "acp_agent",
-            session_id: self.session_id.as_deref(),
+            session_id: Some(&self.conversation_id),
+            linked_session_id: self.session_id.as_deref(),
             call_id: Some(&call.tool_call_id.to_string()),
             parent_call_id: None,
             cwd: self.cwd.as_deref(),
@@ -523,7 +546,8 @@ impl Translator {
             agent: &self.agent,
             event: "tool_complete",
             source: "acp_agent",
-            session_id: self.session_id.as_deref(),
+            session_id: Some(&self.conversation_id),
+            linked_session_id: self.session_id.as_deref(),
             call_id: Some(&update.tool_call_id.to_string()),
             parent_call_id: None,
             cwd: self.cwd.as_deref(),

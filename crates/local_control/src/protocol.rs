@@ -351,7 +351,9 @@ pub struct PendingApproval {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub project: Option<String>,
     /// The agent's own session id, which is what ties this to the lines
-    /// `WARP_FORK_EVENT_LOG` wrote for the same session.
+    /// `WARP_FORK_EVENT_LOG` wrote for the same session — carried there as
+    /// `linked_session_id` since T14.15, because the log files under Warp's
+    /// conversation id so that a turn's tools and its frame share one file.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub session_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

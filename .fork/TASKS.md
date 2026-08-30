@@ -7924,7 +7924,7 @@ mode descriptions is the first legitimate instance of `acp_permission.rs`'s
       The constraint to carry: a model list is the agent's claim about itself, so
       it is rendered, never validated, and a selection is passed back verbatim.
 
-- [ ] **T14.15** **One ACP turn writes two event-log files that never name each
+- [x] **T14.15** **One ACP turn writes two event-log files that never name each
       other.** Found 2026-08-29 while checking whether an advisor's queue
       recommendation rested on a stale doc. It did, and underneath it was a real
       defect nobody had seen.
@@ -7956,6 +7956,40 @@ mode descriptions is the first legitimate instance of `acp_permission.rs`'s
       other. **Check first whether the CLI-agent path has the same split**; it
       keys on its own session id and may already be coherent, in which case match
       it rather than invent.
+
+      **As built — and checking the other path first was the whole of the
+      design.** `local_agent`'s `TurnContext::session_id` carries Warp's
+      conversation id under a comment that reads, in full: *"**Not** Claude's
+      session id: that is what `conversation_token` carries here, and filing
+      under it would put a turn's tools in a different file from its frame."*
+      The rule was written down, with the exact failure named, and the ACP path
+      did the thing it warns against. So there was nothing to invent — only a
+      precedent to match, and the first draft of this fix (a new cross-reference
+      event, keeping two files) was abandoned on reading that sentence.
+
+      ACP tool events now file under the conversation id like every other source.
+      The agent's own session id is kept on each line as `linked_session_id`,
+      which is the join back to a parked approval's `session_id` and is the only
+      thing the new field is for. Verified live — one turn, one file, in order:
+
+      ```text
+      session_start   agent=warp                       linked=None
+      tool_start      agent=opencode  tool=execute     linked=ses_faf811…
+      tool_complete   agent=opencode  tool=execute     linked=ses_faf811…
+      stop            agent=warp                       linked=None
+      ```
+
+      **A second thing falls out, and it is the better argument.** The agent's
+      session id no longer names a file. `event_log::session_key` sanitises that
+      string precisely because a session id of `../../.bashrc` would be a plugin
+      choosing where Warp writes; that defence is still there and now has less to
+      defend, because the only path that fed it an agent-controlled string has
+      stopped. Filing under Warp's own id is the fix for the split *and* removes
+      the reason the sanitiser was load-bearing.
+
+      Pinned by a test that reads the live broadcast rather than the file, since
+      the file key is derived inside `record` from the `session_id` field, and
+      that field is the thing a future edit would get wrong.
 
 ## T15 — Loose ends carried, not forgotten
 

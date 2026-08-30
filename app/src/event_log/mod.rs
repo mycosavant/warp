@@ -96,6 +96,24 @@ pub(crate) struct Entry<'a> {
     /// the wire under the same name.
     pub source: &'a str,
     pub session_id: Option<&'a str>,
+    /// The *other* id for this same turn, when a turn has two.
+    ///
+    /// **Fork (T14.15), and it exists because a log with two id spaces and no
+    /// link between them reads as a log that is missing half its events.**
+    /// [`session_key`] below already names the two worlds: Warp's own ids, and
+    /// the ones that cross a process boundary before Warp sees them. An ACP turn
+    /// has one of each — Warp's conversation id and the agent's session id — and
+    /// each keys a *different file*. Measured 2026-08-29, one turn wrote
+    /// `<conversation>.jsonl` holding `session_start` and `stop`, and
+    /// `<acp-session>.jsonl` holding `tool_start` and `tool_complete`, with
+    /// nothing in either naming the other. Opening the first alone shows a
+    /// session with nothing between its ends, which is exactly the false belief
+    /// `CLAUDE.md` carried for a day after it stopped being true.
+    ///
+    /// So this is the join key, written from both ends: a line keyed by one id
+    /// names the other. Absent for every source with only one id, which is all
+    /// of them except the ACP path.
+    pub linked_session_id: Option<&'a str>,
     /// A stable id for the tool call this event belongs to, so a `tool_complete`
     /// can be tied to the `permission_request` that preceded it.
     ///
@@ -280,6 +298,8 @@ fn hosted_agent_entry(event: &CLIAgentEvent, applied: bool) -> Entry<'_> {
             CLIAgentEventSource::CodexOsc9Fallback => "codex_osc9_fallback",
         },
         session_id: event.session_id.as_deref(),
+        // One id only: this source has no second id space to join to.
+        linked_session_id: None,
         call_id: None,
         parent_call_id: None,
         cwd: event.cwd.as_deref(),

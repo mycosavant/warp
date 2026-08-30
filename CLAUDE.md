@@ -134,14 +134,14 @@ the local log; **reach for this before theorising about why something feels
 slow**), `WARP_FORK_EVENT_LOG` (`on`, or a directory — one JSONL file per
 agent session, appended as events arrive; **reach for this before theorising
 about what an agent did**. T14.9 gave the ACP path tool events, so the "no tool
-events at all" recorded here from T14.7 is **no longer true** — but read the
-next sentence before trusting one file. **One ACP turn writes two files that
-never reference each other**: `<conversation-uuid>.jsonl` gets `session_start`
-and `stop` under `agent: warp`, and `<acp-session-id>.jsonl` gets
-`tool_start`/`tool_complete` under the agent's own name. So opening the
-conversation file alone shows a session with nothing between its ends, which is
-exactly the sentence this bullet used to carry — measured T14.14's opening, and
-ticketed as T14.15), `WARP_FORK_CONTROL_BIND` (**the only one
+events at all" recorded here from T14.7 is **no longer true**. It was also
+briefly true-looking for a worse reason: until T14.15 an ACP turn wrote **two**
+files that never named each other — `session_start`/`stop` under the
+conversation id, tool events under the agent's session id — so opening the
+obvious one showed a session with nothing between its ends. Now everything for a
+turn is filed under **Warp's conversation id**, the way `local_agent` always
+did, with the agent's own id on each line as `linked_session_id`. One turn, one
+file), `WARP_FORK_CONTROL_BIND` (**the only one
 that reaches off the machine** — one literal IP address, optionally with a port
 (`192.168.1.5:41234`, `[fd00::1]:41234`; pin one if you want the console on a
 home screen, because an ephemeral port makes a saved URL dead on the next

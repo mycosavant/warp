@@ -199,6 +199,8 @@ fn record_action_event(
         event: event_name,
         source: SOURCE,
         session_id: session_id.as_deref(),
+        // One id only: this source has no second id space to join to.
+        linked_session_id: None,
         call_id: Some(&call_id),
         parent_call_id: None,
         cwd: cwd.as_deref(),
@@ -289,6 +291,8 @@ fn record_history_event(
         event: event_name,
         source: SOURCE,
         session_id: Some(&session_id),
+        // One id only: this source has no second id space to join to.
+        linked_session_id: None,
         call_id: None,
         parent_call_id: None,
         cwd: cwd.as_deref(),

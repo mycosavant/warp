@@ -98,6 +98,8 @@ pub(crate) fn record(context: &TurnContext, event: &ToolEvent) {
         event: projected.event,
         source: SOURCE,
         session_id: Some(&context.session_id),
+        // One id only: this source has no second id space to join to.
+        linked_session_id: None,
         call_id: Some(&projected.call_id),
         parent_call_id: projected.parent_call_id.as_deref(),
         cwd: context.cwd.as_deref(),

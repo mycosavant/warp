@@ -21,6 +21,7 @@ fn translator() -> Translator {
         DateTime::from_timestamp(1_700_000_000, 0).expect("a valid fixture timestamp"),
         "test-agent".to_owned(),
         Some("/tmp/project".to_owned()),
+        "conv-1".to_owned(),
     )
 }
 
@@ -547,4 +548,46 @@ fn a_replayed_tool_call_leaves_no_locations_behind() {
     translator.end_replay();
 
     assert_eq!(translator.locations_for("call_1"), None);
+}
+
+/// A turn's tools land in the file its frame does (T14.15).
+///
+/// **`local_agent` had already written this rule down and the ACP path broke
+/// it.** Its `TurnContext::session_id` carries Warp's conversation id with the
+/// comment *"Not Claude's session id … filing under it would put a turn's tools
+/// in a different file from its frame"*, and that is precisely what happened
+/// here: measured, one turn wrote `session_start`/`stop` under
+/// `<conversation>.jsonl` and `tool_start`/`tool_complete` under
+/// `<acp-session>.jsonl`, with neither file naming the other. Opening the
+/// obvious one showed a session with nothing between its ends — the false belief
+/// `CLAUDE.md` then carried for a day.
+///
+/// Pinned through the live broadcast rather than the file, because the key is
+/// derived inside `record` from `session_id` and this is the field that decides
+/// it. The agent's own id must still be present, as the join back to a parked
+/// approval, but it must not be what names the file.
+#[test]
+fn a_tool_event_is_filed_under_the_conversation_and_names_the_agents_session() {
+    let mut events = crate::event_log::subscribe();
+    let mut translator = translator();
+    translator.open("ses_abc".to_owned());
+
+    translator.on_update(&SessionUpdate::ToolCall(ToolCall::new(
+        "call_t1415",
+        "grep -rn kind_name",
+    )));
+
+    let line = std::iter::from_fn(|| events.try_recv().ok())
+        .map(|line| serde_json::from_str::<serde_json::Value>(&line).expect("a JSON line"))
+        .find(|line| line["call_id"] == "call_t1415")
+        .expect("the tool start was broadcast");
+
+    assert_eq!(
+        line["session_id"], "conv-1",
+        "the file is keyed on Warp's conversation, so tools and frame share it"
+    );
+    assert_eq!(
+        line["linked_session_id"], "ses_abc",
+        "the agent's own id is still recorded, as the join to its approvals"
+    );
 }

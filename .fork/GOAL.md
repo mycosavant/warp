@@ -46,13 +46,13 @@ has re-taken. Running first has overturned the plan twice in T14 — Phase 0's
 table was wrong in both cells, and T14.9 demoted the button that everyone was
 sure about — so the prior is strong and it is cheap to honour.
 
-The session's own task should be **T14.15** (the event log writes two files with
-no join key), then **T14.13** (context runs out and nothing knows), with
-**T14.14** (model selection, already offered by the protocol) behind them.
-T14.15 goes first because it is the audit trail: an unattended run in which an
-orchestrator answers an agent's permission prompts is only defensible if every
-approval can be traced afterwards to the edit it produced, and today that trail
-is split across two files that do not name each other.
+~~The session's own task should be **T14.15**~~ — **done before the session, in
+about an hour, because the audit trail has to exist before an unattended run can
+rely on one.** An orchestrator answering an agent's prompts is only defensible if
+every approval traces afterwards to the edit it produced, and that trail was
+split across two files that did not name each other. One turn now writes one
+file. So the session's task is **T14.13** (context runs out and nothing knows),
+with **T14.14** (model selection, already offered by the protocol) behind it.
 **T14.12 is closed without being built** — polled through a live turn, `agent
 read` streams after all (0 → 675 → 742 → 838 characters, `is_complete: false`
 throughout), so T14.9's claim that it shows nothing until a turn ends was simply

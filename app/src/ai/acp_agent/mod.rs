@@ -298,6 +298,7 @@ fn run(command: String, turn: Turn) -> impl Stream<Item = Event> + Send + use<> 
         started_at,
         agent_name(&command),
         turn.working_directory.clone(),
+        turn.conversation_id.clone(),
     )));
 
     // Dropped with the driver, so a turn that ends — or is cancelled, or whose
