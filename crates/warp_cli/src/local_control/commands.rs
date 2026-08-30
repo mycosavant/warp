@@ -166,6 +166,7 @@ fn render_human_readable(action: ActionKind, data: &serde_json::Value) -> String
             nested_value_or_unknown(data, &["pane", "id"])
         ),
         ActionKind::AgentApprovals => render_approvals(data),
+        ActionKind::ControlPair => render_pairing(data),
         _ => serde_json::to_string_pretty(data).unwrap_or_else(|_| data.to_string()),
     }
 }
@@ -262,6 +263,50 @@ fn render_approvals(data: &serde_json::Value) -> String {
         ));
     }
     out.pop();
+    out
+}
+
+/// Draws the pairing code as something a phone can be pointed at.
+///
+/// **The QR is why this exists, and it was generated but never printed.**
+/// `PairingResult::qr` carries the code already rendered as text — its own doc
+/// says "so a terminal client can show one without an image viewer" — and the
+/// only human-facing output format dumped the escaped JSON string instead. So
+/// the way to pair was to copy a URL with a secret in its fragment across
+/// devices, or type the hash, which is exactly what a QR exists to avoid.
+///
+/// The grants are printed under it rather than beside it, because *"which of
+/// these actions does my phone get"* is the question `PairingResult` says
+/// should be answerable before anyone scans, and a list that scrolls off the
+/// top of a QR is not an answer.
+fn render_pairing(data: &serde_json::Value) -> String {
+    let mut out = String::new();
+    if let Some(qr) = data.get("qr").and_then(serde_json::Value::as_str) {
+        out.push_str(qr);
+        if !qr.ends_with('\n') {
+            out.push('\n');
+        }
+    }
+    out.push_str(&format!("{}\n", value_or_unknown(data, "url")));
+    // The expiry is not decoration: the code is spendable for two minutes and
+    // once, so a person reading this needs to know whether it is already dead
+    // before they wonder why their phone timed out.
+    out.push_str(&format!(
+        "expires {} (two minutes, single use)\n",
+        value_or_unknown(data, "expires_at")
+    ));
+    let actions = data
+        .get("actions")
+        .and_then(serde_json::Value::as_array)
+        .map(|actions| {
+            actions
+                .iter()
+                .filter_map(serde_json::Value::as_str)
+                .collect::<Vec<_>>()
+                .join(", ")
+        })
+        .unwrap_or_else(|| "<unknown>".to_owned());
+    out.push_str(&format!("a device that scans this may: {actions}"));
     out
 }
 

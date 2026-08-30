@@ -1086,3 +1086,49 @@ fn parsed_action_kind(command: &ControlCommand) -> Option<ActionKind> {
         ControlCommand::Acp(_) => None,
     }
 }
+
+#[test]
+fn renders_the_pairing_qr_rather_than_an_escaped_json_string() {
+    // The whole point of `PairingResult::qr` is that a terminal client can show
+    // one without an image viewer. The renderer printed the JSON instead, so the
+    // only way to pair was to carry a URL with a secret in its fragment across
+    // devices by hand.
+    let rendered = render_human_readable_for_test(
+        local_control::protocol::ActionKind::ControlPair,
+        &json!({
+            "url": "http://192.168.1.5:41234/#code",
+            "qr": "██▀▄█\n█▄▀ █\n",
+            "expires_at": "2026-08-30T17:38:57Z",
+            "actions": ["app.ping", "agent.approve"]
+        }),
+    );
+    assert!(rendered.starts_with("██▀▄█\n█▄▀ █\n"), "{rendered}");
+    assert!(
+        !rendered.contains("\\n"),
+        "the QR must be drawn, not escaped: {rendered}"
+    );
+    assert!(
+        rendered.contains("http://192.168.1.5:41234/#code"),
+        "{rendered}"
+    );
+}
+
+#[test]
+fn the_pairing_render_says_what_a_scan_grants_and_when_it_dies() {
+    // `PairingResult` states that "which of these actions does my phone get" is
+    // the first question anyone should ask about a QR code, and the code is
+    // spendable for two minutes and once — so a stale code should be readable
+    // as stale rather than debugged as a network fault.
+    let rendered = render_human_readable_for_test(
+        local_control::protocol::ActionKind::ControlPair,
+        &json!({
+            "url": "http://h/#c",
+            "qr": "█\n",
+            "expires_at": "2026-08-30T17:38:57Z",
+            "actions": ["app.ping", "agent.approve"]
+        }),
+    );
+    assert!(rendered.contains("app.ping, agent.approve"), "{rendered}");
+    assert!(rendered.contains("2026-08-30T17:38:57Z"), "{rendered}");
+    assert!(rendered.contains("single use"), "{rendered}");
+}
