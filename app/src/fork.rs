@@ -951,8 +951,27 @@ pub fn forced_local_harnesses() -> &'static [Harness] {
 ///
 /// Bypassing them is coherent only because Warp's own settings UI states that
 /// **"API keys added here are stored only on this device, not on Warp's
-/// servers"** — BYO keys are used for direct client→provider calls, so a
-/// logged-out user with their own key needs nothing from Warp's backend.
+/// servers"**.
+///
+/// **But the sentence that used to follow this one was wrong, and it misled a
+/// ticket (2026-08-30).** It said BYO keys are used for *direct
+/// client→provider* calls, so a logged-out user with their own key needs
+/// nothing from Warp's backend. That is true of **`local_completion`**, which
+/// does talk straight to `api.anthropic.com`
+/// (`ai/local_completion/config.rs`). It is **false of the agent path**: there
+/// the keys are placed *inside* the request (`api_keys` in
+/// `ai/agent/api/impl.rs`) and POSTed to Warp's own endpoint, and
+/// `generate_multi_agent_output` calls `get_or_refresh_access_token()` and
+/// returns `Error::Authentication` **before it builds the request at all**
+/// (`warp_multi_agent_client/src/lib.rs`). So agent-path BYOK is *billing*
+/// substitution, not *auth* substitution — Warp's backend receives the key and
+/// performs the inference.
+///
+/// The practical consequence, and the reason this correction is worth its
+/// length: **no API key can ever lift the account requirement on the stock
+/// agent path.** What reaches a logged-out user is the fork's own transports —
+/// `acp_agent` and `local_agent`, which intercept in `impl.rs` *before*
+/// `ServerApi` is touched — and `local_completion`. Nothing else.
 ///
 /// This does **not** grant access to anything server-side. Warp's own `Oz`
 /// agent still requires a real account, because inference for it happens on
