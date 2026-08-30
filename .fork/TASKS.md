@@ -8202,9 +8202,39 @@ mode descriptions is the first legitimate instance of `acp_permission.rs`'s
       like evidence the allowlist is not too tight, and it is not, because the
       log records tool *calls* and a refused request never becomes one. T14.8
       measured exactly that shape: refusing opencode's `other` precondition means
-      the `execute` behind it is never sent. **So the one number that would
-      settle the tightness question — how often a request was refused, and for
-      what kind — is the number the fork does not keep.**
+      the `execute` behind it is never sent. **So the log undercounts in exactly
+      the region under dispute**, which is what makes it useless for this
+      question and is the sharpest argument for building the counters.
+
+      **This ticket first said the tightness question was therefore
+      unanswerable, and that was too strong — corrected on the advisor's
+      push-back, same day.** The event log was never the instrument for it. The
+      *benefit* side is already measured elsewhere and on the wire: the
+      `switch_mode` plan-exit escalation, which the spec says every plan-mode
+      agent will present. The *cost* side has T14.8's live run: one agent, one
+      convention, remedied in that agent's own config, residual one pasted
+      `agent deny`. An unmeasured cost **rate** argues for building the
+      instrument, not for withholding the verdict — and under this fork's own
+      asymmetry a fail-closed status quo is the default that stands until a
+      measurement argues against it. The verdict is **not too tight, on today's
+      evidence**; what T14.17 changes is the ordering, which is that it lands
+      before any widening.
+
+      **And T14.18, found hours later, makes that correction sharper than the
+      advisor could have known.** On the panel path with `claude-agent-acp` the
+      measured request rate is **zero** — not because the allowlist refuses, but
+      because no `session/set_mode` is ever sent and the agent's own classifier
+      answers first. So the missing count was never the thing standing between
+      this fork and a verdict. It was hiding something upstream of the allowlist
+      entirely.
+
+      **The better justification, which is the one to keep.** `acp_permission`'s
+      own doc establishes that *"a hazard in a doc comment with no test under it
+      is a hazard that is not defended"*. The claim *"this model's refusals cost
+      almost nothing"* is the same shape pointed the other way: a **cost** claim
+      living only in prose and in one session's memory. Permission events are
+      the test under it, and that is why they are worth building whatever the
+      verdict is.
 
       **Scope.** Two event names on the ACP translator, mirroring
       `warp_agent`'s vocabulary rather than inventing one: `permission_request`
@@ -8221,6 +8251,15 @@ mode descriptions is the first legitimate instance of `acp_permission.rs`'s
       call: `unconfined_reason`'s wording was corrected in T14.8 for exactly that
       overreach, and a log line is read later with less context than a panel
       message, not more.
+
+      **The falsifier, recorded here so T14.11 knows what to watch for.**
+      Refusals of *confined-kind* requests appearing at all, or approval volume
+      a person abandons the panel over — turn-stopping, not merely annoying,
+      which `GOAL.md` defines as the success condition. Either flips the
+      verdict, and the responses are in order: the mode surface (T14.18), then
+      the shelved digest-bound person-yes on a shown `raw_input`. A second agent
+      whose *ordinary* calls arrive as non-allowlisted kinds with no config
+      remedy flips it too, by breaking T14.8's one-agent-once arithmetic.
 
       **The surface question, resolved before it could become an unknown.**
       `registry::answer` has exactly two callers:
