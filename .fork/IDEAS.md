@@ -2046,3 +2046,84 @@ pricing rendered from the response rather than a table this fork maintains.
 Secrets management is a **separate** entry and should not ride along — it is the
 part with the threat model, and bundling it means the cheap half waits for the
 argument.
+
+---
+
+# I18 — a persistent grant should cost a gesture, not a tap
+
+**Asked 2026-08-30, and it should have been filed when it was said.** It was
+raised in the same breath as the pairing work, noted as "unfiled", and then not
+filed — for a whole session, while three summaries carried it as a loose end.
+That is the failure this holding pen exists to prevent, so it is recorded here
+as part of the entry.
+
+## The ask, as given
+
+> for "always allow" we might consider having the button be a slider to confirm
+> the persistent approval? like the lock/power-off screen on iOS
+
+And, separately but in the same territory: an *allow-all-for-this-task* or
+*for-this-session* affordance, which the maintainer wants because answering
+every prompt one at a time is the friction that makes a working day expensive.
+
+## What already exists underneath it
+
+- **The console's Yes is already deliberately awkward.** T14.16 built two taps
+  inside a four-second window, and the reason is exactly the one behind this
+  idea: an approval reached by a single tap on a phone in a pocket is not
+  consent. So the fork has already accepted that the *gesture* is part of the
+  security argument, and this entry asks how far that goes.
+- **The agents already offer the option.** An ACP permission request carries
+  `{"optionId":"always","name":"Always allow","kind":"allow_always"}` —
+  recorded in `TASKS.md` from a real session. So *"always"* is not a thing the
+  fork would be inventing; it is a thing the fork is currently **declining to
+  surface**. That reframes the work: the question is not "should we build a
+  persistent grant", it is "we are already hiding one, on what argument, and is
+  that argument right?" **Unverified by running** whether the console suppresses
+  it deliberately or simply never renders that option kind.
+- `acp_permission` already refuses whole tool kinds (`other`), so there is a
+  precedent for the fork declining an option the agent offered.
+
+## The argument against, which deserves to be made first
+
+A slide gesture is **not obviously better than two taps**, and the honest
+possibility is that it is theatre. Both are "a deliberate act that a pocket
+cannot perform"; sliding is merely a *longer* one. If the real risk is a
+misdirected tap, two taps already answers it. If the real risk is a person
+approving without reading, no gesture fixes that — a slider makes the ritual
+more solemn without making the reader more informed, and solemnity that does not
+inform is the exact shape of security theatre.
+
+**So the entry's own bar is: name what a slide defends that two taps does not.**
+The candidate answer, and it is a real one: a *persistent* grant is categorically
+different from a single approval, and an interface that makes them feel the same
+is lying about the stakes. Two taps for "yes, this call" and two taps for "yes,
+everything like this, forever" is the interface saying they cost the same. They
+do not. Under that framing the slider is not about accident-prevention at all —
+it is about **making the two decisions feel different**, which is an argument
+from honesty rather than from friction.
+
+## Where it is in tension with the thesis
+
+A session-scoped "allow all" is the consent architecture with the person removed
+for a while, which is the thing `GOAL.md`'s charter was written against. The
+fork's whole position is that a model classifier deciding permissions — the
+`auto` mode `claude-agent-acp` ships with — is *not* consent, and the fork
+discloses it rather than adopting it. An allow-all button is that, chosen
+knowingly. Which may well be fine, and is certainly the maintainer's call, but
+it needs saying out loud rather than arriving as a convenience.
+
+## The smallest version that is still the idea
+
+Guessing, and marked as such:
+
+1. **Surface what the agent already offered**, unchanged in meaning — if the
+   request carries `allow_always`, the console can say so, even before it can
+   answer it.
+2. **Scope the grant to something that ends.** "This task" and "this session"
+   both end; "always" does not. The narrowest defensible version is the one with
+   an expiry the person can see, and the fork already has that vocabulary — a
+   pairing code says *two minutes, single use* on its face.
+3. **The gesture is the last question, not the first.** Whether it is a slide or
+   two taps matters far less than whether the grant has a scope and an end, and
+   building the gesture first would be decorating a decision nobody has made.
