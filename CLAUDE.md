@@ -586,6 +586,34 @@ edges, so `rustfmt some_mod.rs` silently rewrites `some_mod_tests.rs` too.
 Whichever you run, check `git status` afterwards and revert files you did not
 mean to touch.
 
+**Reaching the console from a phone: three things, and the VPN is not one of
+them.** Measured 2026-08-30, end to end — a phone on the LAN loaded the console
+and paired, *with ProtonVPN connected*. **This retracts the claim in
+`67fbe4921`'s body that ProtonVPN blocks LAN traffic.** It does not; the pairing
+failures that produced that claim were `no_instance` — Warp not being alive at
+the moment the phone tried — which was then watched happening live. The LAN
+route being intact was read as evidence about the VPN when it was evidence about
+nothing.
+
+What is actually required:
+
+1. **`networkingMode=mirrored`** in `.wslconfig`, which puts the WSL listener on
+   the Windows stack and gives it a real LAN address (`192.168.254.3` on `eth0`,
+   not a WSL-private `172.x`).
+2. **An inbound Windows firewall rule for the port**, and it is needed — verified
+   present with `Get-NetFirewallRule -DisplayName '*warp*'`.
+3. **Warp actually running.** Backgrounding the launch from a shell that then
+   exits does not keep it up, and from the phone that is indistinguishable from a
+   network block.
+
+**Pin the port, and not only for the reason recorded above.** The firewall rule
+names one port, so an *ephemeral* port is refused outright rather than merely
+producing a stale saved URL. `WARP_FORK_CONTROL_BIND=192.168.254.3:41234`.
+
+**Check Warp is alive before diagnosing the network.** `pair show` answering
+`no_instance` is the whole diagnosis; a phone that cannot load the page tells you
+nothing about why until you know there was something to load.
+
 **There is a browser, and it is on the Windows side.** `/mnt/c/Program Files`
 holds Firefox, Brave and Zen, and Windows reaches the WSL wide listener — so a
 page served by `WARP_FORK_CONTROL_BIND` can be loaded in a real engine and
