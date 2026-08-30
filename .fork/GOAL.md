@@ -143,6 +143,13 @@ capped builds is sixteen effective jobs on a VM that died at thirty-two.
   freeze wins. It covers `opencode.json`'s `permission` block, anything under
   `.claude/`, and both settings files. One approved line is consent for that
   line; it is not a pattern to continue.
+
+  > **Exercised 2026-08-30 and it held.** The `bash` pattern map was measured,
+  > documented, and left **unapplied** across two sessions while the maintainer
+  > was away, then applied the moment they said so. That is the freeze working
+  > as designed rather than an argument for relaxing it: the next
+  > permission-shaped change starts frozen again, including further entries in
+  > that same map.
 - the user's `~/.claude/settings.json` or `settings.toml`; **anything outside
   this repo and the scratch directories.**
 - installing packages or fetching from the network beyond what is already

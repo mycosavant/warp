@@ -272,14 +272,30 @@ mode `auto`, described above.)
   opening.
 
 Therefore any object form **must** start with `"*": "ask"` and list the allows
-after it. Verified working:
+after it. **This repo now runs one**, applied 2026-08-30 with the maintainer's
+explicit approval:
 
 ```json
-"bash": { "*": "ask", "git status*": "allow", "cargo test*": "allow" }
+"bash": {
+  "*": "ask",
+  "git status*": "allow", "git diff*": "allow", "git log*": "allow",
+  "cargo test*": "allow", "cargo check*": "allow"
+}
 ```
 
-with `git status --short` and `cargo check` running unasked and `rm -f …` still
-asking. The plain string form (`"bash": "ask"`) has no such hazard.
+The plain string form (`"bash": "ask"`) has no such hazard, and is what this was.
+
+**How to check one, because the obvious check cannot fail.** Confirming that an
+allowed command runs unasked proves nothing on its own: a map missing its
+`"*": "ask"` lead allows *everything*, so the allow-list appears to work
+perfectly while the catch-all is wide open. The test that matters is the one
+that must **ask**. Measured against the committed file: `git status --short`
+ran with 0 requests, `ls -1 .fork` and `wc -l CLAUDE.md` each raised one.
+
+And pick that firing case so the agent will actually run it. The first attempt
+used `echo hello`, and the agent answered without running anything — 0 asks and
+0 tool calls, which reads exactly like a passing test and is no evidence at all.
+A command whose output the agent needs (`ls`, `wc`) is the reliable shape.
 
 **This repo's `opencode.json` grants `external_directory: {"~/.cargo/**":
 "allow"}`, and what that does is narrower than it reads.** It is there because

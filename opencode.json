@@ -3,7 +3,14 @@
   "instructions": ["CLAUDE.md"],
   "permission": {
     "edit": "ask",
-    "bash": "ask",
+    "bash": {
+      "*": "ask",
+      "git status*": "allow",
+      "git diff*": "allow",
+      "git log*": "allow",
+      "cargo test*": "allow",
+      "cargo check*": "allow"
+    },
     "external_directory": { "~/.cargo/**": "allow" }
   }
 }
