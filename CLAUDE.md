@@ -496,13 +496,29 @@ outcome"**, because on these paths *the prose is the record* — which is exactl
 how refusals are already kept (`transcript_tests.rs`, and verified in real
 transcripts on disk).
 
-**What is genuinely missing is one word.** `tool_update_text` early-returns on
-anything that is not `Completed`, so a **`Failed` call emits no text at all** and
-reads exactly like a success. Everything else the ticket wanted already works:
-tool names are in the prose, and refusals are in the prose with their reason.
-Before building even the marker, run the ten-minute measurement — ask an agent
-to `cat` a nonexistent file and read the transcript. If the failure is already
-legible in the agent's own narration, this is won't-fix.
+**And the last word of it is won't-fix, measured 2026-08-30 rather than
+argued.** `tool_update_text` early-returns on anything that is not `Completed`,
+so a `Failed` call emits no text of its own — which looked like the one real gap
+left. The test was the cheap one: a panel session was asked to `cat` a
+nonexistent file. The transcript came back carrying
+
+> `cat: …/definitely-not-a-real-file-xyz.txt: No such file or directory` — the
+> file doesn't exist, so `cat` exited non-zero.
+
+So the failure is legible in the prose regardless, and a status marker would add
+a greppable token and nothing else. **T14.19's leftover is closed without code.**
+Everything the ticket wanted is already there: tool names in the prose, refusals
+in the prose with their reason, and now failures too.
+
+Two instrument notes from that run, both the same lesson this file keeps paying
+for. `warpctrl agent approvals` in its default **pretty** format says *"Nothing
+is waiting on you right now"* and contains no `approval_id`, so a poll grepping
+for that field reports zero while a request is genuinely parked — and a phantom
+zero was then one inference away from a security investigation into an
+auto-approval hole that does not exist. Use `--output-format json` for anything
+a script decides on. And `--instance` is a **per-subcommand** flag, not a global
+one: `warpctrl pane list --instance <id>`, never `warpctrl --instance <id> pane
+list`, which exits with `unexpected argument`.
 
 **An agent in the panel works in the *pane's* directory, and a fresh pane
 starts in `$HOME`.** Not in the directory Warp was launched from. Both agent
