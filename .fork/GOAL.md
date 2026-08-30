@@ -65,6 +65,15 @@ throughout), so T14.9's claim that it shows nothing until a turn ends was simply
 wrong. That is the third time in T14 that measuring first deleted the work
 instead of guiding it, and it is the argument for this ordering in one line.
 
+**T14.16 landed out of order, on request: the panel can answer.** Two taps for
+yes, one for no, the reason shown where there is no yes — verified by clicking
+it. The argument that shelved it in T14.8 was overturned twice: the greyed-out
+case is one agent's convention rather than a protocol fact, and T14.11 showed
+there is no unattended answerer, which makes a present person answering cheaply
+the only mechanism rather than a nicety. **That also changes what the horizon's
+destination means** — "driven from the fork" has quietly meant "with a person
+answering", and now there is somewhere for that person to click.
+
 **Reorder this list if a run says to.** That is what it is for.
 
 ## Working unattended
