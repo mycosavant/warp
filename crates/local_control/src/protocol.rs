@@ -618,6 +618,23 @@ pub struct AgentConversationSummary {
     /// signal: a turn quiet from its first moment never got started.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_activity: Option<String>,
+    /// Whether this turn is quiet because it is waiting for a person to answer
+    /// a permission request.
+    ///
+    /// **Fork (T14.10), added within the hour by using the two fields above.** A
+    /// turn parked on an approval reported `quiet_for_seconds: 171` — true, and
+    /// indistinguishable from the wedge the number exists to reveal. Waiting
+    /// forever on a question is the *design*; a person who reads an alarming
+    /// number for correct behaviour learns to discount the number, and a signal
+    /// that gets discounted has stopped working.
+    ///
+    /// So this is the field that makes the other two readable: quiet **and**
+    /// waiting is fine, quiet and not waiting is worth a look. What is waiting
+    /// is in `agent.approvals`, which is where the answer is given.
+    ///
+    /// Omitted when false, so an ordinary listing is unchanged.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub waiting_for_you: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

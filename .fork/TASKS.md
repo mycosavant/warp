@@ -7348,6 +7348,13 @@ Nothing has run on Windows.
       other way, and it is why driving a session from the CLI meant photographing
       a window to find out whether anything was happening.
 
+      **Amended by T14.12: `agent read` does stream, and this sentence was
+      wrong.** Polled through a live turn it went 0 → 675 → 742 → 838 characters
+      with `is_complete: false` throughout. The error is explicable rather than
+      careless — for the first few seconds there really is nothing, while the
+      panel is already drawing a spinner — but it was written as a general claim
+      and it is not one. Almost cost a night building a feature that exists.
+
       Two smaller ones. Answering approvals from a script needs a polling loop,
       and two of them ran at once without being noticed — edits landed that the
       friction log never recorded, which a person pressing a control could not do
@@ -7635,6 +7642,28 @@ Nothing has run on Windows.
       removes itself from the driver future the way `registry::Parked` does, so
       cancellation and a dead agent both clean up with nothing watching.
 
+      **And using it found what it was missing, inside the hour.** Driving a real
+      turn, `agent list` reported `quiet_for_seconds: 171` for a conversation
+      that was **waiting for me to answer an approval**. The number was true and
+      the reading was wrong: an agent blocked on a question is behaving exactly
+      as designed and waits forever on purpose, so a person who sees an alarm for
+      correct behaviour learns to discount the alarm — and a discounted signal
+      has stopped working. `waiting_for_you` now says which kind of quiet it is,
+      held by a guard for exactly as long as the request, so `agent list` and
+      `agent approvals` can never disagree about whether a question is
+      outstanding. A count rather than a flag, because one answered of two
+      outstanding is still waiting. Verified live: `waiting_for_you: true` while
+      parked, gone the moment it was answered.
+
+      **The bug in the harness is worth recording too, because it is the second
+      time.** The polling loop that drove this session failed to answer anything
+      for 171 seconds because it passed the digest positionally instead of as
+      `--digest` — the identical mistake T14.9 recorded and this ticket's author
+      had already written down. It looked exactly like a wedge until the new
+      field said `waiting_for_you`. A tool that distinguishes "the agent is gone"
+      from "you have not answered" earns its place the first time the second one
+      is your own fault.
+
 - [x] **T14.3** ~~**Warp cannot observe an agent's permission policy, so it must
       not imply one.**~~ **The headline is false and running it is what showed
       that — see the as-built below.** The agent declares its mode on the wire,
@@ -7846,25 +7875,31 @@ mode descriptions is the first legitimate instance of `acp_permission.rs`'s
       (T14.7 Phase 0, and T14.9 reordering T14.8). Treat a session that produces
       no surprise as weak evidence rather than as a finish line.
 
-- [ ] **T14.12** **`agent read` should say something before the turn ends.**
-      T14.9's third finding, and the one the board has not touched: the panel
-      streams each tool call as it starts, shows a spinner, and badges the tab
-      `+137 -2`, while `warpctrl agent read` shows **nothing at all** until the
-      turn is over. So the GUI has the information and the CLI has the control,
-      and a person driving from the CLI had to photograph a window to find out
-      whether anything was happening.
+- [x] **T14.12** **~~`agent read` should say something before the turn ends.~~
+      It already does. The premise was false, and measuring it first is the only
+      reason nothing was built.** Run 2026-08-29, before any code.
 
-      T14.10 took the first bite — `agent list` now reports `quiet_for_seconds`
-      and `last_activity`, so a turn is no longer *mute*. What it still cannot
-      do is show the work: the output so far, the tool calls in order, the diff
-      an edit is proposing. Note that the approval card already shows an edit's
-      full diff and the transcript afterwards does not, which is its own oddity
-      recorded in T14.9 and probably the same fix.
+      T14.9 recorded that *"`warpctrl agent read` shows nothing at all until the
+      turn ends"*, and this ticket was written on that sentence. Polled through a
+      live turn, the output is **there and growing**: 0 characters at 4s, 675 at
+      8s, 742, then 838 at completion, every reading with `is_complete: false`.
+      Against a purpose-built stalling agent it showed the message chunk *and*
+      both announced tool calls while the turn hung. `agent_read` reads the live
+      history model and already reports per-exchange completeness; there was
+      never a gate to open.
 
-      **Look for the gate first.** The translator already produces exactly these
-      events and hands them to a stream Warp is consuming; the question is whether
-      anything retains them where `agent.read` can reach, or whether the answer is
-      that `agent.read` reads a finished conversation by construction.
+      **So T14.9's sentence is amended where it was written**, and the likely
+      source of the error is visible in the numbers above: for the first few
+      seconds of a turn there genuinely is nothing, and a single read taken then
+      — while the panel was already drawing a spinner — would produce exactly
+      that belief.
+
+      **What survives is narrower and unverified.** T14.9 separately noted that
+      an approval card shows an edit's full diff while the transcript afterwards
+      does not, and this run did not test an editing turn. That is a real
+      question about *tool results*, not about streaming, and it belongs to
+      whoever next wants it. Named here rather than left inside a ticket whose
+      headline is now known to be wrong.
 
 - [ ] **T14.13** **A day's work will outgrow the context window, and the ACP path
       does not know it.** `local_agent` handles compaction; the ACP path has no

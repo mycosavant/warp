@@ -19,10 +19,11 @@ fn a_conversation_with_no_turn_in_flight_reports_nothing() {
 fn a_turn_is_watched_from_the_moment_it_starts() {
     let _watch = watch("t1410-silent".to_owned());
 
-    let (quiet, tool) = quiet_for("t1410-silent").expect("a watched turn reports");
+    let (quiet, tool, waiting) = quiet_for("t1410-silent").expect("a watched turn reports");
 
     assert!(quiet < 5, "a fresh turn is not already stale: {quiet}");
     assert_eq!(tool, None, "nothing has been announced yet");
+    assert!(!waiting, "nothing has been asked yet either");
 }
 
 /// A tool call is remembered; later chatter refreshes the clock without erasing
@@ -35,7 +36,7 @@ fn the_last_tool_survives_updates_that_are_not_tool_calls() {
     note("t1410-tool", Some("grep -rn kind_name".to_owned()));
     note("t1410-tool", None);
 
-    let (_, tool) = quiet_for("t1410-tool").expect("a watched turn reports");
+    let (_, tool, _) = quiet_for("t1410-tool").expect("a watched turn reports");
     assert_eq!(tool.as_deref(), Some("grep -rn kind_name"));
 }
 
@@ -48,7 +49,7 @@ fn a_newer_tool_call_replaces_the_remembered_one() {
     note("t1410-second", Some("first".to_owned()));
     note("t1410-second", Some("second".to_owned()));
 
-    let (_, tool) = quiet_for("t1410-second").expect("a watched turn reports");
+    let (_, tool, _) = quiet_for("t1410-second").expect("a watched turn reports");
     assert_eq!(tool.as_deref(), Some("second"));
 }
 
@@ -76,4 +77,64 @@ fn noting_after_the_turn_ended_does_not_recreate_it() {
     note("t1410-late", Some("too late".to_owned()));
 
     assert!(quiet_for("t1410-late").is_none());
+}
+
+/// Quiet because it is asking is not the same as quiet because it is gone.
+///
+/// The distinction this file lacked for an hour. A turn parked on an approval
+/// reported 171 seconds of quiet — true, and indistinguishable from the wedge
+/// the number exists to reveal. Waiting forever on a question is the design, so
+/// a reader who sees an alarm for it learns to discount the alarm.
+#[test]
+fn a_turn_waiting_on_a_person_says_so() {
+    let _watch = watch("t1410-asking".to_owned());
+    assert_eq!(quiet_for("t1410-asking").map(|(_, _, w)| w), Some(false));
+
+    let asking = waiting_on_a_person("t1410-asking");
+    assert_eq!(quiet_for("t1410-asking").map(|(_, _, w)| w), Some(true));
+
+    drop(asking);
+    assert_eq!(
+        quiet_for("t1410-asking").map(|(_, _, w)| w),
+        Some(false),
+        "answering the question stops the claim"
+    );
+}
+
+/// Two questions at once, and answering one does not clear the other.
+///
+/// A count rather than a flag, because an agent may have more than one request
+/// outstanding — measured on the CLI-agent path, where two concurrent turns both
+/// opened with JSON-RPC id 0 and one evicted the other from a map keyed too
+/// loosely. Same failure shape, one field over.
+#[test]
+fn answering_one_of_two_questions_does_not_clear_the_other() {
+    let _watch = watch("t1410-two".to_owned());
+
+    let first = waiting_on_a_person("t1410-two");
+    let second = waiting_on_a_person("t1410-two");
+    drop(first);
+
+    assert_eq!(
+        quiet_for("t1410-two").map(|(_, _, w)| w),
+        Some(true),
+        "one answered, one still outstanding"
+    );
+
+    drop(second);
+    assert_eq!(quiet_for("t1410-two").map(|(_, _, w)| w), Some(false));
+}
+
+/// A guard outliving its turn does not resurrect the record, and does not
+/// panic. Teardown order is not something a caller controls.
+#[test]
+fn a_waiting_guard_outliving_its_turn_is_harmless() {
+    let asking = {
+        let _watch = watch("t1410-order".to_owned());
+        waiting_on_a_person("t1410-order")
+    };
+
+    drop(asking);
+
+    assert!(quiet_for("t1410-order").is_none());
 }

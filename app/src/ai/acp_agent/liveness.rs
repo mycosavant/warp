@@ -52,6 +52,20 @@ struct Turn {
     /// T14.9 wanted: the panel showed a frozen `grep` and the CLI could not say
     /// so.
     last_tool: Option<String>,
+    /// How many permission requests are parked for this conversation.
+    ///
+    /// **Because a quiet turn has two completely different meanings and the
+    /// first version of this module reported them identically.** Found within
+    /// the hour by using it: a turn waiting on a person read `quiet_for_seconds:
+    /// 171`, which is *true* — the agent had not said anything for 171 seconds —
+    /// and reads exactly like the wedge this was built to detect. An agent
+    /// blocked on a question is behaving correctly and waiting forever is the
+    /// design; a person seeing an alarming number for it learns to discount the
+    /// number, which is how a signal stops working.
+    ///
+    /// A count rather than a flag: an agent may have more than one request
+    /// outstanding, and answering one of three should not clear the state.
+    waiting: usize,
 }
 
 static TURNS: LazyLock<Mutex<HashMap<String, Turn>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
@@ -81,6 +95,7 @@ pub(crate) fn watch(conversation: String) -> Watch {
         Turn {
             last_update: Instant::now(),
             last_tool: None,
+            waiting: 0,
         },
     );
     Watch { conversation }
@@ -99,13 +114,47 @@ pub(crate) fn note(conversation: &str, tool: Option<String>) {
     }
 }
 
-/// How long this conversation's agent has been quiet, and what it was last seen
-/// doing. `None` when no turn of this kind is in flight — which is every
-/// conversation that is not being served by the ACP path right now.
-pub(crate) fn quiet_for(conversation: &str) -> Option<(u64, Option<String>)> {
-    turns()
-        .get(conversation)
-        .map(|turn| (turn.last_update.elapsed().as_secs(), turn.last_tool.clone()))
+/// What this conversation's in-flight turn looks like from outside: how long
+/// since the agent said anything, what it was last seen doing, and whether it is
+/// quiet **because it is waiting for an answer**.
+///
+/// `None` when no turn of this kind is in flight — which is every conversation
+/// not being served by the ACP path right now.
+pub(crate) fn quiet_for(conversation: &str) -> Option<(u64, Option<String>, bool)> {
+    turns().get(conversation).map(|turn| {
+        (
+            turn.last_update.elapsed().as_secs(),
+            turn.last_tool.clone(),
+            turn.waiting > 0,
+        )
+    })
+}
+
+/// Records a permission request parking, until the returned guard is dropped.
+///
+/// Guarded rather than paired with a `stop` call, for the same reason the turn
+/// is: a request stops waiting when it is answered, when its turn is cancelled,
+/// and when the agent goes away — and only one of those three runs any code of
+/// ours.
+pub(crate) struct Waiting {
+    conversation: String,
+}
+
+impl Drop for Waiting {
+    fn drop(&mut self) {
+        if let Some(turn) = turns().get_mut(&self.conversation) {
+            turn.waiting = turn.waiting.saturating_sub(1);
+        }
+    }
+}
+
+pub(crate) fn waiting_on_a_person(conversation: &str) -> Waiting {
+    if let Some(turn) = turns().get_mut(conversation) {
+        turn.waiting += 1;
+    }
+    Waiting {
+        conversation: conversation.to_owned(),
+    }
 }
 
 #[cfg(test)]

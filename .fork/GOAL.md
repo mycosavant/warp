@@ -19,9 +19,11 @@ That was met, and then three tickets went at what it cost:
   knowable in advance, fixable in the agent's own config, and now refused in
   words that say what Warp *cannot tell* rather than implying the call is
   dangerous. Answering the ones it can is now a single paste.
-- **T14.10** gave a silent turn a voice: `quiet_for_seconds` and
-  `last_activity`, plus the discovery that a wedged turn blocks `window close`
-  until you cancel it.
+- **T14.10** gave a silent turn a voice: `quiet_for_seconds`, `last_activity`
+  and `waiting_for_you`, plus the discovery that a wedged turn blocks `window
+  close` until you cancel it. The third field exists because using the first two
+  produced a false alarm within the hour — a turn waiting on *me* looked exactly
+  like a wedge.
 
 So the loop works and the sharp edges named by one real session are filed off.
 **What has never happened is a second real session.**
@@ -44,11 +46,13 @@ has re-taken. Running first has overturned the plan twice in T14 — Phase 0's
 table was wrong in both cells, and T14.9 demoted the button that everyone was
 sure about — so the prior is strong and it is cheap to honour.
 
-The session's *own* task should be **T14.12** (`agent read` says nothing until a
-turn ends), because it is the friction that a long session feels most and the
-one T14.10 only half-answered. **T14.13** (context runs out and nothing knows)
-and **T14.14** (model selection, already offered by the protocol) follow, and
-T14.13 outranks T14.14 the moment a session actually hits a context wall.
+The session's own task should be **T14.13** (context runs out and nothing knows),
+with **T14.14** (model selection, already offered by the protocol) behind it.
+**T14.12 is closed without being built** — polled through a live turn, `agent
+read` streams after all (0 → 675 → 742 → 838 characters, `is_complete: false`
+throughout), so T14.9's claim that it shows nothing until a turn ends was simply
+wrong. That is the third time in T14 that measuring first deleted the work
+instead of guiding it, and it is the argument for this ordering in one line.
 
 **Reorder this list if a run says to.** That is what it is for.
 

@@ -407,13 +407,14 @@ async fn exchange(
             .context("The ACP agent needs a working directory and this one could not be read")?,
     };
 
-    let updates = (Arc::clone(&translator), tx.clone(), conversation_id);
+    let updates = (Arc::clone(&translator), tx.clone(), conversation_id.clone());
     let program = agent_name(&command);
     let permissions = (
         Arc::clone(&translator),
         tx.clone(),
         cwd.to_string_lossy().into_owned(),
         program.clone(),
+        conversation_id,
     );
     let opening = (Arc::clone(&translator), tx.clone(), session, program);
 
@@ -442,7 +443,7 @@ async fn exchange(
         )
         .on_receive_request(
             async move |request: RequestPermissionRequest, responder, connection| {
-                let (translator, tx, directory, program) = &permissions;
+                let (translator, tx, directory, program, conversation) = &permissions;
                 // Still no, always — nothing here can show a person what they
                 // would be agreeing to, so nothing here may agree. What changed
                 // in T14.6 is *when* the no is said: the request is now listed
@@ -476,6 +477,11 @@ async fn exchange(
                 });
                 let _ = tx.unbounded_send(Ok(event));
 
+                // Held for exactly as long as the request is, so `agent.list`
+                // can say "quiet because it is waiting for you" rather than
+                // leaving a person to read a wedge into correct behaviour.
+                let waiting = liveness::waiting_on_a_person(conversation);
+
                 wait_for_a_person(
                     &connection,
                     responder,
@@ -483,6 +489,7 @@ async fn exchange(
                     parked,
                     Arc::clone(translator),
                     tx.clone(),
+                    waiting,
                 )
             },
             agent_client_protocol::on_receive_request!(),
@@ -886,6 +893,7 @@ fn wait_for_a_person(
     request: registry::ParkedRequest,
     translator: Arc<Mutex<Translator>>,
     tx: mpsc::UnboundedSender<Event>,
+    quiet_because_it_is_asking: liveness::Waiting,
 ) -> Result<(), agent_client_protocol::Error> {
     // Resolved before the request is handed to the registry, because after that
     // it is the map's and a caller could already be answering it.
@@ -894,8 +902,13 @@ fn wait_for_a_person(
 
     connection.spawn(async move {
         // Held for exactly as long as the wait, so a turn that is cancelled stops
-        // advertising a question nobody can answer any more.
+        // advertising a question nobody can answer any more. The second is the
+        // same discipline one level out: `agent.list` stops calling the turn
+        // "waiting for you" at the same instant `agent.approvals` stops listing
+        // it, because a person reading the two together must never see them
+        // disagree.
         let _waiting = waiting;
+        let _asking = quiet_because_it_is_asking;
         let answer = answer.await;
         let settled = answered_note(&answer);
         let outcome = outcome_for(answer, allowed, denial);
