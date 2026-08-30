@@ -73,6 +73,16 @@ instead of guiding it, and it is the argument for this ordering in one line.
 Everything below is already true of this fork; it is written down here because
 the usual backstop — someone reading the next message — is missing.
 
+> **Known hole, found by trying it 2026-08-29.** The charter treats *answering
+> the agent's permission prompts* as an allowance to be governed by rules. It is
+> first a **capability**, and unattended it does not exist: starting an automated
+> approval harness was refused by the orchestrating session's own permission
+> layer, which is the right refusal — an unattended script answering an agent's
+> prompts is the consent architecture with no person in it. So the destination
+> below assumes an answerer that is not available. Until that is settled, an
+> unattended run can do everything **except** drive an in-panel agent that asks
+> for anything. See T14.11's as-built.
+
 **Proceed without asking:** measuring and probing locally; editing fork-owned
 files; tests; release builds **capped at `CARGO_BUILD_JOBS=8`**; committing each
 increment on `dev` with the findings in the body; launching and stopping Warp

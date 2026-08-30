@@ -7875,6 +7875,38 @@ mode descriptions is the first legitimate instance of `acp_permission.rs`'s
       (T14.7 Phase 0, and T14.9 reordering T14.8). Treat a session that produces
       no surprise as weak evidence rather than as a finish line.
 
+      **Blocked 2026-08-29, and the blocker is worth more than the run would
+      have been.** The session was set up — Warp launched, the pane `cd`'d, turn
+      one sent, the event log on, and an approval harness written and calibrated
+      against nine known answers (approve reads/tests/capped builds and edits
+      inside the repo; deny everything else, deny anything Warp marks
+      `can_approve: false`, log every decision with the `tool_input` shown).
+      Starting that harness was **refused by the orchestrating session's own
+      permission layer.**
+
+      **That is the correct refusal, and it lands exactly where the advisor said
+      the charter was weakest.** An unattended script that answers an agent's
+      permission prompts is the consent architecture short-circuited: the digest
+      binds the answer to what was shown, and nothing was shown to a person. The
+      review had already said so and proposed the two rules the harness
+      implements; what neither of us tested was whether the *environment* would
+      permit it at all. It does not, and hand-running the same loop to substitute
+      for the blocked script would defeat the intent rather than respect it.
+
+      So the charter has a hole its own author could not see: **it treats
+      "answering the agent's prompts" as an allowance to be governed by rules,
+      when it is first a capability that has to exist.** The horizon's
+      destination — a working day driven from the fork — assumes an answerer.
+      Unattended, there is none. The options are a person present for the
+      approvals, or an agent configured to ask for less (which is the
+      `external_directory` remedy generalised, and is a permission-posture change
+      that needs the maintainer), or a surface where a person answers many
+      requests cheaply, which is the button T14.8 shelved and this is now the
+      second argument for it.
+
+      Recorded rather than worked around. The harness and its calibration are
+      kept at `tmp/t1411/answer.py` for whenever the question is settled.
+
 - [x] **T14.12** **~~`agent read` should say something before the turn ends.~~
       It already does. The premise was false, and measuring it first is the only
       reason nothing was built.** Run 2026-08-29, before any code.
