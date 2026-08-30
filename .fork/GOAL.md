@@ -47,18 +47,22 @@ in T14.
 **The list below used to lead with the button. It does not any more, and the
 reordering is the whole reason T14.9 came first.**
 
-- ~~**Some requests have no yes at all.**~~ **Answered by T14.8, and the answer
-  is that no honest yes exists — but the problem is smaller than it looked.**
+- ~~**Some requests have no yes at all.**~~ **Answered by T14.8: a person yes is
+  viable but declined, and the problem is smaller than it looked.**
   `other` is what `opencode` sends before any call that would reach *outside the
   project directory*; everything inside arrives as an ordinary approvable kind,
   and the agent resolves paths rather than matching strings. So the predicate is
   knowable in advance, which T14.9 said it was not. `claude-agent-acp` sends the
   same command as one plain `execute` and never asks this at all. The remedy is
   a line in the agent's own config (`external_directory` for opencode, verified
-  by running), not a relaxation of Warp's allowlist — which stands, because
-  `#[serde(other)]` makes a deliberate `other` and an unread future kind the
-  same value. What changed is the refusal: it now says what Warp cannot tell
-  rather than implying the call is dangerous, and it names the move.
+  by running for both the command and the file-read variant), not a relaxation of
+  Warp's allowlist — which stands, because `#[serde(other)]` makes a deliberate
+  `other` and an unread future kind the same value. A digest-bound *person* yes
+  on a shown request would have been sound and is left on the shelf, with the
+  counts that would trigger building it written into the ticket; what it buys
+  back no longer pays for widening what a phone tap may approve. What changed is
+  the refusal: it says what Warp cannot tell rather than implying the call is
+  dangerous, and it names the move.
 - **A wedged turn is silent.** One turn burned 36 minutes: alive, 74s of CPU
   against 2176 elapsed, panel frozen, `agent list` saying `in_progress`
   throughout. Diagnosed with `ps` and two screenshots. T14.10. **Now the top of

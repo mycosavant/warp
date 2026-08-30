@@ -194,6 +194,22 @@
 //! field over. **The allowlist stands.** What is new is that its cost is
 //! measured rather than assumed.
 //!
+//! **And the refusal is a choice, not an impossibility — say so, because the
+//! difference is what a later reader needs.** Warp never manufactures a yes; it
+//! relays a person's, and it could relay one here. A person's yes to a *shown*
+//! `other` is epistemically no worse than their yes to a shown `execute`, whose
+//! actual effect is equally unbounded: this allowlist distinguishes what the
+//! spec means, not what a call does. What decides it is size. After the config
+//! remedy below, the residual is one agent, outside the project, with no pattern
+//! granted, once — and one of those costs a single pasted `agent deny`. That
+//! does not pay for widening what every consent surface may say yes to,
+//! including a phone tap under `WARP_FORK_REMOTE_APPROVE`. The invariant is
+//! worth more: **no Warp surface relays a yes to a call whose spec meaning is
+//! unknown.** The shelved design, if the counts ever change, is a digest-bound
+//! *person* yes on an entry showing the verbatim call, with `--approve` and
+//! every other unattended path left exactly as they are — and its predicate must
+//! test that `raw_input` is present and nothing whatever about what is in it.
+//!
 //! So the refusal changed instead of the rule, in two ways. It states what this
 //! build cannot tell rather than what the call does — see
 //! [`unconfined_reason`], which is where the old wording overclaimed. And it

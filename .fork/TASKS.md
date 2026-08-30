@@ -7391,8 +7391,8 @@ Nothing has run on Windows.
       by an order of magnitude — provided it keeps the digest binding, which is
       the design question underneath.
 
-      **As built — measured 2026-08-29, and the first half's answer is that no
-      honest yes exists, for a reason nobody had run down.**
+      **As built — measured 2026-08-29. The first half's answer is that a person
+      yes is *viable but declined*, and the residual it would buy back is small.**
 
       **What an `other` request actually is.** Driven against two live agents
       with a raw ACP client (probes under `tmp/acp/`), not read. `opencode`
@@ -7493,6 +7493,60 @@ Nothing has run on Windows.
       answer, and adding it would move every digest for no reachable gain.
       Recorded rather than changed, because the next person to notice deserves
       the reasoning instead of the discovery.
+
+      **"No honest yes exists" was the wrong sentence, and this is the
+      correction.** Written first as an impossibility; it is a choice, and
+      recording it as impossible would make a future session re-derive all of
+      this. Warp never manufactures a yes — it relays a person's — and it
+      *could* relay one here. The machinery is built and was checked rather than
+      assumed: `digest_of` hashes `tool_input` and `approve_selects`, so an
+      answer is bound to the disclosure that was shown, and `console.js` renders
+      that disclosure verbatim and gates its button on `can(ALLOW) &&
+      approval.can_approve`. More to the point, **a person's yes to a shown
+      `other` is epistemically no worse than their yes to a shown `execute`**,
+      whose actual effect is equally unbounded. The allowlist distinguishes what
+      the *spec* means, not what the call does — that is its whole basis, and it
+      is why it can be right without the refusal being forced.
+
+      **Why declined anyway: the size of what is left.** After the config
+      remedy the residual is opencode-only, outside-the-project-only,
+      unconfigured-pattern-only and one-off — and a one-off now costs a single
+      pasted deny. That does not pay for permanently widening what Warp's consent
+      surface may say yes to, which under `WARP_FORK_REMOTE_APPROVE` includes a
+      phone tap. The invariant kept is worth more than the last message of
+      friction: **no Warp surface relays a yes to a call whose spec meaning is
+      unknown.**
+
+      **The version left on the shelf**, ready if the numbers change: a
+      digest-bound *person* yes on an entry that shows the verbatim call, with
+      every automatic path (`--approve` and anything else answering without a
+      person reading) unchanged on the allowlist, and `SwitchMode` still refused
+      for everyone — there the question is a five-option policy menu and a binary
+      yes has no honest mapping onto it. Its predicate must test
+      `raw_input.is_some()` and **nothing about what is inside it**: reading
+      `directories`/`patterns` would be the option-order bug again, one field
+      over.
+
+      **What would trigger building it.** With the known patterns granted, a real
+      multi-turn session showing more than about one `other`-kind parked turn; or
+      any agent whose ordinary *in-project* work arrives as `other`, for which no
+      config can help. Both are counts, and both are cheap to take.
+
+      **A second falsifier ran and did not fire.** The config remedy was verified
+      for the shell-command precondition, and the outside-project *file read*
+      variant carries a different payload (`{filepath, parentDir}`, declaring no
+      `directories` or `patterns` at all), so it might have ridden opencode's
+      `read` key instead and left the refusal text pointing at a config that
+      could not help. A/B in one scratch directory, same prompt: **without**
+      `external_directory` the `other` fires; **with** `/home/effatha/.cargo/*`
+      granted, no permission request at all. The remedy covers both variants.
+
+      **Enlisting a second opinion earned its keep, and it argued the other way
+      first.** Sent (b) — build the person yes — on the first two rounds, then
+      reversed to (e) on the two later measurements, and the reversal came with
+      the framing correction above plus both falsifiers. The one substantive
+      thing it got wrong is recorded too: it predicted the read variant would
+      escape the config remedy, and the probe says otherwise.
 
 - [ ] **T14.10** **A turn that has wedged should say so.** Opened by T14.9, which
       lost half an hour to one. A turn with a parked question waits forever *on
