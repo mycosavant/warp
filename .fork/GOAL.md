@@ -51,8 +51,14 @@ about an hour, because the audit trail has to exist before an unattended run can
 rely on one.** An orchestrator answering an agent's prompts is only defensible if
 every approval traces afterwards to the edit it produced, and that trail was
 split across two files that did not name each other. One turn now writes one
-file. So the session's task is **T14.13** (context runs out and nothing knows),
-with **T14.14** (model selection, already offered by the protocol) behind it.
+file.
+
+So the session's task is **T14.14** (model selection, which the protocol already
+offers) — tractable, self-contained, and real. **T14.13 is measured by the same
+run rather than built by it**: its first step is *"drive a session long enough to
+hit the context limit and record what the panel does"*, which is the long session
+itself. A dogfood needs something to be building while it gets long; T14.14 is
+that, and the cliff arrives for free or does not arrive, and either is a finding.
 **T14.12 is closed without being built** — polled through a live turn, `agent
 read` streams after all (0 → 675 → 742 → 838 characters, `is_complete: false`
 throughout), so T14.9's claim that it shows nothing until a turn ends was simply

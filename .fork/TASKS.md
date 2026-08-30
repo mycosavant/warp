@@ -7924,6 +7924,35 @@ mode descriptions is the first legitimate instance of `acp_permission.rs`'s
       The constraint to carry: a model list is the agent's claim about itself, so
       it is rendered, never validated, and a selection is passed back verbatim.
 
+      **Re-measured 2026-08-29 before starting, per the rule that a measured
+      claim is measured as of its date — and the premise holds but is more
+      dangerous than the ticket said.** Two corrections:
+
+      **`configOptions` is on `session/new`, not only `session/load`.** So a new
+      conversation can offer this immediately; the ticket implied resume-only.
+
+      **And it is not a model picker. It is a generic config channel, and one
+      agent puts the session's permission mode in it.** Measured, the first entry
+      of `claude-agent-acp`'s list is `{"id": "mode", "category": "mode",
+      "type": "select"}` whose options include `dontAsk` and
+      `bypassPermissions`; `opencode`'s is `{"id": "model", "category":
+      "model"}` with a model list. **So "render `configOptions` and pass the
+      selection back" would ship a control that can set `bypassPermissions`** —
+      the exact escalation `acp_permission` refuses as `switch_mode`, arriving
+      through a different door, and with no permission request involved at all
+      because a config write is not a `session/request_permission`.
+
+      That makes the scope explicit rather than incidental: **render
+      `category: "model"` and nothing else** for this ticket. The mode select is
+      the separate control T14.4 already designated — *"an in-app mode picker
+      rendering the agent's own mode descriptions is the first legitimate
+      instance of a surface capable of showing what the option declares"* — and
+      it is legitimate precisely because it is deliberate, labelled, and shows
+      the agent's own descriptions. Reaching it by accident through a generic
+      picker is the opposite of that, and a filter on `category` is the whole
+      difference. **A category this build does not recognise is not rendered**,
+      by the same allowlist logic as the tool kinds: unknown must not qualify.
+
 - [x] **T14.15** **One ACP turn writes two event-log files that never name each
       other.** Found 2026-08-29 while checking whether an advisor's queue
       recommendation rested on a stale doc. It did, and underneath it was a real
