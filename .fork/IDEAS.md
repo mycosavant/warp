@@ -2240,3 +2240,68 @@ the thing that ran it*.
    missing — which is precisely what T7 found.
 3. **Widen the aside** to carry one refusal reason, and measure whether the next
    turn goes differently. If it does not, stop.
+
+---
+
+# I20 — the TUI is account-gated, and the fork's bypass cannot reach it
+
+**Measured 2026-08-30.** `crates/warp_tui` builds `warp-tui-oss`, "Warp Agent
+CLI". Run from a phone over SSH, it **demands a Warp login**. That also explains
+the spinner recorded in `CLAUDE.md`: it was waiting on authentication.
+
+## Why this is not a one-line fix
+
+This is the fork's most repeated finding — *the feature exists and is switched
+off* — with a twist that decides the whole scope. The account gate is bypassed by
+`account_gate_bypassed` in `app/src/fork.rs`, and **`crates/warp_tui` contains
+zero `fork::` references** (verified by grep, along with `acp_agent`,
+`local_agent` and `generate_multi_agent_output`). So the bypass is not disabled
+there — it is *structurally absent*. The GUI is un-gated because the app crate
+asks; the TUI never asks.
+
+Which kind of gate this is matters, and `CLAUDE.md`'s own distinction applies:
+`FORCE_ENABLED` outranks a flag-list entry but cannot conjure code that was never
+written. This is the second kind. **Unverified:** whether the login demand is a
+feature flag the TUI consults at all, or a hard requirement in its startup path.
+That is the first thing to find out and it is a reading job.
+
+## The cheap alternative that might make all of it moot
+
+The binary offers `--set-provider-api-key <openai|anthropic|google|grok>` and
+`--api-key` (`WARP_API_KEY`). A user's own provider key is the fork's thesis
+nearly verbatim, so **if setting one removes the login demand, the TUI is
+on-thesis today with no fork changes at all.** Nobody has tried it. **Do this
+before scoping anything**, because it is one command and it could delete the
+entry.
+
+If it does *not* remove the demand, then the login is about Warp's own account
+rather than about model access, and that is a different and more interesting
+finding.
+
+## What is already true, and worth not losing
+
+**The telemetry deny-list reaches it anyway.** `egress::is_active()` reads only
+`WARP_FORK_ALLOW_TELEMETRY_EGRESS` and lives in `crates/http_client`, which
+`warp_tui` links. So the fork's strongest claim holds in a binary the fork has
+never edited — because that policy was put in the shared HTTP client rather than
+in the app's policy seam. Recorded here because it is the argument for where the
+*next* policy should live.
+
+## What it would cost, if it comes to that
+
+A **second fork surface**, in a crate the fork has never touched. That is not
+fatal but it is not free either: another file set to keep rebasable against
+upstream, and a binary where **none of T14's consent work applies** — no ACP, no
+permission parking, no console, no pairing. A TUI session would be Warp's own
+agent on the user's key, with the fork's telemetry posture and none of its
+consent posture. Say that out loud before building it, because "run Warp on my
+phone" sounds like the same product and would not be.
+
+## The smallest version that is still the idea
+
+1. **Try the API key.** One command; may end this entry.
+2. If it does not, **read the startup path** for what the login gates — a flag,
+   or a hard requirement.
+3. Only then decide whether a second fork surface is worth a phone-sized
+   terminal, given SSH already gives a shell with all 114 `warpctrl` actions and
+   the full fork behaviour behind it.
