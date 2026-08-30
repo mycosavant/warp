@@ -780,6 +780,54 @@ time 2026-08-30; nothing in this repo's docs had mentioned it.
   is *upstream's*, not the fork's, so a TUI session is a different stack from a
   panel session and none of T14's consent work applies to it.
 
+**The real remote backstop is SSH, not the console — and it is set up as of
+2026-08-30.** A phone in Termux runs `ssh warp` and gets a shell, key-only, no
+prompt. That reaches **all 114 `warpctrl` actions**, against five through a
+paired console.
+
+**That asymmetry is the principle, not an inconsistency.** `PAIRABLE_ACTIONS` is
+narrow because the *credential* is weak — a QR code is a bearer token displayed
+to a room and spendable by anyone who photographs the screen inside its two
+minutes. An SSH key is a strong credential held by one device. Same person, same
+phone, different authority, because authority follows credential strength. Reach
+for this whenever "why can't the phone do X" comes up: the answer is almost
+always about the credential, not about phones.
+
+The setup, in the order that does not lock you out:
+
+1. Key on the phone (`ssh-keygen -t ed25519` in Termux), its **public** half
+   appended to `~/.ssh/authorized_keys` — `700` on `~/.ssh`, `600` on the file.
+2. **Open the port before disabling passwords**, not after. The password
+   fallback is the safety net that lets you debug a failing key path; removing
+   it first means the only way to test is also the way that can strand you.
+3. `New-NetFirewallRule … -LocalPort 22 -RemoteAddress 192.168.254.0/24` — scope
+   it to the subnet rather than `Any`.
+4. Verify the host key fingerprint **out of band** (`ssh-keygen -lf
+   /etc/ssh/ssh_host_ed25519_key.pub`) instead of accepting the TOFU prompt
+   blind.
+5. Only then `/etc/ssh/sshd_config.d/10-keys-only.conf` with
+   `PasswordAuthentication no`, keeping one session open while you reload.
+
+**Four traps, and three of them produced a confident wrong diagnosis first:**
+
+- **A firewall rule is per *port*.** The 41234 rule for the console did nothing
+  for 22, and a *dropped* packet gives no refusal — just a silent hang that
+  reads exactly like a broken key or a hung shell. Check
+  `Get-NetFirewallRule … LocalPort -eq <port>` before debugging anything above
+  the network.
+- **`~/.ssh/authorized_keys` was a *directory*** containing a copied pubkey, so
+  sshd had never read it and key auth had never worked. `[ -f authorized_keys ]`
+  reports "missing" for a directory, which reads as "not set up" rather than
+  "set up wrongly". Look at the target before writing to it — `chmod 600` on a
+  directory strips its traversal bit.
+- **`BatchMode=yes` blocks the passphrase prompt, not just the password one.**
+  Chosen to prove a key rather than a password, it produced a false negative on
+  a passphrase-protected key: `debug1: Server accepts key` followed by failure
+  means `authorized_keys` is *correct* and the client could not sign.
+- **`-tt` is not needed for an interactive login** — ssh allocates a TTY when
+  stdin is one. `-t` is for a *remote command* that needs a terminal, which is
+  how the TUI would be run over SSH.
+
 **There is a browser, and it is on the Windows side.** `/mnt/c/Program Files`
 holds Firefox, Brave and Zen, and Windows reaches the WSL wide listener — so a
 page served by `WARP_FORK_CONTROL_BIND` can be loaded in a real engine and
