@@ -107,6 +107,12 @@ pub(crate) fn subscribe<T: Entity>(
     let session = active_session;
     let history_model = BlocklistAIHistoryModel::handle(ctx);
     ctx.subscribe_to_model(&history_model, move |_, _, event, ctx| {
+        // Deliberately outside `record_history_event`, which returns early when
+        // the event log is off. The transcript (T14.19) is a separate feature
+        // with its own switch, and hanging it off this one would mean a person
+        // who wanted their history greppable had to also turn on an event log
+        // they never asked for.
+        crate::ai::transcript::observe(terminal_surface_id, event, ctx);
         record_history_event(&session, terminal_surface_id, event, ctx);
     });
 }

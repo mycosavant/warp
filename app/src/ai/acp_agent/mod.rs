@@ -645,11 +645,29 @@ async fn exchange(
                 let _ = tx.unbounded_send(Ok(event));
             }
 
+            // The user's own text is left as its own block and never edited.
+            // The transcript pointer, when there is one, rides beside it (T14.19)
+            // -- every turn, because the compaction it exists for would eat a
+            // pointer sent only once.
+            let mut blocks = vec![ContentBlock::Text(TextContent::new(prompt))];
+            if let Some(dir) = crate::fork::transcript_dir() {
+                let path = crate::ai::transcript::path_for(&dir, &conversation_id);
+                blocks.insert(
+                    0,
+                    ContentBlock::Text(TextContent::new(crate::ai::transcript::pointer(&path))),
+                );
+                // Said once, and said at all because this block does not appear
+                // in the panel: without it the agent would be acting on an
+                // instruction the person never saw.
+                if crate::ai::transcript::needs_announcing(&conversation_id) {
+                    let text = crate::ai::transcript::announcement(&path);
+                    let event = emit(&translator, |translator| translator.note(text));
+                    let _ = tx.unbounded_send(Ok(event));
+                }
+            }
+
             let answer = connection
-                .send_request(PromptRequest::new(
-                    session_id.clone(),
-                    vec![ContentBlock::Text(TextContent::new(prompt))],
-                ))
+                .send_request(PromptRequest::new(session_id.clone(), blocks))
                 .block_task()
                 .await?;
 

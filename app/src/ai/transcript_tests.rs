@@ -107,3 +107,37 @@ fn no_partial_file_is_left_behind() {
         .collect();
     assert!(leftovers.is_empty(), "left {leftovers:?}");
 }
+
+#[test]
+fn the_panel_is_told_once_and_not_every_turn() {
+    // The pointer rides every prompt because a compaction would eat one sent
+    // only once. Saying so in the panel every turn would be noise about a fact
+    // that has not changed.
+    forget("conv-once");
+    assert!(needs_announcing("conv-once"), "first turn must announce");
+    assert!(!needs_announcing("conv-once"), "second turn must not");
+    assert!(!needs_announcing("conv-once"), "nor any later one");
+    forget("conv-once");
+}
+
+#[test]
+fn two_conversations_are_announced_independently() {
+    forget("conv-a");
+    forget("conv-b");
+    assert!(needs_announcing("conv-a"));
+    assert!(
+        needs_announcing("conv-b"),
+        "one conversation's announcement must not silence another's"
+    );
+    forget("conv-a");
+    forget("conv-b");
+}
+
+#[test]
+fn the_announcement_names_the_path_and_how_to_stop() {
+    // Warp is adding words to someone else's conversation. The person is
+    // entitled to know where the file is and how to decline.
+    let text = announcement(Path::new("/t/conv.md"));
+    assert!(text.contains("/t/conv.md"), "{text}");
+    assert!(text.contains("WARP_FORK_TRANSCRIPT"), "{text}");
+}

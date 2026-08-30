@@ -143,6 +143,118 @@ pub(crate) fn write(
     Ok(path)
 }
 
+/// Conversations whose pointer has already been announced in the panel.
+static TOLD: std::sync::LazyLock<std::sync::Mutex<std::collections::HashSet<String>>> =
+    std::sync::LazyLock::new(|| std::sync::Mutex::new(std::collections::HashSet::new()));
+
+/// Whether the panel still needs to be told that Warp is handing the agent a
+/// transcript path, and marks it told.
+///
+/// **The pointer rides every prompt; the announcement happens once.** Those are
+/// different cadences on purpose. The pointer has to be re-sent because the
+/// compaction this exists for would eat it along with everything else, and one
+/// line per turn is a rounding error against the window. Saying so in the panel
+/// every turn would be noise about a thing that has not changed.
+///
+/// **And it is announced at all because Warp is adding words to someone else's
+/// conversation.** The block does not appear in the panel — the panel renders
+/// what the person typed — so without this the agent would be reading an
+/// instruction the user never saw and cannot account for. Disclosure is the
+/// same answer T14.18 gave for session modes, for the same reason.
+pub(crate) fn needs_announcing(conversation_id: &str) -> bool {
+    let mut told = TOLD.lock().expect("the transcript lock is uncontended");
+    told.insert(conversation_id.to_owned())
+}
+
+/// What the panel says, once, when the pointer starts riding along.
+pub(crate) fn announcement(path: &Path) -> String {
+    format!(
+        "Warp is keeping a transcript of this conversation at {} and telling the \
+         agent it can search it. Nothing else is added to your prompts. Unset \
+         `WARP_FORK_TRANSCRIPT` to stop.",
+        path.display()
+    )
+}
+
+#[cfg(test)]
+pub(crate) fn forget(conversation_id: &str) {
+    TOLD.lock()
+        .expect("the transcript lock is uncontended")
+        .remove(conversation_id);
+}
+
+/// Writes the transcript when a turn ends, if the fork was asked to keep one.
+///
+/// **Called for every history event and filtered here rather than at the call
+/// site**, so the whole policy — whether to write, for which surface, on which
+/// status — reads in one place. The subscription that feeds this exists per
+/// terminal surface and the history model is global, so without the surface
+/// filter one turn would be written once per open pane.
+///
+/// **Only on a terminal status.** Writing mid-turn would put a half-finished
+/// exchange in the file, and the agent that greps it cannot tell a turn still
+/// running from one that stopped there.
+pub(crate) fn observe(
+    terminal_surface_id: warpui::EntityId,
+    event: &crate::ai::blocklist::BlocklistAIHistoryEvent,
+    ctx: &warpui::AppContext,
+) {
+    use warpui::SingletonEntity as _;
+
+    use crate::ai::agent::conversation::ConversationStatus;
+    use crate::ai::blocklist::{BlocklistAIHistoryEvent, BlocklistAIHistoryModel};
+
+    let Some(dir) = crate::fork::transcript_dir() else {
+        return;
+    };
+    if event
+        .terminal_surface_id()
+        .is_none_or(|id| id != terminal_surface_id)
+    {
+        return;
+    }
+    // Deliberately not exhaustive, for the reason `event_log::warp_agent` gives
+    // at length: `BlocklistAIHistoryEvent` has 26 variants that upstream adds
+    // to, and a transcript that has not learned about a new one is stale, never
+    // wrong.
+    let BlocklistAIHistoryEvent::UpdatedConversationStatus {
+        conversation_id,
+        new_status,
+        ..
+    } = event
+    else {
+        return;
+    };
+    if !matches!(
+        new_status,
+        ConversationStatus::Success | ConversationStatus::Error | ConversationStatus::Cancelled
+    ) {
+        return;
+    }
+
+    let history = BlocklistAIHistoryModel::as_ref(ctx);
+    let Some(conversation) = history.conversation(conversation_id) else {
+        return;
+    };
+    let exchanges = conversation
+        .root_task_exchanges()
+        .map(|exchange| Exchange {
+            input: exchange.format_input_for_copy(),
+            // `None` for the action model, so tool results are left out. This
+            // file exists to be searched, and a transcript carrying every file
+            // read would be larger than the context that ran out.
+            output: exchange.format_output_for_copy(None),
+        })
+        .collect::<Vec<_>>();
+
+    if let Err(error) = write(&dir, &conversation_id.to_string(), &exchanges) {
+        // Warned rather than surfaced, for the same reason the event log warns:
+        // a full disk should not turn a recovery aid into a second failure on
+        // top of the first.
+        log::warn!("fork transcript: write for {conversation_id} failed: {error}");
+    }
+}
+
 #[cfg(test)]
 #[path = "transcript_tests.rs"]
 mod tests;
