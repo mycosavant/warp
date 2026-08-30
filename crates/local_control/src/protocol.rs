@@ -587,6 +587,37 @@ pub struct AgentConversationSummary {
     /// hidden pane can be shown, a closed one cannot.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub is_hidden: bool,
+    /// Seconds since the agent last said anything, for a turn Warp is driving
+    /// itself.
+    ///
+    /// **Fork (T14.10), and it is a symptom rather than a verdict.** `status`
+    /// distinguishes working from finished and cannot distinguish working from
+    /// wedged: a turn that stalled ran 36 minutes reporting `in_progress` with
+    /// no pending approval to answer and no output to read, and was diagnosed
+    /// only by `ps` and two screenshots. This is the number that was missing.
+    ///
+    /// It does not mean the turn is stuck. A long compile and a dead agent look
+    /// identical from here, which is exactly why nothing acts on it — a person
+    /// reads it and decides, and `agent.cancel` loses nothing if they are wrong.
+    ///
+    /// `None` for every conversation Warp is not driving through the ACP path
+    /// right now, which is most of them. **Absent rather than zero**: a
+    /// conversation that finished an hour ago is not quiet for no time at all,
+    /// and a caller polling for a wedge must not find one everywhere it looks.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub quiet_for_seconds: Option<u64>,
+    /// The last tool call the agent announced on this turn.
+    ///
+    /// **Fork (T14.10).** The pairing is what makes the number readable:
+    /// *"quiet for 1100s, last seen `grep -rn kind_name`"* is a report, while
+    /// either half alone is a puzzle. Set only by tool calls — a message chunk
+    /// refreshes the clock without replacing this — so the description survives
+    /// whatever the agent said last before going silent.
+    ///
+    /// `None` when the agent has announced no tool call yet, which is its own
+    /// signal: a turn quiet from its first moment never got started.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_activity: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

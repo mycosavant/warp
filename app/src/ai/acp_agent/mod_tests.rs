@@ -277,6 +277,49 @@ fn parked(acts_on: Vec<String>) -> registry::ParkedRequest {
     park_this(&an_executable_request(as_opencode_sent_it()), acts_on)
 }
 
+/// Only a tool call describes what a turn is doing (T14.10).
+///
+/// A message chunk is a sign of life and not a description of one. If chatter
+/// set the remembered activity, a wedged turn would be reported as whatever
+/// half-sentence the agent emitted last instead of the call it stopped on —
+/// which on T14.9 was the one fact the panel had and the CLI did not.
+#[test]
+fn only_a_tool_call_names_what_a_turn_is_doing() {
+    let spoke = SessionUpdate::AgentMessageChunk(
+        agent_client_protocol::schema::v1::ContentChunk::new(ContentBlock::from("thinking")),
+    );
+    assert_eq!(announced_tool(&spoke), None, "chatter describes nothing");
+
+    let called = SessionUpdate::ToolCall(agent_client_protocol::schema::v1::ToolCall::new(
+        "call_1",
+        "grep -rn kind_name",
+    ));
+    assert_eq!(
+        announced_tool(&called).as_deref(),
+        Some("grep -rn kind_name")
+    );
+}
+
+/// A tool-call update names the call only when it carries a title. Agents send a
+/// placeholder first and correct it — Claude sent "Preparing file…" before
+/// "Write a.txt" — so an update without one must leave the remembered title
+/// alone rather than blank it.
+#[test]
+fn a_tool_call_update_without_a_title_describes_nothing() {
+    let titled = SessionUpdate::ToolCallUpdate(ToolCallUpdate::new(
+        "call_1",
+        ToolCallUpdateFields::new().title("Write a.txt"),
+    ));
+    assert_eq!(announced_tool(&titled).as_deref(), Some("Write a.txt"));
+
+    let untitled = SessionUpdate::ToolCallUpdate(ToolCallUpdate::new(
+        "call_1",
+        ToolCallUpdateFields::new()
+            .status(agent_client_protocol::schema::v1::ToolCallStatus::InProgress),
+    ));
+    assert_eq!(announced_tool(&untitled), None);
+}
+
 /// The request's own locations outrank the remembered ones (T14.8).
 ///
 /// Measured live: one `cat ~/.bashrc` from a pane in the repo produced

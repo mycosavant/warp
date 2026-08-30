@@ -167,6 +167,14 @@ fn conversation_summary(
     settled: bool,
 ) -> AgentConversationSummary {
     let status = conversation.status();
+    // Read once, here, rather than in two field initialisers: the two halves of
+    // a liveness report have to describe the same instant, or a listing could
+    // pair a quiet time with a tool call from a turn that ended between them.
+    let (quiet, last_activity) =
+        match crate::ai::acp_agent::liveness::quiet_for(&conversation.id().to_string()) {
+            Some((quiet, tool)) => (Some(quiet), tool),
+            None => (None, None),
+        };
     AgentConversationSummary {
         conversation_id: conversation.id().to_string(),
         title: conversation.title(),
@@ -192,6 +200,12 @@ fn conversation_summary(
         pane_id: location.map(|location| location.pane_id.to_string()),
         tab_id: location.map(|location| location.tab_id.clone()),
         is_hidden: location.is_some_and(|location| location.is_hidden),
+        // Only the ACP path keeps this, and only while a turn is in flight, so
+        // both fields are absent for every other conversation — see
+        // `AgentConversationSummary::quiet_for_seconds` for why absent is not
+        // zero.
+        quiet_for_seconds: quiet,
+        last_activity,
     }
 }
 

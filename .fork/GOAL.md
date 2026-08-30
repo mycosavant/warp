@@ -63,10 +63,13 @@ reordering is the whole reason T14.9 came first.**
   back no longer pays for widening what a phone tap may approve. What changed is
   the refusal: it says what Warp cannot tell rather than implying the call is
   dangerous, and it names the move.
-- **A wedged turn is silent.** One turn burned 36 minutes: alive, 74s of CPU
-  against 2176 elapsed, panel frozen, `agent list` saying `in_progress`
-  throughout. Diagnosed with `ps` and two screenshots. T14.10. **Now the top of
-  this list.**
+- ~~**A wedged turn is silent.**~~ **Done in T14.10.** `agent list` now reports
+  `quiet_for_seconds` and `last_activity` for a turn Warp is driving — measured
+  live at 14 → 59 → 105 seconds against a stalling agent built for the purpose,
+  with `last_activity` naming the frozen call. It reports a symptom and decides
+  nothing: a long compile and a dead agent look identical, and recovery is
+  already total. The reproduction also found that **a wedged turn blocks
+  `window close`** — cancel first, then close, now recorded in `CLAUDE.md`.
 - ~~**No cheap addressing.**~~ **Done in T14.8, and it absorbed the button's
   case.** `agent approvals` renders each waiting request as a block ending in
   the exact `warpctrl agent approve|deny '<id>' --digest <d>` line that answers

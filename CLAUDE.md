@@ -164,6 +164,15 @@ Windows). Killing the process leaves a stale discovery record and a
 crash-recovery sibling holding the ports, so the next launch fails. Ordinary
 shutdown cleans both up.
 
+**…and cancel a wedged ACP turn first, or it will not close at all.** Measured
+T14.10 against an agent built to stall: with a turn in flight that has stopped
+answering, `window close` returns `ok: true` and Warp stays up — reproduced on
+two separate instances, once after waiting 43 seconds. `agent cancel <id>` and
+then `window close` exits in about five. So a wedge is not only a time cost; it
+takes away the sanctioned way to stop, which is the one thing `kill` was already
+ruled out for. `agent list` now reports `quiet_for_seconds` and `last_activity`
+for a turn Warp is driving, which is how you tell there is one to cancel.
+
 **A GUI Warp binds two loopback ports, and only one of them is this fork's.**
 Measured 2026-08-24 with `ss -ltnp` against a running instance:
 

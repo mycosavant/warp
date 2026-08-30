@@ -7564,7 +7564,7 @@ Nothing has run on Windows.
       thing it got wrong is recorded too: it predicted the read variant would
       escape the config remedy, and the probe says otherwise.
 
-- [ ] **T14.10** **A turn that has wedged should say so.** Opened by T14.9, which
+- [x] **T14.10** **A turn that has wedged should say so.** Opened by T14.9, which
       lost half an hour to one. A turn with a parked question waits forever *on
       purpose* and that is right. A turn with no question and no output has no
       signal at all: `agent list` says `in_progress` whether the agent is
@@ -7591,6 +7591,49 @@ Nothing has run on Windows.
       decoration — it binds the answer to what was shown — so anything cheaper
       must keep that binding rather than drop it, which is the design question
       this ticket actually holds.
+
+      **As built — run 2026-08-29, and the wedge was reproduced on purpose
+      rather than waited for.** The real one (T14.9) happened once and could not
+      be summoned; `tmp/t1410/wedged-agent.py` is forty lines of Python that
+      speaks ACP, answers `initialize` and `session/new`, emits a couple of tool
+      calls, and then never replies again. That made the whole thing testable in
+      seconds instead of hostage to a rare event, and it is the reason two
+      findings below exist at all.
+
+      **Before:** the wedged turn reported `status: in_progress`, `is_busy:
+      true`, and nothing else. `agent approvals` said *"Nothing is waiting on
+      you"* — correctly, since a wedge has no question. Indistinguishable from
+      working, exactly as T14.9 recorded.
+
+      **After:** `agent.list` carries `quiet_for_seconds` and `last_activity` for
+      a turn Warp is driving. Live against the stalling agent they read 14 → 59 →
+      105 while `last_activity` held `grep -rn kind_name app/src` — the frozen
+      call the panel showed and the CLI could not. Both are absent for every
+      conversation with no turn in flight, **absent rather than zero**: a
+      conversation that finished an hour ago is not quiet for no time, and a
+      caller polling for a wedge must not find one everywhere it looks. Verified
+      by cancelling: the record is gone the moment the turn is.
+
+      **It reports a symptom and decides nothing, deliberately.** A long compile
+      and a dead agent are identical from here, so a build that cancelled turns
+      on a timer would eventually cancel a working one. Recovery is already total
+      (T14.9), which is what makes reporting sufficient.
+
+      **The find that the reproduction paid for: a wedged turn takes away the
+      sanctioned way to stop Warp.** `warpctrl window close` returns `ok: true`
+      and Warp stays up — reproduced on two separate instances, once after
+      waiting 43 seconds, and initially misread as a crash-recovery relaunch
+      until the log showed a single unbroken startup. `agent cancel` then
+      `window close` exits in about five seconds. That matters more than it
+      sounds: `CLAUDE.md` already rules out `kill` because it leaves a stale
+      discovery record and a sibling holding the ports, so before this a wedge
+      left no clean way out at all. Recorded there next to the shutdown rule.
+
+      **Keyed on Warp's conversation id**, not the ACP session id — the session
+      id is the agent's and does not exist until it answers `session/new`, which
+      is inside the window where a turn can already have stalled. The record
+      removes itself from the driver future the way `registry::Parked` does, so
+      cancellation and a dead agent both clean up with nothing watching.
 
 - [x] **T14.3** ~~**Warp cannot observe an agent's permission policy, so it must
       not imply one.**~~ **The headline is false and running it is what showed

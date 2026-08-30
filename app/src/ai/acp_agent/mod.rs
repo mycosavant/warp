@@ -101,6 +101,7 @@
 //! configuration works — but nothing here may imply otherwise either, which is
 //! the T14.3 rule. See `.fork/TASKS.md` T14.6.
 
+pub(crate) mod liveness;
 pub(crate) mod registry;
 mod translate;
 
@@ -112,7 +113,7 @@ use agent_client_protocol::schema::v1::{
     ContentBlock, InitializeRequest, LoadSessionRequest, NewSessionRequest, PermissionOption,
     PermissionOptionId, PermissionOptionKind, PromptRequest, RequestPermissionOutcome,
     RequestPermissionRequest, RequestPermissionResponse, SelectedPermissionOutcome, SessionId,
-    SessionNotification, TextContent,
+    SessionNotification, SessionUpdate, TextContent,
 };
 use agent_client_protocol::{AcpAgent, Agent, ConnectionTo};
 use anyhow::{Context as _, anyhow};
@@ -198,6 +199,12 @@ pub(crate) struct Turn {
     task_id: String,
     task_needs_announcing: bool,
     working_directory: Option<String>,
+    /// Warp's own id for the conversation this turn belongs to.
+    ///
+    /// Carried only so a wedged turn can be reported against the row
+    /// `agent.list` already shows (T14.10). Not the ACP session id, which is the
+    /// agent's and does not exist yet at the moment a turn can already stall.
+    conversation_id: String,
 }
 
 impl Turn {
@@ -235,6 +242,7 @@ impl Turn {
             task_id,
             task_needs_announcing,
             working_directory: params.session_context.current_working_directory().clone(),
+            conversation_id: params.conversation_id.to_string(),
         })
     }
 }
@@ -292,14 +300,29 @@ fn run(command: String, turn: Turn) -> impl Stream<Item = Event> + Send + use<> 
         turn.working_directory.clone(),
     )));
 
-    let driver = drive(
+    // Dropped with the driver, so a turn that ends — or is cancelled, or whose
+    // agent dies — takes its liveness record with it. Same discipline as
+    // `registry::Parked`, and for the same reason: nothing else has to notice.
+    let watch = liveness::watch(turn.conversation_id.clone());
+    let conversation_id = turn.conversation_id;
+
+    let driving = drive(
         command,
         turn.prompt,
         turn.session,
         turn.working_directory,
+        conversation_id,
         Arc::clone(&translator),
         tx.clone(),
     );
+    // The guard rides *inside* the driver future rather than beside it, which is
+    // what ties it to cancellation: `generate` wraps this stream in
+    // `take_until`, so a cancelled turn drops the future — and the guard with
+    // it — without anything running a teardown path.
+    let driver = async move {
+        let _watch = watch;
+        driving.await;
+    };
     // The driver yields no items of its own; everything it produces goes through
     // the channel, so its arm is mapped away. `select` ends when both ends do,
     // and the channel ends when `drive` drops the last sender.
@@ -317,6 +340,7 @@ async fn drive(
     prompt: String,
     session: Option<String>,
     working_directory: Option<String>,
+    conversation_id: String,
     translator: Arc<Mutex<Translator>>,
     tx: mpsc::UnboundedSender<Event>,
 ) {
@@ -325,6 +349,7 @@ async fn drive(
         prompt,
         session,
         working_directory,
+        conversation_id,
         Arc::clone(&translator),
         tx.clone(),
     )
@@ -368,6 +393,7 @@ async fn exchange(
     prompt: String,
     session: Option<String>,
     working_directory: Option<String>,
+    conversation_id: String,
     translator: Arc<Mutex<Translator>>,
     tx: mpsc::UnboundedSender<Event>,
 ) -> anyhow::Result<()> {
@@ -381,7 +407,7 @@ async fn exchange(
             .context("The ACP agent needs a working directory and this one could not be read")?,
     };
 
-    let updates = (Arc::clone(&translator), tx.clone());
+    let updates = (Arc::clone(&translator), tx.clone(), conversation_id);
     let program = agent_name(&command);
     let permissions = (
         Arc::clone(&translator),
@@ -395,7 +421,11 @@ async fn exchange(
         .builder()
         .on_receive_notification(
             async move |notification: SessionNotification, _cx| {
-                let (translator, tx) = &updates;
+                let (translator, tx, conversation) = &updates;
+                // Every notification is a sign of life; only a tool call is a
+                // description of one. Recorded before translation, so an update
+                // this build does not render still counts as the agent speaking.
+                liveness::note(conversation, announced_tool(&notification.update));
                 let events = {
                     let mut translator = translator.lock().expect(
                         "the translator lock is held \
@@ -651,6 +681,27 @@ fn stated_locations(request: &RequestPermissionRequest) -> Option<Vec<String>> {
         .map(|location| location.path.to_string_lossy().into_owned())
         .collect::<Vec<_>>();
     (!stated.is_empty()).then_some(stated)
+}
+
+/// The tool call an update announces, for the liveness record (T14.10).
+///
+/// Only tool calls, and only their titles. A message chunk is a sign of life but
+/// not a description of one, and recording it would replace *"grep -rn
+/// kind_name"* — the thing a wedged turn stopped on — with whatever half-sentence
+/// the agent last emitted. Measured on T14.9, the useful fact was the frozen
+/// tool call, which the panel showed and the CLI could not.
+///
+/// A `ToolCall` carries a title outright; a `ToolCallUpdate` may or may not, and
+/// a missing one leaves whatever was already remembered. Both are matched
+/// because agents correct a placeholder title on the update — Claude sent
+/// *"Preparing file…"* before *"Write a.txt"* — so the second is usually the one
+/// worth having.
+fn announced_tool(update: &SessionUpdate) -> Option<String> {
+    match update {
+        SessionUpdate::ToolCall(call) => Some(call.title.clone()),
+        SessionUpdate::ToolCallUpdate(update) => update.fields.title.clone(),
+        _ => None,
+    }
 }
 
 /// Describes one permission request the way the control plane needs it.
