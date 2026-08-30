@@ -103,6 +103,7 @@
 
 pub(crate) mod liveness;
 pub(crate) mod mode;
+pub(crate) mod model;
 pub(crate) mod registry;
 mod translate;
 
@@ -537,9 +538,13 @@ async fn exchange(
             // T14.18 both were read for a session id alone -- which is how a
             // panel session came to run in whatever mode the agent picked,
             // unreported, for its whole life.
+            // Both replies also carry `config_options`, which was read for
+            // nothing until T14.14. It is a generic channel, not a model
+            // picker, so it is captured here and filtered once (see `model`).
             // Not initialised: every path below either assigns it or returns,
             // so an initial `None` would be a dead store the compiler warns about.
-            let mut advertised;
+            let advertised;
+            let config_options;
             let session_id = match resume {
                 None => {
                     let opened = connection
@@ -547,6 +552,7 @@ async fn exchange(
                         .block_task()
                         .await?;
                     advertised = opened.modes.clone();
+                    config_options = opened.config_options.clone();
                     opened.session_id
                 }
                 Some(existing) => {
@@ -573,7 +579,13 @@ async fn exchange(
                         // case where the mode in force was decided by a
                         // previous run -- so it is the case a person is least
                         // likely to have in mind and most worth saying.
-                        Ok(loaded) => advertised = loaded.modes.clone(),
+                        // A resumed session re-advertises its config options too,
+                        // so the catalog is rebuilt from the load reply just like
+                        // the mode state is.
+                        Ok(loaded) => {
+                            advertised = loaded.modes.clone();
+                            config_options = loaded.config_options.clone();
+                        }
                     }
                     existing
                 }
@@ -619,6 +631,14 @@ async fn exchange(
             // and logging only the turns that proceeded would leave the record
             // silent about every one that did not.
             mode::log(&conversation_id, &program, &cwd_text, advertised.as_ref());
+            // T14.14: the model picker, from this turn's own reply, filtered
+            // by the one seam both doors share (see `model`). Brought into
+            // existence next to the mode decision because both answer "what
+            // did this agent offer", and logged whatever the filter admits --
+            // which is the render door (`Catalog::options`) gated before any
+            // surface exists.
+            let catalog = model::Catalog::of(config_options.as_deref());
+            model::log(&conversation_id, &program, &cwd_text, &catalog);
             if let Some(reason) = decision.refusal() {
                 return Err(anyhow!(reason.to_owned()).into());
             }
