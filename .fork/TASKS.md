@@ -7985,6 +7985,47 @@ mode descriptions is the first legitimate instance of `acp_permission.rs`'s
       difference. **A category this build does not recognise is not rendered**,
       by the same allowlist logic as the tool kinds: unknown must not qualify.
 
+      **Surveyed 2026-08-30, and the category allowlist is now measured rather
+      than argued.** Asked *"is our permission model too tight, and how long a
+      pole is auto-mode for agents other than Claude"*, the honest first step was
+      to ask the agents. `session/new` against both, same repo, same day:
+
+      | | `modes` | `configOptions` categories |
+      |---|---|---|
+      | `claude-agent-acp` 0.70.0 | `currentModeId: "auto"`, 6 available | `mode`, `model`, `thought_level`, and one with **no category at all** (`id: "agent"`) |
+      | `opencode` 1.18.25 | **`null`** | `model`, **`mode`** |
+
+      Three things fall out, and the second is the one that matters.
+
+      **`SessionModeState` is protocol-level; `auto` is not.** The schema carries
+      `modes` on `session/new`, `session/load` and `session/set_mode`, so every
+      agent is asked. But `SessionModeId` is `Arc<str>` — an opaque string — and
+      nothing standardises a single id. `auto` is one agent's word, and its
+      meaning lives in its own English `description`.
+
+      **Both agents ship `category: "mode"`, and it means opposite things.** On
+      `claude-agent-acp` its six values include `bypassPermissions` and
+      `dontAsk` — permission policy. On `opencode` its two values are `build`
+      (*"Executes tools based on configured permissions"*) and `plan`
+      (*"Disallows all edit tools"*) — an agent persona, with the permission
+      policy explicitly delegated **elsewhere**, to the config file T14.8 found.
+      So `mode` is not a category whose meaning can be read off its name. This
+      corrects the row above, which recorded opencode as offering `model` alone;
+      it offers both, and a filter that admitted `category: "mode"` would render
+      one agent's escalation menu and another's persona switch through the same
+      control. **The `category: "model"`-only scope stands, and now on evidence.**
+
+      **An option with no category at all exists** (`id: "agent"`). The
+      unknown-must-not-qualify rule was written for a category this build has not
+      read; the measured case is a category that is *absent*. Same answer, and
+      worth pinning with a test rather than inferring.
+
+      One agent did not answer: `@zed-industries/claude-code-acp` 0.16.2, also
+      cached here, completes `initialize` and then fails `session/new` with
+      `Query closed before response received`. Recorded as *did not start*, not
+      as a measurement of its modes — it is a stale build, and reading a crash as
+      a finding is the error this file keeps naming.
+
 - [x] **T14.15** **One ACP turn writes two event-log files that never name each
       other.** Found 2026-08-29 while checking whether an advisor's queue
       recommendation rested on a stale doc. It did, and underneath it was a real
