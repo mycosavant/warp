@@ -262,6 +262,25 @@ port. That is enough to A/B any *flag*, which is most of what policy-off gets
 used for. Save the GUI run for A/B-ing behaviour. (Put any probe **after**
 `mark_initialized()` — `FeatureFlag::is_enabled` panics before it.)
 
+**The `warp` Claude Code plugin is a fork surface, and it is the one nobody
+remembers.** `~/.claude/plugins/cache/claude-code-warp/warp/<version>/` is seven
+bash hooks that emit OSC 777 to the TTY; Warp parses them into
+`CLIAgentEventType`, a **versioned protocol** negotiated through
+`WARP_CLI_AGENT_PROTOCOL_VERSION`, with `PermissionRequest` and
+`PermissionReplied` as first-class events. I17 already ruled on the sibling
+`oz-harness-support` plugin — refused at the manager by
+`fork::cloud_harness_plugin_allowed` — but the local one is welcome and largely
+unexamined.
+
+**Two facts about it that change what the fork can do** (read 2026-08-30, T14.20):
+the permission hook is **observational only** — it reports and exits, so Warp is
+told and cannot answer — and the payload carries **no call id**, which is
+`TR-EVENTS-B` named in three files. Both are plugin-side. So "remote consent only
+works on ACP" is true today and is **not** an architectural fact: it is what you
+get when the only channel is one-directional. Before concluding that a
+CLI-agent limitation is structural, check whether it is simply a hook that does
+not answer yet.
+
 **The agent driving this fork reads `AGENTS.md`, not this file — unless
 `opencode.json` says otherwise.** Measured T14.7 by asking it: in this repo
 `opencode` listed `AGENTS.md` alone. So an agent sent to build the fork gets

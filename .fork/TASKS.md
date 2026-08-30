@@ -8058,6 +8058,72 @@ mode descriptions is the first legitimate instance of `acp_permission.rs`'s
       a protocol signal that does not exist. The finding worth carrying upstream
       is *"an ACP agent has no way to report that it compacted"*.
 
+- [ ] **T14.20** **Vendor the `warp` Claude Code plugin so the thesis path can
+      answer, not just report.** Found 2026-08-30, chasing the maintainer's
+      recollection that "we have been here before". We had: the pieces were all
+      recorded separately and never joined.
+
+      **What exists, verified by reading the installed plugin** at
+      `~/.claude/plugins/cache/claude-code-warp/warp/2.2.0`:
+
+      - `CLIAgentEventType` is a **versioned protocol over OSC 777 on the PTY**,
+        negotiated via `WARP_CLI_AGENT_PROTOCOL_VERSION`, with
+        `PermissionRequest` and `PermissionReplied` as **first-class events**
+        (`event/v1.rs:21-22`). So on the Claude Code path the *request* side is
+        already typed. It was never blind.
+      - The plugin registers a real **`PermissionRequest` hook**
+        (`hooks/hooks.json`), and `on-permission-request.sh` forwards
+        `tool_name` and `tool_input` and then exits. It is **purely
+        observational**: Warp is told, and has no channel to answer.
+      - `build_payload` carries `session_id, cwd, project` and **no call id** —
+        `TR-EVENTS-B` precisely, which `event_log/mod.rs:122`,
+        `event_log/local_agent.rs:29` and `event_log/warp_agent.rs:62` all name,
+        each saying the id *"would have to come from the plugin"*.
+      - `PLUGIN_CURRENT_PROTOCOL_VERSION=1` with `min(plugin, warp)`
+        negotiation, so a bump degrades gracefully both ways.
+      - I17 already decided the fork's stance on the *other* plugin:
+        `oz-harness-support` is refused at the manager
+        (`fork::cloud_harness_plugin_allowed`), while the `warp` plugin — seven
+        bash hooks, no network calls — is welcome.
+
+      **Why this matters more than any ACP work on the board.** T14.11 concluded
+      that remote consent is ACP-shaped because ACP is the only transport where
+      *yes* is a typed option id rather than a cursor position. That conclusion
+      was right about the mechanism and wrong about the cause: **the Claude Code
+      path lacks a typed answer only because the hook does not return one.** A
+      `PermissionRequest` hook can decide. Nothing about the architecture forces
+      Return-pressing; it is what you are left with when the only channel is
+      one-directional.
+
+      So the generalisable path the fork's thesis wants — the user's own Claude
+      subscription, with safe remote consent — is reachable by **vendoring the
+      plugin**, and it does not need ACP at all.
+
+      **The shape, smallest thing first.** Two independent increments:
+
+      1. **Carry the call id** (bump to protocol 2). Closes TR-EVENTS-B, joins
+         `permission_request` to the `tool_start`/`tool_complete` it authorised,
+         and gives T14.17's audit trail on the path that *already* emits
+         permission events. Purely additive; nothing has to answer anything.
+      2. **Let the hook answer.** It blocks briefly, asks Warp's control plane —
+         which already knows about pairing, digests, `WARP_FORK_REMOTE_APPROVE`
+         and the panel button — and returns the decision. This is where the
+         consent design has to be argued, not assumed: a hook that can say yes
+         is a hook that can be made to say yes by anything that can reach it,
+         so the answer must be bound to a shown request by digest exactly as
+         `registry::answer` is, and the default with nobody reachable must be
+         *ask the person in the TUI*, never *allow*.
+
+      **Do not start at (2).** (1) is useful alone, is unarguably safe, and its
+      measurement — do the ids actually join? — is the thing that tells you
+      whether the plugin channel is trustworthy enough to carry a decision.
+
+      **Named, not assumed:** whether Claude Code's `PermissionRequest` hook
+      input actually contains a `tool_use_id` was **not verified** — the current
+      script does not extract one, which is consistent with both "it is there and
+      unused" and "it is not there". Check that first; it decides whether (1) is
+      an afternoon or a protocol conversation upstream.
+
 - [ ] **T14.19** **Hand the agent back the transcript Warp already owns.**
       Proposed by the maintainer 2026-08-30 on reading T14.13, and it is the
       right shape because it **routes around the detection problem instead of
