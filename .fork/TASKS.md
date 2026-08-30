@@ -8233,6 +8233,71 @@ mode descriptions is the first legitimate instance of `acp_permission.rs`'s
       its own process, with no Warp and no event log, which is also why the
       T14.1/T14.2 findings could be made without one running.
 
+- [ ] **T14.18** **The panel never sends `session/set_mode`, so with the
+      flagship agent the fork's permission model is not reached at all.** Found
+      2026-08-30, chasing *"is our permission model too tight?"*. It is not too
+      tight. On the panel path with `claude-agent-acp` it does not run.
+
+      **Read first.** `app/src/ai/acp_agent/mod.rs:513` sends
+      `NewSessionRequest::new(cwd)` — cwd and nothing else — and `set_mode`
+      appears **nowhere** in `app/src/ai/acp_agent/`. The only
+      `SetSessionModeRequest` in the repo is
+      `crates/warp_cli/src/local_control/acp.rs:204`, the standalone CLI probe,
+      once, before the prompt. So a panel session takes whatever mode the agent
+      defaults to and keeps it for the session's life, with no surface to change
+      it.
+
+      **Then measured, calibrated both ways in one sitting.** Same agent
+      (`claude-agent-acp` 0.70.0), same scratch cwd, same prompt — *"create
+      probe.txt containing hello"* — with the probe denying everything it is
+      asked:
+
+      | | `session/set_mode` | started in | permission requests | file written |
+      |---|---|---|---|---|
+      | run 1 — the panel's shape | none sent | `auto` | **0** | **yes** |
+      | run 2 — calibration | `default` | `auto` | **2** | no |
+
+      Run 1 is the panel path exactly. Zero requests, so Warp denied nothing,
+      approved nothing, and was asked nothing; the file appeared. Run 2 fires on
+      the known-present and shows the instrument is sound rather than merely
+      quiet: `execute` (*"printf 'hello' > probe.txt"*) and `edit` (*"Write
+      probe.txt"*), both cancelled, no file. This is the `wedged-agent.py`
+      pattern and it is the reason the run-1 zero can be believed.
+
+      **The two requests run 2 raised are both on the allowlist.** So the honest
+      one-line summary of the tightness question is: *the model is not too
+      tight, it is unreached* — and one `session/set_mode` turns both of these
+      into requests the T14.16 button can answer today.
+
+      **Why this hid.** Every panel session on this board has used `opencode`,
+      which has no session modes at all (`modes: null`, T14.14's survey) and
+      takes its permission policy from the committed config file. So the whole
+      consent architecture was exercised against the one measured agent where
+      this cannot bite. `CLAUDE.md` has said since T14.8 that *"`session/set_mode`
+      to `default` is what makes it ask"* — true, and next to no code that sends
+      it.
+
+      **What to send, and the argument for sending anything.** Not a picker;
+      that is T14.14's separate control and it is about `category: "model"`.
+      The minimal correct thing is to request the mode in which the agent
+      **asks** — `default` where the agent offers it — and to do nothing where
+      it offers no modes, which is the opencode case and must stay silent rather
+      than error.
+
+      This is the fork *narrowing*, not widening, and that is what makes it
+      admissible without consent machinery: moving `auto` → `default` can only
+      cause more requests to be raised and never fewer, which is the same
+      asymmetry that lets `agent.deny` work with no switch while
+      `agent.approve` needs `WARP_FORK_REMOTE_APPROVE`. A person who wants the
+      classifier back should get it from a mode surface built deliberately, and
+      it belongs behind a `fork.rs` predicate either way.
+
+      **Named as unverified:** whether `session/set_mode` is accepted between
+      `session/new` and the first prompt on every agent that advertises modes —
+      one agent, one ordering, is what has been run. And whether a mode
+      requested at session start survives `session/load` on resume, which the
+      fork's recovery story depends on and nothing here tested.
+
 ## T15 — Loose ends carried, not forgotten
 
 - [ ] **Re-check `ALLOW_VERIFIED_AGENTS` against a real prompt** (from T11.5).

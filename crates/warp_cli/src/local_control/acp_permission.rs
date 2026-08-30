@@ -81,6 +81,58 @@
 //! shown. An interactive approval card that renders the declaration could
 //! legitimately offer it; nothing that exists today can.
 //!
+//! ## …and something does now, so that last clause is retired (T14.16/T14.18)
+//!
+//! T14.16 built that card. It shows the agent, the verbatim `rawInput`, where
+//! the request says it acts, and every option offered, and its own module doc
+//! restates this rule. Carrying [`Declaration::Changes`] into the parked
+//! request and rendering it verbatim would meet the standard set just above —
+//! verbatim is already the doctrine here, because what the agent put on the
+//! wire is the only honest thing Warp can say about a policy it cannot see. So
+//! **the disclosure objection is satisfiable, and this module must stop resting
+//! on it.** A refusal defended by a premise its own repo has falsified is the
+//! rot this fork's docs exist to prevent, and that clause was two days from
+//! becoming exactly that.
+//!
+//! What it always was, and remains, is a **necessary** condition and never a
+//! sufficient one. `allow_always` stays refused for three reasons that were
+//! never about disclosure:
+//!
+//! * **The population it would serve is empty today.** `opencode`'s `always`
+//!   carries no `_meta` (measured above), so there is nothing to render and
+//!   *"absence of `_meta` proves nothing"* forbids offering it undeclared — the
+//!   card can never offer that one. That leaves `claude-agent-acp` held in
+//!   `default`. T14.18 then measured that the panel path never sends
+//!   `session/set_mode` at all, so a panel session with that agent runs in
+//!   `auto` and raises no permission requests to attach a button to. The
+//!   beneficiary set is not small; it has no members.
+//! * **Measured demand is zero.** The one recurring refusal in real work was
+//!   `opencode`'s `other` precondition, an allowlist refusal `allow_always`
+//!   would not have touched. What `allow_always` answers is approval *fatigue*,
+//!   and the run that would measure fatigue — T14.11, with the card in place —
+//!   has not happened. Building the escalation before the measurement inverts
+//!   the ordering that has three times in T14 deleted the work rather than
+//!   guided it.
+//! * **A declaration is not the grant.** The `_meta` says *"mode →
+//!   acceptEdits"*; what a yes actually spends is the future calls, which after
+//!   the transition raise no requests and so leave no trace. That thins the
+//!   exact property the charter's audit rule and T14.15's one-turn-one-file
+//!   exist to provide. A person choosing it knowingly is legitimate consent —
+//!   which makes this a posture call rather than a correctness one, and posture
+//!   is the maintainer's.
+//!
+//! **And if fatigue does show up, the answer is probably not this button.** A
+//! tired person wants *"stop asking about edits"*, which is a standing policy
+//! and belongs on a policy surface — `session/set_mode`, whose absence from the
+//! panel is T14.18 — rather than as an escalating third control on a card whose
+//! other two answer one call. A mode surface also serves `opencode`-shaped
+//! agents, which this button structurally cannot.
+//!
+//! The cheap half, shelved with the rest: carry `_meta` into the parked request
+//! **as data, rendered and never selectable**, so the card can say *"this
+//! option, which Warp will not select, declares: …"*. Disclosure without
+//! escalation, and consistent with `_meta` already being read only to refuse.
+//!
 //! A *mode picker* cannot, and the distinction is a channel rather than a
 //! quibble: this option lives on a pending `session/request_permission`, which
 //! only the surface answering that request can select. A picker acts through
