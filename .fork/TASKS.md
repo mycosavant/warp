@@ -7310,11 +7310,18 @@ Nothing has run on Windows.
       in two separate conversations: a `read` of a dependency's source in
       `~/.cargo/registry`, and `cat /nonexistent-file-xyz`. In the same turn as
       the second, `git status --short` arrived as `execute` and was approvable.
-      **The agent decides the kind**, so a person cannot tell in advance which of
-      their commands will be answerable, and when one is not, the request parks
-      with `can_approve: false` and the turn stops until somebody denies it. An
-      in-panel button would be greyed out for exactly these, so building it first
-      would leave the worst case untouched.
+      **The agent decides the kind**, and when it picks one Warp cannot bound,
+      the request parks with `can_approve: false` and the turn stops until
+      somebody denies it. An in-panel button would be greyed out for exactly
+      these, so building it first would leave the worst case untouched.
+
+      **Amended by T14.8: "a person cannot tell in advance which of their
+      commands will be answerable" was wrong**, and it was the sentence that made
+      this look like a rule needing to be relaxed. Measured against the same
+      agent, the predicate is knowable: `other` is what `opencode` sends when a
+      call would reach outside the project directory, and everything inside it
+      arrives as an ordinary kind. Both cases here fit — a crate source in
+      `~/.cargo`, and `/nonexistent-file-xyz` at the root.
 
       **A wedged turn is indistinguishable from a working one.** One turn ran 36
       minutes: process alive, 74 seconds of CPU against 2176 elapsed, state `S`,
@@ -7359,7 +7366,7 @@ Nothing has run on Windows.
       myself in the same session** — I told the agent to check schema 1.7.0 when
       `Cargo.lock` pins 1.5.0, and it went and found the right one.
 
-- [ ] **T14.8** **Give the requests that have no answer an answer, then make
+- [x] **T14.8** **Give the requests that have no answer an answer, then make
       answering cheap.** **Reframed by T14.9's run, which is why the ordering
       mattered.** Was "answer a permission request by pressing something".
 
@@ -7383,6 +7390,109 @@ Nothing has run on Windows.
       if most of the cost is transcription rather than modality it wins on effort
       by an order of magnitude — provided it keeps the digest binding, which is
       the design question underneath.
+
+      **As built — measured 2026-08-29, and the first half's answer is that no
+      honest yes exists, for a reason nobody had run down.**
+
+      **What an `other` request actually is.** Driven against two live agents
+      with a raw ACP client (probes under `tmp/acp/`), not read. `opencode`
+      raises an *extra* permission request, before the call itself, whenever a
+      call would reach outside the project directory: `kind: "other"`, with a
+      `rawInput` naming the command plus the directories and glob patterns being
+      reached into. The call then arrives as its own `execute`. `cat
+      .fork/GOAL.md` is one `execute`; `cat ~/.bashrc` is an `other` and then an
+      `execute`, and refusing the first means the second is never sent. It
+      resolves paths rather than matching strings — `../warp/.fork/GOAL.md` lands
+      back inside and is a plain `execute`.
+
+      **So T14.9 was wrong that a person cannot tell in advance.** With this
+      agent the predicate is knowable and boring: does the call reach outside the
+      project directory. That correction matters, because "unpredictable" is what
+      made this look like a rule needing to be relaxed.
+
+      **And it is one agent's convention, not a protocol fact.**
+      `claude-agent-acp`, same command, same machine, same day: one request,
+      `kind: "execute"`, approvable today, no precondition. Two agents, opposite
+      behaviour — the same shape as `acp_permission`'s existing finding that the
+      two order their options oppositely, and the same conclusion. Anything that
+      special-cased opencode's payload would read a vendor's habit as meaning.
+
+      **The falsifier that decided it.** Answered `once` for `cat /etc/hostname`
+      (declared pattern `/etc/*`), then asked for `cat /etc/hosts` — same
+      pattern, same session. **It asked again.** So `patterns` describes what is
+      being reached into, not what a yes grants, and for this agent the effect
+      genuinely does stop at the call. Warp still cannot know that:
+      `ToolKind` is `#[serde(other)]`, so an unknown kind string deserializes to
+      the identical `Some(Other)` as a deliberate one. There is no value meaning
+      *"this agent said `other` and meant it"*. **The allowlist stands**; what
+      changed is that its cost is measured rather than assumed.
+
+      **The remedy is in the agent, and it was verified by running.** opencode
+      has `external_directory` as a first-class permission key, alongside `bash`
+      and `edit` — so this is not an unnamed kind at all, it is a permission type
+      ACP has no kind for. With `"permission": {"external_directory": {"/etc/*":
+      "allow"}}` in the project config, the `other` precondition disappears
+      entirely and only the approvable `execute` remains. That is the mirror of
+      the rule this fork already keeps — *Warp cannot make an agent ask* — and
+      the other half is worth saying: **the agent's own config also decides
+      whether what it asks can be answered from Warp.**
+
+      **What was built.** The refusal now states what this build cannot tell
+      rather than what the call does, and names a move. The shipped wording —
+      *"the call's kind is `other`, whose effect this build cannot bound to this
+      one call"* — was not false, and an earlier note in this session that called
+      it false overstated: the code means *cannot determine a bound* and a person
+      reads *the effect is unbounded*, which is Warp implying the call is
+      dangerous about a request to read one file in `~`. Two tests pin the
+      epistemic form and pin that a way forward is named.
+
+      **The second half is done, and it turned out to be the cheap one.**
+      `warpctrl agent approvals` rendered pretty-printed JSON, so answering meant
+      copying an id and a 64-character digest by eye, about thirty-five times in
+      T14.9. It now renders one block per request ending in the exact command
+      that answers it — `warpctrl agent approve|deny '<id>' --digest <d>` — with
+      the yes line omitted for an entry that has no yes and the no line always
+      present. **The digest binding is untouched**, which is the design question
+      the ticket held: the digest still travels, and it is still the digest of
+      what this listing displayed, so an answer to a question the agent has moved
+      on from is still refused. The `--latest` idea is what this makes
+      unnecessary, and it is the one that would have loosened the binding.
+
+      **Not built: the in-panel button.** Still second, and now for a better
+      reason than "it would be greyed out" — the measured friction for the
+      answerable requests was transcription, and that is gone without adding a
+      surface. Whether a button is worth building is now a question about
+      *modality*, which needs another session at length to answer honestly.
+
+      **And verifying it live found a bug that reading never would have.** The
+      first live card said `acts on /home/effatha/git/warp` for `cat
+      ~/.bashrc` — the project directory, for a call reaching outside it. Traced
+      on the wire, one call sends both:
+
+      ```text
+      tool_call           locations=[/home/effatha/git/warp]
+      tool_call_update    locations=[/home/effatha/git/warp]
+      request_permission  locations=[/home/effatha]        <- what is being asked
+      tool_call_update    locations=[/home/effatha/git/warp]
+      ```
+
+      The notifications say where the call *runs*; the request says what it wants
+      to *reach*. T14.6 built the `toolCallId` join because a request arrived with
+      `locations: []` while the notification had the path — the same field, the
+      opposite direction, and the fix did not cover this side. So the remembered
+      value was overriding a request that had answered the question itself, and a
+      consent card was **understating a call's reach**, which is the exact failure
+      `acts_on` exists to prevent. Now the request's own locations win and the
+      join is the fallback; an empty list still means *said nothing* rather than
+      *nowhere*. Re-verified live: the card reads `acts on /home/effatha`.
+
+      **Left alone deliberately:** `acts_on` is not in the approval digest. It is
+      displayed, and the digest is documented as hashing what a person was shown,
+      so the omission looks like an oversight — but a `ParkedRequest` is built
+      once and never mutated, so the value cannot change between a listing and an
+      answer, and adding it would move every digest for no reachable gain.
+      Recorded rather than changed, because the next person to notice deserves
+      the reasoning instead of the discovery.
 
 - [ ] **T14.10** **A turn that has wedged should say so.** Opened by T14.9, which
       lost half an hour to one. A turn with a parked question waits forever *on

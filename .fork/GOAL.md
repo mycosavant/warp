@@ -34,35 +34,45 @@ were both wrong and the real one — the pane starting in `$HOME` — was in nei
 cell of the table. Every candidate below is a guess about which friction
 dominates until a real session ranks them.
 
-**T14.8 second: build whatever T14.9 puts at the top.** The current favourite is
-an in-panel approval control, and it is a well-founded favourite — seven
-permission requests in three turns, each answered by copying an id and a digest.
-But whether the answer is a button, a cheaper way to *address* the pending
-request from a shell, or something the session surfaces that nobody has thought
-of, is exactly what a real run decides.
+**T14.8 second: build whatever T14.9 puts at the top.** ~~The current favourite
+is an in-panel approval control.~~ **Both have now run.** T14.9 moved the
+button off the top; T14.8 then found that the thing above it was not a missing
+capability but a wrong sentence and a missing line of output, and that the
+button's own case was mostly transcription. Two rounds, and neither built what
+was predicted before the run — which is the third time this ordering has paid
+in T14.
 
 ## Ranked by a session rather than by conviction — T14.9 has now run
 
 **The list below used to lead with the button. It does not any more, and the
 reordering is the whole reason T14.9 came first.**
 
-- **Some requests have no yes at all.** `acp_permission` refuses
-  `ToolKind::Other` on a correct rule — an unknown kind's effect cannot be bounded
-  to one call — and it fired **twice on ordinary work in one session**: reading a
-  dependency's source, and `cat /nonexistent-file-xyz`. `git status --short` in
-  the same turn was approvable. The agent decides the kind, so nobody can tell in
-  advance which commands will be answerable, and an unanswerable one parks the
-  turn until somebody denies it. **A button over these would be greyed out**,
-  which is why it is no longer first. T14.8.
+- ~~**Some requests have no yes at all.**~~ **Answered by T14.8, and the answer
+  is that no honest yes exists — but the problem is smaller than it looked.**
+  `other` is what `opencode` sends before any call that would reach *outside the
+  project directory*; everything inside arrives as an ordinary approvable kind,
+  and the agent resolves paths rather than matching strings. So the predicate is
+  knowable in advance, which T14.9 said it was not. `claude-agent-acp` sends the
+  same command as one plain `execute` and never asks this at all. The remedy is
+  a line in the agent's own config (`external_directory` for opencode, verified
+  by running), not a relaxation of Warp's allowlist — which stands, because
+  `#[serde(other)]` makes a deliberate `other` and an unread future kind the
+  same value. What changed is the refusal: it now says what Warp cannot tell
+  rather than implying the call is dangerous, and it names the move.
 - **A wedged turn is silent.** One turn burned 36 minutes: alive, 74s of CPU
   against 2176 elapsed, panel frozen, `agent list` saying `in_progress`
-  throughout. Diagnosed with `ps` and two screenshots. T14.10.
-- **No button.** Still real — roughly thirty-five approvals in a seven-turn
-  session, each answered by copying an id and a 64-character digest. Second half
-  of T14.8.
-- **No cheap addressing.** There is no `--latest`. If most of the cost is
-  transcription rather than modality this wins on effort by an order of
-  magnitude, provided it keeps the digest binding.
+  throughout. Diagnosed with `ps` and two screenshots. T14.10. **Now the top of
+  this list.**
+- ~~**No cheap addressing.**~~ **Done in T14.8, and it absorbed the button's
+  case.** `agent approvals` renders each waiting request as a block ending in
+  the exact `warpctrl agent approve|deny '<id>' --digest <d>` line that answers
+  it — no `--latest`, and the digest binding untouched, because the digest is
+  still the one this listing displayed.
+- **No button.** Still open, but the argument for it is now weaker and narrower:
+  the measured cost of ~35 approvals in a seven-turn session was *transcription*,
+  and that is gone without adding a surface. What remains is a claim about
+  modality, which needs another long session to test honestly rather than a
+  conviction.
 - **The GUI has the information, the CLI has the control, neither has both.** The
   panel streams tool calls and badges the tab `+137 -2`; `agent read` says nothing
   until the turn ends. Driving from the CLI meant photographing a window.

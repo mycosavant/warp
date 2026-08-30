@@ -154,6 +154,58 @@
 //! still selected and still correct, because declining a change leaves the state
 //! where it already was. A no cannot widen anything here either.
 //!
+//! ## What that cost actually is, measured (T14.8)
+//!
+//! The cost named just above — *"an honest agent whose ordinary calls arrive as
+//! `other` gets refused"* — was a prediction when it was written. Run
+//! 2026-08-29 against two live agents, it is real, it belongs to one of them,
+//! and it has a shape.
+//!
+//! `opencode` raises an **extra permission request, before the call itself**,
+//! whenever a call would reach outside the project directory. It arrives with
+//! `kind: "other"` and a `rawInput` naming the command together with the
+//! directories and glob patterns being reached into; the call then arrives as
+//! its own `execute`. So `cat .fork/GOAL.md` is one `execute`, while
+//! `cat ~/.bashrc` is an `other` followed by an `execute` — and refusing the
+//! first means the second is never sent. It resolves paths rather than matching
+//! strings: `../warp/.fork/GOAL.md`, which lands back inside, is a plain
+//! `execute`.
+//!
+//! `claude-agent-acp`, same command, same machine, same day: **one** request,
+//! `kind: "execute"`, approvable today, no precondition at all. So this is one
+//! agent's convention rather than a protocol fact — the same shape as the
+//! opposite option orders above, and the same conclusion follows. A rule that
+//! special-cased opencode's payload would be reading one vendor's habit as
+//! meaning, which is precisely the error `options.first()` already cost.
+//!
+//! Two measurements decide what can honestly be offered.
+//!
+//! **The `other` request's `allow_once` really is call-scoped.** Answered
+//! `once` for `cat /etc/hostname` (declared pattern `/etc/*`), then asked for
+//! `cat /etc/hosts` — same declared pattern, same session — and it asked again.
+//! The `patterns` field describes what is being reached into, not what a yes
+//! grants. For this agent the effect genuinely stops at the call.
+//!
+//! **And Warp still cannot know that.** `ToolKind` is `#[serde(other)]`, so an
+//! unknown kind string deserializes to exactly the same `Some(Other)` as a
+//! deliberate one: there is no value meaning *"this agent said `other` and meant
+//! it"*. Admitting `Other` because this agent's `other` happens to be confined
+//! would admit every kind nobody has read yet — the denylist trap restated one
+//! field over. **The allowlist stands.** What is new is that its cost is
+//! measured rather than assumed.
+//!
+//! So the refusal changed instead of the rule, in two ways. It states what this
+//! build cannot tell rather than what the call does — see
+//! [`unconfined_reason`], which is where the old wording overclaimed. And it
+//! names a move, because the person's real remedy is not in Warp at all:
+//! opencode calls this permission `external_directory`, and one line in the
+//! agent's own config stops the ask from being raised. Measured, with
+//! `"permission": {"external_directory": {"/etc/*": "allow"}}` only the
+//! approvable `execute` survives. That is the mirror of the rule this fork
+//! already keeps — **Warp cannot make an agent ask** — and deserves saying in
+//! the same breath: the agent's own config also decides whether what it asks
+//! can be answered from here.
+//!
 //! ## This amends a constraint written in `TASKS.md`, rather than rereading it
 //!
 //! T14.4's constraint list says **"gate on the method, never on
@@ -214,7 +266,7 @@ const PERMISSION_META_KEY: &str = "permission";
 /// not look, so an absent list is not evidence of an absent declaration.
 const KNOWN_PERMISSION_VERSION: u64 = 1;
 
-/// Why nothing was allowed for a call whose effect this build cannot bound.
+/// Why nothing was allowed for a call this build cannot bound to itself.
 ///
 /// **Names the kind**, and that is load-bearing rather than polite. An allowlist
 /// refuses more than a denylist would, so its wrong answers have to be
@@ -222,6 +274,16 @@ const KNOWN_PERMISSION_VERSION: u64 = 1;
 /// *which* kind was not recognised rather than conclude the flag is broken. That
 /// conclusion is exactly what the T14.2 bug cost, and a silent refusal would earn
 /// it honestly.
+///
+/// **Every sentence here is about what this build knows, never about what the
+/// call does** — T14.8, and it is a correction. The shipped wording was *"the
+/// call's kind is `other`, whose effect this build cannot bound to this one
+/// call"*, which the code means epistemically and a person reads
+/// ontologically: as Warp saying the call is unbounded, which is to say
+/// dangerous. Measured, the commonest real `other` is an agent asking to read a
+/// file one directory outside the project. Warp has no idea whether that is
+/// dangerous and should not imply that it does; the honest refusal says it
+/// cannot tell, and says what the person can do instead.
 fn unconfined_reason(request: &RequestPermissionRequest) -> String {
     match request.tool_call.fields.kind {
         Some(ToolKind::SwitchMode) => {
@@ -230,9 +292,19 @@ fn unconfined_reason(request: &RequestPermissionRequest) -> String {
              the session keeps the policy it already had."
                 .to_owned()
         }
+        Some(ToolKind::Other) => {
+            "the call's kind is `other`, which the protocol leaves without a meaning — and it is \
+             also where a kind this build has never heard of arrives, so the word says nothing \
+             about what a yes here would cover. This is not a claim that the call is dangerous \
+             — Warp cannot tell, so it declines rather than guess. Denying works, so \
+             does cancelling the turn, and an agent that asks this for ordinary work can usually \
+             be configured to stop asking — its config decides that, not Warp's."
+                .to_owned()
+        }
         Some(kind) => format!(
-            "the call's kind is `{}`, whose effect this build cannot bound to this one call, so \
-             Warp declines; a kind it knows would have been answered.",
+            "the call's kind is `{}`, which this build has no meaning for, so it cannot tell \
+             whether a yes here stops at this call and declines rather than guess; a kind it \
+             knows would have been answered.",
             tool_kind_name(kind)
         ),
         None => {

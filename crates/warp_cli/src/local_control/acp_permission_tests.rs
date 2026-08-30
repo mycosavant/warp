@@ -306,6 +306,59 @@ fn a_refusal_for_an_unrecognised_kind_names_it() {
     );
 }
 
+/// The refusal describes what Warp knows, never what the call does (T14.8).
+///
+/// The shipped wording said the kind's "effect this build cannot bound to this
+/// one call". The code meant *cannot determine a bound*; a person reads *the
+/// effect is unbounded*, which is Warp calling the call dangerous. Measured
+/// against a live agent, the commonest `other` is a request to read one file
+/// outside the project directory — Warp has no idea whether that is dangerous
+/// and must not imply it does, because a refusal that overstates its grounds is
+/// how a person learns to route around the refusal.
+#[test]
+fn an_unknown_kind_is_refused_without_calling_the_call_dangerous() {
+    for kind in [Some(ToolKind::Other), None] {
+        let mut request = as_claude_asked_to_leave_plan_mode();
+        request.tool_call.fields.kind = kind;
+
+        let Choice::Cancel { reason } = choose(&request, Decision::Allow) else {
+            panic!("{kind:?} is refused");
+        };
+
+        assert!(
+            reason.contains("cannot tell"),
+            "the reason should say Warp cannot tell, got: {reason}"
+        );
+        for overclaim in ["dangerous;", "is unbounded", "unsafe"] {
+            assert!(
+                !reason.contains(overclaim),
+                "{overclaim:?} claims something about the call rather than about this \
+                 build's knowledge, got: {reason}"
+            );
+        }
+    }
+}
+
+/// A refusal a person can act on. `--approve` and the approval card both show
+/// this sentence and nothing else, and the measured cost of the old one was a
+/// turn that parked while its operator worked out that denying was the only
+/// move available. Naming the move is the difference between a refusal and a
+/// dead end.
+#[test]
+fn the_refusal_for_an_unknown_kind_names_a_way_forward() {
+    let mut request = as_claude_asked_to_leave_plan_mode();
+    request.tool_call.fields.kind = Some(ToolKind::Other);
+
+    let Choice::Cancel { reason } = choose(&request, Decision::Allow) else {
+        panic!("an unrecognised kind is refused");
+    };
+
+    assert!(
+        reason.contains("Denying works"),
+        "the reason should say what still works, got: {reason}"
+    );
+}
+
 /// The regression. `options.first()` here is **Deny**, so the old code answered
 /// an approval by refusing it — and did so silently, reporting success.
 #[test]

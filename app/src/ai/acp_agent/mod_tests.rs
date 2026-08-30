@@ -277,6 +277,48 @@ fn parked(acts_on: Vec<String>) -> registry::ParkedRequest {
     park_this(&an_executable_request(as_opencode_sent_it()), acts_on)
 }
 
+/// The request's own locations outrank the remembered ones (T14.8).
+///
+/// Measured live: one `cat ~/.bashrc` from a pane in the repo produced
+/// notifications carrying the *working directory* and a permission request
+/// carrying `/home/effatha` — the path it actually wanted to reach. Taking the
+/// remembered value told a person the call acted inside the project. The join
+/// still covers the T14.6 case below; it just no longer overrides a request that
+/// answered the question itself.
+#[test]
+fn a_request_that_states_its_own_locations_is_believed_over_the_remembered_ones() {
+    let mut asked = an_executable_request(as_opencode_sent_it());
+    asked.tool_call.fields.locations = Some(vec![
+        agent_client_protocol::schema::v1::ToolCallLocation::new("/home/effatha"),
+    ]);
+
+    let stated = stated_locations(&asked);
+
+    assert_eq!(
+        stated,
+        Some(vec!["/home/effatha".to_owned()]),
+        "the request said where it would reach, so that is what a person is shown"
+    );
+}
+
+/// A request that stated nothing falls back to the join, and an empty list is
+/// "said nothing" rather than "nowhere" — the distinction T14.6 built
+/// `locations_for` around.
+#[test]
+fn a_request_that_states_no_location_leaves_the_join_in_charge() {
+    let mut silent = an_executable_request(as_opencode_sent_it());
+    silent.tool_call.fields.locations = None;
+    assert_eq!(stated_locations(&silent), None);
+
+    let mut empty = an_executable_request(as_opencode_sent_it());
+    empty.tool_call.fields.locations = Some(Vec::new());
+    assert_eq!(
+        stated_locations(&empty),
+        None,
+        "an empty list is the agent saying nothing, not the call acting nowhere"
+    );
+}
+
 /// The note tells a person where the call acts, when the agent said.
 ///
 /// The `toolCallId` join exists for this sentence. Without it the note names a

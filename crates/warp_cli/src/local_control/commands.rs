@@ -3,14 +3,15 @@ use std::path::Path;
 
 use local_control::discovery::InstanceRecord;
 use local_control::protocol::{
-    Action, ActionKind, ActionNameParams, AgentApproveParams, AgentCancelParams, AgentPromptParams,
-    AgentReadParams, AgentRevealParams, AgentRevealTarget, AgentSettleParams, AgentSpawnParams,
-    BindingNameParams, BooleanValueParams, ColorValueParams, ControlError, DirectionParams,
-    DriveObjectCreateParams, DriveObjectGetParams, DriveObjectListParams, DriveObjectTrashParams,
-    EmptyParams, ErrorCode, EventStreamResult, FileOpenParams, KeyParams, KeyValueParams,
-    PageQueryParams, QueryParams, RemoteWslConnectParams, RenameParams, RequestEnvelope,
-    ResizeParams, SettingListParams, SlashRunParams, TabActivateParams, TabActivationMode,
-    TabCloseMode, TabCloseParams, TabCreateParams, TextParams, ThemeNameParams,
+    Action, ActionKind, ActionNameParams, AgentApprovalsResult, AgentApproveParams,
+    AgentCancelParams, AgentPromptParams, AgentReadParams, AgentRevealParams, AgentRevealTarget,
+    AgentSettleParams, AgentSpawnParams, BindingNameParams, BooleanValueParams, ColorValueParams,
+    ControlError, DirectionParams, DriveObjectCreateParams, DriveObjectGetParams,
+    DriveObjectListParams, DriveObjectTrashParams, EmptyParams, ErrorCode, EventStreamResult,
+    FileOpenParams, KeyParams, KeyValueParams, PageQueryParams, QueryParams,
+    RemoteWslConnectParams, RenameParams, RequestEnvelope, ResizeParams, SettingListParams,
+    SlashRunParams, TabActivateParams, TabActivationMode, TabCloseMode, TabCloseParams,
+    TabCreateParams, TextParams, ThemeNameParams,
 };
 use local_control::selection::select_instance;
 use serde::Serialize;
@@ -164,8 +165,104 @@ fn render_human_readable(action: ActionKind, data: &serde_json::Value) -> String
             "Split created pane {}",
             nested_value_or_unknown(data, &["pane", "id"])
         ),
+        ActionKind::AgentApprovals => render_approvals(data),
         _ => serde_json::to_string_pretty(data).unwrap_or_else(|_| data.to_string()),
     }
+}
+
+/// One block per waiting request, ending in the command that answers it.
+///
+/// **The command is printed because transcription was the measured cost.**
+/// T14.9 answered about thirty-five requests in a working session, each by
+/// copying an `approval_id` and a 64-character digest out of pretty-printed
+/// JSON and into a shell. That is the whole of the friction for the answerable
+/// ones — not the modality — so printing the line a person would have typed
+/// removes it without adding a surface.
+///
+/// **And it removes nothing from the binding.** The digest still travels, and it
+/// is still the digest of what was displayed *in this listing*: if the agent
+/// moved on between the reading and the answer, the hash no longer fits and the
+/// answer is refused. Copying a printed line and typing the same line are the
+/// same act to the server, which is the property that makes this a convenience
+/// rather than a loosening. The alternative that would have loosened it — a
+/// `--latest` that addresses whatever is pending with no digest at all — is the
+/// one this is written to make unnecessary.
+///
+/// Falls back to the raw JSON if the payload does not parse, because a renderer
+/// is not a place to lose data a person asked for.
+fn render_approvals(data: &serde_json::Value) -> String {
+    let Ok(result) = serde_json::from_value::<AgentApprovalsResult>(data.clone()) else {
+        return serde_json::to_string_pretty(data).unwrap_or_else(|_| data.to_string());
+    };
+    if result.approvals.is_empty() {
+        // Says what empty means. An agent is free to ask nothing at all, so this
+        // is not evidence that nothing is running.
+        return "Nothing is waiting on you right now.".to_owned();
+    }
+
+    let mut out = String::new();
+    for (index, approval) in result.approvals.iter().enumerate() {
+        if index > 0 {
+            out.push('\n');
+        }
+        out.push_str(&format!(
+            "[{}] {} — {}\n",
+            approval.source,
+            approval.agent,
+            approval.summary.as_deref().unwrap_or("(no summary given)")
+        ));
+        if let Some(tool) = &approval.tool_name {
+            out.push_str(&format!("  tool      {tool}\n"));
+        }
+        if let Some(input) = &approval.tool_input {
+            out.push_str(&format!("  the call  {input}\n"));
+        }
+        // "not stated" rather than falling back to `cwd`: presenting Warp's own
+        // session directory as the call's is the certainty this fork does not
+        // have, and `acts_on` exists precisely to keep them apart.
+        out.push_str(&format!(
+            "  acts on   {}\n",
+            if approval.acts_on.is_empty() {
+                "not stated by the agent".to_owned()
+            } else {
+                approval.acts_on.join(", ")
+            }
+        ));
+        if !approval.options_offered.is_empty() {
+            out.push_str(&format!(
+                "  offered   {}\n",
+                approval.options_offered.join(", ")
+            ));
+        }
+        // **Gated on `can_approve`, not on whether a reason came with it** —
+        // T14.6's finding, which cost a phone a *Yes* button on rows that could
+        // never work. The reason is an explanation attached to that fact, not
+        // the fact itself, so an entry refused without one must still not be
+        // offered a yes. It is only ever missing if a server neglected to write
+        // one, which is why there is a sentence to fall back to.
+        if approval.can_approve {
+            out.push_str(&format!(
+                "  yes       warpctrl agent approve '{}' --digest {}\n",
+                approval.approval_id, approval.digest
+            ));
+        } else {
+            out.push_str(&format!(
+                "  no yes    {}\n",
+                approval.approve_refused_because.as_deref().unwrap_or(
+                    "Warp will not say yes to this request, and did not say why. Denying works, \
+                     and so does cancelling the turn."
+                )
+            ));
+        }
+        // Always offered, and last, because a no is the answer that can only
+        // ever make less happen — the asymmetry `agent.deny` is built on.
+        out.push_str(&format!(
+            "  no        warpctrl agent deny '{}' --digest {}\n",
+            approval.approval_id, approval.digest
+        ));
+    }
+    out.pop();
+    out
 }
 
 fn value_or_unknown(data: &serde_json::Value, key: &str) -> String {

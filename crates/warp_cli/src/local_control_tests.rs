@@ -304,6 +304,132 @@ fn renders_human_readable_tab_create_output() {
     );
 }
 
+/// The listing ends in the command that answers it (T14.8).
+///
+/// Pinned because the digest is the part that is easy to drop while "making it
+/// friendlier": a listing that names the request without carrying its digest
+/// forward would push a person toward an addressing scheme that has none, which
+/// is exactly the loosening the digest exists to prevent.
+#[test]
+fn renders_an_approvable_request_with_the_command_that_answers_it() {
+    let rendered = render_human_readable_for_test(
+        local_control::protocol::ActionKind::AgentApprovals,
+        &json!({
+            "approvals": [{
+                "approval_id": "turn-1:7",
+                "agent": "opencode",
+                "source": "acp",
+                "kind": "permission",
+                "summary": "git status --short",
+                "tool_name": "execute",
+                "tool_input": "{\"command\":\"git status --short\"}",
+                "acts_on": [],
+                "options_offered": ["Allow once", "Always allow", "Reject"],
+                "digest": "abc123",
+                "can_approve": true,
+                "approve_selects": "once"
+            }]
+        }),
+    );
+
+    assert!(
+        rendered.contains("warpctrl agent approve 'turn-1:7' --digest abc123"),
+        "a yes should be one paste, got:\n{rendered}"
+    );
+    assert!(
+        rendered.contains("warpctrl agent deny 'turn-1:7' --digest abc123"),
+        "a no is always offered, got:\n{rendered}"
+    );
+    assert!(
+        rendered.contains("not stated by the agent"),
+        "an empty acts_on says so rather than borrowing cwd, got:\n{rendered}"
+    );
+}
+
+/// A request Warp will not say yes to shows the reason and no yes line — and
+/// still shows the no. The measured failure it guards is a turn that parked
+/// while its operator worked out that denying was the only move left.
+#[test]
+fn renders_an_unapprovable_request_with_its_reason_and_only_a_no() {
+    let rendered = render_human_readable_for_test(
+        local_control::protocol::ActionKind::AgentApprovals,
+        &json!({
+            "approvals": [{
+                "approval_id": "turn-1:9",
+                "agent": "opencode",
+                "source": "acp",
+                "kind": "permission",
+                "summary": "cat /etc/hostname",
+                "tool_name": "other",
+                "tool_input": "{\"command\":\"cat /etc/hostname\"}",
+                "acts_on": ["/etc"],
+                "options_offered": ["Allow once", "Always allow", "Reject"],
+                "digest": "def456",
+                "can_approve": false,
+                "approve_refused_because": "the call's kind is `other`, so Warp cannot tell."
+            }]
+        }),
+    );
+
+    assert!(
+        !rendered.contains("agent approve"),
+        "no yes may be offered for an entry that has none, got:\n{rendered}"
+    );
+    assert!(
+        rendered.contains("warpctrl agent deny 'turn-1:9' --digest def456"),
+        "a no must still be one paste, got:\n{rendered}"
+    );
+    assert!(
+        rendered.contains("Warp cannot tell"),
+        "the reason reaches the person, got:\n{rendered}"
+    );
+}
+
+/// The yes is gated on `can_approve`, not on a reason being present.
+///
+/// T14.6's bug, one surface over: the console drew its *Yes* from a per-device
+/// fact with no per-entry check, so a phone showed a button on rows that could
+/// never work. An entry refused without an explanation is still refused, and a
+/// renderer that keyed on the explanation would reintroduce exactly that.
+#[test]
+fn offers_no_yes_for_an_unapprovable_request_that_gave_no_reason() {
+    let rendered = render_human_readable_for_test(
+        local_control::protocol::ActionKind::AgentApprovals,
+        &json!({
+            "approvals": [{
+                "approval_id": "turn-1:11",
+                "agent": "codex",
+                "source": "pane",
+                "kind": "permission",
+                "summary": "rm -rf /",
+                "digest": "aaa",
+                "can_approve": false
+            }]
+        }),
+    );
+
+    assert!(
+        !rendered.contains("agent approve"),
+        "can_approve false is the gate, with or without a reason, got:\n{rendered}"
+    );
+    assert!(
+        rendered.contains("did not say why"),
+        "an unexplained refusal still says something, got:\n{rendered}"
+    );
+}
+
+/// Empty says what empty means. An agent is free to ask nothing at all, so this
+/// is not evidence that nothing is running.
+#[test]
+fn renders_an_empty_approval_list_as_a_sentence() {
+    let rendered = render_human_readable_for_test(
+        local_control::protocol::ActionKind::AgentApprovals,
+        &json!({ "approvals": [] }),
+    );
+
+    assert_eq!(rendered, "Nothing is waiting on you right now.");
+}
+
 fn retained_action_examples() -> Vec<(ActionKind, Vec<&'static str>)> {
     vec![
         (

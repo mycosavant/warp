@@ -423,7 +423,7 @@ async fn exchange(
                 // One lock for all three, because the locations join reads state
                 // the notification handler writes — taking the lock twice would
                 // leave a window where a `tool_call_update` lands between them.
-                let (turn, session, acts_on) = emit(translator, |t| {
+                let (turn, session, remembered) = emit(translator, |t| {
                     (
                         t.request_id(),
                         t.session_id(),
@@ -431,6 +431,7 @@ async fn exchange(
                             .unwrap_or_default(),
                     )
                 });
+                let acts_on = stated_locations(&request).unwrap_or(remembered);
                 let parked = parked_request(
                     responder.id(),
                     &turn,
@@ -613,6 +614,43 @@ fn package_name(spec: &str) -> String {
         .next()
         .unwrap_or(without_version)
         .to_owned()
+}
+
+/// Where *this request* said it would act, if it said at all.
+///
+/// **Preferred over the remembered locations, and T14.8 is why.** The join in
+/// [`Translator::locations_for`] exists because T14.6 measured a request
+/// arriving with `locations: []` while the notification for the same
+/// `toolCallId` had the real path. Measured 2026-08-29, the same call can go the
+/// other way and the stakes are worse:
+///
+/// ```text
+/// tool_call        locations=[/home/effatha/git/warp]
+/// tool_call_update locations=[/home/effatha/git/warp]
+/// request_permission  locations=[/home/effatha]        <- what is being asked
+/// tool_call_update locations=[/home/effatha/git/warp]
+/// ```
+///
+/// One `cat ~/.bashrc` from a pane in the repo. The notifications describe where
+/// the call *runs*; the request describes what it wants to *reach*, which is the
+/// whole reason it is being asked. Taking the remembered value showed a person
+/// `acts on /home/effatha/git/warp` for a call reaching outside it — a card
+/// understating a call's reach, which is the exact failure `acts_on` was built
+/// to prevent, arriving from the direction the fix did not cover.
+///
+/// `None` when the request stated nothing, which is the T14.6 case and is what
+/// the join is still there for. An empty list is `None`: an agent that sends
+/// `locations: []` has said nothing, not "nowhere".
+fn stated_locations(request: &RequestPermissionRequest) -> Option<Vec<String>> {
+    let stated = request
+        .tool_call
+        .fields
+        .locations
+        .as_ref()?
+        .iter()
+        .map(|location| location.path.to_string_lossy().into_owned())
+        .collect::<Vec<_>>();
+    (!stated.is_empty()).then_some(stated)
 }
 
 /// Describes one permission request the way the control plane needs it.

@@ -109,7 +109,7 @@ upstream and rebasable.
 | `app/src/fork.rs` | **the policy seam.** `is_active()`, `FORCE_ENABLED`/`FORCE_DISABLED` feature flags, and ~a dozen predicates (`local_agent_enabled`, `local_drive_enabled`, `account_gate_bypassed`, …). Start here. |
 | `crates/http_client/src/egress.rs` | the telemetry deny-list. The "nothing escapes" claim rests on this. |
 | `app/src/ai/local_agent/` | a local implementation of the one agent-transport function, answering from the `claude` CLI. |
-| `app/src/ai/acp_agent/` | the same function again, answering from **whatever agent `WARP_FORK_ACP_COMMAND` names**, over the Agent Client Protocol (T14.5). It denies every permission request it receives — but **that is not read-only and must never be described as it**: measured, an agent at its own defaults wrote a file and asked nothing, so Warp denied nothing. |
+| `app/src/ai/acp_agent/` | the same function again, answering from **whatever agent `WARP_FORK_ACP_COMMAND` names**, over the Agent Client Protocol (T14.5). It denies every permission request it receives — but **that is not read-only and must never be described as it**: measured, an agent at its own defaults wrote a file and asked nothing, so Warp denied nothing. T14.8 names that mechanism: `claude-agent-acp` starts in session mode **`auto`**, which it describes itself as *"use a model classifier to approve/deny permission prompts"* — so the thing deciding was a model, and Warp was never in the loop. `session/set_mode` to `default` is what makes it ask. |
 | `app/src/drive/local_sync/` | account-free Warp Drive: snapshot, apply, git-backed sync. |
 | `app/src/ai/mcp/tool_digest.rs` | what each MCP server's tools claimed to be, hashed at connect. The tool rug-pull warning rests on this. |
 | `app/src/local_control/console.*` | the console (T12) — the fork's **only** browser-reachable surface. Four unauthenticated routes serving four constants (page, script, manifest, icon), under `default-src 'none'; script-src 'self'`. The script never assigns `innerHTML` and a test pins that; keep it that way, because everything it draws was authored by an agent. **After editing it run `node --check app/src/local_control/console.js`** — it is `include_str!`d, so a syntax error compiles fine, passes every Rust test, and breaks the whole page at runtime. And remember the page draws from `PendingApproval`: a control there must be gated on what the *entry* permits, not only on what the device may do (T14.6). |
@@ -210,6 +210,21 @@ the fork's consent surface reachable at all: **Warp cannot make an agent ask.**
 The agent's own config decides *when* to ask; Warp decides only where the ask
 lands and who may answer it. Committing that config is how the repo stops
 depending on ambient settings for its own safety.
+
+**A request Warp will not answer is usually the agent asking to leave the
+project directory — and that is the agent's setting, not Warp's bug.**
+`acp_permission` says yes only to tool kinds whose spec meaning stops at the
+call, so `other` is refused. Measured T14.8: `other` is exactly what `opencode`
+sends *before* any call that would reach outside the project. `cat
+.fork/GOAL.md` is one `execute` and is answerable; `cat ~/.bashrc` is an `other`
+followed by an `execute`, and refusing the first means the second never arrives.
+It resolves paths, so `../warp/...` back inside is a plain `execute`. The remedy
+lives in the agent: opencode calls this permission `external_directory`, and
+`"permission": {"external_directory": {"/path/*": "allow"}}` in the project's
+`opencode.json` stops the ask being raised at all — verified by running.
+`claude-agent-acp` sends the same command as one `execute` and never asks this,
+so **which requests are answerable is a fact about the agent you named**. Check
+that before suspecting Warp when a session stalls on ordinary work.
 
 **An agent in the panel works in the *pane's* directory, and a fresh pane
 starts in `$HOME`.** Not in the directory Warp was launched from. Both agent

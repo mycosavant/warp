@@ -1151,9 +1151,15 @@ pub struct AgentCancelArgs {
 pub struct AgentApproveArgs {
     /// The `approval_id` from `warpctrl agent approvals`.
     ///
-    /// It is a pane id, and it is not spelled `--pane` because that flag
-    /// already means "which pane to address this request to" for every other
-    /// command. This is the subject, not the route.
+    /// Not spelled `--pane`, because that flag already means "which pane to
+    /// address this request to" for every other command. This is the subject,
+    /// not the route.
+    ///
+    /// **And it is not always a pane.** It is one for a CLI agent in a pane,
+    /// where the pane is the only handle both ends share; for an ACP request it
+    /// is `{turn}:{rpc_id}`, because a JSON-RPC id is unique only within one
+    /// connection. Read it off the entry rather than constructing it — the two
+    /// populations are told apart by `source`, which the server states.
     pub approval: String,
 
     /// The `digest` that `agent approvals` reported for this request.
