@@ -650,6 +650,52 @@ producing a stale saved URL. `WARP_FORK_CONTROL_BIND=192.168.254.3:41234`.
 `no_instance` is the whole diagnosis; a phone that cannot load the page tells you
 nothing about why until you know there was something to load.
 
+**What the pairing path does and does not defend — three corrections, audited
+2026-08-30.** Each was believed in this session before it was read:
+
+- **The control server is plaintext HTTP.** `pairing.rs:288` builds
+  `http://{origin}{path}#{secret}` and `discovery.rs:82` the same; there is no
+  TLS anywhere in the control plane. On a home LAN that is an accepted residual.
+  It is *not* survivable across the internet, and no amount of digest discipline
+  fixes it: the token and every approval payload are in the clear.
+- **`tool_digest.rs` contributes nothing to this threat model.** It is TOFU
+  pinning of **MCP tool definitions** — it hashes what a server advertised at
+  connect, diffs on the next connect, and *warns*; its own docs say
+  "deliberately not a block". It never sees an approval, a paired device or a
+  network path. The digest that guards a phone's yes is `digest_of` in
+  `handlers/approvals.rs`, a different mechanism that merely shares a shape. Do
+  not credit one for the other's job.
+- **And the approval digest does not defend against an active network
+  attacker.** It binds a yes to the request *the server showed*, which stops a
+  stale phone answering yesterday's prompt — genuinely valuable. But it is
+  computed server-side and echoed back, so a MITM on a plaintext path can show
+  the phone a benign summary beside the real digest and the thumb binds
+  perfectly to the nasty request. **It binds server-state to server-state; it
+  never binds what the human saw.**
+
+The remedy for all three is transport encryption the fork does not have. A
+Tailscale address is *one literal IP* and so fits `WARP_FORK_CONTROL_BIND`'s
+parser unchanged — binding it is **narrower** than the LAN bind, not wider, and
+retires the mirrored-networking firewall rule. Prefer it as a *replacement*
+bind, never an addition, and never a port-forward.
+
+**`DEVICE_LIFETIME` is 12 hours** (`pairing.rs:116`), so a phone paired at
+breakfast is unpaired by dinner, and re-pairing needs a locally-authenticated
+`warpctrl` to mint the code. Plan for that before relying on a paired phone for
+a working day.
+
+**A git worktree is workflow insulation, not security insulation, and calling it
+"insulated space" for an agent is actively misleading.** An agent with shell
+access in a worktree runs as the same UID, sees the same `$HOME`, the same
+`~/.ssh`, the same discovery records and credential broker, and can `cd`
+anywhere. Security insulation is a boundary the *kernel* enforces on the
+process; a directory choice enforces nothing. And the worktree habit carries the
+measured `CARGO_TARGET_DIR` hazard recorded above, so it costs something real
+while delivering none of the benefit it is reached for. Whatever sandbox is
+available is a **word until one calibrated test** — a sandboxed command
+attempting a write outside the project and a network call, both confirmed to
+fail — has been run.
+
 **There is a browser, and it is on the Windows side.** `/mnt/c/Program Files`
 holds Firefox, Brave and Zen, and Windows reaches the WSL wide listener — so a
 page served by `WARP_FORK_CONTROL_BIND` can be loaded in a real engine and
