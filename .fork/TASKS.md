@@ -7907,6 +7907,52 @@ mode descriptions is the first legitimate instance of `acp_permission.rs`'s
       Recorded rather than worked around. The harness and its calibration are
       kept at `tmp/t1411/answer.py` for whenever the question is settled.
 
+      **Attempted again 2026-08-30, and the verdict is now settled: T14.11 is
+      person-present by construction. It is not unreachable — it is two taps
+      away the moment someone is at the T14.16 button — so it stays open for
+      that person rather than being rewritten.**
+
+      All three doors to an unattended commit are shut, and checking the third is
+      what makes this a verdict rather than a repeat of last night's block:
+
+      1. **Answering the prompts** — refused by the orchestrating session's
+         permission layer, as before, and correctly.
+      2. **`claude-agent-acp` in its default `auto` mode** — it would edit and
+         commit with **zero** requests ever reaching Warp, because a model
+         classifier answers them. That is precisely the hole T14.18 documented,
+         and *choosing* the agent-and-mode that never asks is routing around the
+         refusal, which the charter names verbatim as "the whole safeguard
+         defeated". Setting `WARP_FORK_ACP_MODE=default` shuts the door the other
+         way: the agent then asks, and with no answerer it wedges on turn one.
+         **So the flagship agent is unusable unattended in both directions**, and
+         that is a property of the consent design working, not a defect.
+      3. **Widening `opencode.json`** — the permission-posture freeze covers
+         exactly this, and names it as the 3am trap.
+
+      **So the run was rebooked as T14.13's measurement** — the one thing nobody
+      had ever observed, and the one that uniquely suits an unattended run because
+      length is cheap when nobody is waiting. It found the compaction result
+      recorded there. The friction log's substance is in that as-built and in this
+      entry; the raw turn timings, the denied approval cards and the panel
+      screenshot were scratch artifacts and are not kept.
+
+      **What the run says about T14.11's own success condition.** GOAL.md defines
+      success as a friction log with *nothing that stops a turn*. Two things stop
+      turns today and neither is about the commit:
+
+      - **A denial landing early in a turn kills it.** Measured both ways in one
+        session: an ask at the tail, after the answer was assembled, cost nothing;
+        an ask at the head, 8 seconds in, produced 871 characters and no answer.
+        The cost of a *no* depends on when it arrives, which the person answering
+        does not control.
+      - **The agent compacts every five or six turns and says nothing** (T14.13).
+        A person driving a real day would lose the early turns silently, which is
+        worse than a stopped turn because it does not announce itself.
+
+      The second is the reason to run T14.11 *after* T14.13's disclosure lands
+      rather than before it. A working day measured across three invisible
+      compactions would produce a friction log nobody could trust.
+
 - [x] **T14.12** **~~`agent read` should say something before the turn ends.~~
       It already does. The premise was false, and measuring it first is the only
       reason nothing was built.** Run 2026-08-29, before any code.
@@ -7945,6 +7991,61 @@ mode descriptions is the first legitimate instance of `acp_permission.rs`'s
       it would be a guess. Note the protocol angle: an agent that resumes through
       `session/load` replays *its own* history, so whose context fills first —
       Warp's or the agent's — is itself an open question.
+
+      **Measured 2026-08-30, and the answer is a fourth option the ticket did not
+      list. It is not graceful and it is not a wall — it is silent divergence,
+      and Warp is not involved.**
+
+      Twenty-one exchanges against `opencode` 1.18.25 in the panel, ~160,000
+      characters of assistant output, a doc-vs-code drift audit as the payload.
+      Then the probe: recall, *without re-reading*, the first three claims you
+      audited — and if you cannot, say so explicitly.
+
+      > "I cannot recall them. At the very start of this conversation the only
+      > record I have is **the work-state block I was handed** … It was consumed
+      > before this session's visible window, not regenerated."
+
+      The agent had compacted **itself**, replacing eleven turns with a summary of
+      its own writing. Three instruments agree on what Warp did about it:
+
+      | | |
+      |---|---|
+      | Warp's transcript | **fully intact** — 21 exchanges, 159,747 chars, turn 1 verbatim |
+      | the event log | **no signal.** Zero events matching compact/context/limit/truncate/summary; only `tool_start` ×90, `tool_complete` ×90, `stop` ×21, `prompt_submit` ×20 |
+      | the panel, screenshotted | a complete scrollable conversation, **no banner, no indicator of any kind** |
+
+      **So the two sides diverge and nothing says so.** Warp holds the whole
+      record; the agent answering holds a summary. The panel renders Warp's copy,
+      so a person sees eleven turns the agent cannot and has every reason to
+      assume otherwise. The answers stay fluent and confident throughout, which is
+      what makes it dangerous rather than merely lossy.
+
+      **And it is not a cliff, it is a metronome.** `opencode`'s own log records
+      `agent=compaction`; correlated against turn completion times, it fired
+      during exchanges **8, 14 and 19** — every five or six turns, the first by
+      turn eight. So this is not something a long day eventually reaches. **T14.9's
+      seven-turn session sat right at the first boundary**, which means the
+      friction log this entire phase was built on was taken across a compaction
+      nobody knew had happened.
+
+      **This reframes the ticket rather than answering it.** T14.13 was written as
+      *"`local_agent` handles compaction; the ACP path has no `/compact` and no
+      idea how close it is"*, assuming the fork's job is to **manage** the limit.
+      It cannot: compaction happens inside someone else's process, on its own
+      policy, and **ACP defines no update kind to carry the news** —
+      `SessionNotification` has nowhere to put it. The achievable job is narrower
+      and is the shape T14.18 just used for modes: **detect the divergence and
+      disclose it.** Warp knows how many exchanges it holds and can say when that
+      is more than the agent is likely carrying; it cannot know the truth without
+      a protocol signal that does not exist. The finding worth carrying upstream
+      is *"an ACP agent has no way to report that it compacted"*.
+
+      **Named, not assumed.** Whether `claude-agent-acp` compacts on the same
+      cadence is **unmeasured** — it has its own policy, and this run deliberately
+      did not use it (see T14.11). The detector above is **unbuilt and
+      unverified**. `providerID=opencode modelID=big-pickle` in the same log
+      settles a side question: this run billed opencode's hosted model, not the
+      user's Claude subscription.
 
 - [ ] **T14.14** **Let a person choose the model the agent uses.**
       `session/load`'s reply carries `configOptions`, which measured against a

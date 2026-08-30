@@ -100,9 +100,26 @@ Opening one usually means touching both, plus `app/src/fork.rs`.
 
 **Prefer `fork::FORCE_ENABLED` to editing a flag list.** It sets a *user
 preference*, and `FeatureFlag::is_enabled` resolves override → user preference →
-channel state. So it outranks every `#[cfg]` and every channel list without
-touching an upstream file — which is why I16 needed no edit to
-`warp_features/src/lib.rs` despite the flag being `#[cfg(not(windows))]` there.
+channel state. So it outranks every **channel list** without touching an upstream
+file — which is why I16 needed no edit to `warp_features/src/lib.rs` despite the
+flag being `#[cfg(not(windows))]` there.
+
+**But it does not outrank every `#[cfg]`, and this line said it did until
+2026-08-30.** Audited from the panel, the claim is true for one kind of `#[cfg]`
+and false for another, and the difference decides whether a session is wasted:
+
+- **A `#[cfg]` on a flag-list *entry*** — `DOGFOOD_FLAGS`/`PREVIEW_FLAGS`/
+  `RELEASE_FLAGS` membership. The preference wins, because the enum variant
+  itself is un-gated and the preference resolves at step 2 of `is_enabled`
+  (`crates/warp_features/src/lib.rs:1088`). This is the I16 case.
+- **A `#[cfg]` that removes *code*** — at the consumer call site, on a
+  cargo-feature-gated module, or on an enum variant absent from this build. A
+  runtime preference structurally cannot reach these. `FORCE_ENABLED` resurrects
+  a flag slot; it cannot conjure code the linker removed.
+
+The failure mode is the silent one this file exists to warn about: the build is
+clean, nothing changes, and there is no error to search for. When a flag looks
+gated, check **which** kind you have before reaching for `FORCE_ENABLED`.
 
 ## Prefer the smallest thing that is still the idea
 
@@ -126,7 +143,7 @@ upstream and rebasable.
 | `app/src/drive/local_sync/` | account-free Warp Drive: snapshot, apply, git-backed sync. |
 | `app/src/ai/mcp/tool_digest.rs` | what each MCP server's tools claimed to be, hashed at connect. The tool rug-pull warning rests on this. |
 | `app/src/local_control/console.*` | the console (T12) — the fork's **only** browser-reachable surface. Four unauthenticated routes serving four constants (page, script, manifest, icon), under `default-src 'none'; script-src 'self'`. The script never assigns `innerHTML` and a test pins that; keep it that way, because everything it draws was authored by an agent. **After editing it run `node --check app/src/local_control/console.js`** — it is `include_str!`d, so a syntax error compiles fine, passes every Rust test, and breaks the whole page at runtime. And remember the page draws from `PendingApproval`: a control there must be gated on what the *entry* permits, not only on what the device may do (T14.6). |
-| `app/src/local_control/`, `crates/local_control/`, `crates/warp_cli/src/local_control/` | the `warpctrl` control plane, 114 actions. The count is pinned by **two** tests in different crates — update both, and never loosen either. **This line said 109 for two phases**: T11.2 took it to 110, T11.4 to 111 and T11.5 to 114, and each updated the pins without updating this table. Read the count off `catalog_has_exactly_N_retained_actions`, never off prose. |
+| `app/src/local_control/`, `crates/local_control/`, `crates/warp_cli/src/local_control/` | the `warpctrl` control plane, 114 actions. The count is pinned by **two** tests in different crates — update both, and never loosen either. **This line said 109 for two phases**: T11.2 took it to 110, T11.4 to 111 and T11.5 to 114, and each updated the pins without updating this table. Read the count off the test, never off prose — and grep for `fn catalog_has_exactly`, because the test's own name embeds the number and so goes stale on exactly the schedule this warning is about. |
 | `app/src/remote_server/wsl_transport.rs`, `crates/remote_server/src/wsl.rs` | the second `RemoteTransport`: Warp's remote-development server, in a WSL distro instead of over SSH. |
 
 Environment variables the fork adds: `WARP_FORK_ACP_COMMAND` (**name an agent and
@@ -310,6 +327,26 @@ not assumed). Widen it only for somewhere you would also be content to answer
 `edit` prompts about, and add `~/.rustup/**` if toolchain sources start stalling
 — that one has not bitten yet, so it is not granted.
 
+**And it does not cover the same destination reached through the shell.**
+Measured 2026-08-30 in a panel session: the agent wanted the
+`agent_client_protocol` crate's source — exactly what the `~/.cargo/**` grant
+exists for — and reached for it with `find / … | xargs grep`, a **bash** call,
+where the map's `"*": "ask"` lead caught it first. The grant is on the
+file-reading door; the shell door to the same place is untouched, and the two
+permission surfaces do not compose. T14.8 measured this remedy against an agent
+that used file reads, so its effectiveness is a fact about *how the agent
+chooses to reach for a file*, not about the path being granted.
+
+**The same collision is the fork's most repeatable friction, and it stops turns.**
+Twice in eighteen turns `opencode` ran `wc -l` to size a file before reading it,
+and each was denied. When the ask landed at the *tail* of a turn, after the answer
+was assembled, it cost nothing. When it landed at the *head* — 8 seconds in,
+before any reading — it killed the turn: 871 characters of output and no answer.
+Same mechanism, opposite costs, and the timing is not something the asker
+controls. `wc`, `ls`, `find` and `cat` are read-only and all ask; `git log` and
+`cargo check`, which do far more, do not. The allowlist is drawn around commands
+the maintainer named, not around what a command can do.
+
 **An agent in the panel works in the *pane's* directory, and a fresh pane
 starts in `$HOME`.** Not in the directory Warp was launched from. Both agent
 paths read `session_context.current_working_directory()`, so this is identical
@@ -384,8 +421,9 @@ regression, and a count that differs by one is usually the flaky set.
 
 **Adding a `warpctrl` action? Run `-p warp --lib` too, not just `-p
 local_control`.** The catalog count is pinned in *two* places: the fast one is
-`catalog_has_exactly_N_retained_actions` in
-`crates/local_control/src/protocol_tests.rs`, and its twin is
+`catalog_has_exactly_<count>_retained_actions` in
+`crates/local_control/src/protocol_tests.rs` — the number is part of the name, so
+grep `fn catalog_has_exactly` rather than pasting this — and its twin is
 `capabilities_advertises_the_complete_catalog` in
 `app/src/local_control/mod_tests.rs`. T8.6 updated the first, left the second
 red, and shipped — because `cargo test -p local_control` takes a second and the
@@ -409,7 +447,10 @@ compiling that crate's tests. A clean `cargo build` proves nothing here.
 Measured 2026-08-29 on WSL: an uncapped release build **took the whole VM down**
 — the guest came back at `up 1 min` with an empty `dmesg`, which is the
 signature of the VM dying rather than Linux OOM-killing a process. A single
-`rustc` compiling the `warp` crate holds **~8.1 GB RSS**, and cargo defaults to
+`rustc` compiling the `warp` crate holds **~8.1 GB RSS** (measured 2026-08-29;
+**re-measured 2026-08-30 at 13.7 GB**, so treat 8 GB as a floor and the `-j 8`
+margin as thinner than it reads — at the peak the VM had 1 GB of RAM and 3 GB of
+swap left), and cargo defaults to
 one job per core (32 here), so several 8 GB-class crates reach codegen together
 and exhaust the VM's 31 GiB. At `-j 8` the same build finished with 19 GiB still
 free. `[profile.release]`'s own comment in `Cargo.toml` records this hazard from

@@ -74,6 +74,24 @@ the only mechanism rather than a nicety. **That also changes what the horizon's
 destination means** — "driven from the fork" has quietly meant "with a person
 answering", and now there is somewhere for that person to click.
 
+**A run said to, 2026-08-30. T14.13 moved ahead of T14.11, and T14.11 is now
+person-present by construction.** Unattended, all three doors to a panel-made
+commit are shut — the harness refusal, the flagship agent (whose `auto` mode
+never asks Warp and whose `default` mode wedges with no answerer, so it is
+unusable in *both* directions), and the permission freeze. That is the consent
+design working, not a defect, and it makes T14.11 a task that waits for a person
+at the T14.16 button rather than one to be rewritten as impossible.
+
+The night went to T14.13 instead, and it inverted the ticket: **the agent
+compacts itself every five or six turns and neither it nor Warp says a word.**
+Warp's transcript stays complete while the agent's context does not, and the
+panel shows the complete one. T14.9's seven-turn session — the measurement this
+whole phase was built on — sat right at the first compaction boundary.
+
+**So T14.11 should now run after T14.13's disclosure lands, not before it.** A
+working day measured across three invisible compactions would produce a friction
+log nobody could trust, which is the one outcome this horizon cannot afford.
+
 **Reorder this list if a run says to.** That is what it is for.
 
 ## Working unattended
