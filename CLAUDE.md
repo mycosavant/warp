@@ -254,6 +254,33 @@ lives in the agent: opencode calls this permission `external_directory`, and
 so **which requests are answerable is a fact about the agent you named**. Check
 that before suspecting Warp when a session stalls on ordinary work.
 
+**The agent's permission config is `opencode.json` in *this repo*, not a user
+file and nothing to do with Claude Code or Warp.** `~/.config/opencode/opencode.jsonc`
+exists on this machine and is empty but for its `$schema` line, so every
+permission decision comes from the committed project file. (`claude-agent-acp` is
+the other story entirely: it reads Claude Code's settings and starts in session
+mode `auto`, described above.)
+
+**And its `bash` pattern map has a footgun that reads backwards.** Measured
+2026-08-29, two rules, neither documented where you would look:
+
+- **Later keys win.** `{"*": "ask", "git status*": "allow"}` allows
+  `git status`; reverse the two and everything asks.
+- **Unmatched commands default to `allow`, not to `ask`.** So `{"echo*":
+  "ask"}` does not mean *"ask about echo"* — it means *"ask about echo and allow
+  literally everything else"*. A block that reads as tightening is a wholesale
+  opening.
+
+Therefore any object form **must** start with `"*": "ask"` and list the allows
+after it. Verified working:
+
+```json
+"bash": { "*": "ask", "git status*": "allow", "cargo test*": "allow" }
+```
+
+with `git status --short` and `cargo check` running unasked and `rm -f …` still
+asking. The plain string form (`"bash": "ask"`) has no such hazard.
+
 **This repo's `opencode.json` grants `external_directory: {"~/.cargo/**":
 "allow"}`, and what that does is narrower than it reads.** It is there because
 reading a dependency's source is ordinary work here and it was the measured
