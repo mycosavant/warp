@@ -272,6 +272,22 @@ bash hooks that emit OSC 777 to the TTY; Warp parses them into
 `fork::cloud_harness_plugin_allowed` — but the local one is welcome and largely
 unexamined.
 
+**The plugin must already be loaded when the CLI agent starts, and if it is not
+the failure is silent.** Measured 2026-08-30: a `claude` running in a pane raised
+a permission prompt in its own TUI and `warpctrl agent approvals` stayed
+**empty** — no error, nothing in the log, and it looks exactly like "this fork
+cannot see CLI agents". Warp installs the plugin on demand, so a session that was
+already running when it landed has no hooks. Reloading plugins in Claude Code and
+asking again made the request appear immediately. **Check the plugin is loaded
+before concluding anything about the CLI-agent path.**
+
+**And with it loaded, `agent approve` genuinely drives a real Claude Code
+prompt** — `keystroke: "enter"`, the request left the queue, the tool ran and the
+file appeared. That was `approvals.rs`'s weakest claim and it is now watched
+rather than assumed. So the fork's thesis path has working remote consent today:
+Claude asks, the plugin reports over OSC 777, Warp surfaces it, a paired device
+answers.
+
 **Two facts about it that change what the fork can do** (read 2026-08-30, T14.20):
 the permission hook is **observational only** — it reports and exits, so Warp is
 told and cannot answer — and the payload carries **no call id**, which is

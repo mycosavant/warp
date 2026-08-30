@@ -8118,11 +8118,45 @@ mode descriptions is the first legitimate instance of `acp_permission.rs`'s
       measurement — do the ids actually join? — is the thing that tells you
       whether the plugin channel is trustworthy enough to carry a decision.
 
+      **Measured the same day, and the headline is that the path already
+      works.** With the plugin loaded, a real `claude` (Claude Code v2.1.251)
+      asked to `Write` a file, `warpctrl agent approve` reported
+      `keystroke: "enter"`, the request left `agent approvals`, and the file
+      appeared with the expected contents. That was `approvals.rs`'s own
+      self-declared weakest claim — *"not a prompt this fork watched"* — and it
+      is now watched. **The thesis path has working remote consent today**:
+      Claude asks, the plugin reports over OSC 777, Warp surfaces it, and a
+      paired device can answer, since `agent.approve` is already in the pairable
+      set when `WARP_FORK_REMOTE_APPROVE` is on.
+
+      **The prerequisite that will cost someone an afternoon.** The plugin must
+      be loaded *when the agent starts*. Measured: a `claude` already running
+      when Warp installed the plugin raised a prompt in its TUI while
+      `agent approvals` stayed **empty** — no error, nothing logged, and it reads
+      exactly like "the fork cannot see CLI agents". Reloading plugins and asking
+      again surfaced it at once. This is now in `CLAUDE.md`.
+
+      **Three gaps the run exposed, all plugin-side, which is this ticket's
+      thesis holding up under test:**
+
+      | gap | what it costs |
+      |---|---|
+      | `approval_id` is the **pane id** | the digest binds to whatever the pane is *currently* asking, not to one call — `TR-EVENTS-B` made concrete |
+      | `acts on: not stated by the agent` | no `cwd` in the payload, though `build_payload` extracts one — so the card cannot say where a call acts, unlike ACP's |
+      | no way to answer through the hook | the Return press works, but it takes the *highlighted* option; a typed answer still needs increment (2) |
+
+      **`tool_use_id` checked on both ends and absent from both**: it appears
+      nowhere in the plugin, and `event/v1.rs` has no call-id slot. So increment
+      (1) needs the plugin to send one *and* a protocol v2 to carry it — the
+      negotiation already supports that, but it is two changes, not one.
+
       **Named, not assumed:** whether Claude Code's `PermissionRequest` hook
-      input actually contains a `tool_use_id` was **not verified** — the current
-      script does not extract one, which is consistent with both "it is there and
-      unused" and "it is not there". Check that first; it decides whether (1) is
-      an afternoon or a protocol conversation upstream.
+      input actually contains a `tool_use_id` is **still not verified**. The plugin's
+      own test uses a synthetic payload (`{"session_id":"s1","cwd":"/tmp/proj"}`),
+      which proves nothing about real input — and note that real input evidently
+      lacks `cwd`, since the card could not state it. The cheap check is a
+      temporary hook that dumps stdin, which is a write under `~/.claude` and so
+      belongs to the maintainer.
 
 - [ ] **T14.19** **Hand the agent back the transcript Warp already owns.**
       Proposed by the maintainer 2026-08-30 on reading T14.13, and it is the

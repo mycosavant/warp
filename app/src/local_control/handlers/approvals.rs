@@ -95,9 +95,20 @@ const DENY_BYTES: &[u8] = b"\x1b";
 /// path — the byte `0d` was observed reaching a pane's PTY — against a
 /// *synthesised* permission notification rather than a real `claude`, so what
 /// this entry asserts is Claude's documented prompt, not a prompt this fork
-/// watched. It is the first claim here to re-check, and the cheapest check is to
-/// answer one real prompt with `warpctrl agent approve` and see whether the tool
-/// runs.
+/// watched.
+///
+/// **Watched 2026-08-30, and it holds.** A real `claude` (Claude Code v2.1.251)
+/// in a pane asked to `Write` a file; `agent approve` reported
+/// `keystroke: "enter"`, the request left `agent approvals`, and the file was
+/// created with the expected contents. So the Return press does reach a real
+/// prompt and does take *Yes*, not merely a documented one.
+///
+/// **Two things that run exposed, both plugin-side and neither fixed here.**
+/// The `approval_id` is the **pane id**, because the plugin sends no per-call id
+/// (`TR-EVENTS-B`) — so a digest binds to whatever this pane is currently
+/// asking rather than to one call. And the card reads `acts on: not stated by
+/// the agent`, because the payload carried no `cwd` even though `build_payload`
+/// extracts one. See `.fork/TASKS.md` T14.20.
 const ALLOW_VERIFIED_AGENTS: &[CLIAgent] = &[CLIAgent::Claude];
 
 /// The two values of [`PendingApproval::source`], written once so the server and
