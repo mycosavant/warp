@@ -8222,9 +8222,16 @@ mode descriptions is the first legitimate instance of `acp_permission.rs`'s
       overreach, and a log line is read later with less context than a panel
       message, not more.
 
-      **Unverified, and named:** whether an `--approve` run and a panel tap are
-      distinguishable at the point the entry is written, or whether the surface
-      has to be threaded down from the answering call. Nothing has been read yet.
+      **The surface question, resolved before it could become an unknown.**
+      `registry::answer` has exactly two callers:
+      `local_control/handlers/approvals.rs` (the control plane, so CLI, console
+      and a paired phone) and `inline_action/acp_approval.rs` (the panel
+      button). Both are in-process and both know which they are, so the surface
+      is a third parameter threaded from two call sites rather than anything
+      inferred. **`--approve` is not a third caller and never reaches here** —
+      `crates/warp_cli/src/local_control/acp.rs` is a standalone ACP client in
+      its own process, with no Warp and no event log, which is also why the
+      T14.1/T14.2 findings could be made without one running.
 
 ## T15 — Loose ends carried, not forgotten
 
