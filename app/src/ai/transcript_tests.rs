@@ -4,6 +4,15 @@ fn exchange(input: &str, output: &str) -> Exchange {
     Exchange {
         input: input.to_owned(),
         output: output.to_owned(),
+        tools: Vec::new(),
+    }
+}
+
+fn exchange_with_tools(input: &str, output: &str, tools: &[&str]) -> Exchange {
+    Exchange {
+        input: input.to_owned(),
+        output: output.to_owned(),
+        tools: tools.iter().map(|t| (*t).to_owned()).collect(),
     }
 }
 
@@ -152,6 +161,7 @@ fn warps_own_words_are_not_attributed_to_the_agent() {
         &[Exchange {
             input: "q".to_owned(),
             output: format!("{CHROME} Warp is keeping a transcript.\nThe real answer is 42."),
+            tools: Vec::new(),
         }],
     );
     assert!(text.contains("The real answer is 42."), "{text}");
@@ -172,6 +182,7 @@ fn a_refusal_is_kept_because_the_agents_own_store_does_not_have_it() {
         &[Exchange {
             input: "run it".to_owned(),
             output: "The agent is waiting for permission: wc -l\nAnswered: **no**.".to_owned(),
+            tools: Vec::new(),
         }],
     );
     assert!(text.contains("Answered: **no**."), "{text}");
@@ -185,6 +196,7 @@ fn an_exchange_that_was_only_warp_chrome_reads_as_no_output() {
         &[Exchange {
             input: "q".to_owned(),
             output: format!("{CHROME} an aside and nothing else"),
+            tools: Vec::new(),
         }],
     );
     assert!(text.contains("(no output recorded)"), "{text}");
@@ -205,4 +217,42 @@ fn the_default_lands_in_the_sessions_own_project() {
         Path::new("/tmp/elsewhere"),
         "a named directory is used as given"
     );
+}
+
+#[test]
+fn what_was_tried_is_recorded_in_order_with_its_outcome() {
+    // The measured loss this file exists for was a record of what had been
+    // checked and what came back. Without it an agent that lost its history
+    // silently redoes work.
+    let text = render(
+        "conv",
+        &[exchange_with_tools(
+            "audit it",
+            "Here is the answer.",
+            &["ReadFiles -> Success", "RunCommand -> Error"],
+        )],
+    );
+    let read = text.find("ReadFiles -> Success").expect("first call");
+    let run = text.find("RunCommand -> Error").expect("second call");
+    assert!(read < run, "calls must keep the order they happened in");
+    assert!(text.contains("### Tools used"), "{text}");
+}
+
+#[test]
+fn an_exchange_that_called_nothing_grows_no_tool_section() {
+    let text = render("conv", &[exchange("q", "a")]);
+    assert!(!text.contains("Tools used"), "{text}");
+}
+
+#[test]
+fn a_call_still_running_says_so_rather_than_claiming_an_outcome() {
+    let text = render(
+        "conv",
+        &[exchange_with_tools(
+            "q",
+            "a",
+            &["ReadFiles -> no result recorded"],
+        )],
+    );
+    assert!(text.contains("no result recorded"), "{text}");
 }

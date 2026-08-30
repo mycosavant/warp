@@ -8214,7 +8214,34 @@ mode descriptions is the first legitimate instance of `acp_permission.rs`'s
 
       Neither is a superset: `opencode` retains reasoning that Warp never keeps.
 
-      **Reasoning is absent by inheritance, not by decision — worth recording
+      **Tool records added 2026-08-30, and they are inert on the path that needs
+      them.** `Exchange` now carries `name -> outcome` per call, using the same
+      `AIAgentActionTypeDiscriminants` / `AIAgentActionResultTypeDiscriminants`
+      vocabulary the event log uses, appended per exchange as `### Tools used`.
+      Name and outcome only, never payloads: the payloads are the largest thing
+      available and the most cheaply recovered, since the agent can read the file
+      again.
+
+      **Then verified by running, which found it empty.** A turn that plainly
+      read a file produced no tool section at all. The reason is structural:
+      **the ACP translator emits tool calls as `AgentOutput` text, never as
+      `AIAgentAction`** (`translate.rs:377`) — there is no action in that path for
+      an action model to have a result for. So the collection is correct, matches
+      precedent, and will populate for an agent that produces actions, while
+      contributing nothing to an `acp_agent` session.
+
+      **What that means for the original question.** On the ACP path the tool
+      *names* are already in the transcript, because the translator renders them
+      as prose (`` `read` ``, then the path). What is missing is the **outcome** —
+      whether the call succeeded, errored, or was refused. So "add tool data" is
+      not a formatter change here; it is a translator change, and the data exists
+      at that layer already since `translate.rs` writes `tool_start`/
+      `tool_complete` to the event log. The options are to have the translator
+      record outcomes into a side table the transcript reads, or to emit real
+      actions — the second changes panel rendering and is much larger. Neither is
+      built. Left explicit rather than shipped as though it worked.
+
+            **Reasoning is absent by inheritance, not by decision — worth recording
       because it looked deliberate.** Warp *does* receive it
       (`AgentThoughtChunk` → `AgentReasoning`, `translate.rs:329`). It dies in
       upstream's `format_for_copy`, which carries a bare

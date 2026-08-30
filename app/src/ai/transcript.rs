@@ -73,6 +73,17 @@ use std::path::{Path, PathBuf};
 pub(crate) struct Exchange {
     pub input: String,
     pub output: String,
+    /// What the agent did, in order: one `name → outcome` per call.
+    ///
+    /// **Name and outcome, never the payload.** The measured loss this file
+    /// exists for was *"three audited claims with their file:line citations"* —
+    /// a record of what was checked and what came back. "What have I already
+    /// tried" is the single most useful thing for an agent that just lost its
+    /// history, because without it the failure mode is silently redoing work.
+    /// Full results are the opposite trade: they are the largest thing here and
+    /// the most cheaply recovered, since the agent can simply read the file
+    /// again.
+    pub tools: Vec<String>,
 }
 
 /// Where a conversation's transcript lands.
@@ -144,6 +155,17 @@ pub(crate) fn render(conversation_id: &str, exchanges: &[Exchange]) -> String {
             out.push_str("(no output recorded)");
         } else {
             out.push_str(spoken.trim());
+        }
+        // **Appended rather than interleaved, and the trade is deliberate.**
+        // Placing each call where it happened would mean re-implementing
+        // upstream's section rendering; an ordered list keeps the sequence of
+        // what was tried, which is the part that answers "have I done this
+        // already", and loses only its position relative to the prose.
+        if !exchange.tools.is_empty() {
+            out.push_str("\n\n### Tools used\n");
+            for tool in &exchange.tools {
+                out.push_str(&format!("\n- {tool}"));
+            }
         }
     }
     out.push('\n');
@@ -243,6 +265,7 @@ pub(crate) fn forget(conversation_id: &str) {
 /// exchange in the file, and the agent that greps it cannot tell a turn still
 /// running from one that stopped there.
 pub(crate) fn observe(
+    action_model: &warpui::ModelHandle<crate::ai::blocklist::BlocklistAIActionModel>,
     active_session: &warpui::ModelHandle<
         crate::terminal::model::session::active_session::ActiveSession,
     >,
@@ -253,6 +276,10 @@ pub(crate) fn observe(
     use warpui::SingletonEntity as _;
 
     use crate::ai::agent::conversation::ConversationStatus;
+    use crate::ai::agent::{
+        AIAgentActionResultTypeDiscriminants, AIAgentActionTypeDiscriminants,
+        AIAgentOutputMessageType,
+    };
     use crate::ai::blocklist::{
         BlocklistAIHistoryEvent, BlocklistAIHistoryModel, ConversationStatusUpdate,
     };
@@ -327,14 +354,52 @@ pub(crate) fn observe(
     let Some(conversation) = history.conversation(conversation_id) else {
         return;
     };
+    let actions = action_model.as_ref(ctx);
     let exchanges = conversation
         .root_task_exchanges()
         .map(|exchange| Exchange {
             input: exchange.format_input_for_copy(),
-            // `None` for the action model, so tool results are left out. This
-            // file exists to be searched, and a transcript carrying every file
-            // read would be larger than the context that ran out.
+            // `None` for the action model, so tool *results* are left out --
+            // those are the largest thing available and the most cheaply
+            // recovered. The calls themselves are collected separately below.
             output: exchange.format_output_for_copy(None),
+            tools: exchange
+                .output_status
+                .output()
+                .map(|output| {
+                    output
+                        .get()
+                        .messages
+                        .iter()
+                        .filter_map(|message| match &message.message {
+                            AIAgentOutputMessageType::Action(action) => {
+                                let name = format!(
+                                    "{:?}",
+                                    AIAgentActionTypeDiscriminants::from(&action.action)
+                                );
+                                // The outcome, by the same discriminant the event
+                                // log uses, so one vocabulary describes a call in
+                                // both places. A call with no result recorded is
+                                // said plainly rather than guessed at -- it may
+                                // still be running, or have been refused.
+                                let outcome = actions
+                                    .get_action_result(&action.id)
+                                    .map(|result| {
+                                        format!(
+                                            "{:?}",
+                                            AIAgentActionResultTypeDiscriminants::from(
+                                                &result.result
+                                            )
+                                        )
+                                    })
+                                    .unwrap_or_else(|| "no result recorded".to_owned());
+                                Some(format!("{name} -> {outcome}"))
+                            }
+                            _ => None,
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default(),
         })
         .collect::<Vec<_>>();
 
