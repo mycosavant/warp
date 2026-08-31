@@ -582,11 +582,30 @@ steering is worth writing and it is not a remedy to rely on: it costs nothing an
 it fails silently. What actually stopped the turn was the volume, not any one
 refusal.
 
-**And that volume is the measured case for I18.** Sixteen permission requests for
-one audit question, every one read-only and inside the project, is a rate no
-per-call consent surface absorbs. The persistent grant stays frozen — it is the
-maintainer's call and the largest posture change on the board — but the friction
-log can no longer say nothing has asked for it.
+**And that volume looked like the measured case for I18 until the question was
+re-run with a boundary, at which point it was not.** Same audit target, same
+three questions, one sentence added — *answer only from those two files; do not
+follow callers, do not trace the UI* — and the result was **0 permission
+requests, 50 seconds, a complete answer**. Six audits across one day now say the
+same thing:
+
+| audit scope | asks |
+|---|---|
+| named files (`egress.rs`, `console.js`, auth trio, transcript) | 0–1 each |
+| *"trace where the warning goes and who sees it"* | **16, turn lost** |
+| the same target, scoped to two named files | **0** |
+
+**So the rule, and it costs one sentence:** name the files, and say where the
+answer stops. An audit question with a boundary is answerable inside this fork's
+permission posture exactly as it stands. One without a boundary sends the agent
+across the codebase and then outside the project — the `find /` that got refused
+was reaching for a crate's source — and the cost is the whole turn, not an
+annoyance.
+
+That materially weakens what had been written here an hour earlier as the case
+for I18. The persistent grant may still be worth building, and the argument for
+it is no longer this measurement. Recorded that way because a number that
+survives one control is worth much less than it looked.
 
 **Check it with the case that must *ask*, not the case that must pass.** A map
 missing its `"*": "ask"` lead allows everything, so an allow-list appears to work
