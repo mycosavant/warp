@@ -63,6 +63,46 @@ strong and it is cheap to honour.
    because an Enter already in the buffer when a TUI prompt takes focus is a yes
    nobody gave.
 
+## Run 2026-08-31: what it took, and what it cost
+
+**Two working sessions, 30 turns, and the two friction logs disagree — which is
+the result rather than a problem with it.**
+
+| log | agent | turns | asks | **stopped** |
+|---|---|---|---|---|
+| `.fork/friction-2026-08-31.md` | `opencode acp` | 21 | 22 | **2** |
+| `.fork/friction-2026-08-31-clean.md` | `claude-agent-acp` + `WARP_FORK_ACP_MODE=default` | 7 | 0 | **0** |
+
+**Both stops in the first log were traced, by running, to causes outside the
+fork's consent design**, and the tracing is what changed the recommendation:
+
+- **An unscoped question.** *"Trace where the warning goes and who sees it"* sent
+  the agent across three subsystems and then outside the project. Re-asked with
+  *"answer only from these two files"*: 0 asks, 50 seconds, complete answer. Six
+  scoped audits later, still 0–1 asks each.
+- **`opencode` abandons a turn after a refusal.** Same prompt, same refusal,
+  measured against both agents: `opencode` emitted nothing further even when told
+  what to do instead; `claude-agent-acp` in `default` mode answered around it.
+  **Warp sends the identical per-call rejection in both cases** — never
+  `Cancelled` — so the difference is entirely the agent's.
+
+**So the fork's documented recommendation changed on the strength of that**, and
+that is the honest resolution of the two logs: they are not two readings of the
+same thing, they are the measured-inferior configuration and the recommended one.
+CLAUDE.md now carries the table and names the pairing, because either half of it
+alone is worse than `opencode`.
+
+**What the run produced**, which is the part worth keeping: 14 defects fixed and
+9 docs corrected, including a `serde_json/preserve_order` regression in which this
+fork's own ACP dependency silently broke this fork's own git-backed Warp Drive
+sync — no line of `local_sync` changed, no gate in the repo catches it, and the
+tripwire test that names the hazard had been red for an unknown period because
+nobody ran it. Five more were one class: **a doc that outlived its code.**
+
+**Not claimed:** eight continuous hours. Thirty turns across a session that
+crossed midnight is a day's work by output, and nothing here establishes how the
+fork feels at that length — every friction logged came from a short burst.
+
 ## So the remaining work is to run it
 
 **T14.11, and it is now person-present by construction.** Unattended, all three

@@ -177,8 +177,31 @@ upstream and rebasable.
 | `app/src/remote_server/wsl_transport.rs`, `crates/remote_server/src/wsl.rs` | the second `RemoteTransport`: Warp's remote-development server, in a WSL distro instead of over SSH. |
 
 Environment variables the fork adds: `WARP_FORK_ACP_COMMAND` (**name an agent and
-it answers the agent panel** — `"opencode acp"`; naming the command *is* the
-switch, there is no second flag, and it outranks `WARP_FORK_LOCAL_AGENT`. **The
+it answers the agent panel**; naming the command *is* the switch, there is no
+second flag, and it outranks `WARP_FORK_LOCAL_AGENT`.
+
+**Which agent to name, measured 2026-08-31 rather than preferred.** This line
+used `"opencode acp"` as its only example for months. Both agents were then put
+through the same refusal, and neither is unambiguously better — but one *pairing*
+is:
+
+| | asks Warp by default? | survives a refusal? |
+|---|---|---|
+| `opencode acp` | **yes** | **no** — no further output at all, turn over, even when the prompt says what to do instead |
+| `claude-agent-acp`, no mode set | **no** — session mode `auto`, its classifier answers first and Warp is never in the loop | n/a |
+| `claude-agent-acp` + `WARP_FORK_ACP_MODE=default` | **yes** | **yes** — *"I can't run that — you denied permission. So, 2+2 is 4."* |
+
+So **the recommended configuration is the third row**, and it is a pairing:
+either half of it alone is worse than `opencode`. Warp sends the identical
+per-call rejection (`{"outcome": "selected", "optionId": "reject"}`, never
+`Cancelled`) in every case, so the difference is entirely the agent's.
+
+Measured across two working sessions the same day: with `opencode`, one refusal
+cost a whole turn's answer while the conversation still reported
+`status: success`. With the pairing above, seven consecutive turns raised zero
+refusals and lost nothing. `opencode` remains perfectly usable and is what most of
+this file's other measurements were taken against — it is named second now, not
+removed. **The
 session cwd comes from the pane, and that is where the agent finds its own
 config — so the pane's directory decides whether the user's permission rules
 load at all.** Measured: the same agent in a directory without its config file
