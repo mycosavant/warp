@@ -286,6 +286,33 @@ candidate is ruled out (`CloseSessionConfirmationDialog` covers pane and tab
 closes; `OpenDialogSource` has no window arm), so naming a cause would be
 invented certainty.
 
+**Whether a refusal costs the whole turn is a fact about the agent you named,
+not about the fork.** Measured 2026-08-31 with `acp probe`, the same prompt and
+the same refusal against two agents:
+
+| agent | what it did after Warp said no |
+|---|---|
+| `opencode` | **nothing.** No further text, turn over — even when the prompt said *"if you cannot run it, say so and then tell me what 2+2 is."* |
+| `claude-agent-acp` 0.70.0, `--mode default` | *"I can't run that command — you denied permission to execute it. So, 2+2 is 4."* |
+
+**Warp sent the identical answer both times** — `{"outcome": "selected",
+"optionId": "reject"}`, a per-call rejection and *not*
+`RequestPermissionOutcome::Cancelled`. Both agents offer a `reject_once` option,
+so `deny`'s fallback to `Cancelled` never fires for either. This retracts a
+hypothesis raised the same day, that Warp was cancelling turns on denial: it is
+not, and the probe shows the agent recording the call as `status: failed` with
+*"The user rejected permission to use this specific tool call."*
+
+So a turn dying after a *no* is agent behaviour with no fork remedy, and it joins
+the list of things that turn out to be facts about `WARP_FORK_ACP_COMMAND`'s
+argument rather than about this codebase — alongside which requests are
+answerable at all, and whether the agent has session modes.
+
+**And that run re-confirmed a dated claim rather than trusting it.**
+`claude-agent-acp` at 0.70.0 with no `--mode` ran the command and raised **zero**
+permission requests: still `auto` by default, still deciding by classifier with
+Warp never in the loop. T14.18's measurement holds.
+
 **A denied call can cost the whole turn while the turn reports `success`.**
 Measured 2026-08-31, and it sharpens the head-vs-tail rule recorded below. A
 denial landing ~90 seconds in, after substantial work, ended the conversation
