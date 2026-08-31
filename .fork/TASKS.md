@@ -7998,9 +7998,42 @@ mode descriptions is the first legitimate instance of `acp_permission.rs`'s
       `quiet_for_seconds` correctly reported as working rather than stalled —
       the T14.10 instrument doing its job on its first unplanned outing.
 
-      **Honest about scale:** six turns is a long session, not a day. The
-      *quality* bar GOAL.md sets — nothing that stops a turn — is met, and the
-      *duration* half is not yet.
+      **The run continued to eleven turns and across midnight**, and the second
+      half was four audits of fork surfaces using the shape turns 1 and 3 had
+      found by accident: *walk this path, quote the deciding lines, say what
+      could make it lie, and say plainly where you find nothing.*
+
+      | surface | outcome |
+      |---|---|
+      | `egress.rs` | **`eventsource` reached the network without the deny-list.** The module's own docs said a check in `execute_inner` *"cannot be bypassed by a call site that forgot"* — false from the day it was written, in the file the fork's strongest claim rests on. Not live: all four call sites target Warp's own service. Closed (`72b0b1aa8`). |
+      | `console.js` | Nothing wrong — but the **test** was narrower than the rule: markup sinks banned, attribute sinks (`.href`, `setAttribute`, `window.open`) not. Pin added and *calibrated by making it fail* (`e6bcd763f`). |
+      | auth / discovery / pairing | Nothing wrong, and it **corrected the question's premise**: the prompt asserted "the discovery record carries the credential" and it cited three places the code says otherwise. That sentence was in CLAUDE.md (`5c604d6cb`). |
+      | transcript | **Both the transcript and the event log were `0644` in `0755` directories** — prompts verbatim, command previews. Fixed and confirmed against a running Warp (`c313ca094`, `b96735535`). |
+
+      **Six of eleven turns produced a correction to something this repo already
+      believed, and three of those were to code or docs written the same day by
+      the author who then asked for the review.** That is the finding this ticket
+      was for. The friction total — 11 turns, 0 stopped, 5 asks all answerable
+      and all answered in one paste — is the *precondition* that let the day
+      happen, not the result.
+
+      **Two process notes worth more than either defect.**
+
+      - **Licensing "nothing wrong" is what makes a clean result mean
+        something.** Every prompt said *say plainly where you find nothing* and
+        *do not invent a concern*. Two audits came back clean, and because a
+        clean answer was available and cheap, the three that did not are worth
+        believing.
+      - **A premise stated in the prompt is a premise the agent can correct.**
+        Turn 9's question was asked wrongly on purpose-of-habit, and the agent
+        refused the frame. A question that hides its assumption gets an answer
+        built on it.
+
+      **Scale, honestly.** Eleven turns across a session that crossed midnight,
+      with four defects fixed and two docs corrected, is a day's work by output.
+      It is not eight hours of continuous use, and nothing here establishes what
+      the fork feels like at that length — the frictions logged are all from
+      short bursts.
 
 - [x] **T14.12** **~~`agent read` should say something before the turn ends.~~
       It already does. The premise was false, and measuring it first is the only
