@@ -635,3 +635,200 @@ fn a_tool_event_is_filed_under_the_conversation_and_names_the_agents_session() {
         "the agent's own id is still recorded, as the join to its approvals"
     );
 }
+
+/// A parked request as `mod.rs` builds one, for the audit-log tests below.
+///
+/// Kept as a fixture rather than reaching for the real `parked_request`,
+/// because these tests are about what the *log* does with a shown request; how
+/// a request comes to be shown is `mod.rs`'s subject and has its own tests.
+fn parked(input: Option<&str>, approve_selects: Option<&str>) -> registry::ParkedRequest {
+    registry::ParkedRequest {
+        approval_id: "req-1:7".to_owned(),
+        agent: "test-agent".to_owned(),
+        title: Some("Write out.txt".to_owned()),
+        tool_name: Some("edit".to_owned()),
+        tool_input: input.map(str::to_owned),
+        session_directory: Some("/tmp/project".to_owned()),
+        session_id: Some("ses_abc".to_owned()),
+        conversation_id: "conv-1".to_owned(),
+        acts_on: Vec::new(),
+        options_offered: vec!["Allow once".to_owned()],
+        approve_selects: approve_selects.map(str::to_owned),
+        approve_refused_because: None,
+    }
+}
+
+fn lines_for(events: &mut tokio::sync::broadcast::Receiver<String>) -> Vec<serde_json::Value> {
+    std::iter::from_fn(|| events.try_recv().ok())
+        .map(|line| serde_json::from_str::<serde_json::Value>(&line).expect("a JSON line"))
+        .collect()
+}
+
+/// **The charter rule, under test.** `.fork/GOAL.md` asks that every decision be
+/// logged *with the `tool_input` that was shown* — so the assertion is not that
+/// some preview appears, it is that the preview is exactly what the shown
+/// request carried, run through the shared truncation.
+///
+/// This is the test that answers the drift worry about deriving the log from
+/// `ParkedRequest`: if a later refactor logged what *arrived* on the wire
+/// instead of what was shown, the two would be equal today and this pin is what
+/// would catch them separating.
+#[test]
+fn a_permission_request_logs_the_input_that_was_shown() {
+    let mut events = crate::event_log::subscribe();
+    let mut translator = translator();
+    translator.open("ses_abc".to_owned());
+
+    // Long enough to truncate, so the shared helper is exercised rather than
+    // merely called — a preview cut at a different length from the other
+    // sources would silently break cross-source comparison.
+    let shown = format!("echo {} > out.txt", "x".repeat(400));
+    translator.log_permission_request(&parked(Some(&shown), Some("once")), "call_p1");
+
+    let line = lines_for(&mut events)
+        .into_iter()
+        .find(|line| line["call_id"] == "call_p1")
+        .expect("the ask was broadcast");
+
+    assert_eq!(line["event"], "permission_request");
+    assert_eq!(
+        line["tool_input_preview"],
+        serde_json::Value::String(crate::event_log::excerpt(&shown)),
+        "the log must carry the input that was shown, truncated the same way \
+         every other source truncates"
+    );
+    assert_eq!(line["call_id"], "call_p1", "the ask joins to its tool call");
+    assert_eq!(line["session_id"], "conv-1");
+    assert_eq!(line["linked_session_id"], "ses_abc");
+    assert_eq!(
+        line["can_approve"], true,
+        "a request Warp could say yes to says so, which is what lets a later \
+         `denied` be read as a person's no rather than as the only answer offered"
+    );
+    assert!(
+        line["summary"]
+            .as_str()
+            .expect("a summary")
+            .contains("req-1:7"),
+        "the approval id is the join key a call id cannot supply, because an \
+         agent may ask about the same call twice, got: {}",
+        line["summary"]
+    );
+}
+
+/// A request Warp has no *yes* for says so as a field, and says why as prose.
+///
+/// The boolean is what a filter counts; the reason is what a person reads. This
+/// is the split the ticket's own falsifier depends on — "refusals of
+/// confined-kind requests appearing at all" is not a question prose can answer.
+#[test]
+fn a_request_warp_cannot_approve_records_that_as_a_fact_and_its_reason_as_prose() {
+    let mut events = crate::event_log::subscribe();
+    let mut translator = translator();
+    translator.open("ses_abc".to_owned());
+
+    let mut request = parked(None, None);
+    request.approve_refused_because = Some("this request carries no tool input".to_owned());
+    translator.log_permission_request(&request, "call_p2");
+
+    let line = lines_for(&mut events)
+        .into_iter()
+        .find(|line| line["call_id"] == "call_p2")
+        .expect("the ask was broadcast");
+
+    assert_eq!(line["event"], "permission_request");
+    assert_eq!(line["can_approve"], false);
+    let summary = line["summary"].as_str().expect("a summary");
+    assert!(
+        summary.contains("no tool input"),
+        "the reason a person was shown belongs on the line, got: {summary}"
+    );
+    assert!(
+        summary.contains("Write out.txt"),
+        "with no input to preview, the agent's title is the only record of what \
+         was asked, and dropping it would leave the log silent about its own \
+         subject, got: {summary}"
+    );
+    assert!(
+        line["tool_input_preview"].is_null(),
+        "there was nothing shown, so nothing is claimed"
+    );
+}
+
+/// **`unanswered` is a value on the line, not a missing key**, and this is the
+/// test that makes that argument load-bearing.
+///
+/// `Entry` is `#[skip_serializing_none]`, so a `None` here would vanish from
+/// the record entirely — making "nobody answered" indistinguishable from "a
+/// build from before this field existed". That is a versioning ambiguity in the
+/// one file that exists to be believed later, and the assertion below is that
+/// the key is *present*, not merely that it is not `allowed`.
+#[test]
+fn every_way_a_permission_question_can_end_is_a_value_on_the_line() {
+    for (decision, answered_by) in [
+        ("allowed", Some("panel")),
+        ("denied", Some("control_plane")),
+        ("unanswered", None),
+    ] {
+        let mut events = crate::event_log::subscribe();
+        let mut translator = translator();
+        translator.open("ses_abc".to_owned());
+
+        let call_id = format!("call_p3_{decision}");
+        translator.log_permission_replied("req-1:7", &call_id, decision, answered_by);
+
+        let line = lines_for(&mut events)
+            .into_iter()
+            .find(|line| line["call_id"] == call_id.as_str())
+            .expect("the answer was broadcast");
+
+        assert_eq!(line["event"], "permission_replied");
+
+        assert_eq!(
+            line["decision"],
+            serde_json::Value::String(decision.to_owned()),
+            "the decision is always stated"
+        );
+        assert!(
+            line.get("decision").is_some(),
+            "the key must exist even for `unanswered`, or an absent answer reads \
+             as an old binary"
+        );
+        match answered_by {
+            Some(surface) => assert_eq!(line["answered_by"], surface),
+            None => assert!(
+                line["answered_by"].is_null(),
+                "nobody answered, so no surface carried anything — and the \
+                 `decision` on the same line is what makes that absence readable"
+            ),
+        }
+        assert_eq!(
+            line["call_id"],
+            call_id.as_str(),
+            "the answer joins to its call"
+        );
+    }
+}
+
+/// The audit line records the ask and never re-runs it.
+///
+/// `translate.rs`'s standing hazard is that a tool call emitted as an `Action`
+/// message is an *instruction* Warp executes — the double-execution trap this
+/// module's own docs say was found the hard way and has been built against
+/// three times since. A permission event is a side-channel append and must stay
+/// one, so this pins that logging an ask produces no client action at all.
+#[test]
+fn logging_a_permission_event_emits_no_action() {
+    let mut translator = translator();
+    translator.open("ses_abc".to_owned());
+
+    // The methods return `()`, so the strongest available statement is that
+    // nothing reaches the stream that carries actions.
+    translator.log_permission_request(&parked(Some("echo hi"), Some("once")), "call_p4");
+    translator.log_permission_replied("req-1:7", "call_p4", "allowed", Some("panel"));
+
+    assert!(
+        translator.flush().is_empty(),
+        "an audit line is an append to a file, never an instruction to Warp"
+    );
+}

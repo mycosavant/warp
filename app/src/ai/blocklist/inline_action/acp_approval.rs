@@ -179,13 +179,21 @@ impl TypedActionView for AcpApprovalView {
                 // that is no longer the armed id is a tap on a question that
                 // has been replaced since the first tap.
                 if self.armed_for(approval_id) {
-                    registry::answer(approval_id, registry::Decision::Allow);
+                    registry::answer(
+                        approval_id,
+                        registry::Decision::Allow,
+                        registry::Surface::Panel,
+                    );
                     self.armed = None;
                     ctx.emit(AcpApprovalViewEvent::Answered);
                 }
             }
             AcpApprovalViewAction::Deny { approval_id } => {
-                registry::answer(approval_id, registry::Decision::Deny);
+                registry::answer(
+                    approval_id,
+                    registry::Decision::Deny,
+                    registry::Surface::Panel,
+                );
                 self.armed = None;
                 ctx.emit(AcpApprovalViewEvent::Answered);
             }

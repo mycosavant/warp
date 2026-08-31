@@ -142,6 +142,76 @@ pub(crate) struct Entry<'a> {
     pub summary: Option<&'a str>,
     pub error_type: Option<&'a str>,
     pub plugin_version: Option<&'a str>,
+    /// What a person answered a permission request, on a `permission_replied`
+    /// line: `allowed`, `denied`, or `unanswered`.
+    ///
+    /// **`unanswered` is an explicit value and never an absent field**, which
+    /// looks like redundancy and is not. This struct is
+    /// `#[skip_serializing_none]`, so a `None` does not serialize as `null` —
+    /// it *vanishes from the line*. A `permission_replied` with no `decision`
+    /// key would therefore be indistinguishable from a line written by a build
+    /// from before this field existed, which collapses "nobody answered" into
+    /// "old binary" — a versioning ambiguity in the one record that exists to
+    /// be believed later. The absence-grammar this fork uses elsewhere
+    /// (`ParkedRequest::acts_on`'s "empty means the agent never said") is
+    /// readable because those fields are always present; this one would not be.
+    ///
+    /// **Present only on `acp_agent` lines.** Warp's own agent path reaches
+    /// `permission_replied` through a conversation-status transition that
+    /// carries no decision, so it cannot fill this in — the same per-source
+    /// fidelity `parent_call_id` documents one field up. A reader counting
+    /// denials across sources reads this on ACP lines and infers it on
+    /// `warp_agent` ones from a `permission_request` followed by a cancelled
+    /// `tool_complete`. That is a fidelity gap to know about, not two
+    /// vocabularies.
+    ///
+    /// **That cross-source claim has two halves with different evidence, and
+    /// they are worth keeping apart** — an earlier draft of this comment
+    /// labelled the whole thing "read, not run", which *understated* the first
+    /// half and overstated the difficulty of settling the second.
+    ///
+    /// - **The mapping is test-held.** `status_event` is a pure function and
+    ///   `leaving_blocked_is_an_answer_and_not_a_new_prompt`
+    ///   (`warp_agent_tests.rs`) pins `Blocked → InProgress` →
+    ///   `permission_replied`. That is as verified as anything on that path can
+    ///   be here, which is exactly why `action_event`'s own note says a test is
+    ///   the only thing that can hold it.
+    /// - **The flow is traced, not run.** Rejecting a proposed command calls
+    ///   `cancel_action_with_id(…, ManuallyCancelled)` on one *action*;
+    ///   `cancel_pending_action` turns it into a cancelled action *result* and
+    ///   hands it to `handle_action_result`, so the turn resumes rather than
+    ///   moving to `ConversationStatus::Cancelled`, which is the separate
+    ///   whole-turn cancel. Only this half is unverified.
+    ///
+    /// **And "unverified" here means not-yet, not cannot.** What is unavailable
+    /// on this fork is the *live server path* — reaching Warp's own agent needs
+    /// the account the fork exists without. That is not the only instrument: the
+    /// flow half is model-layer behaviour, `action_model_tests.rs` exists beside
+    /// the code that implements it, and `integration_testing/agent_mode` already
+    /// asserts on `ConversationStatus::Blocked`. A test driving
+    /// `cancel_pending_action` and observing that the conversation is not
+    /// cancelled would move this half to test-held. Recorded that way because
+    /// this fork has filed "impossible here" confidently and wrongly before —
+    /// T12's "no browser on this machine", three times, when it meant the WSL
+    /// userland.
+    pub decision: Option<&'a str>,
+    /// Which of Warp's surfaces carried the answer — `control_plane` or
+    /// `panel`. See `acp_agent::registry::Surface`, which owns the names and
+    /// the argument for why `control_plane` is one value covering three doors.
+    ///
+    /// Absent when `decision` is `unanswered`, and that absence is safe here
+    /// precisely because the value on the same line explains it: nobody
+    /// answered, so no surface carried anything.
+    pub answered_by: Option<&'a str>,
+    /// Whether Warp could have offered a *yes* at all, on a
+    /// `permission_request` line.
+    ///
+    /// **This is the field that lets the log detect its own falsifier.**
+    /// Without it a `denied` line is ambiguous between a person saying no and
+    /// Warp never having offered a yes to say — and telling those apart is the
+    /// entire question T14.17 was built to make answerable. The reason, when
+    /// this is `false`, is prose and rides `summary`.
+    pub can_approve: Option<bool>,
     /// Whether Warp acted on the event rather than discarding it. False when a
     /// hosted agent's event arrived for a terminal the sessions model has no
     /// session for.
@@ -309,6 +379,9 @@ fn hosted_agent_entry(event: &CLIAgentEvent, applied: bool) -> Entry<'_> {
         summary: payload.summary.as_deref(),
         error_type: payload.error_type.as_deref(),
         plugin_version: payload.plugin_version.as_deref(),
+        decision: None,
+        answered_by: None,
+        can_approve: None,
         applied,
     }
 }
@@ -397,7 +470,7 @@ pub(crate) fn project_name(cwd: &str) -> Option<&str> {
 /// A raw command or query can contain newlines, and a newline in a JSONL record
 /// would be escaped rather than break the file — but the escaping is what a
 /// person reading `tail -f` would have to undo, so it is removed here instead.
-fn excerpt(text: &str) -> String {
+pub(crate) fn excerpt(text: &str) -> String {
     let normalized = text.split_whitespace().collect::<Vec<_>>().join(" ");
     let mut excerpt: String = normalized.chars().take(MAX_TEXT_LEN).collect();
     if normalized.chars().count() > MAX_TEXT_LEN {

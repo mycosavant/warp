@@ -217,6 +217,9 @@ fn record_action_event(
         summary: summary.as_deref(),
         error_type,
         plugin_version: None,
+        decision: None,
+        answered_by: None,
+        can_approve: None,
         applied: true,
     });
 }
@@ -309,6 +312,9 @@ fn record_history_event(
         summary: query.as_deref(),
         error_type,
         plugin_version: None,
+        decision: None,
+        answered_by: None,
+        can_approve: None,
         applied: true,
     });
 }

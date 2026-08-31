@@ -181,6 +181,9 @@ pub(crate) fn log(conversation_id: &str, agent: &str, cwd: &str, catalog: &Catal
         summary: Some(&summary),
         error_type: None,
         plugin_version: None,
+        decision: None,
+        answered_by: None,
+        can_approve: None,
         applied: true,
     });
 }

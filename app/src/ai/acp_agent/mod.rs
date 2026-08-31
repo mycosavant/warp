@@ -501,7 +501,15 @@ async fn exchange(
                     acts_on,
                     conversation.clone(),
                 );
+                // The call id is threaded from here because `ParkedRequest`
+                // does not carry one -- it is keyed on the request, not the
+                // call, deliberately (see `registry::ParkedRequest`).
+                let call_id = request.tool_call.tool_call_id.to_string();
                 let event = emit(translator, |translator| {
+                    // Written under the same lock as the note, so an audit line
+                    // and the sentence a person reads cannot disagree about
+                    // which request this was.
+                    translator.log_permission_request(&parked, &call_id);
                     translator.note(asking_note(&parked, crate::fork::local_control_serving()))
                 });
                 let _ = tx.unbounded_send(Ok(event));
@@ -516,6 +524,7 @@ async fn exchange(
                     responder,
                     outcome,
                     parked,
+                    call_id,
                     Arc::clone(translator),
                     tx.clone(),
                     waiting,
@@ -1063,6 +1072,7 @@ fn wait_for_a_person(
     responder: agent_client_protocol::Responder<RequestPermissionResponse>,
     denial: RequestPermissionOutcome,
     request: registry::ParkedRequest,
+    tool_call_id: String,
     translator: Arc<Mutex<Translator>>,
     tx: mpsc::UnboundedSender<Event>,
     quiet_because_it_is_asking: liveness::Waiting,
@@ -1070,6 +1080,10 @@ fn wait_for_a_person(
     // Resolved before the request is handed to the registry, because after that
     // it is the map's and a caller could already be answering it.
     let allowed = request.approve_selects.clone();
+    // Cloned before `park` takes the request, for the same reason `allowed` is:
+    // after that line the entry belongs to the map and someone may already be
+    // answering it.
+    let approval_id = request.approval_id.clone();
     let (waiting, answer) = registry::park(request);
 
     connection.spawn(async move {
@@ -1083,6 +1097,9 @@ fn wait_for_a_person(
         let _asking = quiet_because_it_is_asking;
         let answer = answer.await;
         let settled = answered_note(&answer);
+        // Read before `outcome_for` consumes the answer, and the ordering is
+        // load-bearing rather than incidental.
+        let (decision, answered_by) = replied_fields(&answer);
         let outcome = outcome_for(answer, allowed, denial);
         // The asking note stays in the transcript, so without this one a
         // finished conversation reads as though it is still waiting — and after
@@ -1092,7 +1109,14 @@ fn wait_for_a_person(
         // second note rather than an edit of the first, because amending a
         // message needs `UpdateTaskMessage`'s `FieldMask` path, which nothing in
         // this repo uses and which this module has twice declined to guess.
-        let event = emit(&translator, |translator| translator.note(settled));
+        let event = emit(&translator, |translator| {
+            // Logged before the responder answers, so a record of the decision
+            // exists even if delivering it fails -- and a failure to deliver is
+            // the agent having gone away, which is precisely when the record is
+            // the only thing left saying what was decided.
+            translator.log_permission_replied(&approval_id, &tool_call_id, decision, answered_by);
+            translator.note(settled)
+        });
         let _ = tx.unbounded_send(Ok(event));
         // A failure to deliver is the agent having gone away, which is not this
         // task's problem to report — and returning `Err` would take the whole
@@ -1109,8 +1133,8 @@ fn wait_for_a_person(
 /// and shows up as the tool's own output. That distinction is the same one
 /// `approvals.rs` makes by reporting the keystroke it sent rather than
 /// `approved: true`.
-fn answered_note(answer: &Result<registry::Decision, oneshot::Canceled>) -> String {
-    match answer {
+fn answered_note(answer: &Result<registry::Answer, oneshot::Canceled>) -> String {
+    match answer.as_ref().map(|answer| answer.decision) {
         Ok(registry::Decision::Allow) => {
             "Answered: **yes**, for this one call. Nothing after it is covered.".to_owned()
         }
@@ -1122,6 +1146,34 @@ fn answered_note(answer: &Result<registry::Decision, oneshot::Canceled>) -> Stri
             "This request ended without an answer, because the turn did. Nothing was allowed."
                 .to_owned()
         }
+    }
+}
+
+/// The two audit fields, from how the wait ended (T14.17).
+///
+/// **Total over the three ways a question can stop being open**, and the third
+/// is the one worth the function existing. `answered_note` already refuses to
+/// call a dropped sender a *no* — *"saying no here would credit a person with a
+/// decision nobody made"* — and this is the same discipline in a field a filter
+/// reads rather than a sentence a person reads. `unanswered` is stated, never
+/// left as an absent key: see `Entry::decision` for why an absence is
+/// unreadable on disk here.
+///
+/// `answered_by` is `None` in exactly that case, which is safe because the
+/// `decision` on the same line explains it — nobody answered, so no surface
+/// carried anything.
+fn replied_fields(
+    answer: &Result<registry::Answer, oneshot::Canceled>,
+) -> (&'static str, Option<&'static str>) {
+    match answer {
+        Ok(answer) => (
+            match answer.decision {
+                registry::Decision::Allow => "allowed",
+                registry::Decision::Deny => "denied",
+            },
+            Some(answer.surface.as_str()),
+        ),
+        Err(_) => ("unanswered", None),
     }
 }
 
@@ -1143,11 +1195,13 @@ fn answered_note(answer: &Result<registry::Decision, oneshot::Canceled>) -> Stri
 ///   currently being looked at, and increment 1's collision cascade was two
 ///   halves of one fix where either alone left the other latent.
 fn outcome_for(
-    answer: Result<registry::Decision, oneshot::Canceled>,
+    answer: Result<registry::Answer, oneshot::Canceled>,
     allowed: Option<String>,
     denial: RequestPermissionOutcome,
 ) -> RequestPermissionOutcome {
-    match answer {
+    // Only the decision reaches the agent. The surface is for the record, and
+    // an agent has no business knowing which of a person's devices answered it.
+    match answer.map(|answer| answer.decision) {
         Ok(registry::Decision::Allow) => match allowed {
             Some(option_id) => RequestPermissionOutcome::Selected(SelectedPermissionOutcome::new(
                 PermissionOptionId::from(option_id),

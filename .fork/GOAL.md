@@ -132,18 +132,30 @@ defensible, and both are cheap.
    the failure this prevents: two polling loops answered at once and edits landed
    that the friction log never recorded.
 
-   > **This rule has no implementation, found 2026-08-30 (T14.17).** The ACP
-   > translator writes `tool_start` and `tool_complete` and nothing else; across
-   > every recorded ACP session in this repo there is not one permission event,
-   > because none is ever written. The ask and the answer are transcript prose,
-   > read live and not kept. Warp's *own* agent path emits `permission_request`
-   > and `permission_replied`; the ACP path does not. So until T14.17 lands, an
-   > orchestrator obeying this rule has to keep the record **itself**, outside
-   > the event log, and say in its write-up that it did — the trail is the
-   > orchestrator's word rather than the fork's evidence. **This is a gap in the
-   > audit trail, not in the boundary**: nothing is auto-approved, Warp still
-   > manufactures no yes, and the refusals still fire. What is missing is the
-   > proof afterwards.
+   > **This rule had no implementation when it was written, and T14.17 landed
+   > one on 2026-08-31.** What was found on 2026-08-30: the ACP translator wrote
+   > `tool_start` and `tool_complete` and nothing else, and across every
+   > recorded ACP session in this repo there was not one permission event,
+   > because none was ever written. The ask and the answer were transcript
+   > prose, read live and not kept — so an orchestrator obeying this rule had to
+   > keep the record itself, and the trail was its word rather than the fork's
+   > evidence.
+   >
+   > The ACP path now emits `permission_request` and `permission_replied` under
+   > `WARP_FORK_EVENT_LOG`, carrying the `tool_input` that was shown, what was
+   > decided (`allowed`/`denied`/`unanswered`), which surface answered, and —
+   > on the ask — whether Warp had a *yes* to offer at all. So the rule above is
+   > now satisfied by the fork rather than by the orchestrator's honesty.
+   >
+   > **Two things that have not changed.** This was always a gap in the audit
+   > trail and never in the boundary: nothing was auto-approved before it and
+   > nothing is now, Warp manufactures no yes, and the refusals fire either way.
+   > And the log only records what Warp was *asked* — T14.18 measured a panel
+   > session with `claude-agent-acp` producing **zero** permission requests,
+   > because its own classifier answered first. A run with no lines in it is
+   > therefore not evidence that nothing was decided; it is evidence Warp was
+   > not in the loop, which is T14.17's own falsifier and the thing to check
+   > before reading any count off this log.
 
 Two more, from measured failures rather than from caution. **Single writer:**
 while the panel session is editing the tree, the orchestrator does not. **Single

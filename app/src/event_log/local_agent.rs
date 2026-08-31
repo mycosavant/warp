@@ -109,6 +109,9 @@ pub(crate) fn record(context: &TurnContext, event: &ToolEvent) {
         summary: None,
         error_type: projected.error_type,
         plugin_version: None,
+        decision: None,
+        answered_by: None,
+        can_approve: None,
         applied: true,
     });
 }

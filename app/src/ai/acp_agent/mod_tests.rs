@@ -8,6 +8,19 @@ use agent_client_protocol::schema::v1::{ToolCallUpdate, ToolCallUpdateFields, To
 
 use super::*;
 
+/// An answer as the panel button would deliver it.
+///
+/// The surface is arbitrary for every assertion below: `outcome_for` is
+/// documented as sending only the decision to the agent, and `answered_note`
+/// reports what was answered rather than who answered. A test that varied the
+/// surface here would be asserting the opposite of that design.
+fn answered_on_the_panel(decision: registry::Decision) -> registry::Answer {
+    registry::Answer {
+        decision,
+        surface: registry::Surface::Panel,
+    }
+}
+
 fn request(options: Vec<PermissionOption>) -> RequestPermissionRequest {
     RequestPermissionRequest::new(
         "session-1",
@@ -579,7 +592,7 @@ fn only_a_permitted_yes_selects_an_allow() {
 
     assert_eq!(
         selected(outcome_for(
-            Ok(registry::Decision::Allow),
+            Ok(answered_on_the_panel(registry::Decision::Allow)),
             Some("once".to_owned()),
             denial.clone()
         )),
@@ -588,7 +601,7 @@ fn only_a_permitted_yes_selects_an_allow() {
     );
     assert_eq!(
         selected(outcome_for(
-            Ok(registry::Decision::Deny),
+            Ok(answered_on_the_panel(registry::Decision::Deny)),
             Some("once".to_owned()),
             denial.clone()
         )),
@@ -606,7 +619,7 @@ fn only_a_permitted_yes_selects_an_allow() {
     );
     assert_eq!(
         selected(outcome_for(
-            Ok(registry::Decision::Allow),
+            Ok(answered_on_the_panel(registry::Decision::Allow)),
             None,
             denial.clone()
         )),
@@ -697,8 +710,8 @@ fn a_refusal_reads_as_sentences_however_the_reason_was_written() {
 /// that id answers `missing_target`.
 #[test]
 fn every_way_a_permission_question_can_end_says_so_in_the_transcript() {
-    let allowed = answered_note(&Ok(registry::Decision::Allow));
-    let denied = answered_note(&Ok(registry::Decision::Deny));
+    let allowed = answered_note(&Ok(answered_on_the_panel(registry::Decision::Allow)));
+    let denied = answered_note(&Ok(answered_on_the_panel(registry::Decision::Deny)));
     let dropped = answered_note(&Err(oneshot::Canceled));
 
     assert!(allowed.contains("yes"), "got: {allowed}");
@@ -724,8 +737,8 @@ fn every_way_a_permission_question_can_end_says_so_in_the_transcript() {
 #[test]
 fn the_answer_note_reports_the_answer_and_not_the_outcome() {
     for note in [
-        answered_note(&Ok(registry::Decision::Allow)),
-        answered_note(&Ok(registry::Decision::Deny)),
+        answered_note(&Ok(answered_on_the_panel(registry::Decision::Allow))),
+        answered_note(&Ok(answered_on_the_panel(registry::Decision::Deny))),
         answered_note(&Err(oneshot::Canceled)),
     ] {
         for claim in ["ran", "succeeded", "was executed", "completed"] {

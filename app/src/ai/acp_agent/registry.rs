@@ -73,6 +73,72 @@ pub(crate) enum Decision {
     Deny,
 }
 
+/// Which of Warp's answering surfaces a decision came through.
+///
+/// **Two values, because [`answer`] has exactly two callers and each knows
+/// which it is.** No inference is involved and none is possible: the surface is
+/// passed in, so a line in the log says where an answer came from rather than
+/// where it probably came from.
+///
+/// **[`Self::ControlPlane`] must not be read as "a person at this keyboard",
+/// and the name is chosen so it cannot be.** It is `agent.approve` /
+/// `agent.deny` arriving at the control plane, which is one door with three
+/// things behind it: `warpctrl` in a local shell, the T12 console in a browser,
+/// and a paired phone answering over the LAN.
+///
+/// **The distinction to keep: Warp does not *lack* that knowledge, it fails to
+/// carry it.** The pairing layer knows perfectly well that a request arrived on
+/// a paired credential — that is what `PAIRABLE_ACTIONS` is checked against.
+/// What is missing is a channel from there to here: `agent_answer` takes
+/// `(instance_id, decision, params, ctx)` and `LocalControlBridge` holds
+/// `instance_id`, `control_origin` and `pairing` and no per-request caller
+/// identity (read, not run). So this is a plumbing gap a later ticket could
+/// close, not a fact about the world — and writing it down that way is what
+/// stops the coarse value hardening into a belief that finer is impossible.
+///
+/// Until then, naming the door is the most this can honestly say. A value like
+/// `cli` or `local` would be a claim about which of the three, and this fork's
+/// rule is that an unknown is rendered as unknown rather than filled in from
+/// the likeliest case.
+///
+/// **`--approve` is not a third value and never reaches here.**
+/// `crates/warp_cli/src/local_control/acp.rs` is a standalone ACP client in its
+/// own process, with no Warp behind it and no event log to write to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Surface {
+    /// `agent.approve` / `agent.deny` through the control plane — a local
+    /// `warpctrl`, the console, or a paired device. See the type's own note on
+    /// why these three are one value.
+    ControlPlane,
+    /// The in-panel approval button (T14.16), which is a person looking at the
+    /// conversation that asked.
+    Panel,
+}
+
+impl Surface {
+    /// The wire name, for the event log.
+    ///
+    /// Written out rather than derived from the variant, so renaming a variant
+    /// cannot silently rewrite the history of a log people grep.
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::ControlPlane => "control_plane",
+            Self::Panel => "panel",
+        }
+    }
+}
+
+/// One answer: what was decided, and which surface carried it.
+///
+/// Travels as a unit down the [`park`] channel rather than as two values,
+/// because a decision whose surface went missing somewhere in the plumbing is
+/// exactly the audit gap T14.17 exists to close.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Answer {
+    pub decision: Decision,
+    pub surface: Surface,
+}
+
 /// One request an agent is blocked on, as the control plane needs to describe
 /// it.
 ///
@@ -174,7 +240,7 @@ pub(crate) struct ParkedRequest {
 /// A parked request, and the way to wake it.
 struct Parked {
     request: ParkedRequest,
-    answer: oneshot::Sender<Decision>,
+    answer: oneshot::Sender<Answer>,
     /// Distinguishes this entry from any later one that reuses its key.
     token: u64,
 }
@@ -199,7 +265,7 @@ fn registry() -> MutexGuard<'static, HashMap<String, Parked>> {
 /// The returned guard **must** be held by whatever is waiting: dropping it
 /// removes the entry, which is how a cancelled or failed turn stops advertising
 /// a question nobody can answer any more.
-pub(crate) fn park(request: ParkedRequest) -> (Waiting, oneshot::Receiver<Decision>) {
+pub(crate) fn park(request: ParkedRequest) -> (Waiting, oneshot::Receiver<Answer>) {
     let (answer, wait) = oneshot::channel();
     let approval_id = request.approval_id.clone();
     let token = NEXT_TOKEN.fetch_add(1, Ordering::Relaxed);
@@ -272,13 +338,13 @@ pub(crate) fn waiting() -> Vec<ParkedRequest> {
 /// cancelled while they were deciding. Both are "the question is gone", and
 /// distinguishing them would mean keeping a record of answered requests for no
 /// one to read.
-pub(crate) fn answer(approval_id: &str, decision: Decision) -> bool {
+pub(crate) fn answer(approval_id: &str, decision: Decision, surface: Surface) -> bool {
     let Some(parked) = registry().remove(approval_id) else {
         return false;
     };
     // The receiver is gone only if the turn ended between the lookup and here,
     // in which case the request is moot and there is nothing to report.
-    parked.answer.send(decision).is_ok()
+    parked.answer.send(Answer { decision, surface }).is_ok()
 }
 
 #[cfg(test)]

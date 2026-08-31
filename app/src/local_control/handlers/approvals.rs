@@ -337,6 +337,11 @@ fn answer_acp(
             Decision::Allow => crate::ai::acp_agent::registry::Decision::Allow,
             Decision::Deny => crate::ai::acp_agent::registry::Decision::Deny,
         },
+        // One door with three things behind it — a local `warpctrl`, the
+        // console, a paired phone — and this handler cannot tell them apart,
+        // because authentication happens upstream and is not threaded here.
+        // Naming the door is the most it can honestly say; see `Surface`.
+        crate::ai::acp_agent::registry::Surface::ControlPlane,
     ) {
         // Between the read above and here the turn ended — cancelled, or the
         // agent went away. The question is gone rather than unanswered.

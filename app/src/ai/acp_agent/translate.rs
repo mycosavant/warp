@@ -54,6 +54,7 @@ use agent_client_protocol::schema::v1::{
 use chrono::{DateTime, Utc};
 use warp_multi_agent_api as api;
 
+use super::registry;
 use crate::event_log::Entry;
 
 /// How much of the prompt becomes the conversation's name in the history panel.
@@ -550,6 +551,9 @@ impl Translator {
             // is on the completion.
             error_type: None,
             plugin_version: None,
+            decision: None,
+            answered_by: None,
+            can_approve: None,
             applied: true,
         });
     }
@@ -593,6 +597,114 @@ impl Translator {
             // never a `tool_start` with no partner — which would read as a hang.
             error_type: (update.fields.status == Some(ToolCallStatus::Failed)).then_some("failed"),
             plugin_version: None,
+            decision: None,
+            answered_by: None,
+            can_approve: None,
+            applied: true,
+        });
+    }
+
+    /// Appends a `permission_request` for a question the agent has raised
+    /// (T14.17).
+    ///
+    /// **Derived from [`registry::ParkedRequest`] rather than from the wire,
+    /// and that coupling is the point.** `.fork/GOAL.md`'s second unattended
+    /// rule asks for *"the `tool_input` that was shown"* — and the parked
+    /// request is verifiably the shown thing: it is what every surface renders
+    /// and what `agent.approvals` reports. Re-reading the raw
+    /// `RequestPermissionRequest` here would log what *arrived*, which is the
+    /// same string today and one refactor away from silently not being. A test
+    /// pins the preview against `excerpt(parked.tool_input)` for exactly this
+    /// reason.
+    ///
+    /// The `tool_call_id` is threaded separately rather than added to
+    /// `ParkedRequest`, because it is a fact only this log consumes and the
+    /// registry's type exists to serve surfaces.
+    ///
+    /// **Observation only.** Nothing here can change an outcome: it is called
+    /// after the request has been parked and the answer is decided elsewhere.
+    pub(super) fn log_permission_request(
+        &self,
+        request: &registry::ParkedRequest,
+        tool_call_id: &str,
+    ) {
+        // Truncated by the same helper and to the same length as every other
+        // source, because a preview cut at a different length would make the
+        // field useless for the cross-source comparison it exists to support.
+        let preview = request.tool_input.as_deref().map(crate::event_log::excerpt);
+        let summary = ask_summary(request);
+        self.log(Entry {
+            v: None,
+            agent: &self.agent,
+            event: "permission_request",
+            source: "acp_agent",
+            session_id: Some(&self.conversation_id),
+            linked_session_id: self.session_id.as_deref(),
+            call_id: Some(tool_call_id),
+            parent_call_id: None,
+            cwd: self.cwd.as_deref(),
+            project: self.cwd.as_deref().and_then(crate::event_log::project_name),
+            tool_name: request.tool_name.as_deref(),
+            tool_input_preview: preview.as_deref(),
+            summary: Some(&summary),
+            // An ask is not a failure. Warp having no yes to offer is reported
+            // by `can_approve`, which is a fact about this build's allowlist
+            // and never a judgement about the call — the overreach
+            // `unconfined_reason`'s wording was corrected for in T14.8.
+            error_type: None,
+            plugin_version: None,
+            decision: None,
+            answered_by: None,
+            can_approve: Some(request.approve_selects.is_some()),
+            applied: true,
+        });
+    }
+
+    /// Appends a `permission_replied` for a question that has stopped being
+    /// open (T14.17).
+    ///
+    /// **One event with a `decision` field, not three event names.** The name
+    /// is `warp_agent`'s, and it is literally true on all three paths: Warp
+    /// replies to the agent in every case, including the one where nobody
+    /// answered — `outcome_for` relays the prepared denial when the sender was
+    /// dropped. So the event records *Warp's act* and the field records *the
+    /// person's*, which is the more honest split as well as the one that keeps
+    /// a cross-source `jq` counting the same kind of thing from both sources.
+    ///
+    /// **`decision` is always present**, `unanswered` included — see the
+    /// field's own note on why an absent key would be unreadable here.
+    pub(super) fn log_permission_replied(
+        &self,
+        approval_id: &str,
+        tool_call_id: &str,
+        decision: &str,
+        answered_by: Option<&str>,
+    ) {
+        // The approval id, because `call_id` alone cannot pair a re-asked call:
+        // an agent may ask about the same `toolCallId` more than once, which is
+        // the stale-answer hazard `ParkedRequest::approval_id` is keyed to
+        // avoid. Carrying it on both lines is what makes an ask and its answer
+        // joinable without that ambiguity.
+        let summary = format!("approval {approval_id}");
+        self.log(Entry {
+            v: None,
+            agent: &self.agent,
+            event: "permission_replied",
+            source: "acp_agent",
+            session_id: Some(&self.conversation_id),
+            linked_session_id: self.session_id.as_deref(),
+            call_id: Some(tool_call_id),
+            parent_call_id: None,
+            cwd: self.cwd.as_deref(),
+            project: self.cwd.as_deref().and_then(crate::event_log::project_name),
+            tool_name: None,
+            tool_input_preview: None,
+            summary: Some(&summary),
+            error_type: None,
+            plugin_version: None,
+            decision: Some(decision),
+            answered_by,
+            can_approve: None,
             applied: true,
         });
     }
@@ -785,6 +897,36 @@ fn actions(actions: Vec<api::client_action::Action>) -> api::ResponseEvent {
 /// names a kind *for a log*, where the `_` arm must be a token a grep or a join
 /// can match, distinct from the real `ToolKind::Other` ("other"). A shared
 /// function would have to pick one `_` arm for both audiences.
+/// What a `permission_request` line says in prose.
+///
+/// Carries three things no machine field on the line does: the **approval id**,
+/// which is the join key a `call_id` cannot supply on its own — an agent may
+/// ask about the same `toolCallId` twice, which is the stale-answer hazard
+/// `ParkedRequest::approval_id` is keyed against; the agent's own one-line
+/// **title**; and, where Warp had no *yes* to offer, the **reason**, which
+/// `acp_permission` already wrote for a person to read rather than for a filter.
+///
+/// The title earns its place in exactly the case the preview is empty. A
+/// request carrying no `rawInput` is unapprovable *because* the title is all
+/// there is (`approvable`'s second gate), so a line that dropped it would
+/// record nothing whatever about what had been asked — the one case where this
+/// log would be silent about its own subject.
+fn ask_summary(request: &registry::ParkedRequest) -> String {
+    let mut summary = format!("approval {}", request.approval_id);
+    if let Some(title) = request.title.as_deref() {
+        summary.push_str(" · ");
+        summary.push_str(title);
+    }
+    // Phrased as what Warp could not offer, never as what the call deserves.
+    // T14.8 corrected `unconfined_reason` for implying the second, and a log
+    // line is read later with less context than a panel message, not more.
+    if let Some(reason) = request.approve_refused_because.as_deref() {
+        summary.push_str(" · Warp had no yes to offer: ");
+        summary.push_str(reason);
+    }
+    summary
+}
+
 fn kind_name(kind: ToolKind) -> &'static str {
     match kind {
         ToolKind::Read => "read",

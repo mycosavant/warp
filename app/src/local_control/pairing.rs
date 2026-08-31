@@ -283,9 +283,14 @@ impl Pairings {
 /// Refuses an action a paired device may not have.
 ///
 /// Stated as an allowlist rather than a denylist on purpose. A denylist is a
-/// promise to remember every future catalog addition, and the catalog is 110
+/// promise to remember every future catalog addition, and the catalog is 114
 /// entries and grows; the failure mode of forgetting is a new action silently
 /// becoming remotely reachable.
+///
+/// (That number was 110 here for four increments while the pinned count moved
+/// to 114 — the stale-count hazard `CLAUDE.md` names, in the one comment whose
+/// argument depends on the catalog being large and growing. Read it off
+/// `catalog_has_exactly_*_retained_actions`, never off prose.)
 pub(super) fn ensure_pairable(action: ActionKind) -> Result<(), ControlError> {
     let allowed = pairable_actions();
     if allowed.contains(&action) {

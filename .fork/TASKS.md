@@ -8761,6 +8761,129 @@ mode descriptions is the first legitimate instance of `acp_permission.rs`'s
       its own process, with no Warp and no event log, which is also why the
       T14.1/T14.2 findings could be made without one running.
 
+      **As built, 2026-08-31. Two events, three fields, and one claim in this
+      ticket corrected on the way.** Reviewed adversarially before a line was
+      written; the review changed the design twice and caught one factual error
+      that had already been reported as a finding.
+
+      `permission_request` and `permission_replied` on the ACP translator,
+      reusing `warp_agent`'s names rather than inventing any. The request line
+      carries the tool kind, the `tool_input` excerpt and whether Warp had a
+      *yes* to offer; the reply line carries what was answered and by which
+      surface. Both join to the call by `tool_call_id` and to each other by the
+      `approval_id`, which rides both summaries — `call_id` alone cannot pair a
+      re-asked call, which is the stale-answer hazard `ParkedRequest` is already
+      keyed against.
+
+      **The three new `Entry` fields, and why each is a field rather than
+      prose.**
+
+      - `decision` — `allowed` / `denied` / `unanswered`, and **always present**.
+        The absence-grammar this fork uses elsewhere (`acts_on`'s "empty means
+        the agent never said") is unavailable here, because `Entry` is
+        `#[skip_serializing_none]`: a `None` does not serialise as `null`, it
+        *vanishes from the line*. A `permission_replied` with no `decision` key
+        would be indistinguishable from a line written by a build from before
+        the field existed — a versioning ambiguity in the one file that exists
+        to be believed later. So `unanswered` is stated, which is also what
+        `answered_note` already does in prose.
+      - `answered_by` — `control_plane` / `panel`, absent when nobody answered,
+        and that absence is readable because the `decision` on the same line
+        explains it.
+      - `can_approve` on the **request** line. **This is the field that lets the
+        log detect this ticket's own falsifier.** Without it a `denied` line is
+        ambiguous between a person's no and Warp never having offered a yes to
+        say — and telling those apart is the entire question the ticket was
+        built to make answerable. The reason, when it is `false`, is prose and
+        rides `summary`, because `acp_permission` wrote it for a person.
+
+      **Derived from `ParkedRequest`, not from the wire, and the coupling is the
+      point.** The charter asks for *"the `tool_input` that was shown"*, and the
+      parked request is verifiably the shown thing — it is what every surface
+      renders and what `agent.approvals` reports. Re-reading the raw
+      `RequestPermissionRequest` would log what *arrived*, which is the same
+      string today and one refactor away from silently not being. A test pins
+      the logged preview against `excerpt(parked.tool_input)` for exactly that.
+      `tool_call_id` is threaded separately rather than added to
+      `ParkedRequest`, because it is a fact only this log consumes.
+
+      **Observation only, by construction.** Both events are appends to a file
+      and a broadcast channel; neither can reach an approval outcome. A test
+      pins that logging emits no client action at all, because
+      `translate.rs`'s standing hazard is that a tool call emitted as an
+      `Action` message is an *instruction* Warp executes — the double-execution
+      trap this phase has now been talked out of four times.
+
+      **The correction, and it was a finding this ticket had already published.**
+      A claim went into a status report that a *denial* on Warp's own path never
+      produces a `permission_replied` — that it goes to `Cancelled` →
+      `stop_failure` — and therefore that the mirror was worthless. That is
+      wrong, and the error was conflating cancelling an **action** with
+      cancelling the **conversation**. Traced: `RequestedCommandViewEvent::
+      Rejected` → `cancel_action` (`block.rs:3653`) →
+      `cancel_action_with_id(…, ManuallyCancelled)` (`block.rs:5045`), then
+      `cancel_pending_action` (`action_model.rs:1276`) builds
+      `pending_action.action.cancelled_result()` into an `AIAgentActionResult`
+      and hands it to `handle_action_result`, after which the turn **resumes**.
+      So `Blocked → InProgress` fires and a denial does emit
+      `permission_replied`; `ConversationStatus::Cancelled` is the separate
+      whole-turn cancel. The mirror is sound and the shared name is right.
+
+      **A follow-on claim was then filed about that correction, and it was also
+      wrong — in this fork's most familiar way.** The claim was that the
+      correction *can never be run here*, because `warp_agent.rs:326` records
+      that its whole table is unreachable at runtime on this fork's primary
+      path. Put to the advisor, it did not survive: **that is the T12 shape**,
+      where "no browser on this machine" was filed three times meaning the WSL
+      userland and written as though it meant the hardware.
+
+      What is unavailable is the **live server path** — reaching Warp's own
+      agent needs the account the fork exists without. That is not the only
+      instrument, and the claim bundled two halves with different evidence:
+
+      - **The mapping is already test-held.**
+        `leaving_blocked_is_an_answer_and_not_a_new_prompt`
+        (`warp_agent_tests.rs:154`) pins `Blocked → InProgress` →
+        `permission_replied`. Labelling that "read only" understated it.
+      - **Only the flow half is traced** — that a rejection resumes the turn
+        rather than cancelling the conversation. And it is model-layer
+        behaviour, with `action_model_tests.rs` sitting beside the code and
+        `integration_testing/agent_mode/assertions.rs` already asserting on
+        `ConversationStatus::Blocked`. A test driving `cancel_pending_action`
+        would settle it without an account.
+
+      Left unwritten deliberately — it is a test for upstream behaviour this
+      fork does not run, and the shared event name does not depend on it
+      (`permission_replied` asserts only that an answer resolved the ask and the
+      turn moved on, which holds under either reading). Named here so it is a
+      known open thread rather than a boundary nobody re-examines. **"Verify by
+      running" has an edge, and this was not it.**
+
+      **Two process findings, both the same shape as the merge-base lesson.**
+
+      - The `Entry` widening was sized by grepping for `applied:` — **9 sites**.
+        The compiler found **12**: two files not in the grep's list, and one
+        using shorthand `applied,`. The command ran perfectly against an input
+        assumed rather than computed. `cargo check --workspace --all-targets`
+        is what made it a non-event, and the lib check would not have.
+      - A new test failed on its first run, correctly. The event log's
+        broadcast is **process-global** and tests run in parallel, so
+        `find(|line| line["event"] == "permission_request")` picked up a
+        *neighbouring test's* line and read its `can_approve`. The pre-existing
+        tool-event test already filters on `call_id` for this reason. Filtering
+        on an event name in a shared stream is a change detector for whatever
+        else happens to be running.
+
+      **The falsifier, restated now that the instrument exists.** N real working
+      sessions with `WARP_FORK_EVENT_LOG=on`: if `permission_request` count is
+      **zero while landed edits are nonzero**, the instrument recorded only
+      Warp's non-involvement and the refusal-cost question stays unanswerable
+      from it — which is exactly what T14.18 predicts for `claude-agent-acp` in
+      `auto` on the panel path, since no `session/set_mode` is sent. In that
+      case the mode surface should have led and this ticket measured nothing.
+      That is checkable within one working day of the feature existing, and
+      T14.11 is the run that checks it.
+
 - [ ] **T14.18** **The panel never sends `session/set_mode`, so with the
       flagship agent the fork's permission model is not reached at all.** Found
       2026-08-30, chasing *"is our permission model too tight?"*. It is not too

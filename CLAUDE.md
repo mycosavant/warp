@@ -171,7 +171,13 @@ conversation id, tool events under the agent's session id — so opening the
 obvious one showed a session with nothing between its ends. Now everything for a
 turn is filed under **Warp's conversation id**, the way `local_agent` always
 did, with the agent's own id on each line as `linked_session_id`. One turn, one
-file), `WARP_FORK_TRANSCRIPT` (`on` writes to **`.warp/transcripts/` under the pane's own
+file. **T14.17 added `permission_request`/`permission_replied` to that path** —
+the `tool_input` that was shown, what was decided
+(`allowed`/`denied`/`unanswered`), which surface answered, and on the ask whether
+Warp had a *yes* to offer at all. **Read a zero here carefully**: T14.18 measured
+a panel session producing zero permission requests because the agent's own
+classifier answered first, so no lines means *Warp was not in the loop*, never
+that nothing was decided), `WARP_FORK_TRANSCRIPT` (`on` writes to **`.warp/transcripts/` under the pane's own
 directory** — not `state_dir`, because outside the session's directory the
 agent's read of the file arrives as `tool: other` and *no* answer exists, so the
 tidy location is the unusable one. `.warp/` is upstream's project directory and

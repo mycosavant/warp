@@ -775,8 +775,10 @@ pub struct PairingResult {
     /// When the code stops being spendable.
     pub expires_at: DateTime<Utc>,
     /// What a device that scans this will be able to ask for — stated up front,
-    /// because "which of these 110 actions does my phone get" is the first
-    /// question anyone should ask about a QR code.
+    /// because "which of these 114 actions does my phone get" is the first
+    /// question anyone should ask about a QR code. (Read the count off
+    /// `catalog_has_exactly_*_retained_actions`, never off prose — this line
+    /// said 110 for four increments after the catalog grew.)
     pub actions: Vec<String>,
 }
 
