@@ -632,3 +632,38 @@ fn all_json_object_types() -> Vec<JsonObjectType> {
     assert_eq!(all.len(), 10, "a json object type was added or removed");
     all
 }
+
+/// **The two halves agree about who may carry an alias.**
+///
+/// `from_parts` has always dropped aliases for anything that is not a
+/// `Workflow`; `header()` used to write them for anything at all. A notebook
+/// carrying one would therefore survive `to_file_contents` and vanish on the way
+/// back in, making the module's own "these are inverses" claim false for it.
+///
+/// Not a live bug when found — `snapshot` keys its alias map on workflow ids, so
+/// nothing else ever gets one. Pinned anyway, because that is an invariant this
+/// module depends on and does not own, and the `preserve_order` regression found
+/// the same day is what a silently-broken distant invariant costs.
+#[test]
+fn only_a_workflow_carries_its_aliases_into_the_file() {
+    let mut object = workflow_fixture();
+    object.object_type = ObjectType::Notebook;
+    object.payload = Payload::Notebook {
+        markdown: "# notes".to_owned(),
+        ai_document_id: None,
+    };
+    object.aliases = vec![Alias {
+        alias: "dep".to_owned(),
+        env_vars: None,
+        arguments: None,
+    }];
+
+    let contents = object.to_file_contents().expect("a notebook is writable");
+    assert!(
+        !contents.contains("dep"),
+        "a non-workflow wrote an alias the reader would drop:\n{contents}"
+    );
+
+    let round_tripped = PortableObject::from_file_contents(&contents).expect("it parses back");
+    assert!(round_tripped.aliases.is_empty());
+}

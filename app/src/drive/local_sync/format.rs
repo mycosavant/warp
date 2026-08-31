@@ -318,10 +318,31 @@ impl PortableObject {
             // Sorted, not in the order the user happened to add them. The
             // setting is a `Vec` in edit order, and shipping that order would
             // make reordering two aliases a diff.
-            aliases: {
-                let mut aliases = self.aliases.clone();
-                aliases.sort();
-                aliases
+            // Gated on the object type, mirroring `from_parts`, so the two
+            // really are inverses for every value of this type rather than for
+            // the ones something upstream happens to build.
+            //
+            // **Found 2026-08-31 and it was not a live bug**: `from_parts` drops
+            // aliases for anything that is not a `Workflow`, and this side wrote
+            // them unconditionally — so a notebook carrying an alias would have
+            // survived a write and been dropped by the read, and the
+            // round-trip claim above would be false for it. Nothing constructs
+            // that today, because `snapshot::aliases_by_workflow` keys its map on
+            // workflow ids and every other object gets an empty vec.
+            //
+            // Fixed anyway, and the reason is the lesson from the
+            // `preserve_order` regression found an hour earlier the same day: an
+            // invariant this module depends on but does not enforce is one edit
+            // in a distant file away from being untrue, and the failure is
+            // silent. `ai_document` and `warp_pack` two lines up were already
+            // gated this way; `aliases` was the odd one out.
+            aliases: match self.object_type {
+                ObjectType::Workflow => {
+                    let mut aliases = self.aliases.clone();
+                    aliases.sort();
+                    aliases
+                }
+                _ => Vec::new(),
             },
         })
     }
