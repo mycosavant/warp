@@ -7953,6 +7953,55 @@ mode descriptions is the first legitimate instance of `acp_permission.rs`'s
       rather than before it. A working day measured across three invisible
       compactions would produce a friction log nobody could trust.
 
+      ---
+
+      **Run again 2026-08-31, six turns, and the headline is not the friction
+      count.** Log at `/tmp/t1411-day/FRICTION.md`. Totals: **6 turns, 0 stopped,
+      2 permission requests raised** — both in a deliberate verification run,
+      both `can_approve: true`, both answered in one paste from
+      `agent approvals`. Neither of the two turn-killers above fired: no denial
+      landed at the head of a working turn, and no compaction occurred inside
+      six turns.
+
+      **What the session actually produced was two corrections to this repo's own
+      claims, both from the agent in the panel and neither from review.**
+
+      1. **The denial branch is conditional** (turn 1). `handle_action_result`
+         makes the post-rejection status `Cancelled` if every finished result is
+         cancelled and `InProgress` otherwise — so *both* readings previously
+         recorded here were half of it, and the flat version had been committed
+         into `Entry::decision`'s doc. See T14.17's entry.
+      2. **T14.17's own audit trail had an orphan** (turn 3), shipped that
+         morning: a cancelled turn kept the `permission_request` and lost the
+         `permission_replied`, and the `unanswered` value that was supposed to
+         cover it was reachable only from a unit test. Fixed and then *measured*
+         both ways.
+
+      **The reusable finding is the prompt shape, not either defect.** Both came
+      from asking the agent to **walk a path and quote the deciding lines**, and
+      in the second case to say what could make the trail *lie* — rather than to
+      confirm a conclusion someone already held. A third turn using the same
+      shape against the approval/digest path found **nothing wrong** and said so
+      when explicitly told not to invent a concern, which is what makes the first
+      two worth believing.
+
+      This is the argument for dogfooding stated better than a friction count
+      can: the value was not that the fork was pleasant to use for six turns. It
+      was that using it for real work put an agent in front of code the author
+      was too close to, twice.
+
+      **Frictions logged, none stopping.** All three are the same class —
+      `agent read` is built for a person reading a panel, not a script reading an
+      answer: its output opens with the `[Warp]` transcript notice, then a bare
+      dump of tool names and paths, before the prose. A caller wanting the
+      conclusion scrolls past both. And one 225-second turn, which
+      `quiet_for_seconds` correctly reported as working rather than stalled —
+      the T14.10 instrument doing its job on its first unplanned outing.
+
+      **Honest about scale:** six turns is a long session, not a day. The
+      *quality* bar GOAL.md sets — nothing that stops a turn — is met, and the
+      *duration* half is not yet.
+
 - [x] **T14.12** **~~`agent read` should say something before the turn ends.~~
       It already does. The premise was false, and measuring it first is the only
       reason nothing was built.** Run 2026-08-29, before any code.
