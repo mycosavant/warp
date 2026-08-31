@@ -744,6 +744,17 @@ failure set (`gh`-dependent git tests, flaky secret-redaction globals, terminal
 view) whose members vary run to run — a count that matches can still hide a
 regression, and a count that differs by one is usually the flaky set.
 
+**And the same trap has a third crate in it: `-p warp_cli`.** Measured
+2026-08-31, by walking into it. The empty-approvals sentence was edited in
+`crates/warp_cli/src/local_control/commands.rs`; `-p local_control` and `-p warp
+--lib` were run and both passed; the assertion on that exact string lives in
+`crates/warp_cli/src/local_control_tests.rs` and sat **red for several hours**,
+shipped in a commit whose body described the fix. Written by someone who had read
+the T8.6 warning below the same day. The string is now a `pub(crate)` constant
+asserted by reference rather than copied, which is the fix that survives the next
+person. **`cargo check --workspace --all-targets` does not catch this** — a
+stale `assert_eq!` compiles perfectly.
+
 **Adding a `warpctrl` action? Run `-p warp --lib` too, not just `-p
 local_control`.** The catalog count is pinned in *two* places: the fast one is
 `catalog_has_exactly_<count>_retained_actions` in

@@ -418,8 +418,22 @@ fn offers_no_yes_for_an_unapprovable_request_that_gave_no_reason() {
     );
 }
 
-/// Empty says what empty means. An agent is free to ask nothing at all, so this
-/// is not evidence that nothing is running.
+/// Empty says what empty means, **in the payload and not only in a comment above
+/// it.**
+///
+/// The caveat is the assertion. T14.19 measured a poll reporting zero parked
+/// approvals while a request was genuinely waiting, and that phantom zero was one
+/// inference away from a security investigation into an auto-approval hole that
+/// does not exist. An empty list is not evidence that nothing is running, and the
+/// person reading it is the one who needs told.
+///
+/// **This test was left red for several hours on 2026-08-31**, by the same commit
+/// that added the caveat: `cargo test -p local_control` and `-p warp --lib` were
+/// run, `-p warp_cli` was not, and the string lives here. Exactly the pattern this
+/// repo already documents from T8.6 — one pin updated, its twin shipped red —
+/// committed by someone who had read that warning the same day. Assert against the
+/// constant rather than a copy of the sentence, so the next edit cannot do it
+/// again.
 #[test]
 fn renders_an_empty_approval_list_as_a_sentence() {
     let rendered = render_human_readable_for_test(
@@ -427,7 +441,11 @@ fn renders_an_empty_approval_list_as_a_sentence() {
         &json!({ "approvals": [] }),
     );
 
-    assert_eq!(rendered, "Nothing is waiting on you right now.");
+    assert_eq!(rendered, commands::NOTHING_IS_WAITING);
+    assert!(
+        rendered.contains("not evidence that nothing is running"),
+        "the empty case must carry its own caveat, not rely on a doc comment: {rendered}"
+    );
 }
 
 fn retained_action_examples() -> Vec<(ActionKind, Vec<&'static str>)> {

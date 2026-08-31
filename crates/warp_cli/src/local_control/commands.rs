@@ -191,6 +191,23 @@ fn render_human_readable(action: ActionKind, data: &serde_json::Value) -> String
 ///
 /// Falls back to the raw JSON if the payload does not parse, because a renderer
 /// is not a place to lose data a person asked for.
+/// What an empty approvals listing says, **in the payload and not only in a
+/// comment above it.**
+///
+/// The parenthetical is the load-bearing half. T14.19 measured a poll reporting
+/// zero parked approvals while a request was genuinely waiting, and that phantom
+/// zero was one inference away from a security investigation into an
+/// auto-approval hole that does not exist. The distinction between "nobody is
+/// asking" and "nothing is running" is the one a person reads straight past, and
+/// `agent list` is what actually answers the second.
+///
+/// A constant because the sentence has a test asserting it, in another crate. It
+/// was edited here and left red there for several hours on 2026-08-31 --
+/// `-p local_control` and `-p warp --lib` were run, `-p warp_cli` was not. One
+/// home for the string means the next edit cannot repeat that.
+pub(crate) const NOTHING_IS_WAITING: &str = "Nothing is waiting on you right now. (An agent is free to ask nothing at all, so this is \
+     not evidence that nothing is running — `agent list` answers that.)";
+
 fn render_approvals(data: &serde_json::Value) -> String {
     let Ok(result) = serde_json::from_value::<AgentApprovalsResult>(data.clone()) else {
         return serde_json::to_string_pretty(data).unwrap_or_else(|_| data.to_string());

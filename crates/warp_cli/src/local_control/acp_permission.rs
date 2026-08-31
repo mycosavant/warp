@@ -74,6 +74,23 @@
 //!
 //! The rule that makes this a line rather than a rationalisation: **an option may
 //! only be selected by a surface capable of showing what that option declares.**
+//!
+//! **Read that as the *rationale*, because the mechanism is stricter and this
+//! paragraph described it wrongly until 2026-08-31.** [`choose`] takes no surface
+//! parameter at all — its signature is `(request, decision)` — so it does not ask
+//! "can *this* surface show a declaration". It refuses any option carrying a
+//! declared change **for every surface, including the panel**, which can render
+//! one perfectly well. The stated rule would permit a per-surface answer; the
+//! code does not implement one.
+//!
+//! Recorded rather than reworded because the difference is the crux of I18. A
+//! reader taking the rule literally would conclude the panel is already entitled
+//! to offer a persistent grant and that some per-surface check has gone missing.
+//! Nothing has gone missing: the universal refusal is deliberate and fail-closed,
+//! and widening it to a capability check would be a **permission-posture change**,
+//! which is exactly the decision that is frozen and the maintainer's to make.
+//! Found by an agent in Warp's own panel auditing this file, asked to name
+//! anything whose doc claims something the code below it does not do.
 //! A single-shot option declares only the tool call, which every surface renders.
 //! An option carrying a declared change describes a *transition*, and neither a
 //! non-interactive `--approve` nor a phone card can show that before the tap — so
