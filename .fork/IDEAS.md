@@ -2128,6 +2128,75 @@ Guessing, and marked as such:
    two taps matters far less than whether the grant has a scope and an end, and
    building the gesture first would be decorating a decision nobody has made.
 
+## Evidence, measured 2026-08-30 — and it lands on point 2, not on the gesture
+
+The `PermissionRequest` payload a Claude Code hook receives was captured
+verbatim (`.fork/tools/dump-hook-stdin.sh`, registered beside the vendored
+plugin's own hook — a hook event runs every command registered for it, so this
+needed no edit to the plugin). Two of its ten keys bear directly on this entry.
+
+**`permission_suggestions` carries Claude Code's own proposed rule additions**,
+shaped:
+
+```
+{type: addRules, rules: [...], behavior: allow, destination: session}
+```
+
+That is a first-class, **session-scoped** persistent grant, with a `destination`
+field naming the scope and a `rules` list naming what it would widen. So this
+entry's central claim is now measured rather than argued: *the allow-all
+affordance is not something the fork would be inventing — it is something already
+offered and currently dropped on the floor.*
+
+**And it answers point 2 in the vendor's own vocabulary.** "Scope the grant to
+something that ends" was written as the narrowest defensible version and marked a
+guess. `destination: session` is exactly that, shipped, with the scope on the
+wire where a surface could render it. The fork would be *adopting* a scope rather
+than choosing one.
+
+`permission_mode` is the second key, and it belongs to T14.18's territory rather
+than this one: Warp can **know** the mode a CLI agent is in rather than infer it.
+`effort: {level: …}` is the third and is unexamined.
+
+## The finding that actually decides the shape: the two paths have opposite gaps
+
+Neither transport can today both *describe* a persistent grant and *answer* one,
+and they fail at opposite ends. This is the thing to design around, and it was
+invisible until both payloads had been read.
+
+| | can Warp answer it? | can Warp say what it widens? |
+|---|---|---|
+| **ACP** (`opencode`) | **yes** — `allow_always` is a selectable option id | **no** — measured, it carries no declaration, so the only thing to show is the name |
+| **Claude Code** (plugin hook) | **no** — the permission hook is *observational only*: it reports and exits (T14.20) | **yes** — `permission_suggestions` names the rules and the scope |
+
+So `acp_permission`'s standing rule — *an option may only be selected by a
+surface capable of showing what that option declares* — is not the fork being
+cautious on the ACP path. It is the rule correctly refusing the only path that
+can currently act, because that path is the one that cannot describe. And the
+path that can describe cannot act.
+
+**Two consequences, and the second is the one to keep.**
+
+1. A persistent grant built on the ACP path today would have to render
+   `allow_always` as a bare name, which is the disclosure failure the rule
+   exists to prevent. Building the gesture there first would be putting a
+   solemn ritual in front of an undisclosed decision — the exact theatre this
+   entry's own argument-against warned about, arrived at from the other side.
+2. **"Remote consent only works on ACP" is true today and is not
+   architectural.** It is what you get when the only channel to a CLI agent is
+   one-directional. The Claude Code plugin is a *versioned* protocol negotiated
+   through `WARP_CLI_AGENT_PROTOCOL_VERSION`, and the fork already owns the
+   vendored copy. A hook that answers is a plugin-side change, not a Warp-side
+   impossibility — and it is the same shape as `TR-EVENTS-B`'s missing call id,
+   which is also plugin-side and also looked structural until it was read.
+
+**Not proposed, and deliberately.** Nothing above is a recommendation to build.
+`.fork/GOAL.md` freezes permission-posture changes, and a persistent grant is the
+largest posture change on this board — the consent architecture with the person
+removed for a while, which is what the charter was written against. This section
+records that the evidence arrived and what it says. The decision is the
+maintainer's and has not been made.
+
 ---
 
 # I19 — agent ergonomics: what the thing inside Warp can feel
