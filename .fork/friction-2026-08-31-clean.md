@@ -23,9 +23,18 @@ Success condition per GOAL.md: nothing here stops a turn.
 | 6 | `handlers/events.rs` | **0** | no | 38s. Nothing wrong; my boundary too tight for two of three questions. |
 | 7 | **adversarial check of this morning's own fix** | **0** | no | 154s. Found the fix's recursion untested. |
 
+| 8 | `handlers/approvals.rs` | **0** | no | 106s. Module doc asserts approval "is a keystroke"; `answer_acp` is not one. |
+| 9 | `event_log/warp_agent.rs` | **0** | no | 120s. Preview doc says "two things"; three arms. |
+| 10 | `acp_agent/translate.rs` | **0** | no | 73s. "Permission requests never reach this file" — T14.17 staled it that morning. |
+| 11 | `crates/local_control/protocol.rs` | **0** | no | 194s. **Nothing wrong.** Every `skip_serializing_if` enumerated. |
+| 12 | `fork.rs` | **0** | no | 199s. "Default off, unlike every other predicate" — three others are too. |
+| 13 | `local_control/console.rs` | **0** | no | 106s. CSP comment contradicts itself about `img-src`. |
+| 14 | `acp_agent/registry.rs` | **0** | no | 134s. A doc comment on the wrong function; one missing blank line. |
+| 15 | `graph.rs` resume guard | **0** | no | 78s. Fingerprint doc oversells completeness against a comment a page later. |
+
 ## Totals
 
-- **turns: 7**
+- **turns: 15**
 - **permission requests: 0**
 - **turns stopped: 0**
 - mode `default` confirmed in `agent list`; `permissions_denied` absent, correctly
@@ -91,3 +100,38 @@ Five of the day's findings were the same defect class, and none of them was a bu
 Two were in files whose *other* comments argue the correction at length. All five
 came from one question: *"name anything whose doc comment claims something the
 code below it does not do."* That question is now in CLAUDE.md with the table.
+
+
+## Turns 8-15
+
+Eight more scoped audits. **Zero permission requests across all fifteen turns,
+zero stops, Warp in the consent loop throughout** (`mode: default`,
+`permissions_denied` absent on every conversation).
+
+Seven more defects, all the same class, all fixed. One audit (`protocol.rs`)
+found nothing wrong after enumerating every `skip_serializing_if` in the file
+against whether absence is distinguishable from a default — which is what makes
+the other seven worth believing.
+
+## The day's actual finding
+
+Twelve stale docs in one day, every one from a single question:
+
+> *name anything whose doc comment claims something the code below it does not do*
+
+**None of them is a careless comment.** Each was written carefully, was true when
+written, and was falsified by a later change to the code beside it. Four are
+*internally* inconsistent — the file contradicts itself and both halves are signed
+work. One was wrong purely by **position**: a missing blank line had attached
+`waiting()`'s doc to the next function, documenting that function as doing the
+opposite of what it does and leaving `waiting()` undocumented.
+
+**One of the twelve was mine, from that same morning.** T14.17 added two functions
+to `translate.rs` that take a `ParkedRequest`; the header above them says
+permission requests "never reach this file". Same person, hours apart, neither
+noticing. Adding a function is exactly when the paragraph above it stops being
+true and exactly when nobody re-reads it.
+
+**Nothing in the toolchain sees any of this.** `cargo check --workspace
+--all-targets`, `cargo test`, `./script/format`, `check_no_inline_test_modules` —
+all pass with all twelve in place.
