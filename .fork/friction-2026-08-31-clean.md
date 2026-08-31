@@ -17,9 +17,15 @@ Success condition per GOAL.md: nothing here stops a turn.
 | 1 | audit `local_sync/mod.rs` (scope too tight — module decls only) | **0** | no | 38s. Said so plainly instead of fabricating. My boundary error, not the fork's. |
 | 2 | audit `local_sync/apply.rs` + tests | **0** | no | 120s. Two doc findings; running that crate's tests then found a real regression. |
 
+| 3 | `format.rs` byte stability | **0** | no | 135s. Found the alias round-trip asymmetry. |
+| 4 | `wsl_transport.rs` + `wsl.rs` | **0** | no | 84s. Found `SpawnFailed` unreachable on the path it was written for. |
+| 5 | `mode.rs` session modes | **0** | no | 82s. Found the module header describing a discarded first cut. |
+| 6 | `handlers/events.rs` | **0** | no | 38s. Nothing wrong; my boundary too tight for two of three questions. |
+| 7 | **adversarial check of this morning's own fix** | **0** | no | 154s. Found the fix's recursion untested. |
+
 ## Totals
 
-- **turns: 2**
+- **turns: 7**
 - **permission requests: 0**
 - **turns stopped: 0**
 - mode `default` confirmed in `agent list`; `permissions_denied` absent, correctly
@@ -47,3 +53,41 @@ it exists for exactly this. The guard worked; nobody ran it.
   question could not be answered in scope. Annoying, not stopping.
 - **Nothing else.** Two turns, zero asks, zero stops, with Warp in the consent
   loop the whole time (`mode: default`, not `auto`).
+
+
+## Turns 3-7
+
+Seven turns, **zero permission requests, zero stops**, Warp in the consent loop
+throughout (`mode: default`, confirmed in `agent list`). Five defects found, all
+fixed, all pinned:
+
+| turn | finding |
+|---|---|
+| 3 | `header()` wrote aliases for any object type; `from_parts` drops them for non-workflows — so the two were not inverses. Not live, gated anyway. |
+| 4 | `SpawnFailed`'s doc says it is what you see without WSL. Most callers go through `output()` and got `IoError`, including `detect_platform` — the *first* thing anyone without WSL hits. |
+| 5 | `mode.rs`'s header and CLAUDE.md both said an unadvertised mode id is "reported, not sent". It **refuses the turn**. Both were describing a first cut the file's own `Decision::Refuse` doc records as wrong. |
+| 6 | Nothing wrong. |
+| 7 | This morning's `sorted_keys` fix claims "at every depth" and no test proved past depth 1. Calibrated: strip the recursion and the *old* test passes while the new one fails. |
+
+### The one friction, and it is mine
+
+**Twice the boundary was too tight** — turn 1 named `local_sync/mod.rs` (four
+`pub mod` lines) and turn 6 named `handlers/events.rs` (which returns a URL; the
+stream lives elsewhere). Both times the agent said the question could not be
+answered in scope rather than fabricating. Cost: a turn's usefulness, never a
+turn.
+
+So the scoping rule needs its second half: **name the files that contain the
+implementation** — and if you do not know which those are, that is a locating
+question first, asked separately.
+
+### What the day's pattern turned out to be
+
+Five of the day's findings were the same defect class, and none of them was a bug:
+
+> **a doc that outlived its code** — the code was corrected, the prose above it
+> was not, so the comment preserves a design that was considered and rejected.
+
+Two were in files whose *other* comments argue the correction at length. All five
+came from one question: *"name anything whose doc comment claims something the
+code below it does not do."* That question is now in CLAUDE.md with the table.
