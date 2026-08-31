@@ -2359,3 +2359,93 @@ one, the answer is to leave it alone and say so.
 3. Only then decide whether a second fork surface is worth a phone-sized
    terminal, given SSH already gives a shell with all 114 `warpctrl` actions and
    the full fork behaviour behind it.
+
+## As found — step 2 done, and question 2 is settled
+
+**Measured 2026-08-30, landed as `e4f52077a`.** The reading job above was done and
+the answer is the one this fork keeps finding: **no feature flag is consulted
+anywhere in the path.** `initial_login_phase` is a plain predicate over
+`AuthState`, in the app crate, two lines from a `fork::` call that had never been
+made.
+
+**Question 2 — cosmetic or load-bearing — resolves to *both*, split by
+transport, and the split is the whole answer.** The gate is load-bearing for
+Warp's own cloud agent, which needs the account whatever the screen says. It is
+**cosmetic for the fork's transports**, because `generate_multi_agent_output` is
+intercepted before `ServerApi` is ever reached. So the correct predicate is not
+`has_validated_identity` — it is the account gate **conjoined with the fork
+actually having an agent that will answer**:
+
+```rust
+fn fork_agent_will_answer() -> bool {
+    crate::fork::acp_agent_command().is_some() || crate::fork::local_agent_enabled()
+}
+```
+
+Deliberately *not* widened to `has_validated_identity` itself, which also feeds
+`TuiUserInfoSnapshot::is_logged_in` and guards `load_current_account` and
+`activate_global_mcp_servers`. Lifting those would be claiming an account exists.
+This lifts one screen for one case that can be served without one.
+
+**Measured with it in place:** the TUI opens (`Not signed in`, 22 skills
+discovered), a fork ACP agent answers, and a permission request **parks
+correctly**. The consent architecture is intact in a binary the fork had never
+run.
+
+## The blocker it exposed, which was never about the gate
+
+The parked request produced TUI prose instructing the user to run `warpctrl agent
+approve 7847a317…` — **a command that cannot exist in that process.** The
+`LocalControlServer` is registered behind a `matches!(launch_mode, LaunchMode::App
+{..} | LaunchMode::Test {..})` at `app/src/lib.rs:2621` (read, not run), which has
+no TUI arm, and `warp_control_cli` is absent from `warp_tui`'s features. So the
+note named the one instrument guaranteed to be missing.
+
+**That bug never needed the bypass to exist.** A signed-in TUI with
+`WARP_FORK_ACP_COMMAND` set had it too — which is why the fix is not part of the
+bypass and stands on its own. `fork::local_control_serving()` is now recorded at
+the single site that registers the server and read by `asking_note`; where nothing
+can answer, the note says **"Nothing in this session can answer it"**, drops the
+paired-device sentence, and names Ctrl-C.
+
+**Ctrl-C is measured to escape** — it closes the permission, cancels the turn, and
+the next message can be typed. That is what made keeping the predicate
+defensible: a disclosed, escapable refusal is honest, where a wedge with no exit
+would have been worse than no bypass at all.
+
+One test finding worth keeping, because it is the general shape. The first
+version of the test asserted the note must never contain the string `warpctrl` —
+and it **failed against copy that was right**, because the note names the tool *as
+absent*. Someone who knows `warpctrl` is exactly the person who will reach for it,
+so naming it is the useful thing to do. The test now forbids a runnable *command*
+(`agent approve`/`deny`/`approvals`), not a mention.
+
+## Not built, and the hazard to name before anyone does
+
+**Deferred on the advisor's ruling: build nothing a friction log has not asked
+for.** The panel earned its button after **35 measured copy-paste approvals**
+(T14.9 → T14.16). The TUI has zero sessions of friction log. The sequencing is
+this fork's own, and it has been right every time it was honoured.
+
+If a TUI answerer is ever built, the cheap path is known — one `LaunchMode` arm at
+`app/src/lib.rs:2621` plus `warp_control_cli` in `warp_tui`'s features, which
+would also serve the T12 console and its already-built per-entry gating, adding
+**zero** new consent-surface code. That is this fork's most repeated finding
+wearing its usual clothes, and it is why (C) is the option to falsify first.
+
+**But it carries a hazard the panel never had, and it is named here so it is not
+discovered later as a fourth-surface T14.6: type-ahead.** A TUI prompt appears in
+the same terminal the person is typing into. An Enter already sitting in the input
+buffer when the prompt takes focus is a **yes nobody gave** — consent
+manufactured by the terminal's line discipline rather than by a decision. The
+panel's two-tap arming is the answer in different clothes, and the reason it
+exists is stated in T14.16's own "not built, deliberately": *binding Enter to a
+permission grant is a decision with its own argument, because a single cheap
+gesture should not be able to say yes.*
+
+In a TUI the gesture is cheaper still, because the person did not even have to be
+looking. Any answerer here must drain the input buffer before arming, or require a
+key that no buffered newline can supply. **Unverified**, and it is the first thing
+to measure rather than reason about: whether the buffered Enter actually lands, on
+which terminal, and whether SSH latency widens the window. Measure it before
+designing against it.
