@@ -8029,11 +8029,61 @@ mode descriptions is the first legitimate instance of `acp_permission.rs`'s
         refused the frame. A question that hides its assumption gets an answer
         built on it.
 
-      **Scale, honestly.** Eleven turns across a session that crossed midnight,
-      with four defects fixed and two docs corrected, is a day's work by output.
+      **The run went to twenty turns, and turns 16-17 finally put something in
+      the friction log that *stopped* a turn** — the thing GOAL.md's success
+      condition is actually about. Then turn 18 took it back out again, and that
+      sequence is the most useful thing the day produced.
+
+      One audit target (`tool_digest.rs`) failed twice. A `find /` reached outside
+      the project, was correctly refused, and the turn ended `status: success`
+      with **no answer in it**. Re-asked, it produced **sixteen** `rg` requests
+      before being cancelled. Both went into the log as fork friction, and the
+      sixteen went into `CLAUDE.md` as the measured case for **I18**.
+
+      **Then the same question was re-run with one sentence added** — *answer only
+      from those two files; do not follow callers, do not trace the UI* — and came
+      back in 50 seconds with **0 permission requests** and a complete answer.
+      Two further scoped audits (`acp_permission.rs`, `graph.rs`) also cost **0**.
+
+      | audit scope | asks |
+      |---|---|
+      | named files (`egress`, `console`, auth trio, transcript) | 0–1 each |
+      | *"trace where the warning goes and who sees it"* | **16, turn lost** |
+      | the same target, two named files | **0** |
+      | `acp_permission.rs`, two named files | **0** |
+      | `graph.rs`, two named files | **0** |
+
+      **So the I18 claim was retracted the same day it was written.** The number
+      did not survive its first control. The persistent grant may still be worth
+      building; the argument for it is no longer this measurement. **And the rule
+      that replaces it costs one sentence:** name the files, and say where the
+      answer stops. An audit question with a boundary is answerable inside this
+      fork's permission posture exactly as it stands.
+
+      **One thing was still worth building from the episode**, because scoping
+      avoids the storm and does nothing about legibility after the fact:
+      `permissions_denied` on `agent.list` (`7c1313a0e`). Turn 16's real trap was
+      `status: success` on a turn with no answer, and a caller polling status had
+      no way to tell it from one that worked. Deliberately not a verdict — a
+      refusal is often correct and the turn answers anyway — and deliberately
+      outside `TURNS`, because the question is asked after the turn ends.
+
+      **And the fork found a defect in its own maintainer.** Faced with a stream
+      of asks I wrote a loop that printed each request and approved it regardless
+      of content — the hazard GOAL.md names, done while present, which is not much
+      better. The audit trail showed afterwards that all fifteen were `ls`/`find`/
+      `rg` inside the repo or `~/.cargo`, every one within the charter. **No harm
+      done and the process was still wrong**, and the only reason the first half
+      can be asserted is that T14.17 recorded what was shown for each. Separately,
+      `renders_an_empty_approval_list_as_a_sentence` had been **red since that
+      morning** — one pin updated, its twin in another crate shipped red, by
+      someone who had read this repo's T8.6 warning the same day.
+
+      **Scale, honestly.** Twenty turns across a session that crossed midnight,
+      with eight defects fixed and six docs corrected, is a day's work by output.
       It is not eight hours of continuous use, and nothing here establishes what
-      the fork feels like at that length — the frictions logged are all from
-      short bursts.
+      the fork feels like at that length — every friction logged came from a short
+      burst.
 
 - [x] **T14.12** **~~`agent read` should say something before the turn ends.~~
       It already does. The premise was false, and measuring it first is the only

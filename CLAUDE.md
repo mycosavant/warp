@@ -127,6 +127,17 @@ gated, check **which** kind you have before reaching for `FORCE_ENABLED`.
 graph that added **zero** new app surface — a TOML file and a `while` loop over
 verbs that already existed. Reach for a file and a loop before a subsystem.
 
+**One thing to know before running someone else's plan, audited 2026-08-31 and
+disclosed in the file's own docs rather than hidden:** the read-only floor is
+structural only for a node with `review = true`, where a wide default allowlist
+is refused and the fence cannot be widened by naming `read-only` itself — *"a
+reviewer that can write can make its own verdict true."* Everywhere else, safety
+rests on the plan author naming a restricted allowlist, and *"omit the key
+entirely for no restriction"* is the documented default. Assertions are shell on
+the runner's commands. So a plan file is code, and it is worth reading before
+`graph run` the way any script would be. Nothing wrong was found; this is the
+shape of what it is, and this table entry used to sell it without saying so.
+
 ---
 
 ## The fork's seams
