@@ -55,10 +55,20 @@
 //!
 //! A person who wants a different mode names it in `WARP_FORK_ACP_MODE`, and
 //! Warp sends `session/set_mode` only for an id the agent actually advertised.
-//! An id it did not advertise is reported rather than sent: the spec requires
-//! the mode be one of `availableModes`, and a JSON-RPC error naming a method is
-//! not a sentence anyone can act on — the same judgement `mod.rs` already makes
-//! about asking a non-resuming agent to resume.
+//! **An id it did not advertise refuses the turn** — see [`Decision::Refuse`],
+//! whose own doc argues the case. The spec requires the mode be one of
+//! `availableModes`, so sending it would produce a JSON-RPC error naming a
+//! method, which is not a sentence anyone can act on.
+//!
+//! **This paragraph said "reported rather than sent" until 2026-08-31**, which
+//! was the behaviour of a first cut that `Decision::Refuse` explicitly records as
+//! wrong and replaced: that version noted the problem and ran the turn anyway,
+//! and what the note was *about* was a session running under a policy the person
+//! did not choose. The correction landed in the code and in the variant's own
+//! doc; this header kept describing the version that was thrown away. The
+//! difference is not cosmetic — "reported" implies the turn proceeds, and a typo
+//! in `WARP_FORK_ACP_MODE` stops it. Found by an agent in Warp's own panel,
+//! scoped to this file and its tests.
 //!
 //! # An agent may change its own mode, and that is disclosed too
 //!

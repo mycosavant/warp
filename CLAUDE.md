@@ -30,6 +30,25 @@ the project is built on, and it is stated here because it keeps paying:
 When something here has only been read, say so. `.fork/IDEAS.md` marks its
 unverified claims at the top of the file; keep that habit.
 
+**And the commonest defect in this fork is not a bug — it is a doc that outlived
+its code.** Five found in one day (2026-08-31), every one by asking an agent
+*"name anything whose doc comment claims something the code below it does not
+do"*:
+
+| where | the doc said | the code did |
+|---|---|---|
+| `egress.rs` | a check in `execute_inner` *"cannot be bypassed"* | `eventsource` bypassed it |
+| `acp_permission.rs` | *"only by a surface capable of showing…"* | no surface parameter exists; refuses for all |
+| `apply.rs` | a reassigned alias is *"named rather than counted"* | named **and** counted |
+| `wsl.rs` | `SpawnFailed` is *"what a caller sees"* without WSL | most callers got `IoError` |
+| `mode.rs` **and this file** | an unadvertised mode id is *"reported, not sent"* | it **refuses the turn** |
+
+The pattern is always the same: the code was corrected and the prose above it was
+not, so the doc preserves a design that was considered and rejected. Two of these
+were in files whose *other* comments argue the correction at length. **Ask that
+question of any file you are about to trust**, and expect the answer to be about
+a paragraph that used to be true.
+
 **And a claim marked *measured* is measured as of its date, not measured now —
 re-run it before building on it.** This is the subtler failure, because "measured
 2026-08-27" reads like ground truth and is treated as exempt from the doubt
@@ -167,7 +186,7 @@ ran a shell command in `$HOME` and sent no permission request; in a directory
 with one it asked, and Warp denied. This corrects an earlier claim here that the
 config came from wherever Warp was launched), `WARP_FORK_POLICY` (set `0`/`off`/`false`
 to run stock upstream behaviour without rebuilding — use this to A/B a suspected
-fork regression), `WARP_FORK_ACP_MODE` (**the session mode to ask the ACP agent for, by that agent's own id for it** — `default` for `claude-agent-acp`, which is how you make it ask rather than let its `auto` classifier answer. Unset by default and deliberately so: ids are opaque and vendor-specific, so Warp discloses the mode in force and never chooses one. An id the agent did not advertise is reported, not sent), `WARP_FORK_LOCAL_AGENT`, `WARP_FORK_AGENT_SPAWN_DEPTH`,
+fork regression), `WARP_FORK_ACP_MODE` (**the session mode to ask the ACP agent for, by that agent's own id for it** — `default` for `claude-agent-acp`, which is how you make it ask rather than let its `auto` classifier answer. Unset by default and deliberately so: ids are opaque and vendor-specific, so Warp discloses the mode in force and never chooses one. An id the agent did not advertise **refuses the turn** — it is not sent and the turn does not run. This line said "reported, not sent" until 2026-08-31, and so did `mode.rs`'s own module header; both were describing a first cut that `Decision::Refuse` records as wrong and replaced, because a note scrolls and what it is a note *about* is a session running under a policy nobody chose. The parser shape here is `WARP_FORK_CONTROL_BIND`'s — a typo would otherwise silently mean something — and unlike that one, refusing costs only the turn), `WARP_FORK_LOCAL_AGENT`, `WARP_FORK_AGENT_SPAWN_DEPTH`,
 `WARP_FORK_ALLOW_TELEMETRY_EGRESS`, `WARP_FORK_QUAKE_VISOR` (the one that
 defaults **on** — set it off to get upstream's terminal in the hotkey window),
 `WARP_FORK_FRAME_LOG` (`on`, or a threshold in ms — slow-frame accounting to
