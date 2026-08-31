@@ -198,7 +198,12 @@ fn render_approvals(data: &serde_json::Value) -> String {
     if result.approvals.is_empty() {
         // Says what empty means. An agent is free to ask nothing at all, so this
         // is not evidence that nothing is running.
-        return "Nothing is waiting on you right now.".to_owned();
+        // Says what empty means, in the payload and not only in a comment
+        // above it: the distinction between "nobody is asking" and "nothing is
+        // running" is exactly the one a person reads past at 2am.
+        return "Nothing is waiting on you right now. (An agent is free to ask nothing at all, \
+                so this is not evidence that nothing is running — `agent list` answers that.)"
+            .to_owned();
     }
 
     let mut out = String::new();
@@ -212,6 +217,18 @@ fn render_approvals(data: &serde_json::Value) -> String {
             approval.agent,
             approval.summary.as_deref().unwrap_or("(no summary given)")
         ));
+        // **Labelled `approval_id`, and the label is the point.** The id was
+        // already here, but only inside the runnable `agent approve '<id>'`
+        // line — so a script grepping the pretty output for `approval_id`
+        // found nothing while a request sat parked, and reported a confident
+        // zero. That phantom zero was one inference away from a security
+        // investigation into an auto-approval hole that does not exist.
+        //
+        // The documented remedy is `--output-format json` for anything a
+        // script decides on, and it still is. This is the cheaper half: make
+        // the human format contain the token a person would reach for anyway,
+        // so the trap needs the documentation rather than depending on it.
+        out.push_str(&format!("  approval_id {}\n", approval.approval_id));
         if let Some(tool) = &approval.tool_name {
             out.push_str(&format!("  tool      {tool}\n"));
         }

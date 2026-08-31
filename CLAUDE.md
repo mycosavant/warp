@@ -226,6 +226,21 @@ Windows). Killing the process leaves a stale discovery record and a
 crash-recovery sibling holding the ports, so the next launch fails. Ordinary
 shutdown cleans both up.
 
+**…and `ok: true` from `window close` never meant the window closed.** Read
+2026-08-30: the handler sends the close with `TerminationMode::Cancellable` —
+*"the termination can be interrupted"* — and returns the instant it has asked,
+without observing the outcome. So `ok` meant *the request was dispatched*, and
+nothing in the payload said so. That is the mistake `approvals.rs` explicitly
+refuses one action over, reporting the keystroke it sent rather than
+`approved: true` because *"a result claiming `approved: true` would assert an
+effect this process cannot observe"*. The result now carries
+`close: "requested"`, `cancellable: true` and a `verify` sentence naming
+`instance list` as the check. **Deliberately not claimed: why a close would be
+refused** — the mechanism has not been established by running it, and one
+candidate is ruled out (`CloseSessionConfirmationDialog` covers pane and tab
+closes; `OpenDialogSource` has no window arm), so naming a cause would be
+invented certainty.
+
 **…and a CLI agent running in a pane blocks it too, with none of the wedge's
 tells.** Measured 2026-08-30: with `claude` alive in a pane, `window close`
 answered `ok: true` and the process stayed up — while `agent list` reported **no
@@ -553,14 +568,19 @@ Everything the ticket wanted is already there: tool names in the prose, refusals
 in the prose with their reason, and now failures too.
 
 Two instrument notes from that run, both the same lesson this file keeps paying
-for. `warpctrl agent approvals` in its default **pretty** format says *"Nothing
-is waiting on you right now"* and contains no `approval_id`, so a poll grepping
-for that field reports zero while a request is genuinely parked — and a phantom
-zero was then one inference away from a security investigation into an
-auto-approval hole that does not exist. Use `--output-format json` for anything
-a script decides on. And `--instance` is a **per-subcommand** flag, not a global
-one: `warpctrl pane list --instance <id>`, never `warpctrl --instance <id> pane
-list`, which exits with `unexpected argument`.
+for. `warpctrl agent approvals` in its default **pretty** format carried the
+approval id *only* inside the runnable `agent approve '<id>'` line, never as a
+labelled field — so a poll grepping for `approval_id` reported zero while a
+request was genuinely parked, and that phantom zero was one inference away from
+a security investigation into an auto-approval hole that does not exist.
+**Fixed 2026-08-31**: the pretty output now has a labelled `approval_id` line,
+and the empty case says *in the payload*, not merely in a comment above it, that
+an agent asking nothing is not evidence nothing is running. **The rule stands
+regardless — use `--output-format json` for anything a script decides on**; the
+fix makes the trap need the documentation rather than depend on it. And
+`--instance` is a **per-subcommand** flag, not a global one: `warpctrl pane list
+--instance <id>`, never `warpctrl --instance <id> pane list`, which exits with
+`unexpected argument`.
 
 **An agent in the panel works in the *pane's* directory, and a fresh pane
 starts in `$HOME`.** Not in the directory Warp was launched from. Both agent

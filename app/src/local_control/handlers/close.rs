@@ -30,6 +30,56 @@ fn validate_empty_params(action: &Action) -> Result<(), ControlError> {
     ))
 }
 
+/// What `window.close` answers, and why it is not a bare `ok`.
+///
+/// **`ok: true` here has always meant "the request was dispatched", never "the
+/// window closed", and nothing in the payload said so.** The close is sent with
+/// [`TerminationMode::Cancellable`] — the mode whose own doc says *"the
+/// termination can be interrupted"* — and this handler returns the instant it
+/// has asked, without observing the outcome. So a caller that reads `ok: true`
+/// as "Warp exited" is reading a claim this process never made and cannot make.
+///
+/// **This is the mistake `approvals.rs` already refuses to make**, one action
+/// over: it reports the keystroke it sent rather than `approved: true`, on the
+/// stated grounds that *"a result claiming `approved: true` would assert an
+/// effect this process cannot observe"*. Same situation, same answer.
+///
+/// **It has a measured cost, which is why this is worth a field.** With a CLI
+/// agent alive in a pane, `window close` answered `ok: true` and the process
+/// stayed up; three instances accumulated in one session that way, and stale
+/// instances make every later `warpctrl` call answer `ambiguous_instance`. A
+/// check that greps only for `"ok"` sails straight past it. A wedged ACP turn
+/// does the same, reproduced twice, once after waiting 43 seconds.
+///
+/// **What is deliberately not claimed here: why.** The mechanism that
+/// interrupts a cancellable termination has not been established by running it,
+/// and one candidate was ruled out by reading — `CloseSessionConfirmationDialog`
+/// covers pane and tab closes (`OpenDialogSource` has no window arm) and so is
+/// not it. Naming a cause on this evidence would be inventing one, which is
+/// exactly what `unconfined_reason` was corrected for in T14.8. The field says
+/// the close may be refused and that the caller must look; it does not guess
+/// what would refuse.
+fn close_requested(instance_id: &Option<InstanceId>) -> serde_json::Value {
+    let mut response = ack(instance_id, ActionKind::WindowClose);
+    if let Some(object) = response.as_object_mut() {
+        // Additive: `ok` keeps its existing meaning for every caller that
+        // already reads it, and the qualifier sits beside it rather than
+        // changing it out from under them.
+        object.insert("close".to_owned(), serde_json::json!("requested"));
+        object.insert("cancellable".to_owned(), serde_json::json!(true));
+        object.insert(
+            "verify".to_owned(),
+            serde_json::json!(
+                "a cancellable close can be refused and this result does not observe the \
+                 outcome; poll `instance list` until this instance is gone. If it stays, end \
+                 any CLI agent running in a pane and cancel any in-flight agent turn, then \
+                 close again."
+            ),
+        );
+    }
+    response
+}
+
 pub(crate) fn window_close(
     instance_id: &Option<InstanceId>,
     request: &RequestEnvelope,
@@ -46,7 +96,7 @@ pub(crate) fn window_close(
     let window_id = target_window_id_for_target(ctx, &request.target, ActionKind::WindowClose)?;
     ctx.windows()
         .close_window(window_id, TerminationMode::Cancellable);
-    Ok(ack(instance_id, ActionKind::WindowClose))
+    Ok(close_requested(instance_id))
 }
 
 pub(crate) fn tab_close(
@@ -119,3 +169,7 @@ pub(crate) fn pane_close(
     pane_group.update(ctx, |pane_group, ctx| pane_group.close_pane(pane_id, ctx));
     Ok(ack(instance_id, ActionKind::PaneClose))
 }
+
+#[cfg(test)]
+#[path = "close_tests.rs"]
+mod tests;
