@@ -325,6 +325,20 @@ pub(super) struct Translator {
     ///
     /// Bounded by the calls in flight, not by the turn: an entry is removed by
     /// the result that answers it.
+    /// Warp's one disclosure sentence, held until the task it would attach to
+    /// exists.
+    ///
+    /// **This is a `None` after it has been said, and the reason it is held at
+    /// all is a bug that compiled and unit-tested cleanly.** The first cut
+    /// seeded the note into the turn's pending queue *before* the stream
+    /// started, reasoning that the sentence should reach the panel ahead of the
+    /// agent's first token. But a note is an `AddMessagesToTask`, and the task
+    /// is created by `CreateTask` further down this very function -- so the
+    /// message named a task that did not exist yet and went nowhere. Measured:
+    /// zero `[Warp]` lines in the panel, on a build whose unit test for the note
+    /// passed. Ordering against the stream is not something a unit test on the
+    /// note can see.
+    pending_announcement: Option<String>,
     tool_names: HashMap<String, String>,
 }
 
@@ -348,6 +362,7 @@ impl Translator {
             started_at,
             tool_events: Vec::new(),
             tool_names: HashMap::new(),
+            pending_announcement: None,
         }
     }
 
@@ -421,6 +436,11 @@ impl Translator {
                             }),
                         },
                     )]));
+                }
+                // After `CreateTask` and before the user's own turn: the task
+                // now exists to attach to, and Warp's sentence reads first.
+                if let Some(text) = self.pending_announcement.take() {
+                    events.push(self.note(text));
                 }
                 let query = self.user_query();
                 events.push(self.add(vec![query]));
@@ -594,6 +614,29 @@ impl Translator {
             return Vec::new();
         }
         vec![self.add(messages)]
+    }
+
+    /// Holds Warp's disclosure until there is a task to attach it to.
+    ///
+    /// Set before the stream starts; spent on the `init` event, immediately
+    /// after `CreateTask`.
+    pub(super) fn announce_transcript(&mut self, text: String) {
+        self.pending_announcement = Some(text);
+    }
+
+    /// One sentence from Warp, in the panel, in Warp's own voice.
+    ///
+    /// The mirror of `acp_agent`'s `note`, and it exists for the same reason:
+    /// the transcript pointer rides on the prompt where the person cannot see
+    /// it, so without this they would be watching an agent act on an
+    /// instruction they were never shown. Marked with the transcript module's
+    /// `[Warp]` chrome, which `strip_chrome` then keeps out of the transcript
+    /// file — an agent must never read Warp's asides back as its own words.
+    pub(super) fn note(&mut self, text: String) -> api::ResponseEvent {
+        let message = self.message(api::message::Message::AgentOutput(
+            api::message::AgentOutput { text },
+        ));
+        self.add(vec![message])
     }
 
     fn add(&self, messages: Vec<api::Message>) -> api::ResponseEvent {

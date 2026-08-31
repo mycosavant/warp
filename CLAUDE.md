@@ -213,15 +213,19 @@ summary. What is lost, and what this is for, is the bulky incidental detail a
 working session is actually made of**. Off by default, because persisting what
 was said is not something a no-telemetry fork should start doing unasked. The
 pointer rides every prompt as its own content block, so your text is never
-edited; the panel says once that it is happening — **but only on the ACP path**,
-and that qualifier was missing here until 2026-08-31. The pointer and the
-announcement are injected in `acp_agent/mod.rs:681-700`, while the *writer*
-(`transcript::observe`) hangs off the shared `BlocklistAIHistoryModel`, which the
-`local_agent` path feeds too. Read, not run: on `WARP_FORK_LOCAL_AGENT` the file
-should therefore be written with no announcement and no pointer — the user is not
-told and the agent is not given the thing the feature exists to give it. **Not
-verified by running**, and it is named here so the next person runs it rather than
-inheriting the assumption. And Warp's own asides are
+edited; the panel says once that it is happening **on both agent paths, and only
+since 2026-08-31**. The writer (`transcript::observe`) always hung off the shared
+`BlocklistAIHistoryModel`, which both paths feed, while the pointer and the
+announcement were injected only in `acp_agent`. Measured both ways before the
+fix: an ACP conversation carried one `[Warp]` line, a `local_agent` one carried
+**zero**, and the file was written either way — so that path put the user's
+prompts on disk, told nobody, and handed the agent nothing. **The fix's first cut
+also measured zero**, and the reason is worth keeping: a note is an
+`AddMessagesToTask`, and on this transport the task is created by the agent
+stream's own `init` event, so a note queued ahead of the stream names a task that
+does not exist and is dropped. Its unit test passed throughout. Ordering against
+a stream is not something a unit test on the message can see. And Warp's own
+asides are
 marked `[Warp]` and kept out of the file so an agent never reads them as its own
 words. **What it holds that the agent's own store does not is the reason a call
 failed**: measured, `opencode` records a denied command as `status=error` with no

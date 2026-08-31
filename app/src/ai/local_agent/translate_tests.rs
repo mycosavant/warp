@@ -833,3 +833,34 @@ fn a_subagents_tools_name_the_call_that_spawned_them() {
         ]
     );
 }
+
+/// **Warp's own sentence, on the transport that had none.**
+///
+/// The transcript writer hangs off the shared history model, so a `local_agent`
+/// conversation was written to disk exactly like an ACP one — while the pointer
+/// and the announcement were injected only on the ACP path. Measured both ways
+/// on 2026-08-31 before this landed: an ACP conversation carried one `[Warp]`
+/// line and a `local_agent` one carried zero, with the file written either way.
+///
+/// The assertion is on the `[Warp]` chrome specifically, not merely on some text
+/// arriving, because that marker is what `transcript::strip_chrome` keys on to
+/// keep Warp's asides out of the file. A note that reached the panel without it
+/// would disclose correctly and then be recorded as the agent's own words.
+#[test]
+fn warp_can_say_one_thing_in_its_own_voice() {
+    let mut translator = translator();
+
+    let event = translator.note(crate::ai::transcript::announcement(std::path::Path::new(
+        "/tmp/project/.warp/transcripts/conv.md",
+    )));
+
+    let text = format!("{event:?}");
+    assert!(
+        text.contains("[Warp]"),
+        "the note is unmarked, so `strip_chrome` will file it as the agent's own words: {text}"
+    );
+    assert!(
+        text.contains("conv.md"),
+        "the note does not name the file it is disclosing: {text}"
+    );
+}

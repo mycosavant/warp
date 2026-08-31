@@ -337,8 +337,39 @@ async fn run(turn: Turn) -> anyhow::Result<impl Stream<Item = Event> + Send + us
         distro,
         allowed_tools,
     } = turn;
+    // Cloned before `TurnContext` takes it, because the transcript path and the
+    // once-per-conversation announcement are both keyed on it and both are
+    // needed after this line.
+    let conversation = conversation_id.clone();
     let log = TurnContext::new(conversation_id, working_directory.clone());
     let prompt = ask.prompt();
+    // The transcript is written for *both* transports -- `transcript::observe`
+    // hangs off the shared `BlocklistAIHistoryModel` -- but until 2026-08-31 the
+    // pointer and the announcement were injected only on the ACP path. Measured
+    // both ways before this landed: an ACP conversation carried one `[Warp]`
+    // line, a `local_agent` one carried zero, and the file was written either
+    // way. So this path wrote the user's prompts to disk, told nobody, and
+    // handed the agent nothing -- the feature's cost with none of its point.
+    //
+    // Query only. A compact's prompt is an instruction to Claude to summarise
+    // its own context, and prefixing a file pointer to that is a different
+    // feature from the one being ported; `Ask::Compact` is left alone
+    // deliberately rather than by omission.
+    let transcript = match (&ask, crate::fork::transcript_dir()) {
+        (Ask::Query(_), Some(location)) => working_directory.as_deref().map(|cwd| {
+            let dir = location.resolve(std::path::Path::new(cwd));
+            crate::ai::transcript::path_for(&dir, &conversation)
+        }),
+        _ => None,
+    };
+    // Warp's words go *before* the user's, and the user's are copied through
+    // untouched. The ACP path keeps them apart with a separate content block;
+    // stdin has no second channel, so the separation here is positional and the
+    // announcement below is what stops it being silent.
+    let prompt = match &transcript {
+        Some(path) => format!("{}\n\n{prompt}", crate::ai::transcript::pointer(path)),
+        None => prompt,
+    };
     let request_id = Uuid::new_v4().to_string();
     let started_at = Utc::now();
 
@@ -412,11 +443,25 @@ async fn run(turn: Turn) -> anyhow::Result<impl Stream<Item = Event> + Send + us
     let stdout = child.stdout.take().context("claude stdout was not piped")?;
     let stderr = child.stderr.take().context("claude stderr was not piped")?;
 
+    let mut translator =
+        Translator::new(task_id, task_needs_announcing, request_id, mode, started_at);
+    // Handed to the translator rather than pushed onto `pending`, and that is
+    // the whole of the fix: a note is an `AddMessagesToTask`, and the task is
+    // created from the stream's own `init` event. A note queued ahead of the
+    // stream names a task that does not exist yet and is silently dropped --
+    // measured as zero `[Warp]` lines in the panel, on a build whose unit test
+    // for the note passed.
+    if let Some(path) = &transcript
+        && crate::ai::transcript::needs_announcing(&conversation)
+    {
+        translator.announce_transcript(crate::ai::transcript::announcement(path));
+    }
+
     Ok(events(TurnState {
         _child: child,
         lines: Box::pin(BufReader::new(stdout).lines()),
         stderr: Box::pin(stderr),
-        translator: Translator::new(task_id, task_needs_announcing, request_id, mode, started_at),
+        translator,
         log,
         pending: VecDeque::new(),
         ended: false,
