@@ -67,8 +67,14 @@ const CONSOLE_ICON: &[u8] = include_bytes!("console_icon.png");
 /// The policy the page is served under.
 ///
 /// `default-src 'none'` first, so every fetch directive that is not named below
-/// is denied rather than defaulted — including `img-src` and `font-src`, which
-/// are the usual way an injected stylesheet talks to the outside world.
+/// is denied rather than defaulted — `font-src` among them, which with `img-src`
+/// is the usual way an injected stylesheet talks to the outside world.
+///
+/// **This named `img-src` as one of the denied-by-default directives until
+/// 2026-08-31, and T12.3 had already added it as `'self'`** — the paragraph four
+/// lines down says so. Two halves of one comment block disagreeing, with the code
+/// matching the later one. `img-src` is still narrow and the argument below still
+/// holds; it is simply named rather than absent.
 ///
 /// `connect-src 'self'` is what lets the script reach `/v1/*` and nothing else:
 /// a page that somehow ran hostile code still could not post what it read

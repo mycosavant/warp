@@ -31,7 +31,7 @@ When something here has only been read, say so. `.fork/IDEAS.md` marks its
 unverified claims at the top of the file; keep that habit.
 
 **And the commonest defect in this fork is not a bug — it is a doc that outlived
-its code.** Eight found in one day (2026-08-31), every one by asking an agent
+its code.** Ten found in one day (2026-08-31), every one by asking an agent
 *"name anything whose doc comment claims something the code below it does not
 do"*:
 
@@ -45,6 +45,8 @@ do"*:
 | `approvals.rs` | *"Approval is a keystroke here, and saying otherwise would be a lie"* | true of the pane path; `answer_acp` sends a typed option id and says so |
 | `warp_agent.rs` | the preview holds *"the same two things and nothing else"* | three arms; the third is stdin content |
 | `translate.rs` | permission requests *"never reach this file"* | T14.17 hands them here to log — **staled that same morning, by me** |
+| `fork.rs` | *"default off, unlike every other predicate in this module"* | three others are off by default too, one arguing its own asymmetry |
+| `console.rs` | `img-src` is denied by `default-src 'none'` | T12.3 added it as `'self'`; the same comment block says so four lines later |
 
 The last one is the shortest fuse in the table: the author of the stale sentence
 and the author of the code that staled it were **the same person, hours apart**,

@@ -179,14 +179,25 @@ const LOCAL_AGENT_ENV_VAR: &str = "WARP_FORK_LOCAL_AGENT";
 
 /// Whether the agent conversation is answered on this machine (T5).
 ///
-/// **Default off, unlike every other predicate in this module.** The others
-/// enlarge what works — an account-free user gets a Drive that can be written
-/// to, a microphone that stays on the machine, a harness list that is not
-/// empty. This one *substitutes* for something that works, and the substitute
+/// **Default off, and for a different reason than the other opt-ins here.**
+///
+/// The *policy* predicates — the ones `is_active()` alone decides — enlarge what
+/// works: an account-free user gets a Drive that can be written to, a microphone
+/// that stays on the machine, a harness list that is not empty. This one is not
+/// one of those. It *substitutes* for something that works, and the substitute
 /// is a spike: Claude runs its own tools, so Warp's diff review and command
 /// approval do not participate, and only a plain user query is handled at all.
 /// Switching it on by fork policy would take working behaviour away from anyone
 /// signed in.
+///
+/// **This said "unlike every other predicate in this module" until 2026-08-31,
+/// and three others are off by default too** — `acp_agent_command` and
+/// `acp_mode` are `None` unless their variable names something, and
+/// `remote_approve_enabled` is off unless the variable literally says yes. Each
+/// of those is off for its own reason and `remote_approve_enabled`'s doc argues
+/// its asymmetry at length, so the sentence was not just imprecise, it competed
+/// with a claim two hundred lines down. The distinction that is actually true is
+/// the one above: policy predicates enlarge, variable-gated ones opt in.
 ///
 /// Consumed by `ai::agent::api::generate_multi_agent_output`, which is the
 /// entire seam: one async fn, `RequestParams` in and a stream of
