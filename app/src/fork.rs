@@ -14,6 +14,7 @@
 //! Keeping the policy here means an upstream merge can only conflict in the
 //! two one-line call sites, never in the policy itself.
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use warp_cli::agent::Harness;
@@ -977,6 +978,37 @@ pub fn forced_local_harnesses() -> &'static [Harness] {
 /// agent still requires a real account, because inference for it happens on
 /// Warp's servers. The point is to reach the BYO-key and local-harness paths,
 /// which do not.
+/// Whether this process runs a local control server.
+///
+/// **A fact about the process, not a policy** — which is why it is recorded
+/// rather than computed. `LocalControlServer` is registered only for
+/// `LaunchMode::App | LaunchMode::Test` (`lib.rs`), so `warpctrl`, the T12
+/// console and paired devices are all absent from a TUI process, and there is
+/// no flag to consult that says so.
+///
+/// Measured 2026-08-30, which is why this exists: an ACP permission request in
+/// the TUI printed *"Answer yes with `warpctrl agent approve …`"* — naming an
+/// instrument that does not exist in that process — and the only escape was
+/// Ctrl-C. Warp telling a person to run something impossible is the T14.2
+/// failure exactly: they conclude the feature is broken. Note the bug does not
+/// need the TUI's account bypass to happen; a *signed-in* TUI with
+/// `WARP_FORK_ACP_COMMAND` set parks requests the same way.
+static LOCAL_CONTROL_SERVING: AtomicBool = AtomicBool::new(false);
+
+/// Records that this process registered a local control server.
+///
+/// Called from the one site in `lib.rs` that adds it, so the record cannot
+/// drift from the condition that decides it.
+pub fn note_local_control_serving() {
+    LOCAL_CONTROL_SERVING.store(true, Ordering::Relaxed);
+}
+
+/// Whether any `warpctrl`, console or paired-device surface can answer in
+/// *this* process. See [`note_local_control_serving`].
+pub fn local_control_serving() -> bool {
+    LOCAL_CONTROL_SERVING.load(Ordering::Relaxed)
+}
+
 pub fn account_gate_bypassed() -> bool {
     is_active()
 }

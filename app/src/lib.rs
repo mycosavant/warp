@@ -2625,6 +2625,11 @@ pub(crate) fn initialize_app(
     {
         ctx.add_singleton_model(local_control::LocalControlBridge::new);
         ctx.add_singleton_model(local_control::LocalControlServer::new);
+        // Recorded here, beside the condition, so nothing downstream has to
+        // re-derive which launch modes get an answerable surface. `acp_agent`
+        // reads it to avoid telling a person to run `warpctrl` in a process
+        // that has none.
+        crate::fork::note_local_control_serving();
     }
 
     app_state

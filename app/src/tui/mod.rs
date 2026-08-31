@@ -241,8 +241,27 @@ fn has_validated_identity(auth_state: &AuthState) -> bool {
     auth_state.is_logged_in() && auth_state.user_id().is_some()
 }
 
+/// Whether a fork transport will answer this session's turns.
+///
+/// Load-bearing, and not a convenience: without it, skipping the welcome screen
+/// would manufacture a UI that renders and then dies at
+/// `get_or_refresh_access_token()` on the first prompt, because stock agent
+/// turns are authenticated server-side before the request is even built. The
+/// bypass is only honest when the turn is never going to reach Warp at all.
+fn fork_agent_will_answer() -> bool {
+    crate::fork::acp_agent_command().is_some() || crate::fork::local_agent_enabled()
+}
+
 fn initial_login_phase(auth_state: &AuthState) -> TuiLoginPhase {
-    if has_validated_identity(auth_state) {
+    // Deliberately *not* `has_validated_identity`, which is also the source of
+    // `TuiUserInfoSnapshot::is_logged_in` and guards `load_current_account` and
+    // MCP activation. Those make authenticated fetches; claiming an identity
+    // that does not exist would start them and then fail. This says only "do
+    // not open on the sign-in screen", which is the whole of what a fork
+    // transport earns.
+    if has_validated_identity(auth_state)
+        || (crate::fork::account_gate_bypassed() && fork_agent_will_answer())
+    {
         TuiLoginPhase::LoggedIn
     } else {
         TuiLoginPhase::SignedOutWelcome

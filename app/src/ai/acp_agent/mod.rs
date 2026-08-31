@@ -502,7 +502,7 @@ async fn exchange(
                     conversation.clone(),
                 );
                 let event = emit(translator, |translator| {
-                    translator.note(asking_note(&parked))
+                    translator.note(asking_note(&parked, crate::fork::local_control_serving()))
                 });
                 let _ = tx.unbounded_send(Ok(event));
 
@@ -944,7 +944,7 @@ fn approvable(
 /// pane's directory decides whether the user's own agent configuration loads at
 /// all, and nothing on the wire distinguishes "your rules allowed it" from "the
 /// agent's defaults did".
-fn asking_note(parked: &registry::ParkedRequest) -> String {
+fn asking_note(parked: &registry::ParkedRequest, answerable_here: bool) -> String {
     let what = parked.title.as_deref().unwrap_or("a request to act");
     let id = &parked.approval_id;
     // **Per entry, not per population.** This said "Warp cannot say yes to this
@@ -953,14 +953,30 @@ fn asking_note(parked: &registry::ParkedRequest) -> String {
     // gone false is the T14.2 failure — a person concluding the feature is
     // broken — so the sentence is derived from the frozen decision rather than
     // asserted.
-    let how = match &parked.approve_selects {
-        Some(_) => format!(
+    // **`warpctrl` is not everywhere, and naming it where it is absent is the
+    // T14.2 failure.** `LocalControlServer` is registered only for
+    // `LaunchMode::App | LaunchMode::Test`, so a TUI process has no `warpctrl`,
+    // no console and no pairing. Measured 2026-08-30: this note told a person in
+    // the TUI to run `warpctrl agent approve`, which cannot exist there, and the
+    // turn's only exit was Ctrl-C. Disclosing the dead end is T14.18's pattern —
+    // Warp says what is true rather than pretending to an answer it does not
+    // have. The bug does not need the TUI's account bypass: a signed-in TUI with
+    // `WARP_FORK_ACP_COMMAND` set parks requests the same way.
+    let how = match (&parked.approve_selects, answerable_here) {
+        (Some(_), true) => format!(
             "Answer yes with `warpctrl agent approve {id}` or no with \
              `warpctrl agent deny {id}` — both take the `digest` that \
              `warpctrl agent approvals` reports. A yes covers this one call and \
              nothing after it."
         ),
-        None => {
+        (Some(_), false) => {
+            "**Nothing in this session can answer it.** This process runs no local \
+             control server, so `warpctrl`, the console and paired devices are \
+             all absent — the request is real and there is no yes or no to give \
+             it here. Cancel the turn (Ctrl-C) to take the session back."
+                .to_owned()
+        }
+        (None, _) => {
             // Terminated explicitly rather than trusting the reason to end in
             // one. Measured on T14.6 against a live `switch_mode` refusal, the
             // note read "…the policy it already had Answer no with…" — two
@@ -978,16 +994,31 @@ fn asking_note(parked: &registry::ParkedRequest) -> String {
             } else {
                 "."
             };
-            format!(
-                "Warp will not say yes to this: {why}{stop} \
-                 Answer no with `warpctrl agent deny {id}`, or cancel the turn."
-            )
+            if answerable_here {
+                format!(
+                    "Warp will not say yes to this: {why}{stop} \
+                     Answer no with `warpctrl agent deny {id}`, or cancel the \
+                     turn."
+                )
+            } else {
+                format!(
+                    "Warp will not say yes to this: {why}{stop} And nothing in \
+                     this session can say no either — this process runs no \
+                     local control server. Cancel the turn (Ctrl-C)."
+                )
+            }
         }
     };
-    let mut note = format!(
-        "The agent is waiting for permission: **{what}**. {how} A paired device can \
-                 answer too, though *yes* only travels there when WARP_FORK_REMOTE_APPROVE is set."
-    );
+    // The paired-device sentence rides the same absent server, so it is dropped
+    // with the rest rather than left standing as a second impossible
+    // instruction.
+    let paired = if answerable_here {
+        " A paired device can answer too, though *yes* only travels there when \
+         WARP_FORK_REMOTE_APPROVE is set."
+    } else {
+        ""
+    };
+    let mut note = format!("The agent is waiting for permission: **{what}**. {how}{paired}");
     // Said before the session directory, because it is the more specific answer
     // to the question a person is actually asking — *where does this happen* —
     // and because leaving it out invites reading the session directory as the

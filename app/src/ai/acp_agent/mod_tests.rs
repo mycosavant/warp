@@ -371,7 +371,7 @@ fn a_request_that_states_no_location_leaves_the_join_in_charge() {
 /// measured to be the question that decided whose permission rules applied.
 #[test]
 fn the_note_says_where_the_call_acts_when_the_agent_said() {
-    let note = asking_note(&parked(vec!["/tmp/t146/project/out.txt".to_owned()]));
+    let note = asking_note(&parked(vec!["/tmp/t146/project/out.txt".to_owned()]), true);
 
     assert!(note.contains("/tmp/t146/project/out.txt"), "got: {note}");
     assert!(
@@ -388,7 +388,7 @@ fn the_note_says_where_the_call_acts_when_the_agent_said() {
 /// fork has repeatedly measured itself not to have. An absent claim stays absent.
 #[test]
 fn a_call_that_named_no_location_is_not_given_one() {
-    let note = asking_note(&parked(Vec::new()));
+    let note = asking_note(&parked(Vec::new()), true);
 
     assert!(!note.contains("acts on"), "got: {note}");
     assert!(
@@ -531,7 +531,7 @@ fn an_agent_offering_only_always_cannot_be_approved() {
 /// the feature is broken — so the sentence is derived from the frozen decision.
 #[test]
 fn the_note_offers_yes_only_when_there_is_a_yes_to_offer() {
-    let approvable = asking_note(&parked(Vec::new()));
+    let approvable = asking_note(&parked(Vec::new()), true);
     assert!(
         approvable.contains("warpctrl agent approve turn-1:0"),
         "got: {approvable}"
@@ -541,7 +541,10 @@ fn the_note_offers_yes_only_when_there_is_a_yes_to_offer() {
         "the scope of the yes is stated, not left to be assumed: {approvable}"
     );
 
-    let refused = asking_note(&park_this(&request(as_opencode_sent_it()), Vec::new()));
+    let refused = asking_note(
+        &park_this(&request(as_opencode_sent_it()), Vec::new()),
+        true,
+    );
     assert!(!refused.contains("agent approve"), "got: {refused}");
     assert!(
         refused.contains("no tool input"),
@@ -660,19 +663,25 @@ fn the_agent_is_named_rather_than_its_launcher() {
 /// and not doubled when it is already present.
 #[test]
 fn a_refusal_reads_as_sentences_however_the_reason_was_written() {
-    let terminated = asking_note(&registry::ParkedRequest {
-        approve_refused_because: Some("it ends in a full stop.".to_owned()),
-        ..park_this(&request(as_opencode_sent_it()), Vec::new())
-    });
+    let terminated = asking_note(
+        &registry::ParkedRequest {
+            approve_refused_because: Some("it ends in a full stop.".to_owned()),
+            ..park_this(&request(as_opencode_sent_it()), Vec::new())
+        },
+        true,
+    );
     assert!(
         terminated.contains("full stop. Answer no with"),
         "an already-terminated reason is not given a second stop: {terminated}"
     );
 
-    let bare = asking_note(&registry::ParkedRequest {
-        approve_refused_because: Some("it does not".to_owned()),
-        ..park_this(&request(as_opencode_sent_it()), Vec::new())
-    });
+    let bare = asking_note(
+        &registry::ParkedRequest {
+            approve_refused_because: Some("it does not".to_owned()),
+            ..park_this(&request(as_opencode_sent_it()), Vec::new())
+        },
+        true,
+    );
     assert!(
         bare.contains("it does not. Answer no with"),
         "an unterminated reason gets one: {bare}"
@@ -726,4 +735,92 @@ fn the_answer_note_reports_the_answer_and_not_the_outcome() {
             );
         }
     }
+}
+
+/// **A process with no local control server must not be told to use one.**
+///
+/// Measured 2026-08-30 in the TUI, which registers no `LocalControlServer`
+/// (`lib.rs` adds it for `LaunchMode::App | Test` only): the note told a person
+/// to run `warpctrl agent approve`, an instrument that cannot exist there, and
+/// the turn's only exit was Ctrl-C. That is T14.2's failure in one sentence — a
+/// person follows the instruction, nothing happens, and they conclude the
+/// feature is broken rather than that the surface is absent.
+///
+/// The bug does not need the TUI's account bypass to occur: the seam keys on
+/// `WARP_FORK_ACP_COMMAND` rather than on auth, so a *signed-in* TUI session
+/// parks requests the same way.
+#[test]
+fn an_unanswerable_process_is_not_told_to_run_warpctrl() {
+    let note = asking_note(&parked(Vec::new()), false);
+
+    // The bare word is *allowed*, and deliberately: a person who knows
+    // `warpctrl` is exactly the person whose first instinct will be to reach for
+    // it, and naming it as absent answers them. What must never appear is a
+    // runnable instruction, because that is the thing that gets followed and
+    // fails silently. The first draft of this test asserted the stronger
+    // property and failed against copy that was right.
+    for command in [
+        "warpctrl agent approve",
+        "warpctrl agent deny",
+        "warpctrl agent approvals",
+    ] {
+        assert!(
+            !note.contains(command),
+            "gave a command this process cannot run ({command}): {note}"
+        );
+    }
+    assert!(
+        !note.contains("WARP_FORK_REMOTE_APPROVE"),
+        "pairing rides the same absent server and must not be offered either: {note}"
+    );
+}
+
+/// **And it must say so, rather than going quiet.**
+///
+/// Dropping the instruction without replacing it would leave a request that
+/// looks answerable and simply is not — the worse half of the same failure. This
+/// is T14.18's pattern: Warp discloses what is true and names the one exit that
+/// exists.
+#[test]
+fn an_unanswerable_process_says_so_and_names_the_way_out() {
+    let note = asking_note(&parked(Vec::new()), false);
+
+    assert!(
+        note.contains("Nothing in this session can answer it"),
+        "the dead end must be stated: {note}"
+    );
+    assert!(
+        note.contains("Ctrl-C"),
+        "the one exit that exists must be named: {note}"
+    );
+    assert!(
+        note.contains("The agent is waiting for permission"),
+        "the request itself is still reported: {note}"
+    );
+}
+
+/// A refusal in an unanswerable process still gives its reason.
+///
+/// The reason is the more specific truth and it is what T14.6 added; losing it
+/// because the *no* has nowhere to be pressed would trade one silence for
+/// another.
+#[test]
+fn a_refusal_keeps_its_reason_when_nothing_can_answer() {
+    let refused = asking_note(
+        &park_this(&request(as_opencode_sent_it()), Vec::new()),
+        false,
+    );
+
+    assert!(
+        refused.contains("Warp will not say yes to this"),
+        "got: {refused}"
+    );
+    assert!(
+        refused.contains("Ctrl-C"),
+        "the exit is named here too: {refused}"
+    );
+    assert!(
+        !refused.contains("warpctrl agent deny"),
+        "gave a command this process cannot run: {refused}"
+    );
 }
