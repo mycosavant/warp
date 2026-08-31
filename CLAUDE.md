@@ -31,7 +31,7 @@ When something here has only been read, say so. `.fork/IDEAS.md` marks its
 unverified claims at the top of the file; keep that habit.
 
 **And the commonest defect in this fork is not a bug — it is a doc that outlived
-its code.** Ten found in one day (2026-08-31), every one by asking an agent
+its code.** Twelve found in one day (2026-08-31), every one by asking an agent
 *"name anything whose doc comment claims something the code below it does not
 do"*:
 
@@ -47,6 +47,17 @@ do"*:
 | `translate.rs` | permission requests *"never reach this file"* | T14.17 hands them here to log — **staled that same morning, by me** |
 | `fork.rs` | *"default off, unlike every other predicate in this module"* | three others are off by default too, one arguing its own asymmetry |
 | `console.rs` | `img-src` is denied by `default-src 'none'` | T12.3 added it as `'self'`; the same comment block says so four lines later |
+| `registry.rs` | `waiting_for` returns *"everything currently waiting"* | it filters to one conversation — **one missing blank line** had glued `waiting()`'s doc onto it, leaving `waiting()` undocumented |
+| `graph.rs` | the fingerprint holds *"everything the runner actually uses"* | `compose_prompt` uses the workspace and its own doc says a page later that it is excluded deliberately |
+
+**Twelve, and the last four are the instructive ones**: none is a careless
+comment. Each was written carefully, was true when written, and was falsified by a
+later change to the code beneath or beside it. Four of the twelve are *internally*
+inconsistent — the file contradicts itself and both halves are signed work — and
+one was wrong purely by *position*, a missing blank line having attached it to the
+next function. **Nothing in the toolchain can see any of this.** `cargo check`,
+`cargo test`, `./script/format` and every gate in this file pass with all twelve
+in place, which is why the question has to be asked out loud.
 
 The last one is the shortest fuse in the table: the author of the stale sentence
 and the author of the code that staled it were **the same person, hours apart**,

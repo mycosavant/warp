@@ -305,8 +305,6 @@ impl Drop for Waiting {
     }
 }
 
-/// Everything currently waiting on a person, oldest key first so a caller
-/// polling it does not get a reshuffled list between calls.
 /// The requests a single conversation is blocked on, oldest first.
 ///
 /// Separate from [`waiting`] rather than filtered by the caller, because the
@@ -321,6 +319,15 @@ pub(crate) fn waiting_for(conversation_id: &str) -> Vec<ParkedRequest> {
         .collect()
 }
 
+/// Everything currently waiting on a person, oldest key first so a caller
+/// polling it does not get a reshuffled list between calls.
+///
+/// **This paragraph spent an unknown period attached to [`waiting_for`]**, one
+/// missing blank line above it, which left that function documented as returning
+/// everything when it filters to one conversation — and left this one, the
+/// whole-process list that `agent.approvals` serves, with no doc at all. Found by
+/// an agent in Warp's own panel, scoped to this file. A doc comment can be wrong
+/// by being in the wrong place, and nothing in the toolchain says so.
 pub(crate) fn waiting() -> Vec<ParkedRequest> {
     let registry = registry();
     let mut requests = registry

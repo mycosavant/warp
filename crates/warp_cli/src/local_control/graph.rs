@@ -715,7 +715,17 @@ const FINGERPRINT_DOMAIN: &str = "warpctrl.graph.node.v1";
 
 /// The node, reduced to the parts that decide what its agent was asked to do.
 ///
-/// Everything the runner actually uses is in here and nothing else is:
+/// Everything a *plan edit* can change is in here.
+///
+/// **Not "everything the runner uses", which is what this said until
+/// 2026-08-31.** `compose_prompt` appends the workspace directory into the
+/// text a review node is actually spawned with, and `compose_prompt`'s own
+/// doc says a page later that it is excluded from the fingerprint
+/// deliberately — *"the fingerprint is about plan edits, and a directory is
+/// environment"*. That reasoning is right and the exclusion stays; the
+/// sentence above it simply oversold its own completeness and contradicted a
+/// comment in the same file. Found by an agent in Warp's own panel, scoped to
+/// this file:
 /// `spawn_params` is `compose_prompt` plus the name and the resolved allowlist,
 /// so those are exactly the fields whose change makes a recorded answer
 /// unreproducible. `[defaults]` is resolved rather than hashed separately —
