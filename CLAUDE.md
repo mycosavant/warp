@@ -877,6 +877,14 @@ global default to get them.** The general rule: if your output's byte-stability
 comes from a dependency's default, pin it locally or it is one `cargo add` away
 from changing.
 
+**And the fork already knew this.** `tool_digest.rs`'s `canonical_json` sorts
+explicitly, with a doc naming the hazard exactly — *"if any crate in the graph
+ever turns it on, every stored digest silently stops matching and every server
+reads as a rug-pull"*. Same hazard, two modules: one defended in code, one
+defended only by a test. The feature got turned on and the defended one was fine.
+**Swept afterwards and there is no third**: `approvals::digest_of` and `graph`'s
+fingerprint both hash field-by-field over strings, so neither can be reordered.
+
 **A build script that reads a file it does not `rerun-if-changed` is a merge
 trap.** `crates/graphql/build.rs` registers a schema from
 `../warp_graphql_schema/api/schema.graphql` and watched only itself, so an
