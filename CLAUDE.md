@@ -191,7 +191,15 @@ event log's `*.jsonl` with its `tool_input` previews; both now go through
 `fork::create_private_dir`/`create_private_file`, which put the mode on the
 `open` rather than chmod-ing after it, because the window between the two is
 exactly when the first line is written. `discovery.rs` had the right instinct
-from the start with `0700`/`0600`; these two never got it. `on` writes to
+from the start with `0700`/`0600`; these two never got it. **Verified by running,
+which exposed a residual reading would have missed:** a transcript written by a
+*pre-fix* build keeps `0644` until that conversation is next written, because the
+transcript is rewritten whole per conversation and a dormant one is never
+rewritten. An active conversation self-heals on its next turn; the event log
+self-heals via `tighten_existing` on reopen. Deliberately **not** swept: a sweep
+would chmod files the fork is not otherwise touching, in a directory that follows
+the pane's cwd and can therefore be anywhere. `chmod 600` on an old transcript is
+the user's call, and this sentence is how they learn it is theirs to make. `on` writes to
 **`.warp/transcripts/` under the pane's own directory** — not `state_dir`, because outside the session's directory the
 agent's read of the file arrives as `tool: other` and *no* answer exists, so the
 tidy location is the unusable one. `.warp/` is upstream's project directory and
