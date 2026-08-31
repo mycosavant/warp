@@ -35,7 +35,7 @@
 //! stops being true, the frame log is the instrument that will say so.
 
 use std::collections::HashMap;
-use std::fs::{File, OpenOptions};
+use std::fs::File;
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -300,7 +300,9 @@ pub(crate) fn subscribe() -> broadcast::Receiver<String> {
 fn sink() -> Option<&'static Sink> {
     SINK.get_or_init(|| {
         let dir = crate::fork::event_log_dir()?;
-        if let Err(err) = std::fs::create_dir_all(&dir) {
+        // Owner-only: these lines carry `tool_input_preview`, which is the
+        // command an agent asked to run and the file it asked to touch.
+        if let Err(err) = crate::fork::create_private_dir(&dir) {
             log::warn!("fork event log: cannot create {}: {err}", dir.display());
             return None;
         }
@@ -413,7 +415,11 @@ impl Sink {
             Some(file) => file,
             None => {
                 let path = self.dir.join(format!("{key}.jsonl"));
-                let file = OpenOptions::new().create(true).append(true).open(path)?;
+                let file = crate::fork::create_private_file(&path, true)?;
+                // `open` ignores the mode on a file that already exists, so a log
+                // an earlier build left world-readable would stay that way for as
+                // long as this session kept appending to it.
+                crate::fork::tighten_existing(&path);
                 files.entry(key.to_string()).or_insert(file)
             }
         };

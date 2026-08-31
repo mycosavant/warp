@@ -1048,6 +1048,93 @@ pub fn apply_feature_preferences() {
     }
 }
 
+/// Creates a directory the fork writes private content into, owner-only where
+/// the platform can say so.
+///
+/// **Because two fork-authored on-disk surfaces inherited the umask.** Measured
+/// 2026-08-31 on a running session: `.warp/transcripts/*.md` and the event log's
+/// `*.jsonl` were both `0644` in `0755` directories — world-readable, holding
+/// the user's prompts verbatim and the `tool_input` previews of every command an
+/// agent ran. On a single-user machine that costs nothing; the point of a fork
+/// whose thesis is that nothing leaves is that it does not rely on the ambient
+/// environment to be true. `crates/local_control/src/discovery.rs` already had
+/// the right instinct — `0700` on its directory, `0600` on its record, and a
+/// refusal to start on a platform that cannot enforce either — and these two
+/// simply never got it.
+///
+/// Best-effort on the directory and **not** best-effort on the file: see
+/// [`create_private_file`]. A directory that cannot be tightened is logged and
+/// carried on with, because the content protection is the file mode and failing
+/// the whole write over defence-in-depth would trade a real feature for a
+/// marginal one.
+///
+/// Only the leaf is tightened. `create_dir_all` makes parents at the umask and
+/// that is deliberate: the transcript's parent is `.warp/`, which is upstream's
+/// project directory and not ours to narrow.
+pub(crate) fn create_private_dir(dir: &std::path::Path) -> std::io::Result<()> {
+    std::fs::create_dir_all(dir)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt as _;
+        if let Err(err) = std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700)) {
+            log::warn!(
+                "fork: could not restrict {} to owner-only: {err}",
+                dir.display()
+            );
+        }
+    }
+    Ok(())
+}
+
+/// Opens a file the fork writes private content into, owner-only from the
+/// moment it exists.
+///
+/// The mode goes on `OpenOptions`, not on a `set_permissions` after the fact,
+/// because the two are not equivalent: a create-then-chmod leaves a window in
+/// which the file exists at the umask and another process can open it, and the
+/// window is exactly when the first line is written. On an existing file the
+/// mode is ignored by `open`, so [`tighten_existing`] handles the upgrade path
+/// for logs written by an earlier build.
+///
+/// Windows has no mode. Files inherit the ACL of their parent directory, which
+/// for both call sites is under the user's own profile or project — not a
+/// guarantee, and stated here rather than papered over.
+pub(crate) fn create_private_file(
+    path: &std::path::Path,
+    append: bool,
+) -> std::io::Result<std::fs::File> {
+    let mut options = std::fs::OpenOptions::new();
+    options.create(true);
+    if append {
+        options.append(true);
+    } else {
+        options.write(true).truncate(true);
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt as _;
+        options.mode(0o600);
+    }
+    options.open(path)
+}
+
+/// Narrows a file an earlier build already created at the umask.
+///
+/// Without this the fix would protect only new conversations, and the files that
+/// exist right now — written world-readable by every build before this one — would
+/// stay that way for as long as they are appended to. Best-effort and silent on
+/// failure: the file may belong to another user, in which case it is not ours to
+/// change and not ours to fail over.
+pub(crate) fn tighten_existing(path: &std::path::Path) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt as _;
+        let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600));
+    }
+    #[cfg(not(unix))]
+    let _ = path;
+}
+
 #[cfg(test)]
 #[path = "fork_tests.rs"]
 mod tests;

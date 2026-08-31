@@ -185,8 +185,14 @@ so the trail kept the question and lost its ending. Measured both ways after the
 fix — a cancelled ask writes it, an answered one does not. **And read the file
 in timestamp order**: the path files per conversation, so `cat *.jsonl` gives
 filename order and a reader inferring causality from line order will be
-wrong), `WARP_FORK_TRANSCRIPT` (`on` writes to **`.warp/transcripts/` under the pane's own
-directory** — not `state_dir`, because outside the session's directory the
+wrong), `WARP_FORK_TRANSCRIPT` (**owner-only since 2026-08-31, and `0644` before that** —
+the file holds the user's prompts verbatim and inherited the umask, as did the
+event log's `*.jsonl` with its `tool_input` previews; both now go through
+`fork::create_private_dir`/`create_private_file`, which put the mode on the
+`open` rather than chmod-ing after it, because the window between the two is
+exactly when the first line is written. `discovery.rs` had the right instinct
+from the start with `0700`/`0600`; these two never got it. `on` writes to
+**`.warp/transcripts/` under the pane's own directory** — not `state_dir`, because outside the session's directory the
 agent's read of the file arrives as `tool: other` and *no* answer exists, so the
 tidy location is the unusable one. `.warp/` is upstream's project directory and
 is tracked, so `/.warp/transcripts/` is gitignored. Any other value is taken as
@@ -199,7 +205,15 @@ summary. What is lost, and what this is for, is the bulky incidental detail a
 working session is actually made of**. Off by default, because persisting what
 was said is not something a no-telemetry fork should start doing unasked. The
 pointer rides every prompt as its own content block, so your text is never
-edited; the panel says once that it is happening, and Warp's own asides are
+edited; the panel says once that it is happening — **but only on the ACP path**,
+and that qualifier was missing here until 2026-08-31. The pointer and the
+announcement are injected in `acp_agent/mod.rs:681-700`, while the *writer*
+(`transcript::observe`) hangs off the shared `BlocklistAIHistoryModel`, which the
+`local_agent` path feeds too. Read, not run: on `WARP_FORK_LOCAL_AGENT` the file
+should therefore be written with no announcement and no pointer — the user is not
+told and the agent is not given the thing the feature exists to give it. **Not
+verified by running**, and it is named here so the next person runs it rather than
+inheriting the assumption. And Warp's own asides are
 marked `[Warp]` and kept out of the file so an agent never reads them as its own
 words. **What it holds that the agent's own store does not is the reason a call
 failed**: measured, `opencode` records a denied command as `status=error` with no

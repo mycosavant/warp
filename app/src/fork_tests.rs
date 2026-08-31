@@ -956,3 +956,82 @@ fn a_paired_device_says_yes_only_when_the_owner_says_so() {
         );
     }
 }
+
+/// **The transcript and the event log were world-readable, and this is the pin.**
+///
+/// Measured on a live session 2026-08-31: `.warp/transcripts/*.md` and the event
+/// log's `*.jsonl` were `0644` inside `0755` directories, holding the user's
+/// prompts verbatim and the `tool_input` preview of every command an agent ran.
+/// Nothing had gone wrong — no mode was ever set, so both inherited a `022`
+/// umask. `discovery.rs` had the right instinct from the start; these two never
+/// got it.
+///
+/// Asserted on the *mode bits*, not on "it is not 0644", because a test that
+/// only excludes today's wrong answer passes for tomorrow's.
+#[cfg(unix)]
+#[test]
+fn a_private_file_is_owner_only_from_the_moment_it_exists() {
+    use std::os::unix::fs::PermissionsExt as _;
+
+    let dir = std::env::temp_dir().join(format!("fork-private-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    create_private_dir(&dir).expect("the directory is creatable");
+
+    let mode = std::fs::metadata(&dir)
+        .expect("the directory exists")
+        .permissions()
+        .mode()
+        & 0o777;
+    assert_eq!(mode, 0o700, "the directory is readable by someone else");
+
+    let path = dir.join("transcript.md");
+    let file = create_private_file(&path, false).expect("the file is creatable");
+    drop(file);
+
+    let mode = std::fs::metadata(&path)
+        .expect("the file exists")
+        .permissions()
+        .mode()
+        & 0o777;
+    assert_eq!(mode, 0o600, "the file is readable by someone else");
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The upgrade path, which is the half that is easy to skip.
+///
+/// `OpenOptions::mode` is ignored for a file that already exists, so without
+/// `tighten_existing` the fix would protect only conversations started after it
+/// landed — and every log written by an earlier build would stay world-readable
+/// for exactly as long as it remained useful.
+#[cfg(unix)]
+#[test]
+fn a_file_an_earlier_build_left_open_is_narrowed() {
+    use std::os::unix::fs::PermissionsExt as _;
+
+    let dir = std::env::temp_dir().join(format!("fork-tighten-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("the directory is creatable");
+
+    let path = dir.join("events.jsonl");
+    std::fs::write(&path, b"{}\n").expect("the file is writable");
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644))
+        .expect("the fixture is settable");
+
+    // What the running code does: open for append, then narrow.
+    let file = create_private_file(&path, true).expect("the file reopens");
+    drop(file);
+    tighten_existing(&path);
+
+    let mode = std::fs::metadata(&path)
+        .expect("the file exists")
+        .permissions()
+        .mode()
+        & 0o777;
+    assert_eq!(
+        mode, 0o600,
+        "an existing file was left as the umask made it"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+}

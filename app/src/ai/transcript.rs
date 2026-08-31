@@ -201,11 +201,17 @@ pub(crate) fn write(
     conversation_id: &str,
     exchanges: &[Exchange],
 ) -> std::io::Result<PathBuf> {
-    std::fs::create_dir_all(dir)?;
+    // Owner-only, because this file holds the user's prompts verbatim and this
+    // fork's whole claim is that what is said here stays here. It was `0644` in
+    // a `0755` directory until 2026-08-31, inherited from the umask.
+    crate::fork::create_private_dir(dir)?;
     let path = path_for(dir, conversation_id);
     let temporary = path.with_extension("md.partial");
     {
-        let mut file = std::fs::File::create(&temporary)?;
+        // The mode is on the create, not a chmod after it: the rename below
+        // publishes this file under a name the agent is told to read, and a
+        // window where it exists at the umask is a window someone can open it.
+        let mut file = crate::fork::create_private_file(&temporary, false)?;
         file.write_all(render(conversation_id, exchanges).as_bytes())?;
         file.sync_all()?;
     }
