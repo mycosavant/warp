@@ -1095,7 +1095,11 @@ fn wait_for_a_person(
         // disagree.
         let _waiting = waiting;
         let _asking = quiet_because_it_is_asking;
+        // Armed across the wait, so the one way a question really goes
+        // unanswered still writes a line. See `AsksNothingMore`.
+        let mut unanswered = AsksNothingMore::arm(&translator, &approval_id, &tool_call_id);
         let answer = answer.await;
+        unanswered.disarm();
         let settled = answered_note(&answer);
         // Read before `outcome_for` consumes the answer, and the ordering is
         // load-bearing rather than incidental.
@@ -1174,6 +1178,70 @@ fn replied_fields(
             Some(answer.surface.as_str()),
         ),
         Err(_) => ("unanswered", None),
+    }
+}
+
+/// Writes the answer that never came, if this task is dropped mid-wait.
+///
+/// **Because the reachable "nobody answered" case never reached
+/// [`replied_fields`].** `permission_request` is logged synchronously in the
+/// request handler; `permission_replied` is logged from the task
+/// [`wait_for_a_person`] spawns onto the connection. A cancelled turn drops the
+/// whole driver future — `generate` wraps the stream in `take_until`, and
+/// `registry`'s own module docs say the waiting future goes "along with
+/// everything else" — so `answer.await` never resolves and the line after it
+/// never runs. The trail was left holding a `permission_request` with no
+/// partner: a question shown to a person, and no record of what became of it.
+///
+/// **And the `unanswered` value was covering a case that cannot happen.**
+/// `Err(Canceled)` needs the sender dropped while the receiver is still polled,
+/// and the sender lives in the registry entry, which only [`registry::answer`]
+/// (which sends) and [`registry::Waiting`]'s `Drop` (which runs in this same
+/// task) remove. The remaining route is an approval-id collision, which
+/// `Waiting`'s token check calls belt and braces. So the arm was live in a unit
+/// test and dead on the path, while the case it was named for wrote nothing at
+/// all — coverage asserted in a doc comment and absent from the code, which is
+/// the failure this fork keeps paying for. It is kept, unchanged, as the
+/// fail-safe it always was; this guard is what makes the *value* reachable.
+///
+/// Found by an agent in Warp's own panel reviewing T14.17 the morning after it
+/// landed, from a prompt that asked what could make the trail **lie** rather
+/// than what it covered.
+struct AsksNothingMore {
+    /// `None` once the wait has resolved: the real line is about to be written
+    /// by the caller and this must not write a second one.
+    pending: Option<(Arc<Mutex<Translator>>, String, String)>,
+}
+
+impl AsksNothingMore {
+    fn arm(translator: &Arc<Mutex<Translator>>, approval_id: &str, tool_call_id: &str) -> Self {
+        Self {
+            pending: Some((
+                Arc::clone(translator),
+                approval_id.to_owned(),
+                tool_call_id.to_owned(),
+            )),
+        }
+    }
+
+    fn disarm(&mut self) {
+        self.pending = None;
+    }
+}
+
+impl Drop for AsksNothingMore {
+    fn drop(&mut self) {
+        let Some((translator, approval_id, tool_call_id)) = self.pending.take() else {
+            return;
+        };
+        // **Not `emit`**, which `expect`s the lock. This runs during teardown and
+        // can run while an unwind is in progress, where a panic aborts the
+        // process — so a poisoned lock costs one missing log line here instead
+        // of taking Warp down over one.
+        let Ok(translator) = translator.lock() else {
+            return;
+        };
+        translator.log_permission_replied(&approval_id, &tool_call_id, "unanswered", None);
     }
 }
 

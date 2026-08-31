@@ -837,3 +837,89 @@ fn a_refusal_keeps_its_reason_when_nothing_can_answer() {
         "gave a command this process cannot run: {refused}"
     );
 }
+
+/// A translator that will log, with no agent and no connection behind it.
+///
+/// `open` is what gives it a `session_id`; without it the lines still write,
+/// but `linked_session_id` is absent and the fixture stops resembling a real
+/// one for no benefit.
+fn logging_translator() -> Arc<Mutex<Translator>> {
+    let mut translator = Translator::new(
+        "task-1".to_owned(),
+        true,
+        "req-1".to_owned(),
+        "does this repo build?".to_owned(),
+        Utc::now(),
+        "test-agent".to_owned(),
+        Some("/tmp/project".to_owned()),
+        "conv-guard".to_owned(),
+    );
+    translator.open("ses_guard".to_owned());
+    Arc::new(Mutex::new(translator))
+}
+
+/// Filtered on `call_id`, never on the event name.
+///
+/// The event log's broadcast is process-global and tests run in parallel, so
+/// `find(|line| line["event"] == …)` reads whatever a neighbouring test happened
+/// to write. That already failed once in this phase.
+fn line_for(
+    events: &mut tokio::sync::broadcast::Receiver<String>,
+    call_id: &str,
+) -> Option<serde_json::Value> {
+    std::iter::from_fn(|| events.try_recv().ok())
+        .map(|line| serde_json::from_str::<serde_json::Value>(&line).expect("a JSON line"))
+        .find(|line| line["call_id"] == call_id)
+}
+
+/// **A question dropped without an answer still says so.**
+///
+/// This is the case a cancelled turn produces, and until `AsksNothingMore`
+/// existed it produced *nothing*: `permission_request` is written synchronously
+/// in the request handler, `permission_replied` from a task that cancellation
+/// drops mid-`await`, so the trail kept the ask and lost its ending.
+///
+/// The assertion is on the value, not merely on the line's presence, because
+/// `Entry` is `#[skip_serializing_none]` and the whole argument for `unanswered`
+/// being a string rather than an absent key is that a reader must be able to
+/// tell "nobody answered" from "an older binary".
+#[test]
+fn a_dropped_question_records_that_nobody_answered() {
+    let mut events = crate::event_log::subscribe();
+    let translator = logging_translator();
+
+    drop(AsksNothingMore::arm(
+        &translator,
+        "req-1:9",
+        "call_guard_dropped",
+    ));
+
+    let line = line_for(&mut events, "call_guard_dropped").expect("the drop was recorded");
+    assert_eq!(line["event"], "permission_replied");
+    assert_eq!(line["decision"], "unanswered");
+    assert!(
+        line["answered_by"].is_null(),
+        "nobody answered, so no surface can be named: {line}"
+    );
+}
+
+/// **And a question that *was* answered is not reported twice.**
+///
+/// The guard rides the same scope as the real logging call, so a disarm that
+/// did not take would double every answered permission in the trail — turning
+/// an instrument built to be counted into one that inflates. Cheap to pin and
+/// silent if it broke.
+#[test]
+fn an_answered_question_is_not_also_recorded_as_unanswered() {
+    let mut events = crate::event_log::subscribe();
+    let translator = logging_translator();
+
+    let mut guard = AsksNothingMore::arm(&translator, "req-1:10", "call_guard_disarmed");
+    guard.disarm();
+    drop(guard);
+
+    assert!(
+        line_for(&mut events, "call_guard_disarmed").is_none(),
+        "a disarmed guard wrote a line anyway"
+    );
+}
