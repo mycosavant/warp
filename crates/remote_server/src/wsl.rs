@@ -118,7 +118,31 @@ pub async fn run_wsl_command(
     .with_timeout(timeout)
     .await
     .map_err(|_| WslCommandError::TimedOut { timeout })?
-    .map_err(WslCommandError::IoError)
+    .map_err(classify_spawn_failure)
+}
+
+/// Tells "there is no `wsl.exe` on this machine" from every other I/O failure.
+///
+/// **Because `SpawnFailed`'s own doc said it was what a caller sees on a machine
+/// without WSL, and for most callers it was not.** `run_wsl_script` builds the
+/// child itself and can map `spawn()` separately; `run_wsl_command` goes through
+/// `output()`, which folds spawning and running into one `io::Error`, and mapped
+/// the lot to `IoError`. Since `detect_platform` — the first thing
+/// `RemoteTransport` runs, and therefore the first thing anyone without WSL hits
+/// — is a `run_wsl_command` caller, the purpose-built error was unreachable on
+/// the path it was written for.
+///
+/// `NotFound` from `output()` means the program could not be found. Nothing else
+/// this command does can produce it: the arguments are not paths, and a missing
+/// *distro* is a non-zero exit from a `wsl.exe` that ran, not a spawn failure.
+///
+/// Found by an agent in Warp's own panel, scoped to these two files, on
+/// 2026-08-31.
+fn classify_spawn_failure(error: std::io::Error) -> WslCommandError {
+    match error.kind() {
+        std::io::ErrorKind::NotFound => WslCommandError::SpawnFailed(error),
+        _ => WslCommandError::IoError(error),
+    }
 }
 
 /// Pipes a script into `bash -s` inside `distro`.

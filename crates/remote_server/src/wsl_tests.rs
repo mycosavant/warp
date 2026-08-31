@@ -77,3 +77,36 @@ fn timeouts_map_to_the_transport_timeout_variant() {
         WslCommandError::SpawnFailed(std::io::Error::other("no wsl here")).into();
     assert!(matches!(err, crate::transport::Error::Other(_)));
 }
+
+/// **A machine with no `wsl.exe` gets the error written for it.**
+///
+/// `SpawnFailed`'s doc says it is what a caller sees on a machine without WSL.
+/// That was true only for `run_wsl_script`, which spawns the child itself.
+/// `run_wsl_command` goes through `output()`, which folds spawning and running
+/// into one `io::Error`, and mapped everything to `IoError` — so the first thing
+/// anyone without WSL hits (`detect_platform`, a `run_wsl_command` caller) never
+/// produced the purpose-built error.
+///
+/// Both halves asserted, because a classifier that returned `SpawnFailed` for
+/// everything would satisfy the first alone and lose the distinction the enum
+/// exists to draw.
+#[test]
+fn a_missing_wsl_binary_is_a_spawn_failure_and_nothing_else_is() {
+    let missing = classify_spawn_failure(std::io::Error::new(
+        std::io::ErrorKind::NotFound,
+        "program not found",
+    ));
+    assert!(
+        matches!(missing, WslCommandError::SpawnFailed(_)),
+        "a missing wsl.exe must say so: {missing}"
+    );
+
+    let broken_pipe = classify_spawn_failure(std::io::Error::new(
+        std::io::ErrorKind::BrokenPipe,
+        "pipe closed mid-read",
+    ));
+    assert!(
+        matches!(broken_pipe, WslCommandError::IoError(_)),
+        "a failure after the process started is not a spawn failure: {broken_pipe}"
+    );
+}
