@@ -1,104 +1,106 @@
-# The horizon: the fork builds the fork, and keeps going when nobody is watching
+# The horizon: a daily driver by Monday
 
-**Set 2026-08-29, replacing the horizon met the same day.** Delete this file when
-it is met or abandoned — it is a horizon, not doctrine. **Read it first; it
-outranks `TASKS.md`'s ordering while it stands.**
+**Set 2026-08-30, replacing the horizon set 2026-08-29** (*"the fork builds the
+fork, and keeps going when nobody is watching"*), which was met in its build half
+and spent in its ordering half. Delete this file when it is met or abandoned — it
+is a horizon, not doctrine. **Read it first; it outranks `TASKS.md`'s ordering
+while it stands.**
 
 ---
 
-## Where this starts
-
-The previous horizon asked for *one* multi-turn conversation in Warp's own panel
-that changed the fork, asked permission, was answered, and remembered itself.
-That was met, and then three tickets went at what it cost:
-
-- **T14.7** proved it possible. **T14.9** ran seven turns of real work and
-  produced the friction log everything since has aimed at.
-- **T14.8** answered the worst of it. A permission request Warp could not answer
-  turned out to be one agent's way of asking to leave the project directory —
-  knowable in advance, fixable in the agent's own config, and now refused in
-  words that say what Warp *cannot tell* rather than implying the call is
-  dangerous. Answering the ones it can is now a single paste.
-- **T14.10** gave a silent turn a voice: `quiet_for_seconds`, `last_activity`
-  and `waiting_for_you`, plus the discovery that a wedged turn blocks `window
-  close` until you cancel it. The third field exists because using the first two
-  produced a false alarm within the hour — a turn waiting on *me* looked exactly
-  like a wedge.
-
-So the loop works and the sharp edges named by one real session are filed off.
-**What has never happened is a second real session.**
-
 ## Destination
 
-> **A working day on the fork, driven from the fork.** Not one conversation and
-> not a demonstration: enough real work, over enough turns, that the friction log
-> stops being a list of blockers and becomes a list of preferences.
+> **A working day on the fork, on real work, driven from the fork.** Not a
+> demonstration and not one conversation. Met when a day's work has been done
+> through it *and* the friction log contains nothing that **stops** a turn.
 
-Met when **T14.11** produces a commit made that way *and* its friction log
-contains nothing that stops a turn. Frictions that merely annoy are the success
-condition, not a failure — that is the whole difference between this horizon and
-the last one.
+Frictions that merely annoy are the **success condition, not a failure**. That
+is the whole difference between this horizon and the one before it, and it is
+the sentence to re-read whenever a run produces a list of complaints and the
+temptation is to fix them before continuing.
 
-## The order, and why
+## Where this starts
 
-**T14.11 first, again.** Two rounds of fixes have landed on a measurement nobody
-has re-taken. Running first has overturned the plan twice in T14 — Phase 0's
-table was wrong in both cells, and T14.9 demoted the button that everyone was
-sure about — so the prior is strong and it is cheap to honour.
+The previous horizon asked for a multi-turn conversation in Warp's own panel that
+changed the fork, asked permission, was answered, and remembered itself. That was
+met. Everything since has been filing the sharp edges one real session found —
+T14.8's unanswerable requests, T14.10's silent turns, T14.13's invisible
+compactions, T14.16's in-panel button, T14.19's transcript recovery.
 
-~~The session's own task should be **T14.15**~~ — **done before the session, in
-about an hour, because the audit trail has to exist before an unattended run can
-rely on one.** An orchestrator answering an agent's prompts is only defensible if
-every approval traces afterwards to the edit it produced, and that trail was
-split across two files that did not name each other. One turn now writes one
-file.
+**What still has not happened is a second real session.** Two rounds of fixes
+have landed on a measurement nobody has re-taken, and running first has
+overturned the plan three times in T14 — Phase 0's table was wrong in both cells,
+T14.9 demoted the button everyone was sure about, and T14.12 was closed without
+being built because `agent read` turned out to stream after all. The prior is
+strong and it is cheap to honour.
 
-So the session's task is **T14.14** (model selection, which the protocol already
-offers) — tractable, self-contained, and real. **T14.13 is measured by the same
-run rather than built by it**: its first step is *"drive a session long enough to
-hit the context limit and record what the panel does"*, which is the long session
-itself. A dogfood needs something to be building while it gets long; T14.14 is
-that, and the cliff arrives for free or does not arrive, and either is a finding.
-**T14.12 is closed without being built** — polled through a live turn, `agent
-read` streams after all (0 → 675 → 742 → 838 characters, `is_complete: false`
-throughout), so T14.9's claim that it shows nothing until a turn ends was simply
-wrong. That is the third time in T14 that measuring first deleted the work
-instead of guiding it, and it is the argument for this ordering in one line.
+## The three blockers, and where each stands
 
-**T14.16 landed out of order, on request: the panel can answer.** Two taps for
-yes, one for no, the reason shown where there is no yes — verified by clicking
-it. The argument that shelved it in T14.8 was overturned twice: the greyed-out
-case is one agent's convention rather than a protocol fact, and T14.11 showed
-there is no unattended answerer, which makes a present person answering cheaply
-the only mechanism rather than a nicety. **That also changes what the horizon's
-destination means** — "driven from the fork" has quietly meant "with a person
-answering", and now there is somewhere for that person to click.
+1. **T14.17 — the ACP path logged what the agent did and never what it asked.**
+   **Done 2026-08-31** (`81b9b334a`). `permission_request` and
+   `permission_replied` now carry the `tool_input` that was shown, what was
+   decided (`allowed`/`denied`/`unanswered`), which surface answered, and whether
+   Warp had a *yes* to offer at all. Observation only: it changes no approval
+   outcome, and a test pins that logging emits no client action.
 
-**A run said to, 2026-08-30. T14.13 moved ahead of T14.11, and T14.11 is now
-person-present by construction.** Unattended, all three doors to a panel-made
-commit are shut — the harness refusal, the flagship agent (whose `auto` mode
-never asks Warp and whose `default` mode wedges with no answerer, so it is
-unusable in *both* directions), and the permission freeze. That is the consent
-design working, not a defect, and it makes T14.11 a task that waits for a person
-at the T14.16 button rather than one to be rewritten as impossible.
+2. **I18 — the persistent grant. Documented, deliberately unbuilt.** The
+   evidence arrived (`permission_suggestions` is a first-class session-scoped
+   grant Claude Code already offers and the fork drops), and with it a finding
+   that decides the shape: **the two transports fail at opposite ends.** ACP can
+   *answer* an `allow_always` but cannot *describe* it; the Claude Code hook can
+   describe one precisely but cannot answer at all. So `acp_permission`'s rule —
+   *an option may only be selected by a surface capable of showing what it
+   declares* — is correctly refusing the only path that can act. **Permission
+   posture stays frozen**; this is the largest posture change on the board and
+   the decision is the maintainer's.
 
-The night went to T14.13 instead, and it inverted the ticket: **the agent
-compacts itself every five or six turns and neither it nor Warp says a word.**
-Warp's transcript stays complete while the agent's context does not, and the
-panel shows the complete one. T14.9's seven-turn session — the measurement this
-whole phase was built on — sat right at the first compaction boundary.
+3. **I20 — the TUI answerer. Deferred, not blocked.** The gate is cosmetic for
+   fork transports and the seam answers; the cheap path is one `LaunchMode` arm
+   plus a cargo feature, which would also serve the T12 console and its existing
+   per-entry gating with zero new consent-surface code. **Build nothing a
+   friction log has not asked for** — the panel earned its button after 35
+   measured copy-paste approvals; the TUI has none. Named hazard: **type-ahead**,
+   because an Enter already in the buffer when a TUI prompt takes focus is a yes
+   nobody gave.
 
-**So T14.11 should now run after T14.13's disclosure lands, not before it.** A
-working day measured across three invisible compactions would produce a friction
-log nobody could trust, which is the one outcome this horizon cannot afford.
+## So the remaining work is to run it
+
+**T14.11, and it is now person-present by construction.** Unattended, all three
+doors to a panel-made commit are shut — the harness refusal, the flagship agent
+(whose `auto` mode never asks Warp and whose `default` mode wedges with no
+answerer), and the permission freeze. That is the consent design working, not a
+defect. T14.16's button is where the person answers.
+
+**And there is something new to measure while running.** T14.17's falsifier is
+live and costs nothing extra: with `WARP_FORK_EVENT_LOG=on`, if
+`permission_request` count is **zero while edits land**, the instrument recorded
+only Warp's non-involvement — which is exactly what T14.18 predicts for
+`claude-agent-acp` in `auto` on the panel path, since no `session/set_mode` is
+ever sent. In that case the mode surface should have led and T14.17 measured
+nothing. A dogfood needs something to be building while it gets long, and it
+needs something to be watching; this is the second.
+
+**Check the binary's timestamp before believing any run.** A release build
+started before a fix and run after it measures the pre-fix binary — that cost a
+rebuild and a wrong conclusion on 2026-08-30. `date -r target/release/warp-oss`
+against the newest file touched settles it in one second.
 
 **Reorder this list if a run says to.** That is what it is for.
 
-## Working unattended
+## The charter
 
-**This section is the charter, and it exists because the maintainer is away.**
-Everything below is already true of this fork; it is written down here because
-the usual backstop — someone reading the next message — is missing.
+**Written for unattended work, and it does not relax when someone is watching.**
+It was set down 2026-08-29 because the usual backstop — someone reading the next
+message — was missing. The maintainer is present again for this horizon, and the
+rules stand unchanged, because a rule that only holds when nobody is looking was
+never a rule.
+
+**The one that matters most under a deadline is the permission freeze.** A
+horizon named *"daily driver by Monday"* is exactly the pressure that makes a
+one-line widening look like progress, and the freeze exists for that moment
+rather than for the calm ones. Its own words: *one approved line is consent for
+that line; it is not a pattern to continue.* A blanket go-ahead is not consent
+for a posture change — ask for that one specifically, every time.
 
 > **Known hole, found by trying it 2026-08-29.** The charter treats *answering
 > the agent's permission prompts* as an allowance to be governed by rules. It is
