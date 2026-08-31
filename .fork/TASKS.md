@@ -8845,19 +8845,42 @@ mode descriptions is the first legitimate instance of `acp_permission.rs`'s
         `leaving_blocked_is_an_answer_and_not_a_new_prompt`
         (`warp_agent_tests.rs:154`) pins `Blocked → InProgress` →
         `permission_replied`. Labelling that "read only" understated it.
-      - **Only the flow half is traced** — that a rejection resumes the turn
-        rather than cancelling the conversation. And it is model-layer
-        behaviour, with `action_model_tests.rs` sitting beside the code and
-        `integration_testing/agent_mode/assertions.rs` already asserting on
-        `ConversationStatus::Blocked`. A test driving `cancel_pending_action`
-        would settle it without an account.
+      - **The flow half was then settled by reading it properly in a panel
+        session, and both earlier readings were half-answers.**
+        `action_model.rs:1451-1480`: once no pending actions remain and the
+        reason maps to `CancellationOutcome::Cancelled` — which
+        `ManuallyCancelled` does (`ai/agent/mod.rs:208`) — the status is
+        `Cancelled` **if every finished result is cancelled**, and `InProgress`
+        otherwise.
 
-      Left unwritten deliberately — it is a test for upstream behaviour this
-      fork does not run, and the shared event name does not depend on it
-      (`permission_replied` asserts only that an answer resolved the ask and the
-      turn moved on, which holds under either reading). Named here so it is a
-      known open thread rather than a boundary nobody re-examines. **"Verify by
-      running" has an edge, and this was not it.**
+        So rejecting the **only** pending action ends the conversation as
+        `Cancelled` → `stop_failure`, with **no** `permission_replied`; and
+        rejecting one call among others that succeeded resumes the turn and
+        does emit one. The first claim ("a denial never emits it") was right
+        for the common single-action case. The advisor's correction ("it always
+        does") was right for the mixed case. Neither was right as stated, and
+        the flat version was committed into `Entry::decision`'s doc for several
+        hours before this run corrected it.
+
+        **Found by the agent, in the panel, on the first turn of a dogfood
+        session** — which is the argument for the dogfood better than any
+        friction count. It read `handle_action_result` because the question
+        asked it to walk the path rather than confirm a conclusion, and neither
+        the author nor the advisor had followed it that far.
+
+      Still left unwritten as a *test*, and now for a better reason than
+      "unreachable": what it would pin is upstream's own model layer, which this
+      fork does not run and does not change. What the reading does settle is the
+      thing the open thread was actually about — **the shared name is right, and
+      it is right for a narrower reason than was claimed.**
+      `permission_replied` asserts that an answer resolved the ask; on the
+      `warp_agent` path it is emitted only when the turn resumes, so a lone
+      rejected call leaves no such line and the answer survives only as the
+      turn's `stop_failure`. The ACP path has no equivalent hole. That is a
+      fidelity difference between two sources sharing one vocabulary, and it is
+      recorded on `Entry::decision` rather than papered over here. **"Verify by
+      running" had an edge and this was not it — but reading it *properly* did
+      the job, and neither earlier read had gone one call deep enough.**
 
       **Two process findings, both the same shape as the merge-base lesson.**
 

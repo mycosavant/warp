@@ -176,12 +176,32 @@ pub(crate) struct Entry<'a> {
     ///   `permission_replied`. That is as verified as anything on that path can
     ///   be here, which is exactly why `action_event`'s own note says a test is
     ///   the only thing that can hold it.
-    /// - **The flow is traced, not run.** Rejecting a proposed command calls
-    ///   `cancel_action_with_id(…, ManuallyCancelled)` on one *action*;
-    ///   `cancel_pending_action` turns it into a cancelled action *result* and
-    ///   hands it to `handle_action_result`, so the turn resumes rather than
-    ///   moving to `ConversationStatus::Cancelled`, which is the separate
-    ///   whole-turn cancel. Only this half is unverified.
+    /// - **The flow is conditional, and an earlier version of this comment
+    ///   stated one branch of it as the whole answer.** Rejecting a proposed
+    ///   command calls `cancel_action_with_id(…, ManuallyCancelled)` on one
+    ///   *action*; `cancel_pending_action` turns it into a cancelled action
+    ///   *result* and hands it to `handle_action_result`. What happens next
+    ///   depends on what else is in the drained phase
+    ///   (`action_model.rs:1451-1480`): once no pending actions remain and the
+    ///   reason maps to `CancellationOutcome::Cancelled` — which
+    ///   `ManuallyCancelled` does (`ai/agent/mod.rs:208`) — the status becomes
+    ///   `Cancelled` **if every finished result is cancelled**, and
+    ///   `InProgress` otherwise.
+    ///
+    ///   So rejecting the *only* pending action ends the conversation as
+    ///   `Cancelled`, which `status_event` maps to `stop_failure` and **not**
+    ///   to `permission_replied`. Rejecting one call among others that
+    ///   succeeded resumes the turn and does emit `permission_replied`. Both
+    ///   readings this repo has recorded were half of that: the first said a
+    ///   denial never emits the event, the second said it always does.
+    ///
+    ///   **The practical consequence for a reader counting denials across
+    ///   sources**: on `warp_agent` lines a lone rejected call leaves no
+    ///   `permission_replied` at all, so its `permission_request` is the only
+    ///   trace and the answer is inferable solely from the turn ending as
+    ///   `stop_failure`. The ACP source has no such hole — it writes
+    ///   `decision: denied` in every case, which is the fidelity gap this
+    ///   field exists to close.
     ///
     /// **And "unverified" here means not-yet, not cannot.** What is unavailable
     /// on this fork is the *live server path* — reaching Warp's own agent needs
