@@ -667,3 +667,47 @@ fn only_a_workflow_carries_its_aliases_into_the_file() {
     let round_tripped = PortableObject::from_file_contents(&contents).expect("it parses back");
     assert!(round_tripped.aliases.is_empty());
 }
+
+/// **"At every depth" is a claim, and until this test it was only a comment.**
+///
+/// `json_payload_keys_are_sorted_not_insertion_ordered` proves sorting at depth
+/// 1 and nothing more: its payload is flat, so a `sorted_keys` that sorted the
+/// top level and returned everything else unchanged would pass it. So would
+/// every other test in this file — `an_unchanged_object_produces_unchanged_bytes`
+/// compares a file against its own re-parse, which is idempotency and not
+/// sortedness, and passes with no sorting applied at any depth.
+///
+/// Found by an agent in Warp's own panel, asked to check that same-day fix
+/// adversarially and specifically whether the test could pass on a wrong
+/// implementation. It named the exact shape that would slip through. This is the
+/// third guard in one day found narrower than the rule it guards.
+///
+/// Objects inside arrays are included because that is the case a `match` on
+/// `Value::Object` alone silently drops.
+#[test]
+fn keys_are_sorted_inside_nested_objects_and_inside_arrays() {
+    let mut object = workflow_fixture();
+    object.payload = Payload::Json(json!({
+        "zebra": {
+            "yak": 1,
+            "ant": { "wolf": 1, "bee": 2 },
+        },
+        "apple": [{ "quail": 1, "crow": 2 }],
+    }));
+
+    let contents = object.to_file_contents().expect("it writes");
+
+    for (outer, inner) in [
+        ("apple", "zebra"),
+        ("ant", "yak"),
+        ("bee", "wolf"),
+        ("crow", "quail"),
+    ] {
+        let first = contents.find(outer).expect("the earlier key is present");
+        let second = contents.find(inner).expect("the later key is present");
+        assert!(
+            first < second,
+            "`{outer}` must precede `{inner}` — sorting stopped before this depth:\n{contents}"
+        );
+    }
+}
