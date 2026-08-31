@@ -8882,6 +8882,56 @@ mode descriptions is the first legitimate instance of `acp_permission.rs`'s
       running" had an edge and this was not it — but reading it *properly* did
       the job, and neither earlier read had gone one call deep enough.**
 
+      **The morning after it landed, an agent in Warp's own panel found a
+      defect in it, and verifying that found a worse one.** Recorded here
+      because the *prompt shape* is the reusable part: it asked what could make
+      the trail **lie** rather than what the trail covered, and it asked for the
+      deciding lines rather than for a judgement.
+
+      - **A cancelled turn kept the question and lost its answer.**
+        `permission_request` is written synchronously in the request handler
+        (`mod.rs:512`); `permission_replied` is written from the task
+        `wait_for_a_person` spawns onto the connection, *after* `answer.await`
+        (`mod.rs:1117`). `generate` wraps the stream in `take_until`
+        (`mod.rs:287`), so a cancelled turn drops the driver future and the
+        waiting task with it — the await never resolves and the line after it
+        never runs.
+      - **And the `unanswered` value was covering a case that cannot happen.**
+        `Err(Canceled)` needs the sender dropped while the receiver is still
+        polled. The sender lives in the registry entry, and only
+        `registry::answer` (which sends) and `Waiting::drop` (which runs inside
+        that same dropped task) remove one. The remaining route is an
+        approval-id collision, which `Waiting`'s own token check calls belt and
+        braces. So the arm was exercised by a unit test and dead on the path,
+        while the case it was named for wrote nothing at all — **coverage
+        asserted in a doc comment and absent from the code**, which is the exact
+        failure this fork's own method section exists to catch, in code written
+        that morning.
+
+      Fixed with `AsksNothingMore`, a drop guard armed across the wait
+      (`202b20130`). It takes the lock without `expect`, because it can run
+      during an unwind where a panic aborts: one missing log line beats taking
+      Warp down over a poisoned mutex.
+
+      **Measured, not read** — `.fork/tools/cancel-leaves-no-orphan-ask.sh`
+      against a binary confirmed to postdate the fix:
+
+      | phase | `permission_request` | `permission_replied` | `unanswered` |
+      |---|---|---|---|
+      | cancelled without answering | +1 | +1 | **+1** |
+      | answered through the control plane | +1 | +1 | **0** |
+
+      Both halves are load-bearing and the second is the one that cannot pass by
+      accident: if the disarm ever stopped taking, every answered permission
+      would be recorded twice and an instrument built to be counted would
+      inflate. A test that only cancelled would never see it.
+
+      **One instrument note from that run.** `cat "$EVENTS"/*.jsonl` returns
+      **filename order, not time order** — the ACP path files per conversation,
+      so a later phase's lines can print above an earlier phase's. Nothing in
+      the log is wrong; a reader inferring causality from line order would be.
+      Sort on the timestamp if order matters.
+
       **Two process findings, both the same shape as the merge-base lesson.**
 
       - The `Entry` widening was sized by grepping for `applied:` — **9 sites**.

@@ -177,7 +177,15 @@ the `tool_input` that was shown, what was decided
 Warp had a *yes* to offer at all. **Read a zero here carefully**: T14.18 measured
 a panel session producing zero permission requests because the agent's own
 classifier answered first, so no lines means *Warp was not in the loop*, never
-that nothing was decided), `WARP_FORK_TRANSCRIPT` (`on` writes to **`.warp/transcripts/` under the pane's own
+that nothing was decided. **`unanswered` is what a cancelled turn leaves**, and
+it did not exist until an agent reviewing T14.17 in the panel found that the
+value was written by a unit test and unreachable on the real path: the ask is
+logged synchronously and the answer from a task cancellation drops mid-`await`,
+so the trail kept the question and lost its ending. Measured both ways after the
+fix — a cancelled ask writes it, an answered one does not. **And read the file
+in timestamp order**: the path files per conversation, so `cat *.jsonl` gives
+filename order and a reader inferring causality from line order will be
+wrong), `WARP_FORK_TRANSCRIPT` (`on` writes to **`.warp/transcripts/` under the pane's own
 directory** — not `state_dir`, because outside the session's directory the
 agent's read of the file arrives as `tool: other` and *no* answer exists, so the
 tidy location is the unusable one. `.warp/` is upstream's project directory and
