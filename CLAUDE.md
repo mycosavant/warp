@@ -275,6 +275,15 @@ candidate is ruled out (`CloseSessionConfirmationDialog` covers pane and tab
 closes; `OpenDialogSource` has no window arm), so naming a cause would be
 invented certainty.
 
+**A denied call can cost the whole turn while the turn reports `success`.**
+Measured 2026-08-31, and it sharpens the head-vs-tail rule recorded below. A
+denial landing ~90 seconds in, after substantial work, ended the conversation
+with `status: success` and **no answer at all** — 2029 characters of tool trace
+and the denial notice, nothing addressing the question. The status is the trap:
+`agent list` reports a turn that worked, and the absence is visible only by
+reading the output. So do not read `success` as "the question was answered";
+read the output, or count the asks that were refused.
+
 **…and a CLI agent running in a pane blocks it too, with none of the wedge's
 tells.** Measured 2026-08-30: with `claude` alive in a pane, `window close`
 answered `ok: true` and the process stayed up — while `agent list` reported **no
@@ -563,6 +572,21 @@ does without asking. So, as an instruction to any agent reading this file:
 > `ls` first, and do not shell out for something a native tool already does.**
 
 That removes the ask at zero security cost, which is smaller than any allow.
+
+**…but measured 2026-08-31, steering put *in the prompt* did not hold, and this
+paragraph was reading stronger than the evidence.** An audit task was re-run with
+that instruction written into the prompt in the imperative, naming the exact
+command to avoid. The agent shelled out on its **first** call anyway, again on
+its second, and produced sixteen `rg` asks before the turn was cancelled. So
+steering is worth writing and it is not a remedy to rely on: it costs nothing and
+it fails silently. What actually stopped the turn was the volume, not any one
+refusal.
+
+**And that volume is the measured case for I18.** Sixteen permission requests for
+one audit question, every one read-only and inside the project, is a rate no
+per-call consent surface absorbs. The persistent grant stays frozen — it is the
+maintainer's call and the largest posture change on the board — but the friction
+log can no longer say nothing has asked for it.
 
 **Check it with the case that must *ask*, not the case that must pass.** A map
 missing its `"*": "ask"` lead allows everything, so an allow-list appears to work
