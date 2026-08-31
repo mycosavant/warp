@@ -104,6 +104,51 @@ fn the_script_never_assigns_markup() {
     }
 }
 
+/// **The other half of the same discipline, and it was unpinned.**
+///
+/// `the_script_never_assigns_markup` covers the sinks that parse HTML. It does
+/// not cover the *attribute* sinks — `setAttribute`, `.href`, `.src`, `.style`,
+/// a handler property assigned a string, `location.assign`, `window.open` —
+/// which take agent-authored text somewhere dangerous without any markup being
+/// parsed. `script-src 'self'` stops an injected `<script>`; it does not stop a
+/// `javascript:` href, and it does not govern navigation at all.
+///
+/// Found by an agent in Warp's own panel auditing this file, which enumerated
+/// those sinks, confirmed the script uses **none** of them today, and thereby
+/// showed that the property everyone relies on is broader than the property
+/// under test. Nothing was wrong; the guard was narrower than the rule it
+/// guards, which is how a rule stops being true without a diff looking wrong.
+///
+/// Note what is *not* banned. `location.hash` and `location.pathname` are read
+/// at the fragment-wipe (the secret is taken out of the URL bar before anything
+/// renders), so a blanket ban on `location.` would forbid the very code that
+/// makes the page safe. The bans below are assignment and navigation sinks
+/// only — and `addEventListener` with a function is how every control here is
+/// wired, which is the safe shape and stays.
+#[test]
+fn the_script_never_puts_text_where_it_could_navigate_or_execute() {
+    for forbidden in [
+        "setAttribute",
+        ".innerText",
+        ".href",
+        ".src",
+        ".style",
+        "location.assign",
+        "location.replace",
+        "window.open",
+        "javascript:",
+        "new Function",
+        "setTimeout(\"",
+        "setInterval(\"",
+    ] {
+        assert!(
+            executable_lines_mentioning(CONSOLE_SCRIPT, forbidden).is_empty(),
+            "the console renders untrusted text and must not use {forbidden}; \
+             render it with `text()` (textContent) or `createTextNode` instead"
+        );
+    }
+}
+
 /// A control plane inside a frame is a control plane a page you did not write
 /// can click on. Both headers, because `frame-ancestors` is the one that is
 /// actually consulted and `X-Frame-Options` is the one an older browser has.
