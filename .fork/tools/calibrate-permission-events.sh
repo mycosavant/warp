@@ -4,8 +4,17 @@
 # Drives an ALREADY-RUNNING Warp through warpctrl and reads the event log after.
 # Launch first, from the repo root:
 #
-#   WARP_FORK_EVENT_LOG=on WARP_FORK_ACP_COMMAND="opencode acp" \
+#   WARP_FORK_EVENT_LOG=/tmp/t1417-events WARP_FORK_ACP_COMMAND="opencode acp" \
 #     env -u WAYLAND_DISPLAY LIBGL_ALWAYS_SOFTWARE=1 ./target/release/warp-oss
+#
+# **Name the directory rather than passing `on`.** `on` resolves to
+# `fork::state_dir()/events`, and `state_dir()` is `secure_state_dir()` joined
+# with "fork" -- platform-dependent, and not somewhere a reader should guess. A
+# reader that guesses wrong finds an empty directory and reports "no permission
+# events", which is indistinguishable from an instrument that never wrote any.
+# That false negative was caught here before it fired, and the fix is to delete
+# the guess rather than to make a better one. Override with EVENTS=<dir> if you
+# launched with something else.
 #
 # and check the binary postdates your source before believing any run --
 # `date -r target/release/warp-oss` against the newest file you touched. A build
@@ -26,7 +35,7 @@
 set -u
 REPO=/home/effatha/git/warp
 CTL="$REPO/target/release/warp-oss --warpctrl"
-EVENTS=$HOME/.local/state/warp-oss/events
+EVENTS=${EVENTS:-/tmp/t1417-events}
 T=/tmp/t1417; mkdir -p $T
 say() { printf '\n\n========== %s ==========\n' "$*"; }
 
@@ -81,6 +90,14 @@ for i in $(seq 1 25); do
 done
 
 say "THE INSTRUMENT"
+if [ ! -d "$EVENTS" ] || [ -z "$(ls -A "$EVENTS" 2>/dev/null)" ]; then
+  echo "  !! $EVENTS is missing or empty."
+  echo "  !! This is an APPARATUS failure, not a finding: Warp was not launched"
+  echo "  !! with WARP_FORK_EVENT_LOG pointing here. Do NOT read a zero off this"
+  echo "  !! run -- relaunch and repeat. A measurement whose apparatus could have"
+  echo "  !! produced it is worse than no measurement."
+  exit 2
+fi
 cat "$EVENTS"/*.jsonl 2>/dev/null | python3 -c "
 import json,sys,collections
 rows=[];c=collections.Counter()
