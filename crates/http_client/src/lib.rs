@@ -511,9 +511,60 @@ impl<'a> RequestBuilder<'a> {
         }
     }
 
+    /// Points this builder at the blackhole if its host is on the egress
+    /// deny-list, reporting whether it did.
+    ///
+    /// **Because `eventsource` does not reach `execute_inner`, and the module
+    /// that claims it does is the one the fork's strongest claim rests on.**
+    /// `egress`'s own docs said *"every request built through `Client` funnels
+    /// through `execute_inner`, so a check there cannot be bypassed by a call
+    /// site that forgot to consult a feature flag"*, and that sentence was false
+    /// from the day it was written: `eventsource` hands `self.wrapped` to
+    /// `reqwest_eventsource` directly. Found by an agent in Warp's own panel,
+    /// asked to walk the request path and name any way to reach the network
+    /// without passing the check.
+    ///
+    /// **Not a live leak when found**, and that is the argument for closing it
+    /// rather than noting it: all four call sites target Warp's own service,
+    /// which is not on the deny-list. A backstop whose coverage depends on where
+    /// today's call sites happen to point is not a backstop, and the comment
+    /// above `execute_inner` promises precisely the opposite.
+    ///
+    /// A body that cannot be cloned yields no URL to judge, which reads as a
+    /// fail-open — except that `eventsource`'s own `expect` panics on exactly
+    /// that request a few lines later, so it reaches the network either way over
+    /// this function's dead body. Returning `false` there is honest rather than
+    /// permissive.
+    fn redirect_if_blocked(&mut self) -> bool {
+        let Some(url) = self
+            .wrapped
+            .try_clone()
+            .and_then(|builder| builder.build().ok())
+            .map(|request| request.url().clone())
+        else {
+            return false;
+        };
+        if !egress::is_blocked(&url) {
+            return false;
+        }
+        log::warn!(
+            "fork: blocked telemetry egress (eventsource) to {}",
+            url.host_str().unwrap_or("<no host>")
+        );
+        // Rebuilt rather than URL-rewritten, because `reqwest::RequestBuilder`
+        // exposes no way to change a URL in place. Headers and body go with it,
+        // which is correct twice over: the payload is what must not leave, and
+        // the destination cannot connect.
+        self.wrapped = self.client.wrapped.get(egress::blackhole_url());
+        true
+    }
+
     /// Sends the request to the endpoint, which is assumed to be a streaming server-sent-events
     /// endpoint, and returns a corresponding `EventSource`.
-    pub fn eventsource(self) -> EventSourceStream {
+    pub fn eventsource(mut self) -> EventSourceStream {
+        // Fork policy backstop: this is the one path out of `Client` that does
+        // **not** reach `execute_inner`. See `redirect_if_blocked`.
+        let _ = self.redirect_if_blocked();
         cfg_if::cfg_if! {
             if #[cfg(target_family = "wasm")] {
                 let mut stream = self

@@ -76,3 +76,60 @@ fn request_carries_trace_link_header_on_warp_header_path() {
     let value = value.expect("trace-link header should be added on the warp-header path");
     assert!(value.starts_with("00-"), "unexpected header value: {value}");
 }
+
+/// **The SSE path is inside the backstop, not outside it.**
+///
+/// `eventsource` is the one way out of [`Client`] that never reaches
+/// `execute_inner`, where the egress check lives — so for as long as this crate
+/// has had a deny-list, a stream to a blocked host would have connected. It was
+/// not a live leak: every call site targets Warp's own service. That is what
+/// makes it worth a test rather than a note, because "no call site does this
+/// today" is a fact about today.
+#[test]
+fn a_blocked_host_is_redirected_on_the_eventsource_path_too() {
+    let client = Client::new();
+    let mut builder = client.get("https://o12345.ingest.sentry.io/api/1/envelope/");
+
+    assert!(
+        builder.redirect_if_blocked(),
+        "a deny-listed host was left pointing at itself on the SSE path"
+    );
+
+    let url = builder
+        .wrapped
+        .try_clone()
+        .and_then(|builder| builder.build().ok())
+        .map(|request| request.url().clone())
+        .expect("the redirected request is buildable");
+    assert_eq!(
+        url,
+        egress::blackhole_url(),
+        "redirected somewhere other than the blackhole"
+    );
+}
+
+/// The other half, and the one that cannot pass by accident.
+///
+/// A `redirect_if_blocked` that returned `true` unconditionally would satisfy
+/// the test above perfectly while sending every SSE stream — including Warp's
+/// own agent traffic, which is what these call sites actually carry — into a
+/// hole. Checking that an ordinary host is left alone is what makes the first
+/// assertion mean anything.
+#[test]
+fn an_ordinary_host_is_left_alone_on_the_eventsource_path() {
+    let client = Client::new();
+    let mut builder = client.get("https://app.warp.dev/api/stream");
+
+    assert!(
+        !builder.redirect_if_blocked(),
+        "redirected a host that is not on the deny-list"
+    );
+
+    let url = builder
+        .wrapped
+        .try_clone()
+        .and_then(|builder| builder.build().ok())
+        .map(|request| request.url().clone())
+        .expect("the untouched request is buildable");
+    assert_eq!(url.as_str(), "https://app.warp.dev/api/stream");
+}
