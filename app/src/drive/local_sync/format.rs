@@ -229,7 +229,48 @@ impl PortableObject {
                 Ok(format!("{}\n{}", front_matter(&header)?, markdown))
             }
             Payload::Folder { .. } => json_envelope(header, None),
-            Payload::Json(data) => json_envelope(header, Some(data.clone())),
+            Payload::Json(data) => json_envelope(header, Some(Self::sorted_keys(data.clone()))),
+        }
+    }
+
+    /// Sorts every object's keys, at every depth.
+    ///
+    /// **Because a dependency two crates away decides whether `serde_json::Map`
+    /// is sorted, and one of ours turned it off.** `Map` is a `BTreeMap` by
+    /// default and an insertion-ordered `IndexMap` under the `preserve_order`
+    /// feature. Cargo unifies features across the whole build, so
+    /// `agent-client-protocol` — which this fork added for T14.5 — enabling
+    /// `serde_json/preserve_order` silently changed the byte layout of every
+    /// file this module writes. Nothing in `local_sync` changed; a git-backed
+    /// sync simply started emitting a different byte stream for identical
+    /// content, which is spurious diffs and avoidable merge conflicts in the one
+    /// feature whose whole job is to be diffable.
+    ///
+    /// `json_payload_keys_are_sorted_not_insertion_ordered` was written as a
+    /// tripwire for exactly this — its own comment says *"pinned because the
+    /// workspace enabling `preserve_order` would silently make every file's
+    /// byte-stability depend on hash iteration"* — and it fired. It went
+    /// unnoticed because nobody ran `-p warp --lib local_sync` after adding ACP.
+    /// The guard worked; the habit around it did not.
+    ///
+    /// Sorting here rather than removing the feature: `agent-client-protocol`
+    /// needs it, feature unification means we could not turn it off for one
+    /// crate anyway, and a module that must produce stable bytes should not
+    /// depend on a global default to get them. Arrays keep their order — that is
+    /// data, not layout.
+    fn sorted_keys(value: serde_json::Value) -> serde_json::Value {
+        match value {
+            serde_json::Value::Object(map) => {
+                let sorted: std::collections::BTreeMap<String, serde_json::Value> = map
+                    .into_iter()
+                    .map(|(key, value)| (key, Self::sorted_keys(value)))
+                    .collect();
+                serde_json::Value::Object(sorted.into_iter().collect())
+            }
+            serde_json::Value::Array(items) => {
+                serde_json::Value::Array(items.into_iter().map(Self::sorted_keys).collect())
+            }
+            other => other,
         }
     }
 

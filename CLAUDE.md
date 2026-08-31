@@ -851,6 +851,32 @@ was correct on disk. Worse, it invalidates verification done before it: a
 consistent. Give the worktree its own target directory and accept the disk, or
 measure the baseline by stashing in place.
 
+**A cargo *feature* enabled by one dependency changes how another crate
+behaves, and nothing in the diff shows it.** Found 2026-08-31 and it is the
+fork breaking the fork: `agent-client-protocol`, added for T14.5, enables
+`serde_json/preserve_order`. Cargo unifies features across the whole build, so
+`serde_json::Map` became an insertion-ordered `IndexMap` **everywhere** —
+including `drive/local_sync/format.rs`, which relied on it being a sorted
+`BTreeMap` to emit stable bytes. A git-backed sync silently started producing a
+different byte stream for identical content: spurious diffs and avoidable merge
+conflicts, in the one feature whose whole job is to be diffable. **No line of
+`local_sync` changed.**
+
+The tripwire existed and fired: `json_payload_keys_are_sorted_not_insertion_ordered`
+says in its own comment *"pinned because the workspace enabling `preserve_order`
+would silently make every file's byte-stability depend on hash iteration"*. Three
+tests had been red for an unknown period, and nobody had run `-p warp --lib
+local_sync` after adding ACP. **The guard worked; the habit around it did not** —
+and `cargo build`, `cargo check --workspace --all-targets` and every gate in this
+file are all silent, because a feature flip is not a compile error.
+
+Fixed by sorting explicitly at the seam rather than by fighting the feature: the
+ACP crate needs it, unification means it cannot be turned off for one crate
+anyway, and **a module that must produce stable bytes should not depend on a
+global default to get them.** The general rule: if your output's byte-stability
+comes from a dependency's default, pin it locally or it is one `cargo add` away
+from changing.
+
 **A build script that reads a file it does not `rerun-if-changed` is a merge
 trap.** `crates/graphql/build.rs` registers a schema from
 `../warp_graphql_schema/api/schema.graphql` and watched only itself, so an

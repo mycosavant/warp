@@ -91,7 +91,18 @@ pub struct ApplySummary {
     /// `dep` takes it from whatever it pointed at here — including a team
     /// workflow the mirror never sees. That is the right outcome, since the
     /// alternative is two `dep`s, but it is a change to something outside the
-    /// mirror and so it gets named rather than counted.
+    /// mirror and so it gets **named as well as counted**.
+    ///
+    /// **"Rather than counted" is what this said until 2026-08-31, and it was
+    /// true in only one direction of two.** A reassigned alias differs from its
+    /// old self by `workflow_id`, so it fails `before.contains(alias)`, lands in
+    /// `changed`, and *is* counted — in `aliases_set`. What it escapes is
+    /// `aliases_removed`: `stale` requires
+    /// `described_ids.contains(&alias.workflow_id)`, and the workflow it used to
+    /// point at is by definition not one the tree describes. So a caller adding
+    /// `aliases_set` and `aliases_reassigned` double-counts, which is exactly
+    /// what the old wording invited. Found by an agent in Warp's own panel,
+    /// scoped to this file and its tests.
     pub aliases_reassigned: Vec<String>,
 }
 
@@ -472,6 +483,14 @@ fn metadata_for(placed: &PlacedObject) -> Result<CloudObjectMetadata> {
         // An imported object has never been sent anywhere, which is exactly
         // what the store already says about every object here — and what draws
         // the "Saved locally" indicator rather than a sync spinner.
+        //
+        // The variant name reads backwards and the comment is right: checked
+        // 2026-08-31 after an audit flagged it as suspicious.
+        // `cloud_object/mod.rs:729` reads `should_show_local_only_indicator =
+        // has_in_flight_requests && !sync_queue_is_dequeueing`, tested *before*
+        // the spinner branch. On a fork with no account the queue never
+        // dequeues, so `InFlight(1)` is precisely what draws the laptop icon and
+        // "Saved locally". Recorded so the next reader does not re-flag it.
         pending_changes_statuses: CloudObjectStatuses {
             content_sync_status: CloudObjectSyncStatus::InFlight(NumInFlightRequests(1)),
             has_pending_metadata_change: false,
