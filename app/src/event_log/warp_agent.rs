@@ -419,11 +419,20 @@ fn cancellation_name(reason: CancellationReason) -> &'static str {
 
 /// The part of an action worth putting in `tool_input_preview`.
 ///
-/// The field is world 2's, where it holds a plugin's `command` or `file_path`,
-/// so this fills it with the same two things and nothing else: a reader greps
-/// this field for what was *run*, and widening it to every action's arguments
-/// would make that grep unreliable rather than more useful. Hence the catch-all
-/// — for the rest, "no preview" is the right answer, not a missing case.
+/// The field is world 2's, where it holds a plugin's `command` or `file_path`.
+/// The rule this fills it by is *what was run or written*, and the catch-all is
+/// the point: a reader greps this field for that, and widening it to every
+/// action's arguments would make the grep unreliable rather than more useful.
+/// For everything else, "no preview" is the right answer and not a missing case.
+///
+/// **This said "the same two things and nothing else" until 2026-08-31, and
+/// there are three arms.** The third is `WriteToLongRunningShellCommand`, whose
+/// preview is the bytes typed into an already-running command's stdin — neither a
+/// command string nor a file path. It belongs here, for the reason its own
+/// comment gives, and the doc simply counted wrong: a reader trusting "two
+/// things" would not expect stdin content in a field they are grepping for
+/// commands. Found by an agent in Warp's own panel, scoped to this file and its
+/// tests.
 fn tool_input_preview(action: &AIAgentActionType) -> Option<String> {
     match action {
         AIAgentActionType::RequestCommandOutput { command, .. } => Some(excerpt(command)),

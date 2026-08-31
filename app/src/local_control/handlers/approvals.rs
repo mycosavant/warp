@@ -18,7 +18,26 @@
 //! empty snapshot; only the live event stream carried it, and only if you were
 //! already watching.
 //!
-//! # Approval is a keystroke here, and saying otherwise would be a lie
+//! # Approval is a keystroke **on the pane path**, and saying otherwise would be
+//! a lie
+//!
+//! **The qualifier was missing until 2026-08-31 and the section was wrong for
+//! half the module.** This handler serves two populations: CLI agents in a pane,
+//! where the only available act is a keystroke, and ACP requests, where the
+//! answer is a typed option id sent back over the protocol. `answer_acp`'s own
+//! comment says so at length — *"not a keystroke … the answer is typed and
+//! carries an id, so naming it is both more precise and more honest than naming a
+//! keystroke that was never sent"*. This section pre-dates that path and was
+//! never revisited, so it asserted in the strongest available language something
+//! the same file contradicts a few hundred lines down.
+//!
+//! What survives the correction unchanged is the *principle*, which is why the
+//! wording was so strong: **a result reports what this process did, never an
+//! effect it cannot observe.** The pane path reports a keystroke because a
+//! keystroke is all it sent; the ACP path reports an option id for the same
+//! reason. Neither reports `approved: true`.
+//!
+//! Everything below in this section is about the pane population.
 //!
 //! Warp has no channel to tell a CLI agent "approved". The agent drew a prompt
 //! on its own terminal and is reading its own stdin; the only thing a person in

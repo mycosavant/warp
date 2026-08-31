@@ -37,13 +37,28 @@
 //! T14 produced three separate instances of a hazard being recorded in prose and
 //! then built against anyway. There is a test under this paragraph.
 //!
-//! # Nothing here reads a permission
+//! # Nothing here *answers* a permission
 //!
 //! Permission requests are a *request* on the connection, not an update on this
-//! stream, so they never reach this file. What answers them is
+//! stream, so none arrives through the mapping below. What answers them is
 //! `warp_cli`'s `acp_permission`, reached from `mod.rs`. Keeping the two apart
 //! is deliberate: this file decides how something is *shown*, and showing must
 //! not be able to authorize.
+//!
+//! **The heading said "reads" and the body said they "never reach this file"
+//! until 2026-08-31, and T14.17 had made both false that same morning.**
+//! `log_permission_request` and `log_permission_replied` take a
+//! `registry::ParkedRequest` and write the audit lines from it, so a permission
+//! request very much reaches this file — it is handed here deliberately, so the
+//! record of what was shown is written by whatever did the showing.
+//!
+//! What is still exactly true is the part that matters, and it is why the
+//! separation exists: **nothing here can change an outcome.** Both functions are
+//! observation only, `log_permission_request`'s own doc says so, and a test pins
+//! that logging emits no client action. Written down rather than quietly
+//! reworded because the author of the stale sentence and the author of the code
+//! that staled it were the same person, hours apart, and neither noticed —
+//! which is this repo's most-repeated failure with the shortest possible fuse.
 
 use std::collections::{HashMap, HashSet};
 
