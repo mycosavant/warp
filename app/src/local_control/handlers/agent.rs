@@ -208,6 +208,11 @@ fn conversation_summary(
         quiet_for_seconds: quiet,
         last_activity,
         waiting_for_you,
+        // Outlives the turn deliberately -- see the field's own docs. A caller
+        // reading `success` needs this most once the turn is over.
+        permissions_denied: crate::ai::acp_agent::liveness::refusals_for(
+            &conversation.id().to_string(),
+        ),
         session_mode,
     }
 }

@@ -138,3 +138,53 @@ fn a_waiting_guard_outliving_its_turn_is_harmless() {
 
     assert!(quiet_for("t1410-order").is_none());
 }
+
+/// **A refusal outlives the turn it happened in, and that is the requirement.**
+///
+/// The question `permissions_denied` answers is asked *after* a turn ends —
+/// "this says `success` and there is no answer in it, why?" — so a count stored
+/// alongside the in-flight turn state would be gone by the time anyone looked.
+/// `watch` and its guard are exercised here precisely to prove the count is not
+/// swept with them.
+#[test]
+fn a_refusal_is_still_counted_once_the_turn_is_over() {
+    let conversation = "t1411-refusal-outlives";
+    assert_eq!(
+        refusals_for(conversation),
+        None,
+        "a conversation nobody refused anything in must report nothing at all"
+    );
+
+    let watch = watch(conversation.to_owned());
+    record_refusal(conversation);
+    drop(watch);
+
+    assert!(
+        quiet_for(conversation).is_none(),
+        "the turn state should be gone, or this test is not testing what it says"
+    );
+    assert_eq!(refusals_for(conversation), Some(1));
+}
+
+/// Counted, not flagged — and `None` rather than `Some(0)` when there are none.
+///
+/// The count matters because one refusal in a turn that answered anyway is
+/// ordinary and several is a pattern worth reading the output over. The `None`
+/// matters because a zero on every row of an ordinary listing is noise, and
+/// noise is how a signal stops being read.
+#[test]
+fn refusals_accumulate_and_absence_is_not_zero() {
+    let conversation = "t1411-refusal-counts";
+    assert_eq!(refusals_for(conversation), None);
+
+    record_refusal(conversation);
+    record_refusal(conversation);
+    record_refusal(conversation);
+
+    assert_eq!(refusals_for(conversation), Some(3));
+    assert_eq!(
+        refusals_for("t1411-refusal-untouched"),
+        None,
+        "a neighbouring conversation must not inherit a count"
+    );
+}

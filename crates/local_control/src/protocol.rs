@@ -589,6 +589,30 @@ pub struct AgentConversationSummary {
     /// hidden pane can be shown, a closed one cannot.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub is_hidden: bool,
+    /// How many of this conversation's permission requests Warp was told to
+    /// refuse. Omitted when none were.
+    ///
+    /// **Because `status: success` was hiding an unanswered question.** Measured
+    /// 2026-08-31: an audit turn asked to run `find /`, was refused, and ended
+    /// reporting `success` with no answer in it — two thousand characters of tool
+    /// trace and the refusal notice, nothing addressing what was asked. The
+    /// status was not wrong about the turn; the agent did stop of its own
+    /// accord. It was silent about the one fact that explained the emptiness,
+    /// and a caller polling `status` could not tell that turn from one that
+    /// worked.
+    ///
+    /// **Not a verdict, and it must not be read as one.** A refusal is very
+    /// often the right outcome and the turn answers anyway — measured
+    /// repeatedly in the same session. This says only *something was refused
+    /// here, so read the output rather than the status*. Whether the agent
+    /// needed what it was denied is not something Warp can know, and asserting
+    /// it would be the `unconfined_reason` overreach T14.8 corrected.
+    ///
+    /// Lifetime is the conversation, not the turn: the question is asked after
+    /// the turn ends, so a count cleared with the turn would answer "none" every
+    /// time.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub permissions_denied: Option<usize>,
     /// Seconds since the agent last said anything, for a turn Warp is driving
     /// itself.
     ///

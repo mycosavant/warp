@@ -70,6 +70,50 @@ struct Turn {
 
 static TURNS: LazyLock<Mutex<HashMap<String, Turn>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
 
+/// How many of this conversation's permission requests were refused, ever.
+///
+/// **Deliberately outside [`TURNS`], which is cleared when a turn ends.** That
+/// is the whole point: the question this answers is asked *after* the turn, and
+/// a count that died with the turn would answer it "none" every time.
+///
+/// Measured 2026-08-31 and it is why this exists. An audit turn reached for
+/// `find /`, was refused, and then ended -- reporting `status: success` with no
+/// answer in it at all: two thousand characters of tool trace and the refusal
+/// notice, nothing addressing the question. `success` was not a lie about the
+/// turn; the agent did stop of its own accord. It was a lie by omission about
+/// whether the question got answered, and a caller polling `status` had no way
+/// to tell that turn from one that worked.
+///
+/// **This does not say the turn failed, and must never be read that way.** A
+/// refusal is often the correct outcome and the turn goes on to answer anyway --
+/// measured repeatedly in the same session. It says only: *something was refused
+/// here, so read the output before believing the status.* Warp cannot know
+/// whether the agent needed what it was denied, and inventing that judgement is
+/// the `unconfined_reason` overreach T14.8 corrected.
+static REFUSALS: LazyLock<Mutex<HashMap<String, usize>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+
+/// Counts one refusal against a conversation.
+pub(crate) fn record_refusal(conversation: &str) {
+    let mut refusals = REFUSALS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    *refusals.entry(conversation.to_owned()).or_insert(0) += 1;
+}
+
+/// How many were refused, or `None` if none ever were.
+///
+/// `None` rather than `0` so the field is absent from an ordinary listing: a
+/// zero on every row is noise, and noise is how a signal stops being read.
+pub(crate) fn refusals_for(conversation: &str) -> Option<usize> {
+    REFUSALS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .get(conversation)
+        .copied()
+        .filter(|count| *count > 0)
+}
+
 fn turns() -> std::sync::MutexGuard<'static, HashMap<String, Turn>> {
     TURNS
         .lock()

@@ -1084,6 +1084,8 @@ fn wait_for_a_person(
     // after that line the entry belongs to the map and someone may already be
     // answering it.
     let approval_id = request.approval_id.clone();
+    // Cloned for the same reason, and used only if the answer is a no.
+    let conversation_id = request.conversation_id.clone();
     let (waiting, answer) = registry::park(request);
 
     connection.spawn(async move {
@@ -1104,6 +1106,13 @@ fn wait_for_a_person(
         // Read before `outcome_for` consumes the answer, and the ordering is
         // load-bearing rather than incidental.
         let (decision, answered_by) = replied_fields(&answer);
+        // Counted here rather than in `registry::answer`, because a request that
+        // is never answered at all is also not a refusal -- the `unanswered` arm
+        // must not inflate this. See `liveness::REFUSALS` for what the number is
+        // and is not allowed to mean.
+        if decision == "denied" {
+            liveness::record_refusal(&conversation_id);
+        }
         let outcome = outcome_for(answer, allowed, denial);
         // The asking note stays in the transcript, so without this one a
         // finished conversation reads as though it is still waiting — and after
