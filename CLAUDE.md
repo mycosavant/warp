@@ -289,10 +289,23 @@ the credential broker and the peer-UID check.
 use that flag to A/B a regression.** Observed 2026-08-22: a policy-off instance
 ran with a visible window and held a port, while the discovery directory stayed
 **empty** — so `warpctrl window close` answered `no_instance` and there was no
-sanctioned way to stop it. The discovery record carries the credential, so no
-record means no client can authenticate, not merely that it cannot be found.
-The port was upstream's 9282, ungated by policy; the empty directory was
-`warpctrl` correctly staying off. Plan the shutdown before a policy-off run.
+sanctioned way to stop it. The port was upstream's 9282, ungated by policy; the
+empty directory was `warpctrl` correctly staying off. Plan the shutdown before a
+policy-off run.
+
+**And the explanation this file gave for that stood wrong until 2026-08-31.** It
+said *"the discovery record carries the credential, so no record means no client
+can authenticate"*. It does not: `InstanceRecord` publishes routing metadata, the
+loopback endpoint and **the filename of the credential-broker socket**, and
+`discovery.rs`'s own module docs say in as many words that *"discovery records
+never contain bearer tokens or reusable credentials"* — the secret is minted at
+the broker, per action, and kept process-local. The observed behaviour was right
+and the mechanism under it was invented: with no record a client cannot find
+*where to ask*, which is a weaker and more interesting fact than not being able
+to authenticate. Caught by an agent in Warp's own panel, from a prompt that
+asserted the wrong version as its premise — it corrected the question instead of
+answering it, which is the argument for stating your premise where the agent can
+see it.
 
 **…and often you do not need one.** `--warpctrl` runs `init_feature_flags`
 before it dispatches, so `WARP_FORK_POLICY=0 warp-oss --warpctrl instance list`
