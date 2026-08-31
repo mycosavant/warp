@@ -8158,6 +8158,71 @@ mode descriptions is the first legitimate instance of `acp_permission.rs`'s
       temporary hook that dumps stdin, which is a write under `~/.claude` and so
       belongs to the maintainer.
 
+      **As built — the payload was captured, and "still not verified" above is
+      now false.** Measured 2026-08-30 with `.fork/tools/dump-hook-stdin.sh`,
+      registered *beside* the vendored plugin's own `PermissionRequest` hook. No
+      edit to the plugin was needed: a hook event runs **every** command
+      registered for it, which is the cheap trick worth remembering the next
+      time a vendored hook has to be observed rather than changed.
+
+      Ten keys arrive:
+
+      ```
+      cwd  effort  hook_event_name  permission_mode  permission_suggestions
+      prompt_id  session_id  tool_input  tool_name  transcript_path
+      ```
+
+      **`tool_use_id` is absent.** `TR-EVENTS-B`, recorded in three files, is
+      correct. The question this ticket left open is answered and the answer is
+      the pessimistic one.
+
+      **But the id is recoverable beside it, and that changes increment (1).**
+      `transcript_path` points at Claude Code's own session JSONL, whose
+      assistant messages carry `tool_use` blocks with `toolu_…` ids — and the
+      entry is written **before** the hook fires (measured: transcript entries at
+      `22:33:13.86–13.99Z` against a dump at `22:33:15Z`). So the id exists at
+      *decision* time, not merely afterwards, which is the only version of that
+      fact worth anything.
+
+      **The obvious join does not work, and this is the part to not rediscover.**
+      Matching on `tool_input` alone is ambiguous: in one session the same
+      command resolved to **two** ids, because agents re-run commands. The usable
+      key is the *most recent* `tool_use`, disambiguated by `tool_name` plus
+      input among calls not yet resolved. **Not verified:** parallel tool calls,
+      where one assistant message carries several `tool_use` blocks and "most
+      recent" stops being a single answer. That is the case to test before
+      trusting the join.
+
+      **So increment (1) is cheaper and dearer than this ticket assumed, in
+      different places.** Cheaper, because the plugin can recover an id today
+      without anything upstream changing. Dearer, because the recovered id is
+      **heuristic rather than exact** — and a call id that is usually right is
+      worse than none for an audit trail, which is the one use it was wanted
+      for. Decide that before bumping the protocol: a v2 field carrying a
+      best-guess join would put a guess where readers will read a fact.
+
+      **Two fields nobody knew were there.**
+
+      - **`permission_mode`** — so Warp can *know* the mode a CLI agent is in
+        rather than infer it. That is T14.18's territory arriving free on a
+        different path.
+      - **`permission_suggestions`** — Claude Code's own proposed rule
+        additions, shaped `{type: addRules, rules: [...], behavior: allow,
+        destination: session}`. A first-class, **session-scoped** persistent
+        grant, with the scope on the wire. This is direct evidence for I18's
+        central claim: the allow-all affordance is not something the fork would
+        be inventing, it is something already offered and currently dropped.
+      - `effort: {level: …}` is the third and is unexamined.
+
+      **And the finding that makes this ticket's thesis stronger than it
+      claimed.** The permission hook is **observational only** — it reports and
+      exits, so Warp is told and cannot answer. Combined with the missing call
+      id, both gaps are **plugin-side**. So *"remote consent only works on ACP"*
+      is true today and is **not an architectural fact**: it is what you get when
+      the only channel is one-directional. Before concluding that a CLI-agent
+      limitation is structural, check whether it is simply a hook that does not
+      answer yet.
+
 - [ ] **T14.19** **Hand the agent back the transcript Warp already owns.**
       Proposed by the maintainer 2026-08-30 on reading T14.13, and it is the
       right shape because it **routes around the detection problem instead of
