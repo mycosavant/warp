@@ -862,7 +862,14 @@ local_control`.** The catalog count is pinned in *two* places: the fast one is
 `crates/local_control/src/protocol_tests.rs` — the number is part of the name, so
 grep `fn catalog_has_exactly` rather than pasting this — and its twin is
 `capabilities_advertises_the_complete_catalog` in
-`app/src/local_control/mod_tests.rs`. T8.6 updated the first, left the second
+`app/src/local_control/mod_tests.rs`.
+
+**`PAIRABLE_ACTIONS` has no such pin, and that is why its count went stale here
+for two days.** The catalog count is wrong loudly, in two crates, the moment it
+drifts; the pairable list is wrong only in prose. A list that decides what a
+weak credential may reach is the wrong one to leave unpinned — noted 2026-09-01
+rather than fixed, because adding the test is a change to the consent surface's
+guardrails and belongs in a ticket, not in a doc edit. T8.6 updated the first, left the second
 red, and shipped — because `cargo test -p local_control` takes a second and the
 app crate does not. `crates/warp_cli` holds two more guardrails: an
 exhaustive `match` over the CLI enum and a list requiring every action to have a
@@ -1080,8 +1087,13 @@ time 2026-08-30; nothing in this repo's docs had mentioned it.
 
 **The real remote backstop is SSH, not the console — and it is set up as of
 2026-08-30.** A phone in Termux runs `ssh warp` and gets a shell, key-only, no
-prompt. That reaches **all 114 `warpctrl` actions**, against five through a
-paired console.
+prompt. That reaches **all 114 `warpctrl` actions**, against **six** through a
+paired console — seven if `WARP_FORK_REMOTE_APPROVE` is set, which adds
+`agent.approve`. This line said "five" until 2026-09-01: T14.21 added
+`agent.cancel` and updated the module's own docs without updating this file.
+**Read the count off `PAIRABLE_ACTIONS` in `app/src/local_control/pairing.rs`,
+never off this sentence** — the same rule this file already states for the 114,
+and for the same reason.
 
 **That asymmetry is the principle, not an inconsistency.** `PAIRABLE_ACTIONS` is
 narrow because the *credential* is weak — a QR code is a bearer token displayed
