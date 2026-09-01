@@ -834,33 +834,57 @@ fn a_subagents_tools_name_the_call_that_spawned_them() {
     );
 }
 
-/// **Warp's own sentence, on the transport that had none.**
+/// Warp's one sentence lands in the panel, after the task and before the turn.
 ///
-/// The transcript writer hangs off the shared history model, so a `local_agent`
-/// conversation was written to disk exactly like an ACP one — while the pointer
-/// and the announcement were injected only on the ACP path. Measured both ways
-/// on 2026-08-31 before this landed: an ACP conversation carried one `[Warp]`
-/// line and a `local_agent` one carried zero, with the file written either way.
+/// **The test this replaces could not fail, and the file said so in advance.**
+/// It called `note()` directly — a formatter — while the fix is
+/// `announce_transcript`, the `pending_announcement` field, the `take()` at the
+/// init event, and the wiring in `mod.rs`. Gutting all four left it green, and
+/// left all 92 tests in this module green: verified by running, not argued.
 ///
-/// The assertion is on the `[Warp]` chrome specifically, not merely on some text
-/// arriving, because that marker is what `transcript::strip_chrome` keys on to
-/// keep Warp's asides out of the file. A note that reached the panel without it
-/// would disclose correctly and then be recorded as the agent's own words.
+/// The doc beside that fix names the exact trap: *"Measured: zero `[Warp]` lines
+/// in the panel, on a build whose unit test for the note passed. Ordering
+/// against the stream is not something a unit test on the note can see."* The
+/// first cut shipped a passing test over a feature that produced nothing, and
+/// the second cut shipped **the same test**. The sentence was right about a test
+/// on `note()` and wrong about what was reachable: the ordering *is* visible at
+/// unit level, from the event sequence rather than from the message.
+///
+/// So this drives the stream. `AddMessagesToTask` naming a task that does not
+/// exist yet is dropped, which is what the first cut did, so position is the
+/// whole property: after `CreateTask`, before the user's own turn.
 #[test]
-fn warp_can_say_one_thing_in_its_own_voice() {
+fn warps_own_sentence_lands_after_the_task_and_before_the_turn() {
     let mut translator = translator();
-
-    let event = translator.note(crate::ai::transcript::announcement(std::path::Path::new(
+    translator.announce_transcript(crate::ai::transcript::announcement(std::path::Path::new(
         "/tmp/project/.warp/transcripts/conv.md",
     )));
 
-    let text = format!("{event:?}");
+    let events = translator.on_line(INIT);
+
+    assert_eq!(
+        events.len(),
+        4,
+        "expected StreamInit, CreateTask, Warp's note, then the user's turn: {events:?}"
+    );
+    let Some(api::client_action::Action::CreateTask(_)) = &client_actions(&events[1])[0].action
+    else {
+        panic!("expected CreateTask second, got {:?}", events[1]);
+    };
+
+    let note = format!("{:?}", messages(&events[2]));
     assert!(
-        text.contains("[Warp]"),
-        "the note is unmarked, so `strip_chrome` will file it as the agent's own words: {text}"
+        note.contains("[Warp]"),
+        "unmarked, so `strip_chrome` files it as the agent's own words: {note}"
     );
     assert!(
-        text.contains("conv.md"),
-        "the note does not name the file it is disclosing: {text}"
+        note.contains("conv.md"),
+        "the note does not name the file it is disclosing: {note}"
+    );
+
+    let turn = format!("{:?}", messages(&events[3]));
+    assert!(
+        turn.contains("capital of France"),
+        "the user's own turn must still come last: {turn}"
     );
 }

@@ -171,22 +171,44 @@ fn warps_own_words_are_not_attributed_to_the_agent() {
     );
 }
 
+/// A refusal survives the one filter that could eat it.
+///
+/// **The test this replaces could not fail.** It built an `Exchange` whose
+/// `output` was the refusal text and asserted the render contained it -- but no
+/// production code decides to keep a refusal; it survives because `output` is an
+/// opaque string, so its unique failure set was empty and a dozen other tests
+/// pin "render emits output".
+///
+/// `strip_chrome` is the only thing between a refusal and the file, and it grew
+/// teeth in the same review: it now rewrites lines rather than only dropping
+/// them. A refusal notice is Warp-shaped prose about permission, which is
+/// exactly the kind of line a future marker might be tempted to match on, so
+/// this is where the property is actually at risk.
+///
+/// Measured T14.19 for why it matters: `opencode` records a denied call as
+/// `status=error` with no notion that anything said no, so an agent reading its
+/// own history sees a failure where there was a decision.
 #[test]
-fn a_refusal_is_kept_because_the_agents_own_store_does_not_have_it() {
-    // Measured T14.19: opencode records a denied call as `status=error` with no
-    // notion that anything said no. If this transcript dropped the refusal too,
-    // the history would show failures where there were decisions, and an agent
-    // reading it back would reasonably retry.
+fn a_refusal_survives_the_chrome_filter() {
+    let refusal = "The agent is waiting for permission: wc -l\nAnswered: **no**.";
+    let kept = strip_chrome(refusal);
+
+    assert_eq!(
+        kept, refusal,
+        "a refusal is the agent's own record of a decision and must pass through whole"
+    );
+
+    // And it still goes out through the renderer, so the two halves are not
+    // proved separately and then assumed to compose.
     let text = render(
         "conv",
         &[Exchange {
             input: "run it".to_owned(),
-            output: "The agent is waiting for permission: wc -l\nAnswered: **no**.".to_owned(),
+            output: refusal.to_owned(),
             tools: Vec::new(),
         }],
     );
     assert!(text.contains("Answered: **no**."), "{text}");
-    assert!(text.contains("waiting for permission"), "{text}");
 }
 
 #[test]
@@ -244,18 +266,13 @@ fn an_exchange_that_called_nothing_grows_no_tool_section() {
     assert!(!text.contains("Tools used"), "{text}");
 }
 
-#[test]
-fn a_call_still_running_says_so_rather_than_claiming_an_outcome() {
-    let text = render(
-        "conv",
-        &[exchange_with_tools(
-            "q",
-            "a",
-            &["ReadFiles -> no result recorded"],
-        )],
-    );
-    assert!(text.contains("no result recorded"), "{text}");
-}
+// **`a_call_still_running_says_so_rather_than_claiming_an_outcome` was deleted
+// here, in review.** It passed `"ReadFiles -> no result recorded"` in and
+// asserted the render contained `"no result recorded"` -- a string the test
+// supplied. The production `unwrap_or_else` that actually decides it lives in
+// the collector and was never reached, so deleting that line left the test
+// green. What remained -- that the tool section renders at all -- is already
+// covered by `what_was_tried_is_recorded_in_order_with_its_outcome`.
 
 /// A removed line leaves a mark when the agent said anything else.
 ///

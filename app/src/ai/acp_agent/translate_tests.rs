@@ -789,11 +789,6 @@ fn every_way_a_permission_question_can_end_is_a_value_on_the_line() {
             serde_json::Value::String(decision.to_owned()),
             "the decision is always stated"
         );
-        assert!(
-            line.get("decision").is_some(),
-            "the key must exist even for `unanswered`, or an absent answer reads \
-             as an old binary"
-        );
         match answered_by {
             Some(surface) => assert_eq!(line["answered_by"], surface),
             None => assert!(
@@ -810,25 +805,16 @@ fn every_way_a_permission_question_can_end_is_a_value_on_the_line() {
     }
 }
 
-/// The audit line records the ask and never re-runs it.
-///
-/// `translate.rs`'s standing hazard is that a tool call emitted as an `Action`
-/// message is an *instruction* Warp executes — the double-execution trap this
-/// module's own docs say was found the hard way and has been built against
-/// three times since. A permission event is a side-channel append and must stay
-/// one, so this pins that logging an ask produces no client action at all.
-#[test]
-fn logging_a_permission_event_emits_no_action() {
-    let mut translator = translator();
-    translator.open("ses_abc".to_owned());
-
-    // The methods return `()`, so the strongest available statement is that
-    // nothing reaches the stream that carries actions.
-    translator.log_permission_request(&parked(Some("echo hi"), Some("once")), "call_p4");
-    translator.log_permission_replied("req-1:7", "call_p4", "allowed", Some("panel"));
-
-    assert!(
-        translator.flush().is_empty(),
-        "an audit line is an append to a file, never an instruction to Warp"
-    );
-}
+// **`logging_a_permission_event_emits_no_action` was deleted here, in review.**
+// It asserted `flush().is_empty()` after two `log_permission_*` calls, and could
+// not fail: `flush` drains only `pending`, which is written solely by the
+// message-chunk arms and yields only `AgentOutput`/`AgentReasoning` -- it
+// structurally cannot carry an `Action` even when non-empty, and the two log
+// methods return `()` and touch only the event log. Gutting both bodies left it
+// green.
+//
+// The hazard it named is real and is the module's central one: an `Action` is an
+// instruction, so emitting one for a tool the agent already ran runs it twice.
+// The guarantee is the `-> ()` return type, which the compiler enforces and no
+// test can strengthen. Recorded as prose because a green test over an empty
+// failure set is counted as coverage and is not.

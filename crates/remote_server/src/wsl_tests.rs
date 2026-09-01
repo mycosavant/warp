@@ -90,6 +90,20 @@ fn timeouts_map_to_the_transport_timeout_variant() {
 /// Both halves asserted, because a classifier that returned `SpawnFailed` for
 /// everything would satisfy the first alone and lose the distinction the enum
 /// exists to draw.
+///
+/// **What this does not pin, so nobody credits it with more: the call site.**
+/// The bug was that `run_wsl_command` used the wrong mapper, and reverting
+/// `wsl.rs:121` to `.map_err(WslCommandError::IoError)` leaves all 107 tests in
+/// this crate green -- verified by running. What catches it is the compiler's
+/// `function classify_spawn_failure is never used`, which is a real guard but
+/// not this one. A hermetic test of the call site would need `WSL_COMMAND`
+/// injectable, and on a machine with WSL interop `wsl.exe` is present, so a test
+/// that spawned it would pass or fail on the environment rather than the code.
+///
+/// The other spawn site uses `.spawn()` and maps everything to `SpawnFailed`
+/// unconditionally, which is correct rather than inconsistent: this classifier
+/// exists because `.output()` folds spawning and running into one error, and
+/// `.spawn()` does not fold them.
 #[test]
 fn a_missing_wsl_binary_is_a_spawn_failure_and_nothing_else_is() {
     let missing = classify_spawn_failure(std::io::Error::new(

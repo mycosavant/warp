@@ -51,7 +51,10 @@ fn the_result_names_the_check_that_settles_it() {
         verify.contains("instance list"),
         "the caller is pointed at the check that answers the question, got: {verify}"
     );
-    for remedy in ["CLI agent", "turn"] {
+    // Not `"turn"`: a four-character substring that "returned", "turns" and
+    // "turned" all satisfy is close to unfalsifiable, and this assertion exists
+    // to catch the sentence being reworded into uselessness.
+    for remedy in ["CLI agent", "in-flight agent turn"] {
         assert!(
             verify.contains(remedy),
             "the two measured blockers are named so a caller is not left guessing, \
