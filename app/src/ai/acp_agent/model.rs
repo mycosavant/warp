@@ -56,13 +56,30 @@
 //! category at a time.
 //!
 //! **It is not a validation of the choices.** The list is the agent's claim
-//! about itself, so it is rendered, never checked, and a selection is passed
-//! back verbatim; the only honesty required of Warp is that it show what the
-//! agent put on the wire, not that it agree with it.
+//! about itself, so it is rendered, never checked; the only honesty required of
+//! Warp is that it show what the agent put on the wire, not that it agree with
+//! it.
+//!
+//! That is about the *content* of a choice, and this line used to say a
+//! selection is "passed back verbatim", which was a different and weaker
+//! promise than it sounded. Corrected in review 2026-08-31: a write must now
+//! name a value the option actually offered ([`advertises`]). Warp still does
+//! not judge whether a model is a good one — it only refuses to send one the
+//! agent never advertised, which is the same rule the `config_id` gate already
+//! applied one field along.
+//!
+//! **What none of this closes, and it should be said plainly:** `category` is
+//! supplied by the agent, so an agent that labels its permission-mode select
+//! `category: "model"` passes [`Catalog::of`] and reaches both doors. The
+//! hostile case is weak — `WARP_FORK_ACP_COMMAND` names a process the user
+//! chose — but the *upgraded* case is not: a vendor re-categorising an option
+//! in a point release would silently widen what this seam admits, with no diff
+//! here and no permission request involved. Validating the value does not fix
+//! that and is not claimed to.
 
 use agent_client_protocol::schema::v1::{
     SessionConfigId, SessionConfigKind, SessionConfigOption, SessionConfigOptionCategory,
-    SessionConfigOptionValue, SessionId, SetSessionConfigOptionRequest,
+    SessionConfigOptionValue, SessionConfigSelectOptions, SessionId, SetSessionConfigOptionRequest,
 };
 
 /// The agent's claim about which model is selected and what else may be.
@@ -107,8 +124,8 @@ impl Catalog {
     ///
     /// Refuses any `config_id` this catalog does not hold, so a caller that
     /// names an option the filter rejected gets `None` rather than a write the
-    /// render could never have shown. The value is passed back verbatim — the
-    /// choices belong to the agent's claim, and Warp does not check them.
+    /// render could never have shown — and refuses any value the option did not
+    /// offer, for the same reason one field along. See [`advertises`].
     ///
     /// Dead in this build only because no surface reaches for it yet: the
     /// model picker (T14.14's second half) is the caller, and it arrives after
@@ -121,12 +138,56 @@ impl Catalog {
         config_id: &SessionConfigId,
         value: SessionConfigOptionValue,
     ) -> Option<SetSessionConfigOptionRequest> {
-        self.options
-            .iter()
-            .any(|option| &option.id == config_id)
-            .then(|| {
-                SetSessionConfigOptionRequest::new(session_id.clone(), config_id.clone(), value)
-            })
+        let option = self.options.iter().find(|option| &option.id == config_id)?;
+        if !advertises(option, &value) {
+            return None;
+        }
+        Some(SetSessionConfigOptionRequest::new(
+            session_id.clone(),
+            config_id.clone(),
+            value,
+        ))
+    }
+}
+
+/// Whether this option actually offered this value.
+///
+/// **The other half of the send door, added in review 2026-08-31.** The `id`
+/// gate exists so a caller cannot reach an option the filter rejected; without
+/// this, the *value* was still passed verbatim, so a caller holding a valid
+/// `model` id could write anything at all into it. Same argument, same door,
+/// one field along.
+///
+/// This is not Warp checking the agent's homework, which the module header
+/// rules out and still rules out: the list is the agent's claim and every value
+/// in it is accepted without judgement. It only says a write must name
+/// something the agent put on the wire, which is the render-and-send symmetry
+/// [`Catalog::request`] already claimed to have.
+///
+/// A mismatched shape — a boolean for a select, or the reverse — is refused by
+/// the same rule, and so is an option shape this build cannot read: both
+/// [`SessionConfigKind`] and `SessionConfigSelectOptions` are
+/// `#[non_exhaustive]` in the schema crate, and unknown must not qualify, as
+/// everywhere else in this module.
+fn advertises(option: &SessionConfigOption, value: &SessionConfigOptionValue) -> bool {
+    match (&option.kind, value) {
+        (SessionConfigKind::Boolean(_), SessionConfigOptionValue::Boolean { .. }) => true,
+        (SessionConfigKind::Select(select), SessionConfigOptionValue::ValueId { value }) => {
+            match &select.options {
+                SessionConfigSelectOptions::Ungrouped(options) => {
+                    options.iter().any(|offered| &offered.value == value)
+                }
+                SessionConfigSelectOptions::Grouped(groups) => groups
+                    .iter()
+                    .any(|group| group.options.iter().any(|offered| &offered.value == value)),
+                // `#[non_exhaustive]` in the schema crate: a shape this build
+                // cannot read is a list it cannot check a value against, and an
+                // unchecked value is exactly what this function exists to
+                // refuse.
+                _ => false,
+            }
+        }
+        _ => false,
     }
 }
 
