@@ -899,19 +899,6 @@ fn actions(actions: Vec<api::client_action::Action>) -> api::ResponseEvent {
     }
 }
 
-/// The wire name of a tool kind, for the log's `tool_name`.
-///
-/// `ToolKind` is a stable enum; the title is a display string the measured
-/// agents correct late, which is the same finding `acp_consent.rs` records, so
-/// the kind is what names a call here. The `_` arm is load-bearing: `ToolKind`
-/// is `#[non_exhaustive]`, so an upstream addition must get a name, not a panic.
-///
-/// This is a near-copy of `acp_consent.rs`'s `kind_name` and it is deliberately
-/// not shared. Those two (`acp_consent`, `acp_permission`) name a kind *for a
-/// person* reading a consent card, where the `_` arm is a sentence; this one
-/// names a kind *for a log*, where the `_` arm must be a token a grep or a join
-/// can match, distinct from the real `ToolKind::Other` ("other"). A shared
-/// function would have to pick one `_` arm for both audiences.
 /// What a `permission_request` line says in prose.
 ///
 /// Carries three things no machine field on the line does: the **approval id**,
@@ -942,6 +929,28 @@ fn ask_summary(request: &registry::ParkedRequest) -> String {
     summary
 }
 
+/// The wire name of a tool kind, for the log's `tool_name`.
+///
+/// `ToolKind` is a stable enum; the title is a display string the measured
+/// agents correct late, which is the same finding `acp_consent.rs` records, so
+/// the kind is what names a call here. The `_` arm is load-bearing: `ToolKind`
+/// is `#[non_exhaustive]`, so an upstream addition must get a name, not a panic.
+///
+/// This is a near-copy of `acp_consent.rs`'s `kind_name` and it is deliberately
+/// not shared. Those two (`acp_consent`, `acp_permission`) name a kind *for a
+/// person* reading a consent card, where the `_` arm is a sentence; this one
+/// names a kind *for a log*, where the `_` arm must be a token a grep or a join
+/// can match, distinct from the real `ToolKind::Other` ("other"). A shared
+/// function would have to pick one `_` arm for both audiences.
+///
+/// **This paragraph spent T14.17 attached to [`ask_summary`]**, which was
+/// inserted above this function with no blank line between the two doc blocks.
+/// It left `ask_summary` prefaced by an argument about `ToolKind` and `_` arms
+/// it has neither of, and left the reason these two `kind_name`s stay apart
+/// stranded exactly where someone would delete one of them. A blank line does
+/// not fix this -- doc attributes accumulate across one onto the next item --
+/// so the paragraph has to move. Found in review, the same class as
+/// `registry.rs` and `fork.rs`.
 fn kind_name(kind: ToolKind) -> &'static str {
     match kind {
         ToolKind::Read => "read",

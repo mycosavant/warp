@@ -949,6 +949,37 @@ pub fn forced_local_harnesses() -> &'static [Harness] {
     &[Harness::Claude, Harness::Codex, Harness::OpenCode]
 }
 
+/// Whether this process runs a local control server.
+///
+/// **A fact about the process, not a policy** — which is why it is recorded
+/// rather than computed. `LocalControlServer` is registered only for
+/// `LaunchMode::App | LaunchMode::Test` (`lib.rs`), so `warpctrl`, the T12
+/// console and paired devices are all absent from a TUI process, and there is
+/// no flag to consult that says so.
+///
+/// Measured 2026-08-30, which is why this exists: an ACP permission request in
+/// the TUI printed *"Answer yes with `warpctrl agent approve …`"* — naming an
+/// instrument that does not exist in that process — and the only escape was
+/// Ctrl-C. Warp telling a person to run something impossible is the T14.2
+/// failure exactly: they conclude the feature is broken. Note the bug does not
+/// need the TUI's account bypass to happen; a *signed-in* TUI with
+/// `WARP_FORK_ACP_COMMAND` set parks requests the same way.
+static LOCAL_CONTROL_SERVING: AtomicBool = AtomicBool::new(false);
+
+/// Records that this process registered a local control server.
+///
+/// Called from the one site in `lib.rs` that adds it, so the record cannot
+/// drift from the condition that decides it.
+pub fn note_local_control_serving() {
+    LOCAL_CONTROL_SERVING.store(true, Ordering::Relaxed);
+}
+
+/// Whether any `warpctrl`, console or paired-device surface can answer in
+/// *this* process. See [`note_local_control_serving`].
+pub fn local_control_serving() -> bool {
+    LOCAL_CONTROL_SERVING.load(Ordering::Relaxed)
+}
+
 /// Whether to bypass Warp's "must have an account" gates.
 ///
 /// Upstream disables the entire AI surface for anonymous/logged-out users in
@@ -989,37 +1020,16 @@ pub fn forced_local_harnesses() -> &'static [Harness] {
 /// agent still requires a real account, because inference for it happens on
 /// Warp's servers. The point is to reach the BYO-key and local-harness paths,
 /// which do not.
-/// Whether this process runs a local control server.
 ///
-/// **A fact about the process, not a policy** — which is why it is recorded
-/// rather than computed. `LocalControlServer` is registered only for
-/// `LaunchMode::App | LaunchMode::Test` (`lib.rs`), so `warpctrl`, the T12
-/// console and paired devices are all absent from a TUI process, and there is
-/// no flag to consult that says so.
-///
-/// Measured 2026-08-30, which is why this exists: an ACP permission request in
-/// the TUI printed *"Answer yes with `warpctrl agent approve …`"* — naming an
-/// instrument that does not exist in that process — and the only escape was
-/// Ctrl-C. Warp telling a person to run something impossible is the T14.2
-/// failure exactly: they conclude the feature is broken. Note the bug does not
-/// need the TUI's account bypass to happen; a *signed-in* TUI with
-/// `WARP_FORK_ACP_COMMAND` set parks requests the same way.
-static LOCAL_CONTROL_SERVING: AtomicBool = AtomicBool::new(false);
-
-/// Records that this process registered a local control server.
-///
-/// Called from the one site in `lib.rs` that adds it, so the record cannot
-/// drift from the condition that decides it.
-pub fn note_local_control_serving() {
-    LOCAL_CONTROL_SERVING.store(true, Ordering::Relaxed);
-}
-
-/// Whether any `warpctrl`, console or paired-device surface can answer in
-/// *this* process. See [`note_local_control_serving`].
-pub fn local_control_serving() -> bool {
-    LOCAL_CONTROL_SERVING.load(Ordering::Relaxed)
-}
-
+/// **All of the above spent 2026-08-30 to 08-31 attached to
+/// [`LOCAL_CONTROL_SERVING`]**, because that static was inserted between this
+/// block and this function with no blank line, and a blank line would not have
+/// helped: doc attributes accumulate across blank lines onto the next item, so
+/// the only fix is to move the paragraph. This function -- the fork's central
+/// policy predicate -- had no documentation at all, and the BYOK correction
+/// above, written because its predecessor "misled a ticket", was filed where it
+/// would mislead a different one. Third instance of the class after
+/// `registry.rs` and `translate.rs`; found in review.
 pub fn account_gate_bypassed() -> bool {
     is_active()
 }
@@ -1083,18 +1093,42 @@ pub fn apply_feature_preferences() {
 /// that is deliberate: the transcript's parent is `.warp/`, which is upstream's
 /// project directory and not ours to narrow.
 pub(crate) fn create_private_dir(dir: &std::path::Path) -> std::io::Result<()> {
-    std::fs::create_dir_all(dir)?;
     #[cfg(unix)]
     {
-        use std::os::unix::fs::PermissionsExt as _;
-        if let Err(err) = std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700)) {
-            log::warn!(
-                "fork: could not restrict {} to owner-only: {err}",
-                dir.display()
-            );
+        use std::os::unix::fs::{DirBuilderExt as _, PermissionsExt as _};
+        // The mode is on the `create`, not a `chmod` after it -- the same
+        // argument `create_private_file` makes one function below, which this
+        // did not follow until review 2026-08-31. `create_dir_all` makes the
+        // leaf at the umask and a `set_permissions` afterwards leaves a window,
+        // and the window is exactly when the first file lands in it. The doc
+        // here disclosed the tightening as best-effort on *failure* and said
+        // nothing about *timing*, so the gap was undocumented rather than
+        // accepted.
+        if let Some(parent) = dir.parent() {
+            std::fs::create_dir_all(parent)?;
         }
+        return match std::fs::DirBuilder::new().mode(0o700).create(dir) {
+            Ok(()) => Ok(()),
+            // Already there, so there was no window to lose -- but it may have
+            // been made by a build from before this fix, or by something else
+            // entirely. Tightened best-effort, and a failure is not fatal: an
+            // unwritable mode must not stop the thing the directory is for.
+            Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => {
+                if let Err(err) =
+                    std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))
+                {
+                    log::warn!(
+                        "fork: could not restrict {} to owner-only: {err}",
+                        dir.display()
+                    );
+                }
+                Ok(())
+            }
+            Err(err) => Err(err),
+        };
     }
-    Ok(())
+    #[cfg(not(unix))]
+    std::fs::create_dir_all(dir)
 }
 
 /// Opens a file the fork writes private content into, owner-only from the
@@ -1136,6 +1170,47 @@ pub(crate) fn create_private_file(
 /// stay that way for as long as they are appended to. Best-effort and silent on
 /// failure: the file may belong to another user, in which case it is not ours to
 /// change and not ours to fail over.
+/// Writes a `.gitignore` containing `*` into a directory the fork chose, so
+/// nothing it writes there can be committed by accident.
+///
+/// **Only for a location the fork picked, never one the caller named.**
+/// `TranscriptLocation::InSessionProject` resolves to `.warp/transcripts/`
+/// under the *pane's* directory, which follows the person around and is
+/// therefore inside whatever repository they happen to be working in. This
+/// repo's own `.gitignore` covers it, and that line is root-anchored and
+/// protects this repo alone -- so in any other project the transcript arrives
+/// as a new untracked `.warp/` holding the user's prompts verbatim, and
+/// `git add -A` stages it. Found 2026-08-31 in review; the disclosure needs no
+/// attacker, and the `0600` fix that landed beside it does nothing here because
+/// git does not record modes.
+///
+/// A caller who named a directory owns it, so this is not applied to
+/// `Fixed` -- writing `*` into somewhere the user chose could ignore files that
+/// were already there, which is a worse failure than the one being fixed.
+///
+/// Written before the first transcript rather than after it, for the reason
+/// [`create_private_file`] puts the mode on the `open`: the window between
+/// creating a thing and protecting it is exactly when the first write lands.
+/// Best-effort and silent on failure -- an unwritable `.gitignore` must not
+/// turn a recovery aid into a second failure.
+pub(crate) fn keep_dir_out_of_git(dir: &std::path::Path) {
+    if create_private_dir(dir).is_err() {
+        return;
+    }
+    let ignore = dir.join(".gitignore");
+    // Left alone if it already exists: it may be the user's, and `*` is not a
+    // thing to impose on a file somebody else wrote.
+    if ignore.exists() {
+        return;
+    }
+    if let Err(err) = std::fs::write(&ignore, "*\n") {
+        log::warn!(
+            "fork: could not write {} to keep transcripts out of git: {err}",
+            ignore.display()
+        );
+    }
+}
+
 pub(crate) fn tighten_existing(path: &std::path::Path) {
     #[cfg(unix)]
     {
