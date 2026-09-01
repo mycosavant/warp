@@ -256,3 +256,31 @@ fn a_call_still_running_says_so_rather_than_claiming_an_outcome() {
     );
     assert!(text.contains("no result recorded"), "{text}");
 }
+
+/// A removed line leaves a mark when the agent said anything else.
+///
+/// The hazard is the mixed case: an agent quoting Warp's announcement at the
+/// start of a line — what an agent summarising its own context does — used to
+/// have that line deleted with nothing to say so. Silent deletion in a file
+/// whose value is that it can be trusted as a record is worse than the
+/// misattribution the filter exists to prevent.
+#[test]
+fn a_chrome_line_among_the_agent_s_own_leaves_a_mark() {
+    let stripped = strip_chrome(&format!(
+        "I checked the file.\n{CHROME} a transcript is at /tmp/x.md\nIt was empty."
+    ));
+
+    assert!(
+        !stripped.contains(CHROME),
+        "Warp's own words must still never reach the file"
+    );
+    assert!(
+        stripped.contains("I checked the file.") && stripped.contains("It was empty."),
+        "and everything the agent said must survive"
+    );
+    assert_eq!(
+        stripped.lines().count(),
+        3,
+        "the removed line is marked, not dropped: {stripped:?}"
+    );
+}

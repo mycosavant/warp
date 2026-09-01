@@ -83,6 +83,25 @@ pub(crate) struct Exchange {
     /// Full results are the opposite trade: they are the largest thing here and
     /// the most cheaply recovered, since the agent can simply read the file
     /// again.
+    ///
+    /// **Empty on both fork transports, and structurally so — the paragraph
+    /// above describes what this field is *for*, not what it currently
+    /// delivers.** The collector matches `AIAgentOutputMessageType::Action`,
+    /// and neither `acp_agent` nor `local_agent` ever emits one: an `Action`
+    /// is an *instruction* to Warp's action model, so emitting one for a tool
+    /// the agent has already run would run it a second time
+    /// (`acp_agent/translate.rs` names this trap and counts four attempts at
+    /// it). On those paths `### Tools used` never renders, and on the one path
+    /// where `Action` messages do exist, `get_action_result`'s only writer is
+    /// the collaboration path, so every line would read `-> no result
+    /// recorded`.
+    ///
+    /// Recorded here rather than only in `../CLAUDE.md`, which has said it for
+    /// some time, because the next person to wonder why the section is missing
+    /// will be reading this field and not that file. **Do not close the gap by
+    /// synthesising `Action` messages.** What the fork keeps instead is the
+    /// prose: on these transports the outcome, the refusal and its reason are
+    /// all in `output`, which is where the record actually lives.
     pub tools: Vec<String>,
 }
 
@@ -176,13 +195,46 @@ pub(crate) fn render(conversation_id: &str, exchanges: &[Exchange]) -> String {
 ///
 /// Line-based rather than clever: the marker starts a line, so a paragraph the
 /// agent wrote that happens to quote the marker mid-sentence is untouched.
+///
+/// **But it leaves a mark rather than deleting, and the first cut did not.**
+/// The doc above anticipated the mid-sentence case and not the line-start one:
+/// an agent that quotes Warp's announcement at the start of a line — which is
+/// exactly what an agent summarising its own context does — had that line
+/// removed with nothing to say so. Silent deletion is a worse failure than the
+/// misattribution this exists to prevent, in a file whose entire value is that
+/// it can be trusted as a record. Found in review 2026-08-31. Warp's own asides
+/// still never reach the file; what changed is that a reader can tell a line was
+/// taken out.
 fn strip_chrome(output: &str) -> String {
+    // An exchange that was *only* Warp's note keeps reading as no output at all,
+    // because there the agent genuinely said nothing and a marker would invent a
+    // gap where none was lost. The mark is for the mixed case, which is the one
+    // that loses something a reader needs.
+    let kept_anything = output
+        .lines()
+        .any(|line| !line.trim().is_empty() && !line.trim_start().starts_with(CHROME));
     output
         .lines()
-        .filter(|line| !line.trim_start().starts_with(CHROME))
+        .filter_map(|line| {
+            if !line.trim_start().starts_with(CHROME) {
+                Some(line)
+            } else if kept_anything {
+                Some(ELIDED)
+            } else {
+                None
+            }
+        })
         .collect::<Vec<_>>()
         .join("\n")
 }
+
+/// Stands in for a line `strip_chrome` removed.
+///
+/// Deliberately not the marker itself, so this cannot be confused with the thing
+/// it replaces, and deliberately visible: the reader of a transcript is an agent
+/// reconstructing what happened, and a gap it cannot see is a gap it will fill
+/// in with a guess.
+const ELIDED: &str = "> [line removed: Warp's own note, not the agent's]";
 
 /// Writes the transcript, replacing whatever was there.
 ///
@@ -408,6 +460,13 @@ pub(crate) fn observe(
                 .unwrap_or_default(),
         })
         .collect::<Vec<_>>();
+
+    // Before the first write, not after it, so there is no moment when the
+    // user's prompts sit in a repository with nothing in front of `git add -A`.
+    // Only for the location the fork chose -- see `fork::keep_dir_out_of_git`.
+    if matches!(location, crate::fork::TranscriptLocation::InSessionProject) {
+        crate::fork::keep_dir_out_of_git(&dir);
+    }
 
     if let Err(error) = write(&dir, &conversation_id.to_string(), &exchanges) {
         // Warned rather than surfaced, for the same reason the event log warns:
