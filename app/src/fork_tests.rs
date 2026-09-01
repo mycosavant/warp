@@ -1035,3 +1035,54 @@ fn a_file_an_earlier_build_left_open_is_narrowed() {
 
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// The transcript directory refuses to be committed.
+///
+/// **This fix shipped with no test at all**, found by reviewing the tests rather
+/// than the code — and it is the one finding in that review whose consequence
+/// leaves the machine, so it is the last one that should have gone unpinned. The
+/// directory follows the pane, so it lands inside whatever repository the person
+/// is working in; this repo's own `.gitignore` line is root-anchored and
+/// protects this repo alone.
+///
+/// Calibrated on the assertion that must fail: asserting the directory exists
+/// proves nothing, because `create_private_dir` alone would satisfy it.
+#[test]
+fn a_transcript_directory_ignores_itself() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let dir = root.path().join(".warp").join("transcripts");
+
+    super::keep_dir_out_of_git(&dir);
+
+    let ignore = dir.join(".gitignore");
+    assert!(
+        ignore.is_file(),
+        "a directory the fork chose must carry its own ignore"
+    );
+    assert_eq!(
+        std::fs::read_to_string(&ignore).expect("readable"),
+        "*\n",
+        "everything in here, including the ignore itself"
+    );
+}
+
+/// An ignore the fork did not write is left alone.
+///
+/// A caller who named a directory owns it. Overwriting a `.gitignore` that was
+/// already there could ignore files someone else put beside it, which is a worse
+/// failure than the disclosure being fixed.
+#[test]
+fn an_existing_ignore_is_not_overwritten() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let dir = root.path().join("somewhere-the-user-named");
+    std::fs::create_dir_all(&dir).expect("dir");
+    std::fs::write(dir.join(".gitignore"), "*.log\n").expect("seed");
+
+    super::keep_dir_out_of_git(&dir);
+
+    assert_eq!(
+        std::fs::read_to_string(dir.join(".gitignore")).expect("readable"),
+        "*.log\n",
+        "somebody else's ignore is not ours to replace"
+    );
+}
