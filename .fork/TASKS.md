@@ -7855,7 +7855,7 @@ mode descriptions is the first legitimate instance of `acp_permission.rs`'s
 *"a surface capable of showing what the option declares"* — the sentence
 *"nothing that exists today can"* now has a designated successor.
 
-- [ ] **T14.11** **Run the working session again, and see whether the fixes
+- [x] **T14.11** **Run the working session again, and see whether the fixes
       moved the number.** T14.9 measured a seven-turn session and produced the
       friction log everything since has been aimed at. Two rounds have landed on
       it — T14.8 made every answerable request one paste and reworded the
@@ -8111,7 +8111,7 @@ mode descriptions is the first legitimate instance of `acp_permission.rs`'s
       whoever next wants it. Named here rather than left inside a ticket whose
       headline is now known to be wrong.
 
-- [ ] **T14.13** **A day's work will outgrow the context window, and the ACP path
+- [x] **T14.13** **A day's work will outgrow the context window, and the ACP path
       does not know it.** `local_agent` handles compaction; the ACP path has no
       `/compact` and no idea how close it is. T14.9 named this as known-unmeasured
       going in and did not reach it — seven turns was not enough.
@@ -8190,7 +8190,7 @@ mode descriptions is the first legitimate instance of `acp_permission.rs`'s
       a protocol signal that does not exist. The finding worth carrying upstream
       is *"an ACP agent has no way to report that it compacted"*.
 
-- [ ] **T14.20** **Vendor the `warp` Claude Code plugin so the thesis path can
+- [x] **T14.20** **Vendor the `warp` Claude Code plugin so the thesis path can
       answer, not just report.** Found 2026-08-30, chasing the maintainer's
       recollection that "we have been here before". We had: the pieces were all
       recorded separately and never joined.
@@ -8355,7 +8355,7 @@ mode descriptions is the first legitimate instance of `acp_permission.rs`'s
       limitation is structural, check whether it is simply a hook that does not
       answer yet.
 
-- [ ] **T14.19** **Hand the agent back the transcript Warp already owns.**
+- [x] **T14.19** **Hand the agent back the transcript Warp already owns.**
       Proposed by the maintainer 2026-08-30 on reading T14.13, and it is the
       right shape because it **routes around the detection problem instead of
       solving it**.
@@ -8790,7 +8790,7 @@ mode descriptions is the first legitimate instance of `acp_permission.rs`'s
       because a single cheap gesture should not be able to say yes. Named here
       rather than added quietly.
 
-- [ ] **T14.17** **The ACP path logs what the agent did and never what it
+- [x] **T14.17** **The ACP path logs what the agent did and never what it
       asked.** Found 2026-08-30 while trying to answer *"is our permission model
       too tight?"* from data, and failing — which is the finding.
 
@@ -9089,7 +9089,7 @@ mode descriptions is the first legitimate instance of `acp_permission.rs`'s
       That is checkable within one working day of the feature existing, and
       T14.11 is the run that checks it.
 
-- [ ] **T14.18** **The panel never sends `session/set_mode`, so with the
+- [x] **T14.18** **The panel never sends `session/set_mode`, so with the
       flagship agent the fork's permission model is not reached at all.** Found
       2026-08-30, chasing *"is our permission model too tight?"*. It is not too
       tight. On the panel path with `claude-agent-acp` it does not run.
@@ -9278,6 +9278,67 @@ mode descriptions is the first legitimate instance of `acp_permission.rs`'s
       not the mode path, and it is recorded rather than explained — chasing it is
       its own ticket, and calling it fixed or harmless would be inventing a
       finding.
+
+- [x] **T14.21** **A phone can stop a runaway, and "monotone" was the wrong
+      criterion.** `agent.cancel` joins `PAIRABLE_ACTIONS`, and the argument
+      that got it there is not the one this work started with.
+
+      The starting criterion was *"monotone — it can only make less happen"*,
+      inherited from how `agent.deny` earned its place. That is too loose to be
+      a security test: kill is monotone, and so, grotesquely, is `rm -rf`. The
+      load-bearing form is narrower and is now written into the module docs: an
+      action may only prevent **proposed future effects** and may not destroy
+      **existing durable state**. `agent.deny` passes exactly — Escape on a
+      prompt that has not run touches nothing that exists. `window.close`
+      fails, which is the principled reason it stays refused rather than the
+      hand-wave it had before: it discards unsaved panes, and that is state no
+      routine mechanism already destroys.
+
+      `agent.cancel` passes approximately, and the delta is recorded rather
+      than smoothed over, because a person consenting to this should see it.
+      Cancelling interrupts a turn that may be mid-side-effect — a rebase
+      half-applied, a file half-written — and `events.subscribe` is already
+      pairable and already carries tool calls live, so a hostile token holder
+      could time one to land at the worst moment. What settles it is that
+      interruption is an authority the environment already holds over every
+      in-flight operation: Ctrl-C, a dropped connection, the panel's own stop
+      button. A tool run that cannot survive interruption is already broken by
+      things no token gates. The handler is Stop and not Kill; the
+      conversation, transcript and pane all survive.
+
+      Deliberately **not** behind `WARP_FORK_REMOTE_APPROVE`. Cancel is
+      deny-shaped, and gating it beside `agent.approve` would imply the approve
+      argument covers it. That argument is about causing what an agent
+      proposed; this can only stop it.
+
+      It completes a loop whose read half was already granted, which is the
+      strongest form of the case: `agent.list` already reports
+      `quiet_for_seconds` to a paired phone, so the wedge has been visible from
+      the couch since T14.10 and only the answer was missing. The console now
+      draws that number beside the button, because a symptom and its only
+      remedy belong in the same place — and it stays a symptom rather than a
+      verdict, since a long compile and a dead agent look identical from there.
+
+      Two things it does not do, both said on screen rather than left to be
+      discovered. It is one-way: restarting needs `agent.prompt`, which causes
+      effects and so can never be pairable, and the row says stopping keeps the
+      conversation while picking the work back up happens at the machine. And
+      it cannot reach a CLI agent running in a pane — that is not a
+      conversation, and the remedy there is keystrokes into a PTY, which is the
+      boundary this list exists to hold. T14.20's finding stands: that
+      limitation is a hook that does not answer yet, not something to tunnel
+      through pairing.
+
+      The button is gated on two independent facts, which is T14.6's rule and
+      the bug it was written for: `can(CANCEL)` is about the device, `is_busy`
+      is about the entry. Drawing it from the device alone would offer to
+      cancel finished work.
+
+      Not verified by running: that cancelling causes no automatic retry in
+      Warp or in either measured agent. The falsifier is a wedged turn
+      cancelled through a paired device credential rather than the Unix
+      socket, which would also exercise `ensure_pairable` and the broker end to
+      end.
 
 ## T15 — Loose ends carried, not forgotten
 

@@ -148,6 +148,6 @@ Warp or agent processes running.
 - **T14.21 exists in git with no ticket in `TASKS.md`.**
 - **Seven `- [ ]` boxes in `TASKS.md` are stale**: the work landed. Read status
   off the as-built records, not the checkboxes.
-- **`CLAUDE.md:1057` still calls the `warp-tui-oss` spinner unverified** and
-  floats a model-credential hypothesis; I20 has since measured it as a
-  device-code OAuth account gate. Same fact, two files, one stale.
+- **Done 2026-09-01.** `CLAUDE.md:1057` called the `warp-tui-oss` spinner
+  unverified and floated a model-credential hypothesis; I20 had since measured
+  it as a device-code OAuth account gate. Corrected in `CLAUDE.md`.

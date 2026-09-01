@@ -1061,10 +1061,10 @@ time 2026-08-30; nothing in this repo's docs had mentioned it.
 - **Build it the way `script/run-tui` does**: `--features standalone`, without
   which `bundled_resources_dir()` cannot find the sibling `resources/` and the
   binary cannot locate its skills. 9m18s at `-j 8`.
-- **It runs.** Alt-screen, mouse tracking, and then a spinner. **Unverified**
-  what the spinner waits on — the plausible answer is a model credential, since
-  the binary offers `--set-provider-api-key <openai|anthropic|google|grok>` and
-  `--api-key` (`WARP_API_KEY`), but nobody has confirmed it.
+- **It runs.** Alt-screen, mouse tracking, and then a spinner. **Measured by
+  I20**: the spinner is a device-code OAuth account gate, not a model
+  credential — `--set-provider-api-key <openai|anthropic|google|grok>` and
+  `--api-key` (`WARP_API_KEY`) are a separate path and do not bypass it.
 - **It is not a fork surface.** `grep -rn "fork::" crates/warp_tui/src/` returns
   **nothing**, and so does a grep for `acp_agent`, `local_agent` and
   `generate_multi_agent_output`. So `WARP_FORK_ACP_COMMAND`, the account-gate

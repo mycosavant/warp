@@ -2326,6 +2326,9 @@ the thing that ran it*.
 CLI". Run from a phone over SSH, it **demands a Warp login**. That also explains
 the spinner recorded in `CLAUDE.md`: it was waiting on authentication.
 
+**`CLAUDE.md` corrected 2026-09-01** to state this measurement instead of the
+retracted model-credential hypothesis.
+
 ## Why this is not a one-line fix
 
 This is the fork's most repeated finding — *the feature exists and is switched
