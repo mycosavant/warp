@@ -773,15 +773,47 @@ fix makes the trap need the documentation rather than depend on it. And
 --instance <id>`, never `warpctrl --instance <id> pane list`, which exits with
 `unexpected argument`.
 
-**An agent in the panel works in the *pane's* directory, and a fresh pane
-starts in `$HOME`.** Not in the directory Warp was launched from. Both agent
-paths read `session_context.current_working_directory()`, so this is identical
-for `local_agent` and `acp_agent`, and the failure is quiet in the worst way:
+**An agent in the panel works in the *pane's* directory** — that half is right,
+and it is the half that matters. Both agent paths read
+`session_context.current_working_directory()`, so this is identical for
+`local_agent` and `acp_agent`, and the failure is quiet in the worst way:
 measured T14.7, a first turn asked to work on this repo answered "not a git
 repository", created `/home/effatha/target/` and wrote there, and reported
 success. **`warpctrl input submit 'cd /home/effatha/git/warp'` before the first
 prompt**, and for an ACP agent this decides more than the files — the agent
 resolves its own permission config from there too.
+
+**This paragraph also said "a fresh pane starts in `$HOME`. Not in the directory
+Warp was launched from", and that is backwards — measured 2026-09-01 across
+three launches.** A fresh pane's shell *inherits Warp's own process cwd*, and a
+**restored** pane keeps the directory it had in the previous launch, which is
+undocumented and was the thing actually being observed:
+
+| Warp's process cwd | pane origin | pane shell | agent's `pwd` |
+|---|---|---|---|
+| the repo | new tab | the repo | **the repo** |
+| `$HOME` | restored from last launch | the repo | **the repo** |
+| `$HOME` | scratch profile, nothing to restore | `$HOME` | **`$HOME`** |
+
+Row 2 is what separates the two candidate rules: Warp's cwd and the pane's cwd
+disagree, and the agent follows the **pane**. Row 3 is the only one that lands in
+`$HOME`, and it does so because Warp was *launched* from `$HOME` — which is what
+a desktop launcher or a shell sitting at home does, and so is the ordinary case
+the original sentence generalised from.
+
+**The remedy is unchanged and the reason for it is stronger.** `cd` first, not
+because there is a `$HOME` default to overcome, but because the pane's directory
+now has *two* sources you did not choose — where Warp happened to be launched,
+and where that pane was pointing days ago. Session restore is the nastier of the
+two: it survives a reboot and it is invisible in the launch command.
+
+Two traps for anyone re-running this. Reading the shell's cwd out of
+`/proc/<pid>/cwd` measures the **shell**, and the claim is about what the *agent*
+sees — they coincide often enough to look like confirmation and they are not the
+same quantity. And any instance launched normally has panes to restore, so a
+"fresh pane" is not fresh: only `XDG_CONFIG_HOME`/`XDG_STATE_HOME` pointed at a
+scratch directory (with the onboarding key seeded, per the recipe below) gives a
+profile with nothing to restore.
 
 **Leave the user's `settings.toml` alone.** For any run that needs different
 settings, point `XDG_CONFIG_HOME`/`XDG_STATE_HOME` at a scratch directory —
@@ -864,12 +896,20 @@ grep `fn catalog_has_exactly` rather than pasting this — and its twin is
 `capabilities_advertises_the_complete_catalog` in
 `app/src/local_control/mod_tests.rs`.
 
-**`PAIRABLE_ACTIONS` has no such pin, and that is why its count went stale here
-for two days.** The catalog count is wrong loudly, in two crates, the moment it
-drifts; the pairable list is wrong only in prose. A list that decides what a
-weak credential may reach is the wrong one to leave unpinned — noted 2026-09-01
-rather than fixed, because adding the test is a change to the consent surface's
-guardrails and belongs in a ticket, not in a doc edit. T8.6 updated the first, left the second
+**`PAIRABLE_ACTIONS` is pinned by two tests, and this paragraph said it was
+pinned by none.** Corrected 2026-09-01 by calibration, after the wrong version
+had stood here for a day and was one step from funding a panel task to build a
+test that already existed. `a_paired_device_gets_the_read_surface_and_the_safe_half_of_answering`
+asserts the **whole list** against a literal slice — membership, not a count, so
+it is strictly stronger than the catalog pin above — and widening the list also
+reddens `saying_yes_does_not_travel_by_default_and_saying_no_does`, which holds
+the consent asymmetry. Both verified by making them fail: adding
+`ActionKind::AgentApprove` to the list fails exactly those two and nothing else.
+
+What *did* go stale for two days was the **count in this file**, and no test can
+pin prose — which is the whole reason this file keeps telling you to read a
+number off the test. The observation was right and the mechanism invented under
+it was not, the same shape as the discovery-record retraction above. T8.6 updated the first, left the second
 red, and shipped — because `cargo test -p local_control` takes a second and the
 app crate does not. `crates/warp_cli` holds two more guardrails: an
 exhaustive `match` over the CLI enum and a list requiring every action to have a
