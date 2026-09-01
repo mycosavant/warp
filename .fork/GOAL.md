@@ -71,7 +71,13 @@ the result rather than a problem with it.**
 | log | agent | turns | asks | **stopped** |
 |---|---|---|---|---|
 | `.fork/friction-2026-08-31.md` | `opencode acp` | 21 | 22 | **2** |
-| `.fork/friction-2026-08-31-clean.md` | `claude-agent-acp` + `WARP_FORK_ACP_MODE=default` | 7 | 0 | **0** |
+| `.fork/friction-2026-08-31-clean.md` | `claude-agent-acp` + `WARP_FORK_ACP_MODE=default` | 15 | 0 | **0** |
+
+**This row said 7 until 2026-09-01.** It was written when the clean run was seven
+turns long and the log grew to fifteen (`a27ffaff4`, "Turns 8-15") without the
+table following it. The same defect class this horizon spent its last day
+cataloguing, in the file that sets the horizon — found by an agent surveying the
+board to set the next one.
 
 **Both stops in the first log were traced, by running, to causes outside the
 fork's consent design**, and the tracing is what changed the recommendation:

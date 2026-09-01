@@ -2639,7 +2639,17 @@ in the order they should be acted on:
 has a friction log behind it, which is the bar this board applies to everything
 else.
 
-## But one present exposure was found while answering it, and it is not cryptographic
+## But one present exposure was found while answering it — and fixed hours later
+
+**Fixed by `541a853f3` on 2026-08-31, a few hours after this entry was written.**
+`fork::keep_dir_out_of_git` now writes a `.gitignore` containing `*` into the
+transcript directory at creation, before the first transcript rather than after
+it, and only for the location the fork chose — a caller who names a directory
+owns it. Tests landed later still, in `17c81a366`, because the fix shipped
+without any: found by reviewing the tests separately from the code. The section
+below is kept as written because it is the argument for the fix, and because an
+entry that quietly acquires a resolution reads as though the problem was never
+real.
 
 **Read 2026-08-31, not run — and it should be run before it is believed.**
 
