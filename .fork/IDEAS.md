@@ -1985,7 +1985,15 @@ politeness.
 
 ---
 
-# I18 — OpenRouter as a first-class provider, and a place to keep secrets
+# I22 — OpenRouter as a first-class provider, and a place to keep secrets
+
+**Renumbered from I18 on 2026-09-01.** Two entries carried that number: this one,
+added 2026-08-28, and the persistent grant, added 2026-08-30. Every other
+reference in the repo — `GOAL.md`, both friction logs, `TASKS.md`, `CLAUDE.md`
+and `acp_permission.rs`'s module docs — means the *persistent grant*, so the
+number stayed with the entry that is load-bearing in prose and in code, and this
+one moved despite being older. Chronologically odd, cheapest by a factor of ten,
+and recorded here rather than silently corrected.
 
 Captured 2026-08-28, from the maintainer, while probing `opencode` over
 OpenRouter for T14.5. **Unverified against the code — nothing below has been

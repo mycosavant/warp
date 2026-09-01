@@ -309,7 +309,7 @@ building it, in T14.8.
 
 ## Not this weekend
 
-T10's upstream merge and I18's OpenRouter provider. Merging while the agent
+T10's upstream merge and I22's OpenRouter provider (that entry was numbered I18 when this was written; renumbered 2026-09-01 to end a collision). Merging while the agent
 surface moves would confuse two kinds of breakage; the merge cost is paid by
 deferral, not by divergence. A deliberate wait.
 
