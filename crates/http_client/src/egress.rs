@@ -119,6 +119,30 @@ pub(crate) fn is_blocked(url: &reqwest::Url) -> bool {
 }
 
 /// The URL blocked requests are rewritten to.
+/// Points a built request at the blackhole and takes its payload with it.
+///
+/// **Both halves matter, and until review 2026-08-31 only the first was
+/// done.** Rewriting the URL alone left the headers and the body assembled and
+/// attached, so what stopped the request leaving was that `0.0.0.0:0` cannot be
+/// connected to. That is a property of a port number, not of this code, and it
+/// is strictly weaker than what [`crate::RequestBuilder::redirect_if_blocked`]
+/// claims about itself one module over -- on the check that covers essentially
+/// all traffic rather than a single method. This module's own docs described
+/// the two as enforcement points of equal standing; they now are.
+///
+/// It also had a reachable edge. `Client::new` sets no `no_proxy`, so system
+/// and environment proxies are honoured, and the rewrite drops the scheme to
+/// `http` -- which hyper writes to a proxy in absolute-URI form, headers and
+/// body first and the unreachable destination only afterwards. The path that
+/// matters was immune because upstream's Rudderstack client sets
+/// `https_only(true)`, for a reason unrelated to any of this and held by no
+/// test here.
+pub(crate) fn blackhole(request: &mut reqwest::Request) {
+    *request.url_mut() = blackhole_url();
+    request.headers_mut().clear();
+    *request.body_mut() = None;
+}
+
 pub(crate) fn blackhole_url() -> reqwest::Url {
     // Parsed from a const literal that is covered by a test, so this cannot
     // fail in practice.

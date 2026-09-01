@@ -388,7 +388,9 @@ impl Client {
                 "fork: blocked telemetry egress to {}",
                 request.url().host_str().unwrap_or("<no host>")
             );
-            *request.url_mut() = egress::blackhole_url();
+            // The payload goes with the destination -- see `egress::blackhole`,
+            // which is where the argument for taking both lives.
+            egress::blackhole(&mut request);
         }
 
         if let Some(before_response_send_fn) = &self.before_request_sent {
