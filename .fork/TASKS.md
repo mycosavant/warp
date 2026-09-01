@@ -11256,3 +11256,157 @@ Worth knowing while working on this fork, since `.fork/README.md` tells you to
 run `target/debug/warp-oss`: **your development build's log does contain what
 you typed.** That is upstream's stated intent for a dev build, not a leak, but
 it is a reason not to hand that file to anyone without reading it first.
+
+---
+
+## T16 — The WSL explorer walks over 9p, and the fix is already running
+
+**Filed 2026-09-01, from a live run plus a Fable 5.1 review.** This is the
+defect the fork was started over — *"no file explorer, no diffs, no agent
+feedback"* working on WSL projects — located to file and line for the first
+time. Nothing here is built yet.
+
+### What was measured, not argued
+
+A Windows debug build at `7725c7e2b` (pid 16428) was pointed at
+`\\wsl$\ubuntu\home\effatha\git\warp` and the project explorer opened.
+
+- Index started: `23:32:51Z`, logged as *"Upgrading pending lazy-loaded path to
+  fully indexed directory"*, with the root spelled **non-verbatim**
+  `\\wsl$\ubuntu\...`.
+- At `23:53Z` — **20 minutes** — 343 s of CPU, 587 MB RSS, and **neither**
+  completion line (`Successfully indexed repository`, `local_model.rs:2025`, nor
+  the budget warning at `:2019`) had been written. The skeleton never populated.
+
+**The per-entry cost over 9p is ~20 ms, not the ~0.5 ms a plain enumeration
+suggests**, because `Entry::build_tree_...` does six filesystem ops per child
+(`crates/repo_metadata/src/entry.rs:359-372`, `:589-638`) and one of them,
+`dunce::canonicalize` → `GetFinalPathNameByHandle`, costs **13.3 ms** by itself.
+
+| walk shape | 2286 files | per file |
+|---|---|---|
+| plain `scandir` recursion | 444 ms | 0.19 ms |
+| Warp-shaped, six ops per entry | 47,893 ms | **20.9 ms** |
+
+Calibrated against Warp's own code rather than only a model: the outline
+indexer has a hard 5,000-entry budget and the log shows it run `23:32:51Z` →
+`23:34:32Z` — **5,000 entries in 101 s = 20.2 ms/entry**, agreeing within 5%.
+
+### The bug: `Prefix::UNC` is not `Prefix::VerbatimUNC`
+
+`matches_gitignores` does `path.strip_prefix(gitignore.path())` and returns
+`false` on `Err` (`entry.rs:774-789`). The gitignore's root is the spelling of
+the directory it was found in, and the fork's own `canonicalize_wsl_unc_path`
+**guarantees** that is non-verbatim `\\wsl$\...` (`path.rs:629-644`, wired at
+`working_directories.rs:1147`). Every child is `dunce::canonicalize`
+(`entry.rs:372`), which returns **verbatim** `\\?\UNC\wsl$\...` and which dunce
+does not strip for UNC. `std` compares prefixes by parsed variant, so the strip
+fails for every child, `/target` never matches, and 410k files queue until
+`MAX_FILES_PER_REPO = 200_000` runs out — **~67 minutes**. `.git` escapes only
+because its check is component-based (`entry.rs:602`).
+
+Specific to UNC roots: on `C:\` dunce strips and both sides agree; on Linux
+there are no prefixes. **Exactly and only the configuration T6.4 rules on.**
+
+Falsifier, no GUI and no filesystem — a `#[cfg(windows)]` test:
+`GitignoreBuilder::new(r"\\wsl$\ubuntu\repo").add_line(None, "/target")`, then
+assert `matches_gitignores(Path::new(r"\\?\UNC\wsl$\ubuntu\repo\target"), …)`.
+False today; the control with a non-verbatim child is true. It proves the
+matcher, **not** that the builder feeds those two spellings — that rests on
+`entry.rs:372` plus T6.2's measured dunce output.
+
+### Why the remote server does not save us — and it is running
+
+`warpctrl remote wsl connect` succeeds and the daemon runs **natively inside
+WSL** (measured: proxy, `remote-server-daemon`, `terminal-server`, the daemon
+idle at 0.9% while Windows burned a quarter core). The server implements the
+explorer path — `handle_load_repo_metadata_directory`
+(`app/src/remote_server/server_model.rs:2157-2205`) calls the same model on
+ext4, where there is no prefix problem.
+
+It is never asked, and the reason is one hostname comparison:
+
+1. `determine_session_type` (`app/src/terminal/model/session.rs:723-744`) →
+   `Local` when bootstrap hostname == local hostname and not an SSH wrapper.
+   **WSL2 inherits the Windows machine name** (measured: `effatha` both sides).
+   The only route to `WarpifiedRemote` is `with_ssh_socket_path` (`:1835-1837`).
+2. `set_remote_host_id` no-ops unless already `WarpifiedRemote` (`:1004-1009`).
+   So connect published `host=d091df60…` and **the session discarded it**.
+3. `location_for_path` (`session/active_session.rs:105-118`) yields `Remote`
+   only for `WarpifiedRemote { host_id: Some }`.
+4. `set_remote_root_directories` (`view.rs:911-975`) is the only writer of
+   `remote_host_id` and is fed only from `Remote` entries, so the tree takes the
+   local branch and `load_remote_directory` is **never entered**.
+
+**The absent `no host_id` warning is consistent with this, not evidence against
+it** — the warn sits inside a function a local root never reaches. Worth keeping:
+a missing log line is only evidence if the line is reachable.
+
+`.fork/IDEAS.md:1499` already sells this exact outcome — *"files, terminals,
+language servers and agents all live on the fast side of the 9p boundary"* —
+citing the ten-minute skeleton at `:1219`. The wiring was never built.
+
+### What to build, ranked by cost
+
+- [ ] **(1) `#[cfg(windows)]` unit test** on `matches_gitignores` — minutes,
+      isolates the bug, fails today.
+- [ ] **(2) Skip `canonicalize` for non-symlink children** at `entry.rs:371-373`.
+      `read_dir` already returns the on-disk name joined to the parent's
+      spelling, so this deletes the 13 ms op **and** makes child spelling equal
+      root spelling by construction — one edit, fixes the bug and 65% of the
+      cost. ~20 ms/entry → ~7 ms; this repo becomes ~55 s. Helps every UNC root.
+      Pair with **(2a)**: canonicalize the root before `gitignores_for_directory`
+      (`local_model.rs:1903`, `:1100`).
+- [ ] **(3) Route at the path seam.** In `location_for_path`, before the `Local`
+      arm: if `session.wsl_name().is_some()` and the manager reports a host id,
+      return `Remote(host_id, linux_cwd)`. ~15 lines, one file, gated on a
+      connected server so nothing changes until `remote wsl connect` succeeds.
+      **`SessionType` stays `Local`.** Test: WSL launch data + local hostname +
+      stubbed manager → `location_for_path` is `Remote`; fails today.
+
+**Do not reclassify the session**, though it is the "correct" model. Ranked
+blast radius, all read: `maybe_convert_to_native_path` (`session.rs:1019`) stops
+converting `/home/…` to UNC and every existing consumer gets a Linux path; agent
+cwd special-cases `WarpifiedRemote{host_id:None}`
+(`ai/agent/api/impl.rs:266,324`) and the fork's agents spawn via `wsl.exe --cd`;
+`universal_developer_input.rs:129-145`; command corrections (`session.rs:555`)
+and the git chip's `wsl.exe` wrapper; and `WarpifiedRemote{host_id:None}` yields
+**no explorer root at all** before connect — a regression for every WSL pane.
+The path-seam fix touches none of these.
+
+**Unverified ordering hazard**: today connect landed *after* the `cd`
+(`23:32:51Z` index start, `23:33:36Z` connected). Whether `SessionConnected`
+re-derives display roots and drops a running local index was not traced. The fix
+needs a connect-after-cd test.
+
+### The sidestep that needs no code
+
+Navigate in WSL (`yazi`/`ranger`/`fd`), open with
+`warpctrl file open <unc-path> --line N` — **measured 273 ms**, opens in a
+Windows tab with markdown rendering. `file open` is O(1) for the read and does
+not run `build_tree`. Two settings keep it that way: **keep the project explorer
+closed** (the tree indexes an opened file's root only when active,
+`view.rs:1561`), and **turn off codebase-symbol outlining**, whose
+`RepoOutlines::index_repo` is a 5,000-entry ~100 s background 9p walk per repo
+(`ai/outline/native.rs:121-146`). Not verified: whether opening a file with no
+`cd` detects the repo and fires the outline — today it fired on the `cd`.
+
+### Corrections this ticket carries
+
+- **T6.4's verdict is a workaround recorded as a law.** Its direction survives
+  on the *local* path (~2.5 min for this repo even with ignore rules fixed), but
+  fix (2) gives ~55 s and routing gives ext4 speed. `.fork/README.md:485-489`
+  inherits the wrong mechanism from `TASKS.md:2187-2191`, which derived
+  "200,000 stats … two minutes" from a constant and from ignored directories
+  rendering in italics — italics that could not have been seen on a tree that
+  never rendered, and a price of one op per entry where the builder does six.
+- **`app/src/code/file_tree/snapshot.rs` is dead code** — no consumer outside
+  its own module. It was read during this investigation as though it were the
+  live path, and its genuine laziness was used to argue the doc was wrong. The
+  live path is `repo_metadata`, which walks a git repo **eagerly to depth 200**
+  for non-ignored content (`local_model.rs:1952-1954`). Reading the right-looking
+  file is not the same as reading the one that runs.
+- **The in-process cache is real** (`file_tree_store.rs`, dropped at
+  `local_model.rs:995` when no pane references the repo), which is why a working
+  day feels fine and a cold start does not. Nothing is cached on disk, and 9p
+  itself showed no warm-up across three passes.

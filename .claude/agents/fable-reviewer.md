@@ -1,7 +1,7 @@
 ---
 name: fable-reviewer
 description: Adversarial expert code reviewer for this fork. Use to review a diff, a branch, or a named set of files for correctness, security and API-shape defects before anything is pushed. Returns ranked findings, each with a concrete failure scenario and a proposed fix — it argues its case and it does not implement. Prefer it over a general review when the change touches the egress backstop, file permissions, consent surfaces, Drop/async ordering, or anything the fork's thesis rests on.
-model: fable
+model: claude-fable-5-1
 color: red
 tools: Read, Grep, Glob, Bash
 ---
