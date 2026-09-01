@@ -102,9 +102,64 @@ fn a_requested_mode_the_agent_offers_is_sent() {
         note.contains("Standard behavior, prompts for dangerous operations"),
         "the description of what was asked for, not just its id: {note}"
     );
+}
+
+/// **The note speaks after the answer, because it is only ever read after the
+/// answer** — and this assertion is the inverse of the one it replaces.
+///
+/// The old test required the note to contain *"Whether the agent honours the
+/// request"*, on the reasoning that *"requesting is not receiving, and the note
+/// must not blur that"*. That principle is right and was being applied one
+/// step too early. `mod.rs` sends `session/set_mode` and returns on the error
+/// path **before** anything reads [`Decision::note`], so the only way this
+/// string reaches a person is a turn in which the agent already accepted. The
+/// hedge was therefore never true when displayed: it told a reader Warp did not
+/// know something that `mode::acknowledged`, two lines above the emit, had just
+/// recorded.
+///
+/// Measured on the wire 2026-09-01 before it was changed — the note rendered,
+/// the agent had accepted, and the sentence disclaimed it.
+///
+/// So the pin is on both halves: no hedge, and the opening mode named in the
+/// past tense, since by render time the session has left it.
+#[test]
+fn the_request_note_reports_the_answer_rather_than_hedging_about_it() {
+    let decision = Decision::of("conv-request-tense", Some(&claude_modes()), Some("default"));
+    let note = decision.note().expect("a request is worth saying");
+
     assert!(
-        note.contains("Whether the agent honours the request"),
-        "requesting is not receiving, and the note must not blur that: {note}"
+        !note.contains("honours the request"),
+        "the hedge is settled before this renders, and repeating it understates \
+         what Warp knows: {note}"
+    );
+    assert!(
+        note.contains("the agent accepted"),
+        "say what the agent answered, since the emit path guarantees it: {note}"
+    );
+    assert!(
+        note.contains("This session opened in"),
+        "the opening mode is history by the time this is read: {note}"
+    );
+    assert!(
+        !note.contains("This session is in the agent's `auto`"),
+        "naming the mode the session just left as the one it is in is the \
+         defect `an_acknowledged_mode_becomes_the_reported_one` fixed for the \
+         status field: {note}"
+    );
+}
+
+/// The un-asked case keeps the present tense, because nothing moves the session
+/// on that path — [`Decision::Disclose`] sends no `set_mode` at all.
+#[test]
+fn the_disclose_note_keeps_the_present_tense() {
+    let decision = Decision::of("conv-disclose-tense", Some(&claude_modes()), None);
+    let note = decision
+        .note()
+        .expect("an undisclosed mode is worth saying");
+
+    assert!(
+        note.contains("This session is in"),
+        "nothing was requested, so the session is still where it opened: {note}"
     );
 }
 
@@ -330,6 +385,21 @@ fn a_change_to_an_unadvertised_mode_reports_the_id_and_says_so() {
     assert!(
         note.contains("did not list"),
         "and says why nothing more is shown: {note}"
+    );
+    // **This arm shipped with eighteen spaces in the middle of it**, from
+    // T14.18 on 2026-08-30 until 2026-09-01 — a lost line-continuation `\`,
+    // which keeps the newline's indentation inside the literal. The test above
+    // passed throughout, because `contains` does not care what lies between the
+    // fragments it looks for. Nothing in the toolchain reads prose, and this is
+    // the rarest arm in the module, so it went to a person's screen unseen.
+    //
+    // Pinned on the whole module's output rather than on this one string: a
+    // sentence Warp shows about a policy it cannot see is this module's entire
+    // product, and mangled whitespace is the one defect in it that no reviewer
+    // reading a diff will catch.
+    assert!(
+        !note.contains("  "),
+        "no run of spaces inside a sentence a person reads: {note:?}"
     );
 }
 

@@ -216,6 +216,20 @@ pub(crate) enum Decision {
     Disclose { note: String },
     /// Modes exist and the person named one the agent advertises. Send it, then
     /// say what was asked for.
+    ///
+    /// **This note is written to be read *after* the send succeeded, and that
+    /// is a precondition on the caller rather than a property of this type.**
+    /// `mod.rs` sends `session/set_mode` and returns on error before it ever
+    /// reaches [`Decision::note`], so the only path that renders this string is
+    /// one where the agent has already accepted. The note says so in the past
+    /// tense, which would become a lie if some future caller emitted it before
+    /// the send or on the error path.
+    ///
+    /// It said the opposite until 2026-09-01 — *"whether the agent honours the
+    /// request is the agent's to answer"* — a hedge about a question that was
+    /// settled two lines earlier, in `mode::acknowledged`. Measured on the wire
+    /// rather than argued: the note rendered, the agent had accepted, and the
+    /// sentence told the reader Warp did not know.
     Request { mode: SessionModeId, note: String },
     /// The same request, on a later turn of a conversation already told.
     ///
@@ -289,6 +303,14 @@ impl Decision {
         // so it is re-sent every turn while only the telling is rationed.
         let news = needs_telling(conversation_id, &state.current_mode_id);
         let current = describe_current(state);
+        // The same fact in the tense each arm can honestly use. `Disclose` and
+        // `Refuse` render with the session still where it opened, so they say
+        // "is". `Request` renders only after `set_mode` succeeded, so for it
+        // the opening mode is already history and "is" would name the mode the
+        // session just left -- the error `an_acknowledged_mode_becomes_the_
+        // reported_one` fixed for `agent.list`'s status field, which survived
+        // here in the prose for a fortnight after.
+        let opened = describe_opened(state);
         let offered = offered_list(state);
         match wanted {
             None if !news => Self::NothingToSay,
@@ -311,8 +333,8 @@ impl Decision {
                 Some(mode) => Self::Request {
                     mode: mode.id.clone(),
                     note: format!(
-                        "{current} `WARP_FORK_ACP_MODE` asks for {}, so Warp is requesting it. \
-                         Whether the agent honours the request is the agent's to answer.",
+                        "{opened} `WARP_FORK_ACP_MODE` asked for {}, and the agent accepted, so \
+                         that is the mode this session is running under.",
                         described(mode)
                     ),
                 },
@@ -425,7 +447,15 @@ pub(crate) fn changed(
         .map(described)
         .unwrap_or_else(|| {
             format!(
-                "the agent's `{}` mode, which it did not list when this session opened, so there                  is no description of it to show",
+                // The spaces in the middle of this sentence were real until
+                // 2026-09-01: eighteen of them, shipped in T14.18 and rendered
+                // to a person every time an agent moved itself into a mode it
+                // had never advertised. A line-continuation `\` was lost from a
+                // multi-line literal, which keeps the newline's indentation in
+                // the string; nothing in the toolchain reads prose, and this
+                // arm is the rarest one in the module, so it sat unseen.
+                "the agent's `{}` mode, which it did not list when this session opened, so there \
+                 is no description of it to show",
                 now.0
             )
         });
@@ -440,18 +470,33 @@ pub(crate) fn changed(
 /// see, and an empty pair of quotes reads as though the agent said something
 /// blank.
 fn describe_current(state: &SessionModeState) -> String {
+    describe_led_by(state, "This session is in")
+}
+
+/// The same sentence about the same mode, in the tense the one arm that renders
+/// *after* a successful `session/set_mode` can honestly use.
+///
+/// Split from [`describe_current`] rather than given a `bool`, because the two
+/// differ in what they assert and not only in how they read: this one says
+/// where the session started, and is the only honest form once Warp has moved
+/// it. See [`Decision::Request`] for the precondition that makes it so.
+fn describe_opened(state: &SessionModeState) -> String {
+    describe_led_by(state, "This session opened in")
+}
+
+fn describe_led_by(state: &SessionModeState, lead: &str) -> String {
     let current = state
         .available_modes
         .iter()
         .find(|mode| mode.id == state.current_mode_id);
     match current {
-        Some(mode) => format!("This session is in {}.", described(mode)),
+        Some(mode) => format!("{lead} {}.", described(mode)),
         // The advertised list did not contain the current mode. Nothing in the
         // spec forbids that, and guessing which of the others it resembles
         // would be worse than saying only what arrived.
         None => format!(
-            "This session is in the agent's `{}` mode, which the agent did not include in the \
-             modes it listed, so there is no description of it to show.",
+            "{lead} the agent's `{}` mode, which the agent did not include in the modes it \
+             listed, so there is no description of it to show.",
             state.current_mode_id.0
         ),
     }

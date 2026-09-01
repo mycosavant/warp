@@ -9340,9 +9340,95 @@ mode descriptions is the first legitimate instance of `acp_permission.rs`'s
       socket, which would also exercise `ensure_pairable` and the broker end to
       end.
 
+- [x] **T14.22** **The consent path, watched on the wire — and the note that
+      hedged about a question it had already answered.** First run of the
+      2026-09-01 horizon. Full log: `.fork/run-2026-09-01/friction.md`.
+
+      Seven turns against `claude-agent-acp` 0.70.0 in `default`, event log and
+      transcript on throughout, binary rebuilt at run start. **The refusal path
+      has now been observed rather than argued**, which was the horizon's whole
+      point: Warp answered a real `edit` request with `reject_once` — a per-call
+      rejection and not `Cancelled` — the agent survived it, and turn 2 closed
+      the loop through `agent approve` to a write on disk. `options_offered`
+      came back `["Deny", "Allow Once", "Always Allow"]`, re-confirming against
+      0.70.0 the ordering `acp_permission` exists because of.
+
+      **The finding: a requested mode does not survive `session/load`, on every
+      turn.** `session_mode`, written from the agent's own reply, read `current
+      auto` on all four turns of one conversation, each after Warp had set
+      `default` on the turn before, while the agent asked for permission on every
+      one — behaviour `auto` does not have. So the session returns from every
+      resume in the agent's own mode, and `mod.rs`'s unconditional per-turn
+      `set_mode` is the only thing that puts it back. Deleting it as redundant
+      would not fail loudly: every turn after the first would run in `auto`, the
+      classifier would answer, and the event log would show *zero* permission
+      requests — which reads as "nothing needed asking" and means "Warp was not
+      in the loop". The measurement is recorded at the call site rather than
+      here, because that is where someone stands while deciding the line is
+      redundant.
+
+      Two things this corrects in the horizon's own framing. It called the
+      re-send *"untested"*; it has always been pinned by
+      `a_repeated_request_is_still_sent_while_the_note_goes_quiet`, and
+      `Decision::of` already reasoned that a resumed session "may have come back
+      in a different mode than it left". The design was right, documented and
+      tested — only the reality of the hazard was unmeasured. And what I cannot
+      separate from outside is whether the agent truly reverts or merely reports
+      its opening mode on load; the falsifier is to send `set_mode` only on
+      `session/new` and resume.
+
+      **Fixed: the mode note reported a hedge in place of an answer.** It said
+      *"whether the agent honours the request is the agent's to answer"* at a
+      point where every path reaching it has had `set_mode` return `Ok` — a
+      failure returns earlier and the turn never runs — with `mode::acknowledged`
+      recording that very fact two lines above the emit. Its `current` also named
+      the mode the session was leaving. **This is the second instance of one
+      defect**: `an_acknowledged_mode_becomes_the_reported_one` fixed exactly this
+      for `agent.list`'s status field and the prose kept it, so what looked like
+      an oversight is a fix applied to one of two surfaces — the unfixed one
+      being the sentence a person actually reads. The note now says the agent
+      accepted and names the opening mode in the past tense;
+      `describe_current`/`describe_opened` split so each arm asserts only the
+      tense it can support. The emit-after-success precondition is documented on
+      `Decision::Request`, because the new wording would become a lie if a future
+      caller emitted it earlier.
+
+      The old test **asserted the defect**, requiring the hedge on the reasoning
+      that "requesting is not receiving" — right in general, applied one step too
+      early. Replaced and calibrated by making it fail.
+
+      **Also fixed, and it is a leftover from this fork's own review a fortnight
+      earlier**: `NOTHING_IS_WAITING` was added so the empty-approvals string
+      would have one home, after being edited in one place and left red in
+      another. The constant landed; `render_approvals` kept its duplicate. The
+      two were identical so nothing was red, and **only `dead_code` noticed** —
+      the argument for chasing a warning rather than silencing it.
+
+      Unknowns 2 and 3 came back as absences and are labelled as such. Two
+      requests never parked at once: prompted explicitly for parallel calls the
+      agent serialized, releasing the second 0.1s after the first was answered,
+      so the dispatch loop was never asked to hold two — a fact about the agent,
+      not about the fork. No turn vanished: 4/4 closed, permission events
+      balanced 8/8. Unknown 4 was **not reached**, which is weaker still, and
+      there is no compaction detector that could have been running.
+
+      Confirmed by running rather than by test, incidentally: the transcript
+      hardening including `keep_dir_out_of_git`, which shipped with no test —
+      this run's transcript is `600` in a `700` directory with its `.gitignore`
+      written, and the documented residual is visible in the same listing, every
+      `644` file predating the fix. And the `{turn}:{rpc_id}` scoping held
+      against real traffic, two turns opening with the same JSON-RPC id `0`.
+
+      Not verified: anything at length. The eight-hours caveat is untouched.
+
 ## T15 — Loose ends carried, not forgotten
 
-- [ ] **Re-check `ALLOW_VERIFIED_AGENTS` against a real prompt** (from T11.5).
+- [x] **Re-check `ALLOW_VERIFIED_AGENTS` against a real prompt** (from T11.5).
+      **Done, and this box was stale.** `CLAUDE.md` records it under the Claude
+      Code plugin: with the plugin loaded, `agent approve` drove a real prompt —
+      `keystroke: "enter"`, the request left the queue, the tool ran and the file
+      appeared. Recorded there and never ticked here, which is the same
+      box-versus-as-built drift T14.22's run found six more of.
       The named unverified input: the permission prompt that proved the path was
       synthesised, so the claim that Return means yes rests on Claude Code's
       documentation rather than on this fork having watched one. The cheapest

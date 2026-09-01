@@ -66,12 +66,26 @@ Each is already recorded as unverified; the point of naming them together is tha
 **a single long run with instrumentation is the only place any of them can
 show up.** They are not four projects.
 
-1. **A requested mode may not survive `session/load`.** (`TASKS.md:9270`)
-   Untested — the mode is re-sent every turn *because* it is untested. If it does
-   not survive a resume, the session silently reverts to `auto`, the agent's own
-   classifier answers, and the event log records **zero** permission requests.
-   **That zero is T14.17's falsifier wearing a disguise**: a reader sees "nothing
-   needed asking" where the truth is "Warp was not in the loop".
+1. ~~**A requested mode may not survive `session/load`.**~~ **ANSWERED, run 1 —
+   it does not survive, on every turn.** `session_mode`, written from the agent's
+   own reply, read `current auto` on all four turns of one conversation, each
+   after Warp had set `default` the turn before, while the agent raised a
+   permission request on every one — which `auto` does not do. So the session
+   returns from every resume in the agent's own mode and `mod.rs:660`'s
+   unconditional re-send is the only thing that puts it back.
+
+   **And this bullet's own framing was wrong.** It said the re-send happens
+   *"because it is untested"*. The re-send has always been pinned by
+   `a_repeated_request_is_still_sent_while_the_note_goes_quiet`, and
+   `Decision::of`'s comment already reasoned that *"a resumed session may have
+   come back in a different mode than it left"*. The design was right, documented
+   and tested; what was unmeasured was whether the hazard is real. It is, every
+   turn. Measurement now recorded at the call site, where someone would stand
+   while deciding the line is redundant.
+
+   The disguised-zero hazard named below is unchanged and is why the comment is
+   there: **that zero is T14.17's falsifier wearing a disguise** — a reader sees
+   "nothing needed asking" where the truth is "Warp was not in the loop".
 
 2. **Two requests parked on one connection.** (`TASKS.md:6714`) Never tested —
    both agents measured so far were separate processes, so a blocked dispatch
@@ -90,6 +104,32 @@ show up.** They are not four projects.
    deliberately context-hostile payload. The honest statement is that the cadence
    under ordinary work is unmeasured, and the disclosure half is unbuilt: the
    panel cannot say the agent's view and Warp's have diverged.
+
+## Run 1 — 2026-09-01, and what it left
+
+**Log: `.fork/run-2026-09-01/friction.md`.** Seven turns against
+`claude-agent-acp` 0.70.0 in `default`, both instruments on, on a binary rebuilt
+at run start.
+
+| | |
+|---|---|
+| refusal on the wire | **observed** — `reject_once`, request recorded verbatim, agent survived it |
+| unknown 1 | **answered** — the mode does not survive a load; the re-send is load-bearing |
+| unknown 2 | **cannot arise with this agent** — it serializes; two were never parked at once |
+| unknown 3 | **not observed** — 4/4 turns closed, permission events balanced 8/8 |
+| unknown 4 | **not reached** — seven turns did not come near compacting |
+
+**So this horizon is not met, and the gap is precise**: one long session, for
+unknown 4 and for the eight-hours caveat. The refusal criterion is satisfied and
+does not need repeating. Three of the four are done, and #2's answer is a fact
+about the agent rather than about the fork, so it stays a *"not observed"* rather
+than a *"does not exist"*.
+
+Fixed after the run closed, both earned by it: the mode note now reports the
+agent's answer instead of hedging about a question settled two lines earlier, and
+`NOTHING_IS_WAITING` — a review fix that added a constant while leaving the
+renderer's duplicate in place — actually has one home now. Neither is a
+permission-posture change.
 
 ## What "met" looks like, concretely
 

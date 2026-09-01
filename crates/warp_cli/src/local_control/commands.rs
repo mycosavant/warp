@@ -213,14 +213,18 @@ fn render_approvals(data: &serde_json::Value) -> String {
         return serde_json::to_string_pretty(data).unwrap_or_else(|_| data.to_string());
     };
     if result.approvals.is_empty() {
-        // Says what empty means. An agent is free to ask nothing at all, so this
-        // is not evidence that nothing is running.
-        // Says what empty means, in the payload and not only in a comment
-        // above it: the distinction between "nobody is asking" and "nothing is
+        // Says what empty means, in the payload and not only in a comment above
+        // it: the distinction between "nobody is asking" and "nothing is
         // running" is exactly the one a person reads past at 2am.
-        return "Nothing is waiting on you right now. (An agent is free to ask nothing at all, \
-                so this is not evidence that nothing is running — `agent list` answers that.)"
-            .to_owned();
+        //
+        // Returned from the constant rather than spelled again here. It was
+        // spelled again here until 2026-09-01, which made the constant -- added
+        // so that the string would have *one* home -- dead code that the test
+        // asserted against while this function kept its own copy. The two
+        // happened to be identical, so nothing was red; `dead_code` was the only
+        // thing that noticed, and it is the whole reason the warning was worth
+        // chasing rather than silencing.
+        return NOTHING_IS_WAITING.to_owned();
     }
 
     let mut out = String::new();

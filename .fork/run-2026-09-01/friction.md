@@ -307,3 +307,82 @@ recent work; the note predates the `refusal()` arm that made its hedge moot.
 **Suggested shape, not applied:** emit the note from a state that knows the
 outcome — `current` should be the mode now in force, and the hedge should become
 a statement that the agent accepted the request. Both facts are in hand at 672.
+
+---
+
+# After the run: acting on it, and two corrections to this file
+
+The run is closed, so the horizon's *"do not fix frictions mid-run"* no longer
+binds. Two things were fixed and two claims made above turn out to be wrong.
+
+## Correction: the re-send was never "untested"
+
+`.fork/GOAL.md` said the mode is re-sent every turn *"because it is untested"*,
+and the section above repeated that framing. Reading before writing found the
+opposite: `a_repeated_request_is_still_sent_while_the_note_goes_quiet` has pinned
+the re-send all along, and `Decision::of`'s own comment already gave the reason —
+
+> `session/set_mode` is idempotent and **a resumed session may have come back in
+> a different mode than it left**, so it is re-sent every turn while only the
+> telling is rationed.
+
+So the design was right, documented, and tested. What was unmeasured was whether
+the hazard it guards against is *real*. It is: the run shows the session comes
+back in `auto` every single time. The correct statement is not "an untested
+hedge turned out to matter" but **"a reasoned guard turned out to be load-bearing
+on every turn rather than occasionally"** — which is a smaller claim about the
+code and a larger one about the consequence of removing it.
+
+The measurement is now recorded at the call site in `mod.rs`, which is where
+someone would stand when deciding the line is redundant.
+
+## Correction: the note defect had already been fixed once, next door
+
+The finding above presents the stale-`current` problem as new. It is the second
+instance. Directly below the re-send test sits:
+
+> **The status field must report where the session ended up, not where it
+> started** — found by running it, on a session `agent.list` called `auto`
+> moments after Warp had moved it to `default`.
+
+Same defect, same cause, found the same way — and fixed for `agent.list`'s status
+field while the *prose* kept it. That makes this a stronger finding than
+originally written: not an oversight, but a fix applied to one of two surfaces,
+where the unfixed one is the sentence a person actually reads.
+
+## Fixed
+
+- **The note now reports the answer instead of hedging about it.** It is only
+  ever rendered after `set_mode` returned `Ok`, so it says the agent accepted and
+  names the opening mode in the past tense. The precondition that makes this
+  honest — emit-after-success, enforced in `mod.rs` — is documented on
+  `Decision::Request`, because the wording would become a lie if some future
+  caller emitted it earlier. `describe_current`/`describe_opened` split so each
+  arm asserts only the tense it can support; `Disclose` keeps the present tense,
+  since nothing moves the session on that path.
+
+  The old test **asserted the defect** (`note.contains("Whether the agent honours
+  the request")`), on a principle that is right and was applied one step too
+  early. Replaced, and **calibrated by making it fail**: with the hedge restored
+  exactly, one test fails and every other passes.
+
+- **A leftover from the review that shipped a fortnight earlier.**
+  `NOTHING_IS_WAITING` was introduced so the empty-approvals string would have
+  *one* home after it had been edited in one place and left red in another. The
+  constant was added and `render_approvals` kept its own copy — so the constant
+  was dead code the test asserted against while the renderer answered from a
+  duplicate. The two happened to be identical, so nothing was red. **Only
+  `dead_code` noticed**, which is the argument for chasing a warning rather than
+  silencing it.
+
+## Gates
+
+`./script/format` (4 files, no drive-bys), `check_no_inline_test_modules`,
+`cargo check --workspace --all-targets`, `-p local_control` 42, `-p warp_cli`
+376, `-p warp --lib acp_agent::` 103 — all green.
+
+Full `-p warp --lib` diffed by **membership** against a same-session stashed
+baseline: **zero regressions**. Baseline 136 failures, after 132; the four-test
+difference is entirely the known-flaky secret-redaction globals. A count
+comparison would have read as "fixed four tests", which is why the rule is
+membership.

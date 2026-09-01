@@ -652,6 +652,26 @@ async fn exchange(
                 return Err(anyhow!(reason.to_owned()).into());
             }
             if let Some(mode) = decision.mode() {
+                // **Sent on every turn, including every resume, and measured
+                // 2026-09-01 to be load-bearing rather than belt-and-braces.**
+                // `Decision::of`'s own comment reasons that a resumed session
+                // "may have come back in a different mode than it left"; a run
+                // against `claude-agent-acp` 0.70.0 showed it always does.
+                // `session_mode`, written from the agent's own reply, read
+                // `current auto` on all four turns of one conversation -- each
+                // after Warp had set `default` on the turn before -- while the
+                // agent raised a permission request on every one of them, which
+                // `auto` does not do. So the session comes back from
+                // `session/load` in the agent's default mode and this send is
+                // the only thing that puts it back.
+                //
+                // Deleting it as redundant would not fail loudly. Every turn
+                // after the first would run in `auto`, the agent's classifier
+                // would answer, and the event log would show *zero* permission
+                // requests -- which reads as "nothing needed asking" and means
+                // "Warp was not in the loop". That is T14.17's falsifier wearing
+                // a disguise, and it is why this is a comment and not a habit.
+                //
                 // The same argument one step later: the person named a policy
                 // and the agent declined to enter it, so running would run under
                 // a policy nobody chose -- the case above, reached by the
