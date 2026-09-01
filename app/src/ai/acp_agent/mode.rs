@@ -306,11 +306,15 @@ impl Decision {
         // The same fact in the tense each arm can honestly use. `Disclose` and
         // `Refuse` render with the session still where it opened, so they say
         // "is". `Request` renders only after `set_mode` succeeded, so for it
-        // the opening mode is already history and "is" would name the mode the
-        // session just left -- the error `an_acknowledged_mode_becomes_the_
-        // reported_one` fixed for `agent.list`'s status field, which survived
-        // here in the prose for a fortnight after.
-        let opened = describe_opened(state);
+        // that mode is already history and "is" would name the mode the session
+        // just left -- the error `an_acknowledged_mode_becomes_the_reported_one`
+        // fixed for `agent.list`'s status field, which survived here in the
+        // prose for a fortnight after.
+        //
+        // Anchored to the *turn* and not the session: `state` is this turn's
+        // `session/new` or `session/load` reply, so "opened" would be a claim
+        // the input cannot support on a resume. See `describe_turn_start`.
+        let turn_start = describe_turn_start(state);
         let offered = offered_list(state);
         match wanted {
             None if !news => Self::NothingToSay,
@@ -333,7 +337,7 @@ impl Decision {
                 Some(mode) => Self::Request {
                     mode: mode.id.clone(),
                     note: format!(
-                        "{opened} `WARP_FORK_ACP_MODE` asked for {}, and the agent accepted, so \
+                        "{turn_start} `WARP_FORK_ACP_MODE` asked for {}, and the agent accepted, so \
                          that is the mode this session is running under.",
                         described(mode)
                     ),
@@ -478,10 +482,22 @@ fn describe_current(state: &SessionModeState) -> String {
 ///
 /// Split from [`describe_current`] rather than given a `bool`, because the two
 /// differ in what they assert and not only in how they read: this one says
-/// where the session started, and is the only honest form once Warp has moved
-/// it. See [`Decision::Request`] for the precondition that makes it so.
-fn describe_opened(state: &SessionModeState) -> String {
-    describe_led_by(state, "This session opened in")
+/// where the session was before Warp moved it, and is the only honest form once
+/// Warp has. See [`Decision::Request`] for the precondition that makes it so.
+///
+/// **Anchored to the turn, not to the session, and the first cut got that
+/// wrong.** It read *"This session opened in …"*, which is a claim about the
+/// session's beginning — but `state` is *this turn's* reply, and every turn
+/// after the first is a `session/load`. For `claude-agent-acp` the two coincide
+/// (it comes back in `auto` every time, so a resumed turn matches what was last
+/// disclosed and goes quiet through [`Decision::RequestQuietly`]), which is
+/// exactly why the run that produced this module's other corrections could not
+/// see it. An agent that *persists* the mode across a load would resume with a
+/// mode differing from the one last told, re-render this arm, and be told the
+/// session "opened in" a mode it merely resumed in. Caught in review, by
+/// reasoning about an agent nobody has run.
+fn describe_turn_start(state: &SessionModeState) -> String {
+    describe_led_by(state, "This turn began with the session in")
 }
 
 fn describe_led_by(state: &SessionModeState, lead: &str) -> String {

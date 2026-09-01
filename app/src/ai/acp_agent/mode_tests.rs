@@ -120,8 +120,11 @@ fn a_requested_mode_the_agent_offers_is_sent() {
 /// Measured on the wire 2026-09-01 before it was changed — the note rendered,
 /// the agent had accepted, and the sentence disclaimed it.
 ///
-/// So the pin is on both halves: no hedge, and the opening mode named in the
-/// past tense, since by render time the session has left it.
+/// So the pin is on both halves: no hedge, and the pre-request mode named in the
+/// past tense, since by render time the session has left it. The lead is
+/// anchored to the *turn* rather than to the session — see
+/// `a_resumed_turn_does_not_claim_the_session_opened_in_the_resumed_mode` for
+/// why "opened" was wrong on a resume.
 #[test]
 fn the_request_note_reports_the_answer_rather_than_hedging_about_it() {
     let decision = Decision::of("conv-request-tense", Some(&claude_modes()), Some("default"));
@@ -137,14 +140,58 @@ fn the_request_note_reports_the_answer_rather_than_hedging_about_it() {
         "say what the agent answered, since the emit path guarantees it: {note}"
     );
     assert!(
-        note.contains("This session opened in"),
-        "the opening mode is history by the time this is read: {note}"
+        note.contains("This turn began with the session in"),
+        "the pre-request mode is history by the time this is read, and the claim is \
+         anchored to the turn because that is what the reply describes: {note}"
     );
     assert!(
         !note.contains("This session is in the agent's `auto`"),
         "naming the mode the session just left as the one it is in is the \
          defect `an_acknowledged_mode_becomes_the_reported_one` fixed for the \
          status field: {note}"
+    );
+}
+
+/// **A resumed turn must not be told it "opened" in the mode it resumed in.**
+///
+/// Caught in review, by reasoning about an agent nobody here has run. `state` is
+/// *this turn's* reply, and every turn after the first is a `session/load` — so
+/// a lead anchored to the session's beginning is a claim the input cannot
+/// support. `claude-agent-acp` hides this perfectly: it comes back in `auto`
+/// every time, which matches what was last disclosed, so its resumed turns go
+/// quiet through `RequestQuietly` and never re-render this arm. The measured run
+/// could not have found it.
+///
+/// This is the shape the fixture cannot produce, so it is built by hand: an
+/// agent that *persists* the requested mode across a load. Turn 2 then carries a
+/// current mode differing from the one last told, which makes it news again and
+/// re-renders the note.
+#[test]
+fn a_resumed_turn_does_not_claim_the_session_opened_in_the_resumed_mode() {
+    let conversation = "conv-persisting-agent";
+    forget(conversation);
+
+    // Turn 1: the session opens in `auto` and Warp asks for `default`.
+    let first = Decision::of(conversation, Some(&claude_modes()), Some("default"));
+    assert!(first.note().is_some(), "the first turn is news");
+
+    // Turn 2: `session/load` returns the agent still in `default`, unlike
+    // `claude-agent-acp`, which always reverts.
+    let mut resumed = claude_modes();
+    resumed.current_mode_id = SessionModeId::from("default".to_owned());
+    let second = Decision::of(conversation, Some(&resumed), Some("default"));
+
+    let note = second
+        .note()
+        .expect("a mode differing from the one last told is news again");
+    assert!(
+        !note.contains("opened in"),
+        "this session opened in `auto` and merely resumed in `default`; saying it \
+         opened in `default` states a fact the load reply does not carry: {note}"
+    );
+    assert!(
+        note.contains("This turn began with the session in"),
+        "turn-anchored, which is true on `session/new` and `session/load` alike: {note}"
     );
 }
 
@@ -397,6 +444,13 @@ fn a_change_to_an_unadvertised_mode_reports_the_id_and_says_so() {
     // sentence Warp shows about a policy it cannot see is this module's entire
     // product, and mangled whitespace is the one defect in it that no reviewer
     // reading a diff will catch.
+    //
+    // Worth knowing what this pins: descriptions are quoted from the agent
+    // verbatim, so an agent whose own description contained two spaces would
+    // trip it. That is acceptable and deliberate -- the fixture's text is
+    // fixed, and the assertion is about Warp's formatting of everything
+    // *around* the quote. If it ever fires on a real description, the answer is
+    // to narrow the assertion, not to widen the formatting.
     assert!(
         !note.contains("  "),
         "no run of spaces inside a sentence a person reads: {note:?}"

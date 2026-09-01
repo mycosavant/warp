@@ -386,3 +386,63 @@ baseline: **zero regressions**. Baseline 136 failures, after 132; the four-test
 difference is entirely the known-flaky secret-redaction globals. A count
 comparison would have read as "fixed four tests", which is why the rule is
 membership.
+
+---
+
+## The review, and the defect it found in the fix
+
+`fable-reviewer` was asked to review the post-run diff and **went idle twice
+without reporting**, including after a direct follow-up naming the four questions.
+Its findings arrived after the work had been committed. Recorded because the
+stall is itself worth knowing about the tool: the agent had done the work and the
+delivery was what failed, so "no findings" and "findings not delivered" looked
+identical from the outside, and I committed on the first reading.
+
+It confirmed the premise and found a defect **I introduced while fixing an
+instance of the same defect class**.
+
+### Confirmed
+
+`Decision::note` has exactly one non-test caller, reached only after the
+`set_mode` send returns `Ok`. It then checked the half I did not ask about: does
+`Ok` mean *the agent replied* or merely *the request was dispatched* — the
+`window close` trap, where `ok: true` meant only that a close had been asked for.
+Traced into `agent-client-protocol` 2.0.0: `block_task().await` awaits the
+agent's actual JSON-RPC reply, so `Ok` requires `result: Ok` from the agent. **So
+"the agent accepted" asserts an observed reply, not a dispatch.** That is the
+right question to have asked and I had not asked it.
+
+### The defect: "This session opened in X" is anchored to the wrong thing
+
+`state` is *this turn's* `session/new` **or** `session/load` reply. A lead
+anchored to the session's *opening* is a claim the input cannot support on a
+resume.
+
+For an agent that **persists** the mode across a load — unlike
+`claude-agent-acp` — turn 2's load returns `default`, which differs from the
+`auto` last disclosed, so `needs_telling` makes it news again and the `Request`
+arm re-renders: *"This session opened in the agent's `default` mode"*. It opened
+in `auto` and merely resumed in `default`.
+
+**The measured run structurally could not have found this.**
+`claude-agent-acp` comes back in `auto` every time, which matches what was last
+told, so its resumed turns go quiet through `RequestQuietly` and never re-render
+the arm. The run is what proved the mode reverts — and that same revert is what
+hides this.
+
+Fixed: `describe_opened` → `describe_turn_start`, leading *"This turn began with
+the session in"*, which is true on `session/new` and `session/load` alike. A
+regression test builds the shape the fixture cannot produce — a persisting agent
+— and both it and the retuned pin were calibrated by restoring the old anchor.
+
+**This is the third instance in two days of one pattern**: a sentence that was
+true of the case in front of the author and false of a case they had not run.
+The note's hedge, the eighteen spaces, and now this. Each was written carefully.
+
+### Also filed, not fixed
+
+`translate.rs` feeds every `CurrentModeUpdate` to `changed()`, which claims the
+agent acted "on its own" with no filter for an echo of Warp's own `set_mode`. For
+an agent that echoes client-initiated changes, that falsely-attributed note would
+be the only mode note on quiet turns. Pre-existing, unreachable with either
+measured agent, now a `T15` loose end with its one-map-read fix recorded.

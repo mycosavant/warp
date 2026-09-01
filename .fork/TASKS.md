@@ -9423,6 +9423,31 @@ mode descriptions is the first legitimate instance of `acp_permission.rs`'s
 
 ## T15 — Loose ends carried, not forgotten
 
+- [ ] **An agent echoing Warp's own `set_mode` would be reported as acting on
+      its own.** Raised in review of T14.22, reasoned rather than run.
+      `translate.rs` feeds *every* `CurrentModeUpdate` to `mode::changed`, which
+      says "The agent changed this session's mode on its own" with no filter for
+      an update that is merely the echo of the `set_mode` Warp just sent — and
+      `mod.rs`'s own comment anticipates that arrival ("a `current_mode_update`
+      can arrive as soon as the mode request does").
+
+      The spec permits an agent to notify on any change, including a
+      client-initiated one. For such an agent turn 1 would read "the agent
+      accepted" immediately followed by "the agent changed this on its own",
+      contradicting itself; and on turns 2+, where `RequestQuietly` means Warp
+      says nothing, the falsely-attributed note would be the **only** mode note
+      shown. That inverts the module's purpose, which is to say truthfully who
+      set the policy.
+
+      Not reachable with either measured agent — `claude-agent-acp` sends no
+      such echo and `opencode` has no modes — so this is a hazard about an agent
+      nobody here has run, which is exactly the population T14.22's other
+      review finding also came from. Cheap fix when it fires or as hardening:
+      `changed()` compares `now` against the conversation's recorded
+      `known.current`, which `acknowledged` set to the requested mode moments
+      earlier, and on a match stays silent or attributes it as confirmation.
+      One map read that already exists.
+
 - [x] **Re-check `ALLOW_VERIFIED_AGENTS` against a real prompt** (from T11.5).
       **Done, and this box was stale.** `CLAUDE.md` records it under the Claude
       Code plugin: with the plugin loaded, `agent approve` drove a real prompt —
