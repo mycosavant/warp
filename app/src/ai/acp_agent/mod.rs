@@ -1088,6 +1088,16 @@ fn wait_for_a_person(
     let conversation_id = request.conversation_id.clone();
     let (waiting, answer) = registry::park(request);
 
+    // **Armed before the spawn, not inside it.** `connection.spawn` hands the
+    // future to an executor, and a connection torn down before its first poll
+    // drops it having run nothing -- so an `arm` on the first line of the block
+    // never happens, and the trail keeps a `permission_request` with no partner.
+    // That is indistinguishable from the bug this guard exists to close, which
+    // is the worst way for an edge case to present: a reader concludes the guard
+    // does not work. Found in review 2026-08-31. Armed here, the guard is owned
+    // by the future and drops with it whether or not it was ever polled.
+    let mut unanswered = AsksNothingMore::arm(&translator, &approval_id, &tool_call_id);
+
     connection.spawn(async move {
         // Held for exactly as long as the wait, so a turn that is cancelled stops
         // advertising a question nobody can answer any more. The second is the
@@ -1097,9 +1107,9 @@ fn wait_for_a_person(
         // disagree.
         let _waiting = waiting;
         let _asking = quiet_because_it_is_asking;
-        // Armed across the wait, so the one way a question really goes
-        // unanswered still writes a line. See `AsksNothingMore`.
-        let mut unanswered = AsksNothingMore::arm(&translator, &approval_id, &tool_call_id);
+        // Moved in by the `async move`, so it lives exactly as long as this
+        // future. See `AsksNothingMore`, and the note above the arm.
+        let unanswered = &mut unanswered;
         let answer = answer.await;
         unanswered.disarm();
         let settled = answered_note(&answer);

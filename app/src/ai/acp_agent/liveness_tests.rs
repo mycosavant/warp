@@ -188,3 +188,43 @@ fn refusals_accumulate_and_absence_is_not_zero() {
         "a neighbouring conversation must not inherit a count"
     );
 }
+
+/// The count belongs to the turn whose status is reported beside it.
+///
+/// Pinned because the first cut cleared it *never*, which made it a constant
+/// after the first refusal: `agent.list` returns a row carrying a conversation's
+/// current status, so a lifetime count sitting next to a per-turn status is a
+/// category error, and a field that always fires is one a reader learns to
+/// skip. The paired assertion above — that a refusal outlives the turn it
+/// happened in — is the property this must not break, which is why both are
+/// here: the count has to survive its own turn ending and not survive the next
+/// one starting.
+#[test]
+fn a_new_turn_does_not_inherit_the_last_turn_s_refusals() {
+    let conversation = "t1411-refusal-per-turn";
+    assert_eq!(refusals_for(conversation), None);
+
+    let first = watch(conversation.to_owned());
+    record_refusal(conversation);
+    drop(first);
+    assert_eq!(
+        refusals_for(conversation),
+        Some(1),
+        "the count must outlive the turn it happened in, or it is unreadable"
+    );
+
+    let second = watch(conversation.to_owned());
+    assert_eq!(
+        refusals_for(conversation),
+        None,
+        "a new turn starts clean; the previous turn's refusal is not this one's"
+    );
+
+    record_refusal(conversation);
+    assert_eq!(
+        refusals_for(conversation),
+        Some(1),
+        "and the new turn counts its own"
+    );
+    drop(second);
+}

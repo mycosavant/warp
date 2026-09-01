@@ -70,11 +70,27 @@ struct Turn {
 
 static TURNS: LazyLock<Mutex<HashMap<String, Turn>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
 
-/// How many of this conversation's permission requests were refused, ever.
+/// How many of this conversation's permission requests were refused *this turn*.
 ///
 /// **Deliberately outside [`TURNS`], which is cleared when a turn ends.** That
 /// is the whole point: the question this answers is asked *after* the turn, and
 /// a count that died with the turn would answer it "none" every time.
+///
+/// **But it is cleared when the next turn starts, and the first cut was not.**
+/// Review 2026-08-31: solving "survives the turn" by building "survives
+/// forever" makes the number a constant after the first refusal, so turns 2
+/// through 40 of a clean conversation all report `1`. `agent.list` returns a row
+/// carrying that conversation's *current* status, and `permissions_denied` is
+/// read as qualifying it -- a lifetime count against a per-turn status is a
+/// category error. It is also the exact failure `Turn::waiting`'s doc forty
+/// lines above was written to prevent: *a person seeing an alarming number for
+/// it learns to discount the number.* A stuck `1` is worse than a zero, because
+/// it looks like information. Cleared in [`watch`], which already marks the
+/// start of a turn.
+///
+/// So the number **can change within a turn**, upward, as refusals land. No
+/// other field here does that, and a reader watching it move is seeing it work
+/// rather than seeing a bug.
 ///
 /// Measured 2026-08-31 and it is why this exists. An audit turn reached for
 /// `find /`, was refused, and then ended -- reporting `status: success` with no
@@ -101,7 +117,7 @@ pub(crate) fn record_refusal(conversation: &str) {
     *refusals.entry(conversation.to_owned()).or_insert(0) += 1;
 }
 
-/// How many were refused, or `None` if none ever were.
+/// How many were refused this turn, or `None` if none were.
 ///
 /// `None` rather than `0` so the field is absent from an ordinary listing: a
 /// zero on every row is noise, and noise is how a signal stops being read.
@@ -134,6 +150,12 @@ impl Drop for Watch {
 /// Starts watching a turn. The clock starts now, because a turn that wedges
 /// before its agent says anything is exactly the case with no other signal.
 pub(crate) fn watch(conversation: String) -> Watch {
+    // Cleared here rather than when the turn ends, because the count has to
+    // outlive its own turn to be readable at all. See [`REFUSALS`].
+    REFUSALS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .remove(&conversation);
     turns().insert(
         conversation.clone(),
         Turn {

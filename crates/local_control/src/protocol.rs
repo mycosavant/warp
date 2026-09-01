@@ -608,9 +608,17 @@ pub struct AgentConversationSummary {
     /// needed what it was denied is not something Warp can know, and asserting
     /// it would be the `unconfined_reason` overreach T14.8 corrected.
     ///
-    /// Lifetime is the conversation, not the turn: the question is asked after
-    /// the turn ends, so a count cleared with the turn would answer "none" every
-    /// time.
+    /// **Scoped to the turn whose status is on this same row**, and cleared when
+    /// the next turn starts rather than when this one ends -- the question is
+    /// asked *after* a turn, so a count cleared with the turn would answer
+    /// "none" every time. This line said "lifetime is the conversation, not the
+    /// turn" until 2026-08-31, which made the number a constant after the first
+    /// refusal: every later turn of a clean conversation still reported it, and
+    /// a field that always fires is one a reader learns to skip. A lifetime
+    /// count against a per-turn status was a category error.
+    ///
+    /// It can therefore increase *within* a turn as refusals land. Nothing else
+    /// on this row moves that way.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub permissions_denied: Option<usize>,
     /// Seconds since the agent last said anything, for a turn Warp is driving
