@@ -234,6 +234,7 @@ fn an_agent_that_is_not_on_path_is_reported_as_being_not_on_path() {
         "Internal error: {\"spawned_at\": \"jsonrpc.rs:1732:39\", \
          \"data\": \"No such file or directory (os error 2)\"}",
         "opencode acp",
+        "/home/effatha/repo",
     )
     .to_string();
 
@@ -248,10 +249,85 @@ fn an_agent_that_is_not_on_path_is_reported_as_being_not_on_path() {
 /// it fixes.
 #[test]
 fn a_failure_that_is_not_a_missing_file_does_not_blame_path() {
-    let error = spawn_failure_or("connection closed before initialize", "opencode acp").to_string();
+    let error = spawn_failure_or(
+        "connection closed before initialize",
+        "opencode acp",
+        "/home/effatha",
+    )
+    .to_string();
 
     assert!(!error.contains("PATH"), "got: {error}");
     assert!(error.contains("connection closed"), "got: {error}");
+}
+
+/// A WSL pane's cwd handed to a Windows-side agent is explained, not relayed.
+///
+/// Measured 2026-09-02: on the Windows build every turn in a WSL pane dies at
+/// `session/new` with *"`cwd` does not exist on the machine running the agent"*,
+/// which is true and names neither the cause nor the fix. Warp has both facts
+/// the agent's message lacks — that it is on Windows, and that it just sent a
+/// Unix path.
+///
+/// Asserted on the remedy, because that is the part a person acts on. The
+/// underlying error is kept as well, so nobody has to re-run to see what the
+/// agent actually said.
+#[test]
+fn a_wsl_working_directory_sent_to_a_windows_agent_names_the_remedy() {
+    let error = cwd_is_on_the_other_side_of_wsl(
+        "Invalid params: `cwd` does not exist on the machine running the agent: \
+         /home/effatha/scratch/repo",
+        "npx -y @agentclientprotocol/claude-agent-acp",
+        "/home/effatha/scratch/repo",
+        true,
+    )
+    .expect("a unix cwd from a windows Warp is the case this explains")
+    .to_string();
+
+    assert!(error.contains("WSL distribution"), "got: {error}");
+    assert!(error.contains("wsl.exe -d Ubuntu"), "got: {error}");
+    assert!(error.contains("/home/effatha/scratch/repo"), "got: {error}");
+    assert!(
+        error.contains("does not exist on the machine"),
+        "got: {error}"
+    );
+}
+
+/// …and the same message on a Windows *path* is left alone, because then the
+/// agent and the directory are on the same side and the cause is something else.
+///
+/// This is the `a_failure_that_is_not_a_missing_file_does_not_blame_path` rule
+/// applied again: a remedy offered at the wrong error sends a person somewhere
+/// there is nothing to find.
+#[test]
+fn a_windows_working_directory_is_not_blamed_on_wsl() {
+    assert!(
+        cwd_is_on_the_other_side_of_wsl(
+            "Invalid params: `cwd` does not exist on the machine running the agent: \
+             C:\\dev\\gone",
+            "npx -y @agentclientprotocol/claude-agent-acp",
+            "C:\\dev\\gone",
+            true,
+        )
+        .is_none(),
+        "the agent and the directory are on the same side; the cause is elsewhere"
+    );
+}
+
+/// And on a Linux Warp the same message is left alone, because there the agent
+/// and the shell share a filesystem and this explanation would be a fiction.
+#[test]
+fn a_unix_working_directory_is_not_blamed_on_wsl_when_warp_is_not_on_windows() {
+    assert!(
+        cwd_is_on_the_other_side_of_wsl(
+            "Invalid params: `cwd` does not exist on the machine running the agent: \
+             /home/effatha/gone",
+            "opencode acp",
+            "/home/effatha/gone",
+            false,
+        )
+        .is_none(),
+        "this whole failure mode is a fact about the Windows build"
+    );
 }
 
 /// The shape a real request has: a kind whose effect stops at the call, and the
@@ -922,4 +998,83 @@ fn an_answered_question_is_not_also_recorded_as_unanswered() {
         line_for(&mut events, "call_guard_disarmed").is_none(),
         "a disarmed guard wrote a line anyway"
     );
+}
+
+// ── Starting the agent where the files are (2026-09-02) ──────────────────
+
+/// A WSL session on the Windows build starts its agent inside the distribution.
+///
+/// Measured before this existed: every turn in every WSL pane died at
+/// `session/new` with *"`cwd` does not exist on the machine running the agent"*,
+/// because the shell reports `/home/…` and Warp had started the agent on
+/// Windows. `local_agent` fixed the same bug in T6.1 and this is that fix
+/// arriving one module late.
+#[test]
+fn a_wsl_session_starts_its_agent_inside_the_distribution() {
+    let argv = agent_argv(
+        "npx -y @agentclientprotocol/claude-agent-acp",
+        Some("Ubuntu"),
+        Some("/home/effatha/repo"),
+        true,
+    )
+    .expect("a WSL session on Windows is exactly the case this wraps");
+
+    assert_eq!(argv[0], "wsl.exe");
+    assert!(argv.contains(&"--distribution".to_owned()));
+    assert!(argv.contains(&"Ubuntu".to_owned()));
+    // `--cd` is what makes the Unix cwd legal for the agent, which is the whole
+    // point; without it the wrap starts the process and keeps the bug.
+    assert!(argv.contains(&"--cd".to_owned()));
+    assert!(argv.contains(&"/home/effatha/repo".to_owned()));
+    // The command rides as one argument, so `sh` reads it the way the variable's
+    // documentation says it is written.
+    assert_eq!(
+        argv.last().map(String::as_str),
+        Some("npx -y @agentclientprotocol/claude-agent-acp")
+    );
+}
+
+/// A command already aimed at the distribution by hand is left exactly alone.
+///
+/// This was the documented workaround before this function existed, and someone
+/// is running it. Wrapping a wrapper would produce `wsl.exe … wsl.exe …`, which
+/// fails in a way that reads like the fix broke rather than that it fired twice.
+#[test]
+fn a_command_already_aimed_at_wsl_is_not_wrapped_twice() {
+    assert!(
+        agent_argv(
+            "wsl.exe -d Ubuntu -- npx -y @agentclientprotocol/claude-agent-acp",
+            Some("Ubuntu"),
+            Some("/home/effatha/repo"),
+            true,
+        )
+        .is_none(),
+        "the caller already said where to run it"
+    );
+}
+
+/// An ordinary Windows session is untouched, so this cannot change behaviour it
+/// was not written for.
+#[test]
+fn a_session_that_is_not_wsl_is_taken_as_written() {
+    assert!(agent_argv("opencode acp", None, Some("C:\\dev\\warp"), true).is_none());
+}
+
+/// And on Linux nothing is wrapped, because there the agent and the shell
+/// already share a filesystem.
+#[test]
+fn nothing_is_wrapped_when_warp_is_not_on_windows() {
+    assert!(agent_argv("opencode acp", Some("Ubuntu"), Some("/home/effatha"), false).is_none());
+}
+
+/// A session whose cwd Warp never learned still starts — without `--cd`, in the
+/// distribution's default directory, which is a working agent rather than a
+/// failed turn.
+#[test]
+fn a_wsl_session_with_no_working_directory_still_starts_in_the_distribution() {
+    let argv = agent_argv("opencode acp", Some("Ubuntu"), None, true).expect("still wrapped");
+
+    assert_eq!(argv[0], "wsl.exe");
+    assert!(!argv.contains(&"--cd".to_owned()), "nothing to point it at");
+    assert_eq!(argv.last().map(String::as_str), Some("opencode acp"));
 }

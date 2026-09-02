@@ -129,6 +129,7 @@ use self::translate::Translator;
 use crate::ai::agent::AIAgentInput;
 use crate::ai::agent::api::{Event, RequestParams, ResponseStream};
 use crate::server::server_api::AIApiError;
+use crate::terminal::ShellLaunchData;
 
 /// Whether this request is one the ACP path handles.
 ///
@@ -218,6 +219,12 @@ pub(crate) struct Turn {
     task_id: String,
     task_needs_announcing: bool,
     working_directory: Option<String>,
+    /// The WSL distribution this session's shell runs in, when it is one.
+    ///
+    /// Carried for the same reason `local_agent::Turn` carries it, and fixing
+    /// the same bug one module later: the agent has to be started *inside* the
+    /// distribution or it cannot see the session's working directory at all.
+    distro: Option<String>,
     /// Warp's own id for the conversation this turn belongs to.
     ///
     /// Carried only so a wedged turn can be reported against the row
@@ -261,6 +268,12 @@ impl Turn {
             task_id,
             task_needs_announcing,
             working_directory: params.session_context.current_working_directory().clone(),
+            // Carried for the same reason `local_agent::Turn` carries it: a WSL
+            // session's agent has to be started inside the distribution.
+            distro: match params.session_context.shell() {
+                Some(ShellLaunchData::WSL { distro }) => Some(distro.clone()),
+                _ => None,
+            },
             conversation_id: params.conversation_id.to_string(),
         })
     }
@@ -331,6 +344,7 @@ fn run(command: String, turn: Turn) -> impl Stream<Item = Event> + Send + use<> 
         turn.prompt,
         turn.session,
         turn.working_directory,
+        turn.distro,
         conversation_id,
         Arc::clone(&translator),
         tx.clone(),
@@ -360,6 +374,7 @@ async fn drive(
     prompt: String,
     session: Option<String>,
     working_directory: Option<String>,
+    distro: Option<String>,
     conversation_id: String,
     translator: Arc<Mutex<Translator>>,
     tx: mpsc::UnboundedSender<Event>,
@@ -369,6 +384,7 @@ async fn drive(
         prompt,
         session,
         working_directory,
+        distro,
         conversation_id,
         Arc::clone(&translator),
         tx.clone(),
@@ -413,13 +429,24 @@ async fn exchange(
     prompt: String,
     session: Option<String>,
     working_directory: Option<String>,
+    distro: Option<String>,
     conversation_id: String,
     translator: Arc<Mutex<Translator>>,
     tx: mpsc::UnboundedSender<Event>,
 ) -> anyhow::Result<()> {
-    let agent = AcpAgent::from_str(&command)
-        .map_err(|error| anyhow!("{error}"))
-        .with_context(|| format!("Could not read WARP_FORK_ACP_COMMAND: {command:?}"))?;
+    let agent = match agent_argv(
+        &command,
+        distro.as_deref(),
+        working_directory.as_deref(),
+        cfg!(windows),
+    ) {
+        Some(argv) => AcpAgent::from_args(argv)
+            .map_err(|error| anyhow!("{error}"))
+            .with_context(|| format!("Could not read WARP_FORK_ACP_COMMAND: {command:?}"))?,
+        None => AcpAgent::from_str(&command)
+            .map_err(|error| anyhow!("{error}"))
+            .with_context(|| format!("Could not read WARP_FORK_ACP_COMMAND: {command:?}"))?,
+    };
 
     let cwd = match working_directory {
         Some(directory) => std::path::PathBuf::from(directory),
@@ -445,6 +472,9 @@ async fn exchange(
         conversation,
         cwd.to_string_lossy().into_owned(),
     );
+    // Kept for the failure path: `cwd` is moved into `opening`, and the one
+    // failure worth explaining is about this exact string.
+    let attempted_cwd = cwd.to_string_lossy().into_owned();
 
     agent_client_protocol::Client
         .builder()
@@ -737,7 +767,7 @@ async fn exchange(
             Ok(())
         })
         .await
-        .map_err(|error| spawn_failure_or(error, &command))
+        .map_err(|error| spawn_failure_or(error, &command, &attempted_cwd))
 }
 
 /// Turns a connection error into something a person can act on.
@@ -751,8 +781,17 @@ async fn exchange(
 /// it is a *guess named as one*: the same errno would arise if the agent existed
 /// and its own launcher were missing. Warp cannot tell those apart, so it does
 /// not claim to.
-fn spawn_failure_or(error: impl std::fmt::Display, command: &str) -> anyhow::Error {
+fn spawn_failure_or(
+    error: impl std::fmt::Display,
+    command: &str,
+    attempted_cwd: &str,
+) -> anyhow::Error {
     let error = error.to_string();
+    if let Some(explained) =
+        cwd_is_on_the_other_side_of_wsl(&error, command, attempted_cwd, cfg!(windows))
+    {
+        return explained;
+    }
     if error.contains("os error 2") || error.contains("No such file or directory") {
         return anyhow!(
             "Could not start the agent named by WARP_FORK_ACP_COMMAND ({command:?}): \
@@ -763,6 +802,124 @@ fn spawn_failure_or(error: impl std::fmt::Display, command: &str) -> anyhow::Err
         );
     }
     anyhow!("The agent exchange failed: {error}")
+}
+
+/// Decides how to start the configured ACP agent, and starts it inside the
+/// distribution when the session's shell is there.
+///
+/// **This is `local_agent::spawn_for` arriving one module late, for a bug that
+/// module already found by running (T6.1).** A WSL session's working directory
+/// is a Linux path; Warp on Windows is a Windows process. `local_agent` hit that
+/// as `ERROR_DIRECTORY` on `current_dir`; the ACP path hits it later and louder,
+/// as the agent refusing `session/new` with *"`cwd` does not exist on the machine
+/// running the agent"* — measured 2026-09-02, and it killed every turn in every
+/// WSL pane on the Windows build.
+///
+/// The alternative is rejected on the same evidence `spawn_for` rejects it on:
+/// rewriting the path to its `\\wsl$\<distro>\…` form starts the process and
+/// moves the cost, at ~13× the same tree on the Windows disk and ~50× the same
+/// tree from inside the distribution. An agent is a file-reading workload, so
+/// that is the whole job made slow — and worse, it succeeds, which is how a
+/// wrong answer outlives a loud one.
+///
+/// Returns `None` when the command should be taken as written, so the ordinary
+/// path keeps `AcpAgent::from_str`'s own parsing and this function cannot change
+/// behaviour it was not written for.
+///
+/// The command rides as a single argument to `/bin/sh -lc`. A *login* shell for
+/// the reason `spawn_for` records — `wsl.exe --exec` searches a minimal `PATH`
+/// and agents live under the user's home, via `nvm` or `~/.local/bin` — and as
+/// one argument because `WARP_FORK_ACP_COMMAND` is already a command line, so
+/// letting `sh` read it is what its own documentation promises.
+fn agent_argv(
+    command: &str,
+    distro: Option<&str>,
+    working_directory: Option<&str>,
+    on_windows: bool,
+) -> Option<Vec<String>> {
+    if !on_windows {
+        return None;
+    }
+    let distro = distro?;
+    // Already aimed at the distribution by hand: leave it alone rather than
+    // wrapping a wrapper. This was the documented workaround before this
+    // function existed, and it must keep working.
+    if command.trim_start().starts_with("wsl.exe") || command.trim_start().starts_with("wsl ") {
+        return None;
+    }
+
+    let mut argv = vec![
+        "wsl.exe".to_owned(),
+        "--distribution".to_owned(),
+        distro.to_owned(),
+    ];
+    if let Some(directory) = working_directory {
+        argv.push("--cd".to_owned());
+        argv.push(directory.to_owned());
+    }
+    argv.extend([
+        "--exec".to_owned(),
+        "/bin/sh".to_owned(),
+        "-lc".to_owned(),
+        command.to_owned(),
+    ]);
+    Some(argv)
+}
+
+/// Names the one failure a Windows Warp hits in every WSL pane.
+///
+/// **Measured 2026-09-02, and it stops the turn before any tool runs.** A WSL
+/// session's shell reports a Unix cwd, Warp passes it verbatim in `session/new`,
+/// and on the Windows build the agent process was started by Warp — on Windows.
+/// So `claude-agent-acp` refuses the session with
+///
+/// ```text
+/// Invalid params: `cwd` does not exist on the machine running the agent: /home/…
+/// ```
+///
+/// which is accurate and names neither the cause nor the remedy. Warp holds both
+/// facts the message is missing: that it is running on Windows, and that the
+/// path it just sent is a Unix one.
+///
+/// **Shaped on the error rather than checked before sending**, deliberately and
+/// for the same reason as [`spawn_failure_or`]: naming an agent that starts
+/// inside the distribution makes this exact combination correct, so a pre-flight
+/// check would refuse the configuration that works. Warp cannot tell from the
+/// command string which side an agent will run on — `wsl.exe -d Ubuntu -- npx …`
+/// and `npx …` differ only in a prefix this code has no business parsing — so it
+/// waits to be told, and then explains.
+///
+/// Not attempted: rewriting the path to `\\wsl.localhost\…`. That would make
+/// the session open and leave the agent running its shell commands on the wrong
+/// side of the boundary, which is a worse failure because it succeeds.
+///
+/// `on_windows` is a parameter rather than a `cfg!` inside, so the rule is a pure
+/// function with tests that run on every platform — the same reason
+/// `session::filesystem::classify` takes its three facts instead of reading
+/// them. A `#[cfg(windows)]` test is one nobody here can calibrate by making it
+/// fail.
+fn cwd_is_on_the_other_side_of_wsl(
+    error: &str,
+    command: &str,
+    attempted_cwd: &str,
+    on_windows: bool,
+) -> Option<anyhow::Error> {
+    if !on_windows {
+        return None;
+    }
+    if !error.contains("does not exist on the machine running the agent") {
+        return None;
+    }
+    if !attempted_cwd.starts_with('/') {
+        return None;
+    }
+    Some(anyhow!(
+        "The agent could not open this session's working directory ({attempted_cwd}). \
+         That is a path inside a WSL distribution, and the agent named by \
+         WARP_FORK_ACP_COMMAND ({command:?}) was started by Warp on Windows, so it \
+         cannot see it. Name an agent that starts inside the distribution instead — \
+         for example `wsl.exe -d Ubuntu -- {command}`. Underlying error: {error}"
+    ))
 }
 
 /// Runners that are not the agent, and whose next non-flag argument is.

@@ -306,10 +306,71 @@ What you get, scoped by running it (`.fork/TASKS.md` T6.1):
 | Project explorer | works — says "loading" while it indexes, which is slow (see below) |
 | Global search | works — slowly over 9p, ~9 s where `C:` takes 0.1 s |
 | **First index of a large repo** | **minutes, sometimes very many** (see the 9p table below) |
+| The agent panel (`WARP_FORK_ACP_COMMAND`) | works — **fixed 2026-09-02, was broken outright**; see below |
+| The agent's LSP tool (definitions, symbols, diagnostics) | works, from the agent's own language server inside the distribution |
 
 And in a **PowerShell** session sitting on a `\\wsl$\…` path — the other way to
 reach WSL files from Windows — the git chips, the window title and the project
 explorer all work in this fork and none of them did upstream; see below.
+
+### The agent panel in a WSL session
+
+**Nothing to configure since 2026-09-02.** Name an agent the ordinary way and it
+starts inside the distribution:
+
+```powershell
+$env:WARP_FORK_ACP_COMMAND = 'npx -y @agentclientprotocol/claude-agent-acp'
+$env:WARP_FORK_ACP_MODE    = 'default'
+```
+
+**Before that fix every turn in every WSL pane died**, and the message named
+neither the cause nor the remedy:
+
+```
+Invalid params: `cwd` does not exist on the machine running the agent:
+/home/you/project
+```
+
+The shell reports a Linux cwd, Warp passes it verbatim in `session/new`, and the
+agent process had been started by Warp — on Windows. `acp_agent::agent_argv` now
+wraps the command in `wsl.exe --distribution <distro> --cd <dir> --exec /bin/sh
+-lc …`, which is the treatment `local_agent::spawn_for` has given `claude` since
+T6.1 for the identical bug. A command you have already aimed at the distribution
+yourself is left alone, so the old manual workaround keeps working.
+
+Rewriting the path to `\\wsl$\<distro>\…` instead was rejected on
+`spawn_for`'s own measurements — ~13× the same tree on the Windows disk, ~50×
+the same tree from inside the distribution — and because it *succeeds*, which
+makes it slow forever rather than loudly wrong once.
+
+**The agent's LSP tool works, and it is the agent's, not Warp's.** With
+`claude-agent-acp`, Claude Code ships an `LSP` tool driven by whichever `*-lsp`
+plugins are enabled; measured on a routed session it returned rust-analyzer's
+real document symbols. Two gotchas, both of which cost an hour:
+
+- **A crash with exit code 1 is usually your toolchain.** The language server is
+  spawned from the *agent's* cwd, so the rustup toolchain that resolves *there*
+  is the one that needs the component — not the one pinned in the file you asked
+  about. `rustup component add rust-analyzer` on the default toolchain.
+- **Check an LSP answer before believing it.** A real one and a fabricated one
+  read identically. The tell is internal consistency: `documentSymbol` reports a
+  documented item at its *doc comment* line and an undocumented one at the item
+  line, so in a mixed file only some symbols are offset, each by its own doc
+  length. `opencode` with `OPENCODE_EXPERIMENTAL_LSP_TOOL=1` was measured
+  inventing five symbols after its server failed to attach, which is worse than
+  having no tool.
+
+### Reproducing any of this — three traps
+
+- **A fresh pane is already Ubuntu** if that is your default shell. Typing
+  `wsl.exe -d Ubuntu` into it makes a *nested subshell* whose block never
+  completes; after that `warpctrl input submit` answers `queued: true` forever
+  and `agent prompt` refuses with `target_state_conflict`. That reads as three
+  separate product defects and is one mistake.
+- **The agent panel takes focus on launch.** Press Escape to reach the shell.
+- **`warpctrl acp probe --cwd` validates the path on the machine running
+  `warpctrl`**, so it cannot be used to test a Unix cwd from the Windows binary.
+  Use the panel for that.
 
 Three things are worth knowing rather than discovering:
 
