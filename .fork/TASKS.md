@@ -11702,8 +11702,9 @@ machine, and nothing in `fork.rs` says anything about it.
 `indexing_that_uploads_source_stays_behind_a_default_this_fork_did_not_set`
 pins the default and was calibrated by flipping it.
 
-**Decided by the maintainer: force-disabled, and the fallback closed too.** The
-second was only visible because the first was made.
+**Decided by the maintainer: force-disabled, indexing defaults off, and the
+fallback closed too.** Three changes, and the second and third were only visible
+because the first was made.
 
 1. `FullSourceCodeEmbedding` joins `FORCE_DISABLED` — the first entry there
    where the runtime force is the *primary* removal rather than a backstop over
@@ -11730,6 +11731,27 @@ second was only visible because the first was made.
    `the_symbol_map_leaves_by_exactly_one_call_site_and_it_is_guarded` pins the
    **count** rather than the guard, for the reason `egress.rs` needed a second
    check: a backstop that covers today's call sites is a fact about today.
+
+3. **Indexing defaults off, which took two changes because the gate is a
+   disjunction.** `should_build_outlines` is `indexing_enabled &&
+   (codebase_context_enabled || outline_codebase_symbols_for_at_context_menu)`,
+   so `fork::codebase_indexing_default()` is consulted from both settings'
+   `default_value`. Wiring one leaves the walk running through the other, with
+   no error and a diff that looks finished —
+   `both_halves_of_the_outline_gate_default_the_same_way` exists for that and
+   was calibrated by reverting one half. The reason is not egress: with the
+   embedding index gone the remaining work is local. It is that outline building
+   parses up to 5,000 files of every repository the shell navigates into
+   (~100 s over 9p, per T6), and upstream asks before the embedding index and
+   never before this one. The settings toggle is the consent; there is no second
+   prompt, because an affordance that is off until switched on has already
+   asked.
+
+**What this costs, stated rather than left to be found.** Until indexing is
+switched on, the `@` menu's Code section is empty and `are_file_symbols_indexed`
+is false in the agent's directory context — the latter changes nothing on this
+fork's own agent paths, which never read that context. And once it is on,
+`SearchCodebase` ranks lexically rather than semantically.
 
 #### What the outline gap does not cost
 

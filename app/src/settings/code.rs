@@ -14,7 +14,7 @@ define_settings_group!(CodeSettings, settings: [
     }
     codebase_context_enabled: CodebaseContextEnabled {
         type: bool,
-        default: true,
+        default: crate::fork::codebase_indexing_default(),
         supported_platforms: SupportedPlatforms::DESKTOP,
         sync_to_cloud: SyncToCloud::Globally(RespectUserSyncSetting::Yes),
         surface: settings::SettingSurfaces::GUI,

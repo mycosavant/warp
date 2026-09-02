@@ -301,9 +301,14 @@ fn test_codebase_context_enabled_with_no_workspace() {
         app.read(|ctx| {
             let codebase_context_enabled =
                 UserWorkspaces::as_ref(ctx).is_codebase_context_enabled(ctx);
-            assert!(
+            // Asserted against the setting rather than against `true`: this
+            // fork defaults it off (`fork::codebase_indexing_default`), and
+            // what the test is actually about is that with no workspace there
+            // is no admin setting to override the user's.
+            assert_eq!(
                 codebase_context_enabled,
-                "codebase context should be on by default"
+                *CodeSettings::as_ref(ctx).codebase_context_enabled.value(),
+                "with no workspace the user setting is what governs"
             );
         });
     })
@@ -2385,7 +2390,12 @@ fn test_codebase_context_respects_user_setting_when_any_team_does() {
                 user_workspaces.teams_allow_codebase_context(),
                 AdminEnablementSetting::RespectUserSetting
             );
-            assert!(user_workspaces.is_codebase_context_enabled(ctx));
+            // As above: `RespectUserSetting` means the user's setting decides,
+            // so the assertion is that it is deferred to, not that it is true.
+            assert_eq!(
+                user_workspaces.is_codebase_context_enabled(ctx),
+                *CodeSettings::as_ref(ctx).codebase_context_enabled.value()
+            );
         });
     })
 }

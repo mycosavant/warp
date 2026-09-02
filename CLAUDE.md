@@ -246,6 +246,19 @@ camelCase. `the_symbol_map_leaves_by_exactly_one_call_site_and_it_is_guarded`
 pins the **count**, not the guard, for the same reason `egress.rs` needed its
 second check: a backstop that covers today's call sites is a fact about today.
 
+**And indexing now defaults off, which needed two changes because the gate is a
+disjunction.** `should_build_outlines` is `indexing_enabled &&
+(codebase_context_enabled || outline_codebase_symbols_for_at_context_menu)`, so
+`fork::codebase_indexing_default()` is consulted from *both* settings'
+`default_value`; wiring one leaves the walk running through the other, with no
+error and a diff that looks finished. The reason is not egress — with the
+embedding index gone the remaining work is local tree-sitter parsing — it is
+that outline building parses up to 5,000 files of every repository the shell
+navigates into, ~100 s over 9p per T6, and upstream asks before the *embedding*
+index and never before this one. The settings toggle is the consent and there is
+deliberately no second prompt: an affordance that is off until switched on has
+already asked.
+
 ## Prefer the smallest thing that is still the idea
 
 `crates/warp_cli/src/local_control/graph.rs` is the standard: a run-scale task

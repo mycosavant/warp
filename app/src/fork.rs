@@ -1098,6 +1098,34 @@ pub fn apply_feature_preferences() {
     }
 }
 
+/// Whether codebase indexing should be on before anyone asks for it.
+///
+/// Consulted from the `default_value` of the two settings that together decide
+/// whether `RepoOutlines` builds anything — `should_build_outlines` is
+/// `indexing_enabled && (codebase_context_enabled || outline_codebase_symbols_
+/// for_at_context_menu)`, so **both** have to default off or the walk still
+/// happens. It changes only the *default*: an explicit choice stored by the
+/// user still wins, exactly as with [`local_control_default_enabled`].
+///
+/// The reason is not egress. With `FullSourceCodeEmbedding` in
+/// [`FORCE_DISABLED`] the only indexing left is tree-sitter outlines, and
+/// building those is local. The reason is that it is work nobody asked for:
+/// outline building parses up to `MAX_REPO_FILE_SIZE_LIMIT` (5,000) files of
+/// every repository the shell navigates into, and T6 measured ~100 s per
+/// repository when the files are on the far side of the 9p redirector. Upstream
+/// asks before it indexes for the *embedding* index and does not ask before
+/// this one.
+///
+/// So the settings toggle is the consent, and there is deliberately no second
+/// prompt: an affordance that is off until switched on has already asked. What
+/// it costs is visible and worth stating — until it is switched on, the `@`
+/// menu's Code section is empty and `are_file_symbols_indexed` is false in the
+/// agent's directory context. On this fork's own agent paths that second one
+/// changes nothing, because `acp_agent` never reads that context.
+pub fn codebase_indexing_default() -> bool {
+    !is_active()
+}
+
 /// Whether a codebase search ranks its candidates on this machine.
 ///
 /// `get_relevant_files` builds tree-sitter outlines locally and then, with two

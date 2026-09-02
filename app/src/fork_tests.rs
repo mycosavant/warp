@@ -1166,6 +1166,35 @@ fn the_index_that_uploads_source_is_forced_off_not_merely_absent() {
     );
 }
 
+/// Both halves of the outline gate default the same way, because wiring one of
+/// them is a silent no-op.
+///
+/// `should_build_outlines` is `indexing_enabled && (codebase_context_enabled ||
+/// outline_codebase_symbols_for_at_context_menu)`. It is a **disjunction**, so a
+/// change that flips one default to off leaves the walk running through the
+/// other, produces no error, and looks exactly like a change that worked. That
+/// is the whole reason this test exists rather than a comment.
+///
+/// Asserted against `is_active()` rather than against `false`, for the same
+/// reason as [`the_cloud_harness_plugin_is_refused_under_fork_policy`]:
+/// `WARP_FORK_POLICY` is process-wide, and a test that reads a literal would
+/// fail for anyone A/B-ing a suspected fork regression with it set.
+#[test]
+fn both_halves_of_the_outline_gate_default_the_same_way() {
+    use ::settings::Setting as _;
+
+    assert_eq!(
+        crate::settings::CodebaseContextEnabled::default_value(),
+        !is_active(),
+        "codebase context is half of what starts an outline walk"
+    );
+    assert_eq!(
+        crate::settings::OutlineCodebaseSymbolsForAtContextMenu::default_value(),
+        !is_active(),
+        "the @ menu setting is the other half, and either one alone starts it"
+    );
+}
+
 /// The repository's symbol map leaves by exactly one call site, and that call
 /// site is guarded.
 ///

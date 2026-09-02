@@ -154,7 +154,7 @@ define_settings_group!(InputSettings,
         },
         outline_codebase_symbols_for_at_context_menu: OutlineCodebaseSymbolsForAtContextMenu {
             type: bool,
-            default: true,
+            default: crate::fork::codebase_indexing_default(),
             supported_platforms: SupportedPlatforms::ALL,
             sync_to_cloud: SyncToCloud::Globally(RespectUserSyncSetting::Yes),
             surface: settings::SettingSurfaces::GUI,
