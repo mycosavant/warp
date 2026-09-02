@@ -3750,6 +3750,95 @@ one structural fact rather than a missing hook: the attach is keyed on
 WSL session cannot have. Adding a WSL arm beside it is the work, and
 `Session::wsl_name()` already carries the distribution.
 
+## Reaching this machine from a phone
+
+The SSH path already set up (`ssh warp`, key-only, firewall scoped to
+`192.168.254.0/24`) works on the LAN. Getting in from anywhere else is three
+separate problems, and only one of them is the network.
+
+### 1. It sleeps — fixed 2026-09-02
+
+*"Goes to sleep after a few hours no matter what setting I try"* was not
+mysterious. `powercfg` reported the AC standby timeout as `0x1c20` — **7200
+seconds, exactly two hours**. The GUI setting was not sticking; the command line
+is authoritative:
+
+```powershell
+powercfg /change standby-timeout-ac 0      # never sleep on AC
+powercfg /change hibernate-timeout-ac 0    # and do not hibernate instead
+powercfg /q SCHEME_CURRENT SUB_SLEEP STANDBYIDLE   # read it back: expect 0x00000000
+```
+
+**Read it back.** That is the whole reason this is written down — the setting had
+been "changed" before and was still 7200.
+
+Two more facts from the same check. This machine offers **S3 standby only**, not
+Modern Standby, so a sleeping machine is genuinely off the network and no amount
+of software reaches it — which is why the fix is *not sleeping* rather than
+waking. And `powercfg /lastwake` reported the power button, meaning nothing was
+waking it remotely to begin with.
+
+### 2. Sessions die when the link drops — use `tmux`
+
+Already installed. The connection dropping should cost nothing:
+
+```bash
+ssh warp -t tmux new -A -s main     # attach if it exists, create if not
+```
+
+`-A` is the whole trick: one command that works the first time and every time
+after. A dropped phone connection leaves the work running; reconnecting with the
+same line lands back in it.
+
+Worth adding server-side when someone next has `sudo` in hand, because a phone
+behind carrier NAT drops idle connections quickly:
+
+```
+# /etc/ssh/sshd_config.d/20-keepalive.conf
+ClientAliveInterval 60
+ClientAliveCountMax 5
+```
+
+### 3. Off-LAN access — Tailscale, and not a port-forward
+
+`CLAUDE.md` already rules on this and the ruling stands: **never a port-forward.**
+Opening 22 to the internet replaces a LAN-scoped firewall rule with a global one,
+and this machine's control plane is plaintext HTTP sitting beside it.
+
+Tailscale is the recommended answer there for a reason that also applies here: a
+tailnet address is *one literal IP*, so it fits `WARP_FORK_CONTROL_BIND`'s parser
+unchanged, and binding it is **narrower** than the LAN bind rather than wider —
+it retires the mirrored-networking firewall rule instead of adding to it.
+
+Not installed as of 2026-09-02, and it needs an interactive login, so it is the
+owner's to do:
+
+```powershell
+winget install -e --id tailscale.tailscale
+tailscale up
+tailscale ip -4                     # the address to use from the phone
+```
+
+**Install it on Windows, not inside WSL.** `.wslconfig` here already uses
+`networkingMode=mirrored`, so WSL shares the host's stack and the sshd already
+listening on `0.0.0.0:22` should answer on the tailnet address without further
+work. **Verify that by running it** rather than assuming — mirrored mode is what
+makes it true and it is the kind of thing that quietly is not.
+
+Then from Termux, with Tailscale on the phone too:
+
+```bash
+ssh warp -t tmux new -A -s main     # same line, from anywhere
+```
+
+### Optional: `mosh` for a phone specifically
+
+Not installed. `mosh` survives roaming between wifi and cellular and a phone
+being locked, which SSH does not — it is the difference between reconnecting and
+never noticing. It needs a UDP range, which is trivial inside a tailnet and is
+another reason not to port-forward. `apt install mosh` on both ends, then
+`mosh warp -- tmux new -A -s main`.
+
 ## Driving the Windows build from WSL
 
 Written down 2026-08-18 after the original working session was lost to a
