@@ -1129,46 +1129,39 @@ fn the_surfaces_routing_costs_are_switched_on_in_this_build() {
     }
 }
 
-/// The codebase index this fork ships is enabled, and a settings default is
-/// the only thing between it and an upload of the user's source.
+/// The index that uploads source is forced off, and the entry that does it
+/// looks redundant to anyone who checks the cargo features.
 ///
-/// T16 carried `RemoteCodebaseIndexing` as a `FORCE_ENABLED` candidate, on the
-/// recorded grounds that it and `FullSourceCodeEmbedding` are "DOGFOOD-only and
-/// `warp-oss` never takes that list". Both halves of that are wrong.
-/// `remote_codebase_indexing` is in `app/Cargo.toml`'s `default` list, so the
-/// flag is already on and there is nothing to force; and that cargo feature is
-/// declared as `["full_source_code_embedding"]`, so it transitively switches on
-/// the embedding index too — which the flag lists do not show and a reader of
-/// them cannot see.
+/// This is the assertion most likely to be deleted by a careful reader.
+/// `full_source_code_embedding` is not in `app/Cargo.toml`'s `default` list, so
+/// checking there says the feature is off and the `FORCE_DISABLED` entry is
+/// dead weight. It is on: `remote_codebase_indexing` *is* in `default` and is
+/// declared `= ["full_source_code_embedding"]`. The `cfg!` here is the evidence
+/// for that, and it is why the runtime force is the primary removal rather than
+/// belt-and-braces — the opposite of the Sentry entries beside it.
 ///
-/// What that reaches matters. The only non-mock `StoreClient` is `ServerApi`,
-/// and `generate_embeddings` sends `Fragment { content: String, .. }` — chunks
-/// of the user's source — to Warp's GraphQL service to be embedded by OpenAI or
-/// Voyage. `egress.rs` is a deny-list aimed at telemetry vendors and does not
-/// cover Warp's own API, so nothing else here would stop it.
-///
-/// It does not happen unasked, and this test pins the reason it does not.
-/// Upstream gates indexing behind a speedbump banner the user clicks, and
-/// behind `auto_indexing_enabled`, which defaults false; `view.rs`'s
-/// `AllowIndexing` arm is the only writer that sets it true, and only when the
-/// user ticked "always allow". So consent is real and upstream's, not this
-/// fork's — which is exactly why the default is worth a test here. Nothing in
-/// `fork.rs` currently asserts a policy over this, and if that default ever
-/// flips, a build whose whole thesis is that nothing leaves the machine starts
-/// uploading source with no diff in this repository to say so.
+/// The upload it removes is `generate_embeddings` sending
+/// `Fragment { content: String, .. }` to `ServerApi`, which `egress.rs` does not
+/// cover. `auto_indexing_enabled` is still asserted, because if this entry ever
+/// does go, upstream's default is what is left holding the line.
 #[test]
-fn indexing_that_uploads_source_stays_behind_a_default_this_fork_did_not_set() {
+fn the_index_that_uploads_source_is_forced_off_not_merely_absent() {
+    assert!(
+        cfg!(feature = "full_source_code_embedding"),
+        "if this ever goes false the FORCE_DISABLED entry becomes belt-and-braces \
+         rather than the removal — check `remote_codebase_indexing`'s deps before \
+         concluding the entry can go"
+    );
+    assert!(
+        FORCE_DISABLED.contains(&FeatureFlag::FullSourceCodeEmbedding),
+        "the cargo feature is on, so nothing else in this build stops the upload"
+    );
     assert!(
         {
             use ::settings::Setting as _;
             !crate::settings::AutoIndexingEnabled::default_value()
         },
-        "the speedbump is the whole defence; a true default would index and \
-         upload on its own"
-    );
-    assert!(
-        !FORCE_ENABLED.contains(&FeatureFlag::FullSourceCodeEmbedding),
-        "a user preference outranks a flag list, so forcing this on would reach \
-         the upload path even if the cargo feature were off"
+        "upstream's speedbump is the second layer, and the only one left if the \
+         force above is ever removed"
     );
 }

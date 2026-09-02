@@ -38,13 +38,42 @@ pub fn is_active() -> bool {
     )
 }
 
-/// Telemetry, analytics and crash-reporting flags forced off.
+/// Flags forced off: telemetry, analytics, crash reporting — and the one that
+/// uploads the user's source.
 ///
-/// Note this is defence in depth, not the primary removal: `crash_reporting`
-/// and `cocoa_sentry` are Cargo features that gate `dep:sentry` itself, so a
-/// build without them contains no Sentry code at all. These entries only
-/// matter if such a build is ever produced.
+/// For the telemetry entries this is defence in depth, not the primary removal:
+/// `crash_reporting` and `cocoa_sentry` are Cargo features that gate
+/// `dep:sentry` itself, so a build without them contains no Sentry code at all.
+/// Those entries only matter if such a build is ever produced.
+///
+/// `FullSourceCodeEmbedding` is the opposite case, and the difference is why it
+/// is called out rather than appended. **Here the runtime force is the primary
+/// removal**, because the compile-time half is switched *on* in every build made
+/// here and does not look it: `full_source_code_embedding` is absent from
+/// `app/Cargo.toml`'s `default` list, and `remote_codebase_indexing`, which is
+/// in it, is declared `= ["full_source_code_embedding"]`. So a reader checking
+/// `default` concludes this entry is redundant and deletes it. It is not.
+///
+/// What it removes: `CodebaseIndexManager`'s embedding index, whose only
+/// non-mock `StoreClient` is `ServerApi`. `generate_embeddings` sends
+/// `Fragment { content: String, .. }` — chunks of the user's source — to Warp's
+/// GraphQL service to be embedded by OpenAI or Voyage. `egress.rs` is a
+/// deny-list aimed at telemetry vendors and does not cover Warp's own API, so
+/// nothing else in this fork would have stopped it. Upstream asked before doing
+/// it — `auto_indexing_enabled` defaults false behind a speedbump banner — but
+/// that is upstream's default, not this fork's policy, and a fork whose thesis
+/// is that nothing leaves the machine should not rely on someone else's default
+/// staying where it is.
+///
+/// **What it does not remove, stated so nobody credits it with more than it
+/// does.** `SearchCodebase` does not stop working; `get_relevant_files` falls
+/// back to outline-based search. Building those outlines is local — tree-sitter
+/// over the working tree — but *searching* them is not: with two or more
+/// matching files it `POST`s `/ai/relevant_files` with each file's path and
+/// symbol names for ranking. That is a smaller disclosure than source content
+/// and it is not zero, and it is untouched by this entry.
 const FORCE_DISABLED: &[FeatureFlag] = &[
+    FeatureFlag::FullSourceCodeEmbedding,
     FeatureFlag::CrashReporting,
     FeatureFlag::CocoaSentry,
     FeatureFlag::LogExpensiveFramesInSentry,
