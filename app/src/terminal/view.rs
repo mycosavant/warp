@@ -446,6 +446,7 @@ use crate::terminal::model::index::{Point, Side};
 use crate::terminal::model::mouse::MouseState;
 use crate::terminal::model::selection::{SelectAction, SelectionDirection};
 use crate::terminal::model::session::active_session::ActiveSession;
+use crate::terminal::model::session::filesystem::session_filesystem;
 use crate::terminal::model::session::{
     BootstrapSessionType, Session, SessionId, SessionType, Sessions, SessionsEvent,
 };
@@ -23895,8 +23896,8 @@ impl TerminalView {
         }
     }
 
-    /// The host a WSL session's files actually live on, or `None` for every
-    /// other session and for a WSL session with no server attached yet.
+    /// The host a session's files actually live on, or `None` when this
+    /// process can open them itself.
     ///
     /// **One definition, because the boundary is decided in more than one
     /// place and they have to agree.** `pwd_as_local_or_remote` and the
@@ -23905,35 +23906,19 @@ impl TerminalView {
     /// one of them routes, the tree asks a server about a repository the
     /// server was never told exists — measured, and it answers
     /// `Repository not found`. See T16.
-    #[cfg(not(target_family = "wasm"))]
+    ///
+    /// The rule itself now lives in `session::filesystem`, so call sites
+    /// outside this view get the same answer.
     fn wsl_connected_host(
         session: &Session,
         session_id: SessionId,
         ctx: &AppContext,
     ) -> Option<warp_core::HostId> {
-        use warpui::SingletonEntity as _;
-
-        use crate::remote_server::manager::RemoteServerManager;
-
-        if !session.is_wsl() {
-            return None;
-        }
-        RemoteServerManager::as_ref(ctx)
-            .host_for_connected_session(session_id)
-            .cloned()
+        session_filesystem(session, session_id, ctx).host().cloned()
     }
 
-    #[cfg(target_family = "wasm")]
-    fn wsl_connected_host(
-        _session: &Session,
-        _session_id: SessionId,
-        _ctx: &AppContext,
-    ) -> Option<warp_core::HostId> {
-        None
-    }
-
-    /// A remote path for a WSL session that has a remote-development server
-    /// connected, or `None` for every other session.
+    /// A remote path for a session whose files are on a host, or `None` when
+    /// this process can open them itself.
     fn wsl_remote_cwd(
         session: &Session,
         session_id: SessionId,
@@ -23943,16 +23928,6 @@ impl TerminalView {
         let host_id = Self::wsl_connected_host(session, session_id, ctx)?;
         let path = StandardizedPath::try_new(cwd_str).ok()?;
         Some(LocalOrRemotePath::Remote(RemotePath::new(host_id, path)))
-    }
-
-    #[cfg(target_family = "wasm")]
-    fn wsl_remote_cwd(
-        _session: &Session,
-        _session_id: SessionId,
-        _cwd_str: &str,
-        _ctx: &AppContext,
-    ) -> Option<LocalOrRemotePath> {
-        None
     }
 
     pub fn shell_launch_data_if_local(&self, ctx: &AppContext) -> Option<ShellLaunchData> {

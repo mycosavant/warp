@@ -1,5 +1,6 @@
 pub mod active_session;
 pub mod command_executor;
+pub mod filesystem;
 
 use std::collections::{HashMap, HashSet};
 #[cfg(windows)]

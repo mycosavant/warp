@@ -7,6 +7,7 @@ use warp_util::remote_path::RemotePath;
 use warp_util::standardized_path::StandardizedPath;
 use warpui::{AppContext, Entity, ModelContext, ModelHandle};
 
+use super::filesystem::{SessionFilesystem, session_filesystem};
 use super::{Session, SessionType, Sessions};
 use crate::ai_assistant::execution_context::{
     WarpAiExecutionContext, execution_context_for_session,
@@ -107,16 +108,28 @@ impl ActiveSession {
     /// implementation before it was measured: every caller here is a slash
     /// command, a skill, blocklist output or AI context. The tree's roots come
     /// from `TerminalView::pwd_as_local_or_remote`, which builds a
-    /// `LocalOrRemotePath` of its own. WSL routing lives there.
+    /// `LocalOrRemotePath` of its own.
+    ///
+    /// Both now ask `session_filesystem`, so a WSL session with a connected
+    /// server gets a `Remote` path here too. It did not until T16 phase 2:
+    /// this arm matched `session_type()`, a WSL session answers `Local`, and
+    /// every consumer downstream was handed a `/home/...` path to open with
+    /// `std::fs` on Windows.
     pub fn location_for_path(&self, path: &str, app: &AppContext) -> Option<LocalOrRemotePath> {
-        match self.session_type(app) {
-            Some(SessionType::WarpifiedRemote {
-                host_id: Some(host_id),
-            }) => StandardizedPath::try_new(path)
+        let session_id = self.session_id(app);
+        let filesystem = match (self.session(app), session_id) {
+            (Some(session), Some(session_id)) => session_filesystem(&session, session_id, app),
+            // No session yet. Historically this fell through to the local
+            // branch, and it still does: there is no host to route to and the
+            // caller is usually resolving a path typed by the user.
+            _ => SessionFilesystem::Local,
+        };
+        match filesystem {
+            SessionFilesystem::Host(host_id) => StandardizedPath::try_new(path)
                 .ok()
                 .map(|path| LocalOrRemotePath::Remote(RemotePath::new(host_id, path))),
-            Some(SessionType::WarpifiedRemote { host_id: None }) => None,
-            Some(SessionType::Local) | None => {
+            SessionFilesystem::Unreachable => None,
+            SessionFilesystem::Local => {
                 let path =
                     dunce::canonicalize(Path::new(path)).unwrap_or_else(|_| PathBuf::from(path));
                 Some(LocalOrRemotePath::Local(path))
