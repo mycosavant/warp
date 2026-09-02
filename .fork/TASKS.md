@@ -11391,6 +11391,51 @@ closed** (the tree indexes an opened file's root only when active,
 (`ai/outline/native.rs:121-146`). Not verified: whether opening a file with no
 `cd` detects the repo and fires the outline — today it fired on the `cd`.
 
+### Fix (2) measured, and the scope this ticket first claimed was wrong
+
+**Measured 2026-09-02 on a Windows debug build rebuilt with fix (2)**, same
+machine, same repository, same launch recipe:
+
+| | before | after |
+|---|---|---|
+| outcome | budget exhausted, tree never rendered | **indexed and rendered** |
+| wall clock | 32m50s | **~19s** |
+| files | 200,000 (gave up) | **6,384** |
+| `target/` | walked | italic in the tree — correctly ignored |
+
+`Successfully indexed repository: \\wsl$\ubuntu\home\effatha\git\warp with
+6384 files`, 19 seconds after the `cd`. Roughly **100x**, and the italic
+`target/` is the predicted visual tell that the gitignore prefix now matches.
+
+**And the scope written above is too wide.** This ticket's first draft said the
+Windows build was unusable for WSL work. That was one measurement, on the worst
+directory in the checkout, generalised. Measured since:
+
+| root | index log lines | result |
+|---|---|---|
+| `$HOME` — not a git repo | **none** | populated instantly, every dotfile |
+| `~/git/warp` — a git repo | `Upgrading...` | the 32m50s walk |
+
+`local_model.rs:1136` builds a non-git root with `max_depth: 1` -- *"Only first
+level"* -- and `:1952` builds a git repo with `MAX_TREE_DEPTH`. So ordinary
+navigation was always lazy and always fast, and only the eager repo walk was
+pathological. The maintainer's report of a month of unremarkable WSL use was
+accurate the whole time and was dismissed here twice before being measured.
+
+**This also demotes the routing work.** After fix (2) the Windows build is
+usable for WSL repositories, so Phase 1 is no longer a rescue. The argument for
+it is correctness: the client reaching across the boundary at all is what let a
+32-minute walk hide for months, because nothing ever failed -- it was only ever
+slow. Keep it on the board; stop selling it on the number.
+
+**Read is not run, three times in one session.** `snapshot.rs` was quoted by
+line and is dead code with no consumer outside its own module. A claim about
+what the *agent* sees was tested by reading `/proc/<pid>/cwd`, which is the
+*shell*. And the lazy/eager split above was announced as "confirmed" from a
+source read before `$HOME` was actually opened. Each was caught by someone
+noticing that lived experience did not match the conclusion, which is a control
+worth more than another measurement of the same thing.
+
 ### Corrections this ticket carries
 
 - **T6.4's verdict is a workaround recorded as a law.** Its direction survives
