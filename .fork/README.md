@@ -360,6 +360,41 @@ real document symbols. Two gotchas, both of which cost an hour:
   inventing five symbols after its server failed to attach, which is worse than
   having no tool.
 
+### Launching it instrumented — `ggwarpdev`
+
+The four `WARP_FORK_*` variables turn a launch into a *measured* one. Setting
+them at User or Machine scope is the obvious way and the wrong one: a variable
+set in October is still set in December, and `WARP_FORK_ACP_COMMAND` silently
+replaces the agent transport for every session after it — a corrupted
+measurement that looks like a working day.
+
+`.fork/tools/warpdev.ps1` holds the toggle. **Nothing is ever written to the
+Windows environment**; the variables are set inside the launcher process only and
+die with it. What persists is one word in `~/.warpdev`, and every run prints it.
+
+```bash
+ggwarpdev            # report; enable if off, offer to disable if on
+ggwarpdev launch     # launch Warp applying the current state
+ggwarpdev on | off   # set explicitly
+ggwarpdev status     # report only
+```
+
+The shell function is in `~/.bashrc`; the script is run from the Windows checkout
+(`C:\dev\warp\.fork\tools\warpdev.ps1`), so **sync that checkout first** —
+it is a separate clone and nothing updates it.
+
+**The limitation, stated rather than discovered:** this governs launches made
+through the script. A Warp started from Explorer, a shortcut, or a bare
+`warp-oss.exe` inherits none of it and is not instrumented however the toggle
+reads. `status` says what a launch *would* do; it cannot say what a running
+instance was launched with. To check a live one, look for the event-log
+directory rather than trusting the toggle.
+
+Two behaviours worth knowing: it prints the commit the Windows checkout is
+sitting on before launching, because that tree is the one that gets built and
+nothing syncs it; and it polls `instance list` for up to 45 s afterwards, so a
+launch that fails silently is reported instead of assumed.
+
 ### Reproducing any of this — three traps
 
 - **A fresh pane is already Ubuntu** if that is your default shell. Typing
