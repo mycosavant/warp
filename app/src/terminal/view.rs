@@ -4519,6 +4519,21 @@ impl TerminalView {
                                 session_id: *session_id,
                             },
                         );
+                        // A WSL session that had already navigated is holding
+                        // a local root that has just stopped being the right
+                        // answer: `session_filesystem` reported `Local` while
+                        // no server was attached, and one now is. Nothing else
+                        // re-derives it, so before this the routing depended
+                        // on whether the user connected before or after their
+                        // `cd` -- measured, and a pane that connected second
+                        // kept its Windows-side tree permanently.
+                        //
+                        // Re-running detection rather than only refreshing the
+                        // displayed path is deliberate: registration is what
+                        // tells the server the repository exists, and phase 1
+                        // measured `Repository not found` from routing the
+                        // path without it.
+                        me.rerun_repo_detection_after_host_attached(*session_id, ctx);
                         let (remote_os, remote_arch) = RemoteServerManager::handle(ctx)
                             .as_ref(ctx)
                             .platform_for_session(*session_id)
@@ -11651,197 +11666,13 @@ impl TerminalView {
                     }
                 };
                 if is_done_bootstrapping && should_run_detection {
-                    // Derive locality directly from the incoming block's
-                    // session_id. We cannot use `active_session_is_local(ctx)`
-                    // here because `active_block_metadata` was just consumed
-                    // via `take()` above, so it would always return `None`
-                    // and misclassify every local session as Remote.
-                    //
-                    // `session_is_local` keeps the shared-session viewer /
-                    // conversation-transcript guard intact.
-                    let session_id = block_metadata.session_id();
-                    let session_type = session_id.map(|sid| {
-                        // A WSL session with a connected server is detected as
-                        // *remote*, matching `pwd_as_local_or_remote`. Both must
-                        // agree: the tree routes its directory loads to the
-                        // host, and detection is what tells the host the
-                        // repository exists at all. Routing one without the
-                        // other produced `Repository not found` from a server
-                        // that was never notified. See T16.
-                        let is_wsl_remote =
-                            self.sessions.as_ref(ctx).get(sid).is_some_and(|session| {
-                                Self::wsl_connected_host(&session, sid, ctx).is_some()
-                            });
-                        if self.session_is_local(sid, ctx) && !is_wsl_remote {
-                            RepoDetectionSessionType::Local
-                        } else {
-                            RepoDetectionSessionType::Remote { session_id: sid }
-                        }
-                    });
-                    if let Some(session_type) = session_type {
-                        let is_local = matches!(session_type, RepoDetectionSessionType::Local);
-
-                        // For local sessions, convert the shell-native CWD
-                        // (e.g. "/c/Users/..." for Git Bash/MSYS2) to a
-                        // Windows-native path before repo detection.
-                        let directory_for_detection = if is_local {
-                            block_metadata
-                                .session_id()
-                                .and_then(|sid| self.sessions.as_ref(ctx).get(sid))
-                                .and_then(|session| {
-                                    session.launch_data().and_then(|data| {
-                                        data.maybe_convert_absolute_path(active_directory)
-                                    })
-                                })
-                                .map(|path| path.to_string_lossy().into_owned())
-                                .unwrap_or_else(|| active_directory.to_string())
-                        } else {
-                            active_directory.to_string()
-                        };
-
-                        let fut = detect_possible_git_repo(
-                            session_type,
-                            &directory_for_detection,
-                            RepoDetectionSource::TerminalNavigation,
-                            ctx,
-                        );
-
-                        ctx.spawn(fut, move |me, repo_path_opt, ctx| {
-                            let old_repo_path = me.current_repo_path.clone();
-                            me.current_repo_path = repo_path_opt.clone();
-
-                            if old_repo_path != me.current_repo_path {
-                                ctx.emit(Event::Pane(PaneEvent::RepoChanged));
-                            }
-
-                            // `block_completed_callbacks` are scheduled via
-                            // `on_next_block_completed` and expect the block
-                            // to have finished. OSC 7 fires mid-block, so
-                            // draining them here would run callbacks like
-                            // `maybe_set_pending_repo_init_path`'s project
-                            // init before the actual command (e.g. `git
-                            // clone`) finishes.
-                            if source == BlockMetadataUpdateSource::Precmd {
-                                let callbacks =
-                                    me.block_completed_callbacks.drain(..).collect_vec();
-                                for callback in callbacks {
-                                    callback(me, ctx);
-                                }
-                            }
-
-                            match &repo_path_opt {
-                                Some(LocalOrRemotePath::Remote(remote_path)) => {
-                                    #[cfg(not(target_family = "wasm"))]
-                                    DetectedRepositories::handle(ctx).update(
-                                        ctx,
-                                        |repos, _| {
-                                            repos.register_remote_repo_root(remote_path.clone());
-                                        },
-                                    );
-
-                                    // Remote sessions can only materialize their working
-                                    // directory after repo detection has resolved the host.
-                                    // Re-run app-state propagation now that the remote path
-                                    // is known so the active session's working directory catches up.
-                                    ctx.emit(Event::AppStateChanged);
-
-                                    if FeatureFlag::AIContextMenuEnabled.is_enabled() {
-                                        me.input.update(ctx, |input, ctx| {
-                                            input
-                                                .check_and_update_ai_context_menu_disabled_state(
-                                                    ctx,
-                                                );
-                                        });
-                                    }
-                                    ctx.emit(Event::Pane(PaneEvent::RemoteRepoNavigated {
-                                        remote_path: remote_path.clone(),
-                                    }));
-
-                                    // Wire up the remote git-status chips when the
-                                    // remote repo changed (mirrors the local branch).
-                                    let changed = !matches!(
-                                        old_repo_path.as_ref(),
-                                        Some(LocalOrRemotePath::Remote(rp)) if rp == remote_path
-                                    );
-                                    if changed {
-                                        me.clear_git_repo_status_subscription(ctx);
-                                        me.update_git_status_subscription(ctx);
-                                    }
-                                }
-                                Some(LocalOrRemotePath::Local(repo_path)) => {
-                                    #[cfg(feature = "local_fs")]
-                                    {
-                                        let Some(active_directory) =
-                                            me.active_session_path_if_local(ctx)
-                                        else {
-                                            me.clear_git_repo_status(ctx);
-                                            return;
-                                        };
-
-                                        let Ok(active_directory) =
-                                            CanonicalizedPath::try_from(
-                                                active_directory,
-                                            )
-                                        else {
-                                            return;
-                                        };
-
-                                        let is_ancestor = active_directory
-                                            .as_path_buf()
-                                            .ancestors()
-                                            .any(|ancestor| ancestor == repo_path.as_path());
-                                        if !is_ancestor {
-                                            return;
-                                        }
-
-                                        PersistedWorkspace::handle(ctx).update(
-                                            ctx,
-                                            |manager, _| {
-                                                manager.navigated_to_path(
-                                                    active_directory.as_path_buf(),
-                                                );
-                                            },
-                                        );
-
-                                        if old_repo_path
-                                            .as_ref()
-                                            .and_then(|p| p.to_local_path())
-                                            != Some(repo_path.as_path())
-                                        {
-                                                me.clear_git_repo_status_subscription(ctx);
-                                            me.update_git_status_subscription(ctx);
-                                        }
-
-                                        me.input.update(ctx, |input, ctx| {
-                                            input.update_repo_path(
-                                                Some(repo_path.clone()),
-                                                ctx,
-                                            );
-                                        });
-
-                                        if FeatureFlag::AIContextMenuEnabled.is_enabled() {
-                                            me.input.update(ctx, |input, ctx| {
-                                                input
-                                                    .check_and_update_ai_context_menu_disabled_state(
-                                                        ctx,
-                                                    );
-                                            });
-                                        }
-
-                                        me.start_lsp_server_in_active_pwd(ctx);
-
-                                        me.update_repo_banner_state(repo_path.clone(), ctx);
-                                    }
-                                    #[cfg(not(feature = "local_fs"))]
-                                    let _ = repo_path;
-                                }
-                                None => {
-                                    me.clear_git_repo_status(ctx);
-                                    ctx.notify();
-                                }
-                            }
-                        });
-                    }
+                    self.run_repo_detection(
+                        block_metadata.session_id(),
+                        active_directory,
+                        RepoDetectionSource::TerminalNavigation,
+                        Some(source),
+                        ctx,
+                    );
                 }
             }
         }
@@ -11865,6 +11696,234 @@ impl TerminalView {
             // prompt area so it's up to date.
             ctx.notify();
         });
+    }
+
+    /// Runs git-repository detection for `active_directory` and propagates the
+    /// result: the git chip, `current_repo_path`, `RepoChanged`, and -- for a
+    /// remote result -- the registration that tells the server the repository
+    /// exists at all.
+    ///
+    /// Extracted from `update_block_metadata` so `SessionConnected` can re-run
+    /// it. A WSL session is `Local` at the moment it navigates and becomes
+    /// host-routed only when a server attaches, and nothing re-derived it:
+    /// measured 2026-09-02, a pane that had `cd`-ed before `remote wsl
+    /// connect` kept its Windows-side tree for the rest of its life, so
+    /// whether the routing happened at all depended on the order two unrelated
+    /// commands were typed in. `HostDisconnected` already had the symmetric
+    /// half of this and broadcast `RepoChanged`; connecting did not.
+    fn run_repo_detection(
+        &mut self,
+        session_id: Option<SessionId>,
+        active_directory: &str,
+        source: RepoDetectionSource,
+        // The block-metadata update that triggered this, when one did.
+        // `None` when detection is re-run for a reason other than a block --
+        // a server attaching, say -- in which case there is no completed block
+        // and no `block_completed_callbacks` to drain.
+        block_source: Option<BlockMetadataUpdateSource>,
+        ctx: &mut ViewContext<Self>,
+    ) {
+        // Derive locality from the `session_id` the caller passed, not
+        // from `active_session_is_local(ctx)`: on the block-metadata path
+        // the active block's metadata has just been consumed via `take()`,
+        // so it would return `None` and misclassify every local session as
+        // Remote.
+        //
+        // `session_is_local` keeps the shared-session viewer /
+        // conversation-transcript guard intact.
+        // `session_id` and `active_directory` are parameters: the caller
+        // supplies them from the block being processed, or -- when a remote
+        // server attaches after the fact -- from the session's current state.
+        let session_type = session_id.map(|sid| {
+            // A WSL session with a connected server is detected as
+            // *remote*, matching `pwd_as_local_or_remote`. Both must
+            // agree: the tree routes its directory loads to the
+            // host, and detection is what tells the host the
+            // repository exists at all. Routing one without the
+            // other produced `Repository not found` from a server
+            // that was never notified. See T16.
+            let is_wsl_remote = self
+                .sessions
+                .as_ref(ctx)
+                .get(sid)
+                .is_some_and(|session| Self::wsl_connected_host(&session, sid, ctx).is_some());
+            if self.session_is_local(sid, ctx) && !is_wsl_remote {
+                RepoDetectionSessionType::Local
+            } else {
+                RepoDetectionSessionType::Remote { session_id: sid }
+            }
+        });
+        if let Some(session_type) = session_type {
+            let is_local = matches!(session_type, RepoDetectionSessionType::Local);
+
+            // For local sessions, convert the shell-native CWD
+            // (e.g. "/c/Users/..." for Git Bash/MSYS2) to a
+            // Windows-native path before repo detection.
+            let directory_for_detection = if is_local {
+                session_id
+                    .and_then(|sid| self.sessions.as_ref(ctx).get(sid))
+                    .and_then(|session| {
+                        session
+                            .launch_data()
+                            .and_then(|data| data.maybe_convert_absolute_path(active_directory))
+                    })
+                    .map(|path| path.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| active_directory.to_string())
+            } else {
+                active_directory.to_string()
+            };
+
+            let fut = detect_possible_git_repo(session_type, &directory_for_detection, source, ctx);
+
+            ctx.spawn(fut, move |me, repo_path_opt, ctx| {
+                let old_repo_path = me.current_repo_path.clone();
+                me.current_repo_path = repo_path_opt.clone();
+
+                if old_repo_path != me.current_repo_path {
+                    ctx.emit(Event::Pane(PaneEvent::RepoChanged));
+                }
+
+                // `block_completed_callbacks` are scheduled via
+                // `on_next_block_completed` and expect the block
+                // to have finished. OSC 7 fires mid-block, so
+                // draining them here would run callbacks like
+                // `maybe_set_pending_repo_init_path`'s project
+                // init before the actual command (e.g. `git
+                // clone`) finishes.
+                if block_source == Some(BlockMetadataUpdateSource::Precmd) {
+                    let callbacks = me.block_completed_callbacks.drain(..).collect_vec();
+                    for callback in callbacks {
+                        callback(me, ctx);
+                    }
+                }
+
+                match &repo_path_opt {
+                    Some(LocalOrRemotePath::Remote(remote_path)) => {
+                        #[cfg(not(target_family = "wasm"))]
+                        DetectedRepositories::handle(ctx).update(ctx, |repos, _| {
+                            repos.register_remote_repo_root(remote_path.clone());
+                        });
+
+                        // Remote sessions can only materialize their working
+                        // directory after repo detection has resolved the host.
+                        // Re-run app-state propagation now that the remote path
+                        // is known so the active session's working directory catches up.
+                        ctx.emit(Event::AppStateChanged);
+
+                        if FeatureFlag::AIContextMenuEnabled.is_enabled() {
+                            me.input.update(ctx, |input, ctx| {
+                                input.check_and_update_ai_context_menu_disabled_state(ctx);
+                            });
+                        }
+                        ctx.emit(Event::Pane(PaneEvent::RemoteRepoNavigated {
+                            remote_path: remote_path.clone(),
+                        }));
+
+                        // Wire up the remote git-status chips when the
+                        // remote repo changed (mirrors the local branch).
+                        let changed = !matches!(
+                            old_repo_path.as_ref(),
+                            Some(LocalOrRemotePath::Remote(rp)) if rp == remote_path
+                        );
+                        if changed {
+                            me.clear_git_repo_status_subscription(ctx);
+                            me.update_git_status_subscription(ctx);
+                        }
+                    }
+                    Some(LocalOrRemotePath::Local(repo_path)) => {
+                        #[cfg(feature = "local_fs")]
+                        {
+                            let Some(active_directory) = me.active_session_path_if_local(ctx)
+                            else {
+                                me.clear_git_repo_status(ctx);
+                                return;
+                            };
+
+                            let Ok(active_directory) =
+                                CanonicalizedPath::try_from(active_directory)
+                            else {
+                                return;
+                            };
+
+                            let is_ancestor = active_directory
+                                .as_path_buf()
+                                .ancestors()
+                                .any(|ancestor| ancestor == repo_path.as_path());
+                            if !is_ancestor {
+                                return;
+                            }
+
+                            PersistedWorkspace::handle(ctx).update(ctx, |manager, _| {
+                                manager.navigated_to_path(active_directory.as_path_buf());
+                            });
+
+                            if old_repo_path.as_ref().and_then(|p| p.to_local_path())
+                                != Some(repo_path.as_path())
+                            {
+                                me.clear_git_repo_status_subscription(ctx);
+                                me.update_git_status_subscription(ctx);
+                            }
+
+                            me.input.update(ctx, |input, ctx| {
+                                input.update_repo_path(Some(repo_path.clone()), ctx);
+                            });
+
+                            if FeatureFlag::AIContextMenuEnabled.is_enabled() {
+                                me.input.update(ctx, |input, ctx| {
+                                    input.check_and_update_ai_context_menu_disabled_state(ctx);
+                                });
+                            }
+
+                            me.start_lsp_server_in_active_pwd(ctx);
+
+                            me.update_repo_banner_state(repo_path.clone(), ctx);
+                        }
+                        #[cfg(not(feature = "local_fs"))]
+                        let _ = repo_path;
+                    }
+                    None => {
+                        me.clear_git_repo_status(ctx);
+                        ctx.notify();
+                    }
+                }
+            });
+        }
+    }
+
+    /// Re-derives the repository for `session_id` now that a remote server has
+    /// attached to it.
+    ///
+    /// Does nothing unless the session's files have actually moved -- an SSH
+    /// session was `WarpifiedRemote` before the connection and its detection
+    /// already ran against the host, so re-running it there would be churn.
+    /// The case this exists for is a WSL session, which reports `Local` right
+    /// up until the server lands. See T16.
+    fn rerun_repo_detection_after_host_attached(
+        &mut self,
+        session_id: SessionId,
+        ctx: &mut ViewContext<Self>,
+    ) {
+        let Some(session) = self.sessions.as_ref(ctx).get(session_id) else {
+            return;
+        };
+        if !session.is_wsl() || Self::wsl_connected_host(&session, session_id, ctx).is_none() {
+            return;
+        }
+        let Some(cwd) = self
+            .active_block_metadata
+            .as_ref()
+            .and_then(BlockMetadata::current_working_directory)
+            .map(str::to_owned)
+        else {
+            return;
+        };
+        self.run_repo_detection(
+            Some(session_id),
+            &cwd,
+            RepoDetectionSource::TerminalNavigation,
+            None,
+            ctx,
+        );
     }
 
     fn handle_terminal_event(&mut self, event: &ModelEvent, ctx: &mut ViewContext<Self>) {
