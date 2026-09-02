@@ -1026,6 +1026,27 @@ second. This is the read-back rule (above) applied to a build: **after any
 mutation, confirm the mutation before believing the next reading**, and a
 compile is a mutation with a long latency and no completion signal of its own.
 
+**…and on Windows that timestamp check does not work, because the build is a
+different checkout.** Found 2026-09-02. `C:\dev\warp` is its own clone whose
+`origin` is the WSL repo, and `build.ps1` does `Set-Location C:\dev\warp` then
+`cargo build` with **no sync step**. So after six commits in the WSL tree the
+build ran, printed `Finished dev profile in 34.12s`, exited 0 — and produced
+nothing, correctly, because *that* tree had not changed. The binary's timestamp
+was 18 hours old and cargo was right.
+
+The recorded remedy above fails here: `date -r` against "the newest file you
+touched" compares a binary in one tree to a source file in another, so it reports
+a stale binary every time and means nothing. **Check the commit, not the clock**
+— `git -C /mnt/c/dev/warp log --oneline -1` against your own HEAD, before every
+Windows run. To sync: `git -C /mnt/c/dev/warp fetch gh dev && git -C
+/mnt/c/dev/warp merge --ff-only FETCH_HEAD` (the `gh` remote is GitHub; `origin`
+is the WSL path and only works when the 9p share is up).
+
+`.fork/README.md` documents the clone and never says to update it, which is how
+a two-tree setup reads as one tree for months. Worth stating in general: a build
+that reports success and changes nothing is indistinguishable from a build that
+had nothing to do, and only one of those means your code ran.
+
 **And never `pgrep -f` a pattern your own command line contains.** From the same
 session: `until ! pgrep -f "release/warp-oss"; do sleep 2; done` never exits,
 because the `bash -c` running the loop has that string in its own argv and
