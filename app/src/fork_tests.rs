@@ -1165,3 +1165,76 @@ fn the_index_that_uploads_source_is_forced_off_not_merely_absent() {
          force above is ever removed"
     );
 }
+
+/// The repository's symbol map leaves by exactly one call site, and that call
+/// site is guarded.
+///
+/// `ServerApi::get_relevant_files` `POST`s `/ai/relevant_files` with every
+/// candidate file's path, its symbol names and the comments written above each
+/// symbol. `fork::rank_relevant_files_locally` diverts it into
+/// `ai::get_relevant_files::local_rank`, and that diversion protects exactly
+/// the call sites it sits in front of.
+///
+/// So the thing worth pinning is not the guard — it is the *count*. A second
+/// caller added anywhere in `app/src` would send the same payload with nothing
+/// in front of it, would compile, and would pass every other test here. This is
+/// the same shape as `egress.rs`'s bypass: a backstop that covers today's call
+/// sites is a fact about today unless something counts them.
+///
+/// Comments are skipped, because this file and `fork.rs` both name the function
+/// in prose in order to explain that it is diverted.
+#[test]
+fn the_symbol_map_leaves_by_exactly_one_call_site_and_it_is_guarded() {
+    const GUARDED: &str = "ai/get_relevant_files/controller.rs";
+
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let mut callers = Vec::new();
+    let mut stack = vec![root.clone()];
+    while let Some(dir) = stack.pop() {
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+                continue;
+            }
+            let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+                continue;
+            };
+            if !name.ends_with(".rs") || name.ends_with("_tests.rs") {
+                continue;
+            }
+            let Ok(text) = std::fs::read_to_string(&path) else {
+                continue;
+            };
+            let calls_it = text.lines().any(|line| {
+                let trimmed = line.trim_start();
+                !trimmed.starts_with("//") && trimmed.contains(".get_relevant_files(")
+            });
+            if calls_it {
+                callers.push(
+                    path.strip_prefix(&root)
+                        .unwrap_or(&path)
+                        .to_string_lossy()
+                        .replace('\\', "/"),
+                );
+            }
+        }
+    }
+    callers.sort();
+
+    assert_eq!(
+        callers,
+        vec![GUARDED.to_owned()],
+        "a new caller of get_relevant_files would upload the symbol map with no \
+         guard in front of it; divert it through local_rank, then add it here"
+    );
+
+    let guarded = std::fs::read_to_string(root.join(GUARDED)).expect("the guarded file");
+    assert!(
+        guarded.contains("fork::rank_relevant_files_locally()"),
+        "the only call site must still be behind the fork predicate"
+    );
+}

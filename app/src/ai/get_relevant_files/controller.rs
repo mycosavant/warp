@@ -19,6 +19,7 @@ use crate::ai::agent::SearchCodebaseFailureReason;
 use crate::ai::agent::{AIAgentActionId, SearchCodebaseResult};
 use crate::ai::blocklist::SessionContext;
 use crate::ai::get_relevant_files::api::{FileContext as FileContextRequest, GetRelevantFiles};
+use crate::ai::get_relevant_files::local_rank;
 use crate::ai::outline::{OutlineStatus, RepoOutlines};
 use crate::server::server_api::{AIApiError, ServerApiProvider};
 use crate::{TelemetryEvent, send_telemetry_from_ctx};
@@ -298,6 +299,33 @@ impl GetRelevantFilesController {
                             })
                             .collect(),
                     };
+                    if crate::fork::rank_relevant_files_locally() {
+                        // Emitted inline rather than spawned, matching the
+                        // `< MINIMUM_FILE_COUNT_FOR_API_CALL` branch above:
+                        // `SearchCodebaseExecutor` inserts into
+                        // `active_searches` before it calls this, so there is
+                        // no window in which the success has nobody to reach.
+                        let ranked = local_rank::rank_locally(
+                            &outline_request.query,
+                            &outline_request.files,
+                            local_rank::LOCAL_RANK_LIMIT,
+                        );
+                        ctx.emit(GetRelevantFilesControllerEvent::Success {
+                            action_id,
+                            result: GetRelevantFilesControllerResult::Locations(Arc::new(
+                                ranked
+                                    .into_iter()
+                                    .map(|path| base_path.join(path))
+                                    // Same validation the server path applies:
+                                    // an outline can outlive the file it named.
+                                    .filter(|file_path| file_path.exists())
+                                    .map(CodeContextLocation::WholeFile)
+                                    .collect::<HashSet<CodeContextLocation>>(),
+                            )),
+                        });
+                        return Ok(());
+                    }
+
                     let action_id_clone = action_id.clone();
                     let request_abort_handle = ctx
                         .spawn(

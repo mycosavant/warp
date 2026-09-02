@@ -215,9 +215,36 @@ own API. **It is not a leak**: `auto_indexing_enabled` defaults false and the
 only writer setting it true is a speedbump banner's `AllowIndexing` arm after
 the user ticks "always allow". But that defence is upstream's default, not a
 fork policy, in a fork whose thesis is that nothing leaves the machine — so
-`indexing_that_uploads_source_stays_behind_a_default_this_fork_did_not_set`
-pins it, and whether the flag belongs in `FORCE_DISABLED` is left as the
-maintainer's call rather than taken quietly.
+**Answered 2026-09-02: it does, and closing it turned up a second disclosure
+underneath.** `FullSourceCodeEmbedding` is now in `FORCE_DISABLED`, and it is
+the first entry there for which the runtime force is the *primary* removal
+rather than a backstop — the Sentry entries beside it are belt-and-braces over a
+cargo feature that removes the code, this one is the only thing switching off a
+feature that is compiled in and on. `the_index_that_uploads_source_is_forced_off_not_merely_absent`
+asserts the cargo feature is **on** for exactly that reason, so the evidence for
+the entry sits beside the entry and nobody deletes it as redundant.
+
+**Then check what the removal leaves running, because the fallback was the
+interesting half.** `SearchCodebase` does not stop working — `get_relevant_files`
+falls back to outline search — and that fallback `POST`s `/ai/relevant_files`
+with every candidate file's path, its symbol names and the comments written
+above each symbol. **Building the outline is local and searching it was not**,
+which is a distinction the feature's name actively hides, and it would have
+survived the force-disable untouched. The general form: when you switch off the
+expensive path, read what the cheap path does, because a fallback is code nobody
+chose and everybody inherits.
+
+Closed by `ai::get_relevant_files::local_rank`, and the shape of the fix is the
+one this file keeps recommending: **the local ranker already existed.**
+`warp_search_core` is the tantivy searcher behind the command palette, already
+an `app` dependency, giving BM25, field weights and the same tokenizer the rest
+of the app searches with — so the whole replacement is a schema declaration and
+one function. What it costs is stated in that module rather than discovered
+later: it is lexical, so a query with no shared token returns nothing where a
+model would have matched a synonym, and the tokenizer splits `_ - / \ :` but not
+camelCase. `the_symbol_map_leaves_by_exactly_one_call_site_and_it_is_guarded`
+pins the **count**, not the guard, for the same reason `egress.rs` needed its
+second check: a backstop that covers today's call sites is a fact about today.
 
 ## Prefer the smallest thing that is still the idea
 

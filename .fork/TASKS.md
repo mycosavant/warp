@@ -11702,10 +11702,34 @@ machine, and nothing in `fork.rs` says anything about it.
 `indexing_that_uploads_source_stays_behind_a_default_this_fork_did_not_set`
 pins the default and was calibrated by flipping it.
 
-**Left as a decision, not taken:** whether `FullSourceCodeEmbedding` belongs in
-`FORCE_DISABLED` beside `CrashReporting` and `CocoaSentry`. It is a one-line
-change and it removes a working feature, which makes it the maintainer's call
-rather than a tidy-up. Recorded here so the choice is visible either way.
+**Decided by the maintainer: force-disabled, and the fallback closed too.** The
+second was only visible because the first was made.
+
+1. `FullSourceCodeEmbedding` joins `FORCE_DISABLED` — the first entry there
+   where the runtime force is the *primary* removal rather than a backstop over
+   a cargo feature that deletes the code. The test asserts the cargo feature is
+   **on**, so the evidence for the entry sits beside it and nobody deletes the
+   entry as redundant after checking `default`.
+
+2. **The fallback was the interesting half.** `SearchCodebase` does not stop
+   working: `get_relevant_files` falls back to outline search, and *that* `POST`s
+   `/ai/relevant_files` with every candidate's path, its symbol names, and the
+   comments written above each symbol. Building the outline is local; searching
+   it was not, and nothing in the feature's name says so. It would have survived
+   the force-disable untouched.
+
+   Closed by `ai::get_relevant_files::local_rank`, and the fix has this fork's
+   usual shape — **the local ranker already existed**. `warp_search_core` is the
+   tantivy searcher behind the command palette, already an `app` dependency,
+   with BM25, field weights and the same tokenizer the rest of the app uses. The
+   whole replacement is a schema declaration and one function. Its costs are
+   documented in the module: it is lexical, so a query sharing no token with any
+   path or symbol returns nothing where a model would have matched a synonym,
+   and the tokenizer splits `_ - / \ :` but not camelCase.
+
+   `the_symbol_map_leaves_by_exactly_one_call_site_and_it_is_guarded` pins the
+   **count** rather than the guard, for the reason `egress.rs` needed a second
+   check: a backstop that covers today's call sites is a fact about today.
 
 #### What the outline gap does not cost
 

@@ -1098,6 +1098,27 @@ pub fn apply_feature_preferences() {
     }
 }
 
+/// Whether a codebase search ranks its candidates on this machine.
+///
+/// `get_relevant_files` builds tree-sitter outlines locally and then, with two
+/// or more candidates, `POST`s `/ai/relevant_files` with every file's path, its
+/// symbol names, and the comments attached to each symbol — receiving a list of
+/// paths back. Building the outline is local; searching it was not, and the
+/// feature's name does not suggest the difference.
+///
+/// That payload is a smaller disclosure than the source itself and it is not a
+/// small one: it is the complete symbol map of a private repository plus the
+/// prose written above each symbol. Whether it is retained is a question about
+/// someone else's service and cannot be answered from this side of the wire,
+/// which is the argument for not sending it rather than an argument about who
+/// receives it.
+///
+/// `ai::get_relevant_files::local_rank` is what runs instead. Its costs are
+/// real and are documented there rather than here.
+pub fn rank_relevant_files_locally() -> bool {
+    is_active()
+}
+
 /// Creates a directory the fork writes private content into, owner-only where
 /// the platform can say so.
 ///
