@@ -634,6 +634,17 @@ pub enum FeatureFlag {
     ListSkills,
 
     /// When enabled, we expose LSP as a tool to the agent
+    ///
+    /// Fork note, measured 2026-09-02: this line states an intent, not a
+    /// behaviour, and reads as an answer to "is LSP-as-a-tool already built and
+    /// switched off?" — which it is not. All three call sites are
+    /// `LspRepoWatcher::ensure`/`teardown` (`crates/lsp/src/model.rs:305,335,409`),
+    /// forwarding repo file changes as `workspace/didChangeWatchedFiles`. No
+    /// `warpctrl` action, built-in MCP server or `remote_server` message touches
+    /// LSP, and `ToolType` (generated from `warp-proto-apis`, 36 variants) has no
+    /// LSP entry — so the tool is absent from the protocol rather than gated off.
+    /// Upstream's line is kept above rather than rewritten, because it may yet
+    /// describe where this is going.
     LSPAsATool,
 
     /// Enables conversation artifacts.

@@ -70,8 +70,9 @@ do"*:
 | `console.rs` | `img-src` is denied by `default-src 'none'` | T12.3 added it as `'self'`; the same comment block says so four lines later |
 | `registry.rs` | `waiting_for` returns *"everything currently waiting"* | it filters to one conversation — **one missing blank line** had glued `waiting()`'s doc onto it, leaving `waiting()` undocumented |
 | `graph.rs` | the fingerprint holds *"everything the runner actually uses"* | `compose_prompt` uses the workspace and its own doc says a page later that it is excluded deliberately |
+| `warp_features` (upstream) | `LSPAsATool` — *"we expose LSP as a tool to the agent"* | gates `LspRepoWatcher::ensure`/`teardown` only; no agent-facing LSP path exists and `ToolType` has no LSP variant |
 
-**Twelve, and the last four are the instructive ones**: none is a careless
+**Thirteen, and the last five are the instructive ones**: none is a careless
 comment. Each was written carefully, was true when written, and was falsified by a
 later change to the code beneath or beside it. Four of the twelve are *internally*
 inconsistent — the file contradicts itself and both halves are signed work — and
@@ -84,6 +85,32 @@ The last one is the shortest fuse in the table: the author of the stale sentence
 and the author of the code that staled it were **the same person, hours apart**,
 and neither noticed. Adding a function is exactly when the paragraph above it
 stops being true, and exactly when nobody re-reads it.
+
+**The thirteenth is the first one found in an *upstream* file, and it is the most
+expensive shape: a doc that answers the question you came to ask, wrongly.**
+Found 2026-09-02 while auditing whether LSP-backed navigation was already built
+and switched off — this file's own "look for the gate first" advice, run
+literally. `FeatureFlag::LSPAsATool` is exactly what that search is looking for:
+the name says it, the doc says *"When enabled, we expose LSP as a tool to the
+agent"*, and it is off in **both** halves (in no channel list; `lsp_as_a_tool`
+declared in `app/Cargo.toml` but absent from `default`). A reader stops there and
+concludes the feature exists behind a switch.
+
+All three of its call sites are `LspRepoWatcher::ensure`/`teardown`
+(`crates/lsp/src/model.rs:305,335,409`) — forwarding repo file-change events as
+`workspace/didChangeWatchedFiles`. Nothing about tools, nothing about agents.
+Measured the same day: no `warpctrl` action, no built-in MCP server and no
+`remote_server` message touches LSP, and `ToolType` — generated from the
+`warp-proto-apis` git dependency, 36 variants — has no LSP entry at all. So the
+tool is not gated off, it is **absent from the protocol**, and the flag is a
+statement of intent sitting on top of a watcher.
+
+Two things follow. **A flag's name and doc are not evidence that a feature
+exists** — grep its call sites before believing either, which is the same
+discipline this file already demands for the two halves of a gate and for the
+count behind a pinned test. And **the fork's stale-doc question is worth asking
+of upstream files too**: the first twelve were all fork-authored, which quietly
+suggested the defect was ours.
 
 The pattern is always the same: the code was corrected and the prose above it was
 not, so the doc preserves a design that was considered and rejected. Two of these
