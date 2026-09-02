@@ -23838,6 +23838,32 @@ impl TerminalView {
             .and_then(BlockMetadata::current_working_directory)?;
 
         if self.session_is_local(session_id, ctx) {
+            // **A WSL session is "local" here and its files are not.** This is
+            // the one place that can tell, and it is why the branch exists:
+            // `determine_session_type` decides by hostname equality and WSL2
+            // inherits the Windows machine name, so a WSL session can never be
+            // `WarpifiedRemote` and `set_remote_host_id` silently no-ops on it
+            // — a server attached by `remote wsl connect` publishes a host id
+            // that the session discards. Without this, the line below converts
+            // `/home/you/repo` into `\\wsl$\...` and the whole file tree is
+            // then read back from Windows across the 9p redirector, at roughly
+            // 20 ms per entry, while a server sits idle inside the distribution
+            // that could answer from ext4.
+            //
+            // Gated on the server actually being connected, so a WSL pane
+            // without one keeps exactly the local UNC path it has always had
+            // rather than losing its tree to a host that cannot answer.
+            //
+            // `cwd_str` is passed through unconverted because it is the Linux
+            // path the shell reported, and the Linux path is what the far side
+            // wants. The UNC rewrite below is precisely what this avoids.
+            //
+            // Routing here rather than reclassifying the session is deliberate:
+            // `SessionType::Local` also drives path conversion, agent execution
+            // context, command corrections and chips. See T16.
+            if let Some(remote) = Self::wsl_remote_cwd(&session, session_id, cwd_str, ctx) {
+                return Some(remote);
+            }
             // Local session: canonicalize to resolve symlinks / normalize.
             let path = session
                 .launch_data()
@@ -23856,6 +23882,43 @@ impl TerminalView {
                 host_id, std_path,
             )))
         }
+    }
+
+    /// A remote path for a WSL session that has a remote-development server
+    /// connected, or `None` for every other session.
+    ///
+    /// Free function rather than a method because it needs nothing from
+    /// `TerminalView`: the session, its id and the reported cwd are the whole
+    /// input, which also makes the WSL condition easy to read at the call site.
+    #[cfg(not(target_family = "wasm"))]
+    fn wsl_remote_cwd(
+        session: &Session,
+        session_id: SessionId,
+        cwd_str: &str,
+        ctx: &AppContext,
+    ) -> Option<LocalOrRemotePath> {
+        use warpui::SingletonEntity as _;
+
+        use crate::remote_server::manager::RemoteServerManager;
+
+        if !session.is_wsl() {
+            return None;
+        }
+        let host_id = RemoteServerManager::as_ref(ctx)
+            .host_for_connected_session(session_id)?
+            .clone();
+        let path = StandardizedPath::try_new(cwd_str).ok()?;
+        Some(LocalOrRemotePath::Remote(RemotePath::new(host_id, path)))
+    }
+
+    #[cfg(target_family = "wasm")]
+    fn wsl_remote_cwd(
+        _session: &Session,
+        _session_id: SessionId,
+        _cwd_str: &str,
+        _ctx: &AppContext,
+    ) -> Option<LocalOrRemotePath> {
+        None
     }
 
     pub fn shell_launch_data_if_local(&self, ctx: &AppContext) -> Option<ShellLaunchData> {
