@@ -11577,8 +11577,8 @@ Phase 3 was written as *"a path that belongs to a host should not hand out a
 Audited rather than assumed, **most of that number is not the hazard**:
 `Repository` models are only ever constructed by `DirectoryWatcher`, which
 watches the local filesystem, so every site reached through
-`Repository::root_dir()` is local by construction — outlines, MCP watchers,
-skills watchers, diff state.
+`Repository::root_dir()` is local by construction — outlines, MCP watchers, the
+skills watchers' local fallback, diff state.
 
 The hazard is the project explorer, because that is the surface phase 1 moved.
 It calls `std::fs::remove_dir_all`, `std::fs::rename` and
@@ -11616,23 +11616,68 @@ asks `session_type()` about a file and gets `Local`:
 
 Both calibrated by making them fail.
 
-### Still open
+### The three open items, answered — and each premise was wrong
 
-- [ ] **Phase 1's remote-surface inheritance, disclosed rather than fixed.**
-      Routing a WSL session moves it onto upstream's remote feature surface, and
-      that surface is thinner in places: `DetectedGitRepo` fires only from
-      `detect_possible_local_git_repo`, so `RepoOutlines` (the `@` menu's
-      codebase symbols), `file_mcp_watcher` and the skills file watchers never
-      see a remote repository. **Project rules are *not* in this list** — a
-      sqlite check suggested they were, and that was measuring persistence
-      rather than application: `apply_project_rules` handles the remote branch
-      and inserts into the live `path_to_rules`, skipping only the SQLite cache,
-      and `ProjectContextModel` hydrates remote repos from standing queries. The
-      claim was one step from being recorded as fact.
-- [ ] **Whether the outline gap matters in this fork**, given codebase indexing
-      is DOGFOOD-gated off anyway. Unmeasured.
-- [ ] **`RemoteCodebaseIndexing` as a `FORCE_ENABLED` candidate** — only worth it
-      if the daemon actually indexes, which has not been run.
+All three were closed by resolving a gate, and the first answer was wrong every
+time, because **a gate here has two halves and the flag lists are only one of
+them**.
+
+#### Skills were never lost, and this ticket had already corrected itself once
+
+The three surfaces recorded as given up by a routed session were `RepoOutlines`,
+`file_mcp_watcher` and the skills file watchers, on the grounds that all three
+hang off `DetectedGitRepo`, which only `detect_possible_local_git_repo` emits.
+
+The skills watchers do not hang off it. They subscribe to `RepoMetadataModel`
+and refresh on `StandingQueryResultsUpdated`; `project_skills` travels over the
+remote-server protocol (`repo_metadata_proto.rs`); and
+`find_project_skill_files_in_tree` carries a doc saying in as many words that it
+is the shared local-and-remote path, with the filesystem scan beside it labelled
+a local-only fallback. Upstream has tests for exactly this case —
+`find_skill_files_in_tree_returns_remote_skill_paths_for_remote_repos` and
+`test_removing_remote_project_repo_deletes_shared_cached_skill_paths`. All 41
+tests in that module pass here.
+
+**The instructive part is that the same paragraph already contained the
+correction.** The entry naming skills as broken also recorded that project rules
+were *not* broken, having been assumed so and then found to reach the client
+through standing queries. Skills use the identical mechanism. The correction was
+made, written down, and not generalised one line further.
+
+#### The other two losses are real — and nearly got recorded as moot
+
+`RepoOutlines` and `file_mcp_watcher` genuinely never see a routed repository.
+The question was whether that costs anything here, and resolving
+`FeatureFlag` list membership says it costs nothing: `AIContextMenuCode` and
+`FileBasedMcp` are in **no list at all** — not `DOGFOOD_FLAGS`, not
+`PREVIEW_FLAGS`, not `RELEASE_FLAGS` — so `is_enabled` resolves both false at
+step 3 and both surfaces are dead however the session is routed.
+
+That was one edit away from being written down as the answer. It is wrong.
+Both flags are also entries in `app/src/features.rs`'s `enabled_features()`
+behind a cargo feature, and `ai_context_menu_code` and `file_based_mcp` are both
+in `app/Cargo.toml`'s `default` list. Both are **on** in every build made here.
+Pinned by `the_surfaces_routing_costs_are_switched_on_in_this_build`, calibrated
+by taking `ai_context_menu_code` out of `default` and watching it fail.
+
+What the `@` menu loses is worth stating precisely, because it is not the
+category. `is_active_dir_in_git_repo` asks
+`DetectedRepositories::get_root_for_canonical_path`, which answers for a remote
+root — phase 1 registers one. So the Code section still appears; its data source
+is `RepoOutlines::get_outline`, which has nothing for that path. **The category
+is offered and empty**, which is a worse failure than its absence and is
+invisible to anything that checks whether the menu rendered.
+
+#### What the outline gap does not cost
+
+On this fork's own agent paths, nothing. `acp_agent` reads `params.input`,
+`session_context.current_working_directory()`, `conversation_id` and `tasks`;
+it never touches `AIAgentContext`, so `are_file_symbols_indexed` — the boolean
+`context_model` computes from `RepoOutlines` — is assembled and never sent.
+`get_relevant_files` is a `ServerApi` call and off-thesis for the same reason.
+So the loss is confined to the `@` menu, which is a person's surface, not an
+agent's.
+
 
 ### Corrections this ticket carries
 

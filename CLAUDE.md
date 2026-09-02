@@ -182,6 +182,30 @@ The failure mode is the silent one this file exists to warn about: the build is
 clean, nothing changes, and there is no error to search for. When a flag looks
 gated, check **which** kind you have before reaching for `FORCE_ENABLED`.
 
+**And answering "is this flag on?" from the flag lists gives a confident wrong
+answer — measured 2026-09-02, three times in one session.** T16's last three
+open items each turned on whether a surface was reachable in this fork. Resolved
+against `DOGFOOD_FLAGS`/`PREVIEW_FLAGS`/`RELEASE_FLAGS`, the answer was that
+`AIContextMenuCode` and `FileBasedMcp` are in **no list at all** and both
+surfaces are dead. That was one edit from being written down. Both are also
+entries in `app/src/features.rs`'s `enabled_features()` behind a cargo feature,
+and both cargo features are in `default` — so both are **on**, and both losses
+the ticket described are real.
+
+**The second half is sharper than the pairing rule above, which this file has
+carried since T1 and which is not sufficient.** Checking `default` is *also* not
+the test, because a feature in `default` enables others through its own
+dependency list:
+
+```toml
+remote_codebase_indexing = ["full_source_code_embedding"]
+```
+
+`remote_codebase_indexing` is in `default`; `full_source_code_embedding` is not,
+and is on anyway. **`cfg!(feature = "…")` in a test is the only honest check** —
+an assertion that it was off is what caught this, by failing on its first run
+against a TOML reading that had just said otherwise.
+
 ## Prefer the smallest thing that is still the idea
 
 `crates/warp_cli/src/local_control/graph.rs` is the standard: a run-scale task

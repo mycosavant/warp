@@ -1086,3 +1086,45 @@ fn an_existing_ignore_is_not_overwritten() {
         "somebody else's ignore is not ours to replace"
     );
 }
+
+/// A gate in this codebase has two halves, and reading one of them gives a
+/// confident wrong answer in either direction.
+///
+/// T16 recorded three surfaces as lost when a WSL session is routed to a
+/// server, and asked whether any of them cost anything in this fork. Answering
+/// it by resolving `FeatureFlag` list membership says that `AIContextMenuCode`
+/// and `FileBasedMcp` are in no list at all — not `DOGFOOD_FLAGS`, not
+/// `PREVIEW_FLAGS`, not `RELEASE_FLAGS` — and so the surfaces are dead and the
+/// gap is free. That was about to be written down. It is wrong: both flags are
+/// also entries in `enabled_features()` behind a cargo feature, and both cargo
+/// features are in `app/Cargo.toml`'s `default` list, so both are **on** in
+/// every build made here and both losses are real.
+///
+/// Asserted on `cfg!` rather than on `is_enabled()` deliberately. `is_enabled`
+/// resolves override → user preference → channel state, and the user preference
+/// is a fact about the machine the test ran on; the cargo feature is the half
+/// that a reader of the flag lists cannot see, so it is the half worth pinning.
+#[test]
+fn the_surfaces_routing_costs_are_switched_on_in_this_build() {
+    assert!(
+        cfg!(feature = "ai_context_menu_code"),
+        "the @ menu's Code category is live, so outlines never built for a \
+         routed repository are a real loss and not a moot one"
+    );
+    assert!(
+        cfg!(feature = "file_based_mcp"),
+        "FileBasedMCPManager subscribes to FileMCPWatcher, so a project-scoped \
+         MCP config in a routed repository is genuinely never discovered"
+    );
+
+    for flag in [FeatureFlag::AIContextMenuCode, FeatureFlag::FileBasedMcp] {
+        assert!(
+            !crate::features::DOGFOOD_FLAGS.contains(&flag)
+                && !crate::features::PREVIEW_FLAGS.contains(&flag)
+                && !crate::features::RELEASE_FLAGS.contains(&flag),
+            "{flag:?} is enabled by its cargo feature and by nothing else — if \
+             it gains a list entry, the two halves have stopped agreeing and \
+             the reasoning above needs re-reading rather than trusting"
+        );
+    }
+}
