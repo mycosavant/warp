@@ -11660,7 +11660,18 @@ impl TerminalView {
                     // conversation-transcript guard intact.
                     let session_id = block_metadata.session_id();
                     let session_type = session_id.map(|sid| {
-                        if self.session_is_local(sid, ctx) {
+                        // A WSL session with a connected server is detected as
+                        // *remote*, matching `pwd_as_local_or_remote`. Both must
+                        // agree: the tree routes its directory loads to the
+                        // host, and detection is what tells the host the
+                        // repository exists at all. Routing one without the
+                        // other produced `Repository not found` from a server
+                        // that was never notified. See T16.
+                        let is_wsl_remote =
+                            self.sessions.as_ref(ctx).get(sid).is_some_and(|session| {
+                                Self::wsl_connected_host(&session, sid, ctx).is_some()
+                            });
+                        if self.session_is_local(sid, ctx) && !is_wsl_remote {
                             RepoDetectionSessionType::Local
                         } else {
                             RepoDetectionSessionType::Remote { session_id: sid }
@@ -23884,19 +23895,22 @@ impl TerminalView {
         }
     }
 
-    /// A remote path for a WSL session that has a remote-development server
-    /// connected, or `None` for every other session.
+    /// The host a WSL session's files actually live on, or `None` for every
+    /// other session and for a WSL session with no server attached yet.
     ///
-    /// Free function rather than a method because it needs nothing from
-    /// `TerminalView`: the session, its id and the reported cwd are the whole
-    /// input, which also makes the WSL condition easy to read at the call site.
+    /// **One definition, because the boundary is decided in more than one
+    /// place and they have to agree.** `pwd_as_local_or_remote` and the
+    /// repo-detection branch both ask "is this session local?", and a WSL
+    /// session answers yes to both while its files are somewhere else. If only
+    /// one of them routes, the tree asks a server about a repository the
+    /// server was never told exists — measured, and it answers
+    /// `Repository not found`. See T16.
     #[cfg(not(target_family = "wasm"))]
-    fn wsl_remote_cwd(
+    fn wsl_connected_host(
         session: &Session,
         session_id: SessionId,
-        cwd_str: &str,
         ctx: &AppContext,
-    ) -> Option<LocalOrRemotePath> {
+    ) -> Option<warp_core::HostId> {
         use warpui::SingletonEntity as _;
 
         use crate::remote_server::manager::RemoteServerManager;
@@ -23904,9 +23918,29 @@ impl TerminalView {
         if !session.is_wsl() {
             return None;
         }
-        let host_id = RemoteServerManager::as_ref(ctx)
-            .host_for_connected_session(session_id)?
-            .clone();
+        RemoteServerManager::as_ref(ctx)
+            .host_for_connected_session(session_id)
+            .cloned()
+    }
+
+    #[cfg(target_family = "wasm")]
+    fn wsl_connected_host(
+        _session: &Session,
+        _session_id: SessionId,
+        _ctx: &AppContext,
+    ) -> Option<warp_core::HostId> {
+        None
+    }
+
+    /// A remote path for a WSL session that has a remote-development server
+    /// connected, or `None` for every other session.
+    fn wsl_remote_cwd(
+        session: &Session,
+        session_id: SessionId,
+        cwd_str: &str,
+        ctx: &AppContext,
+    ) -> Option<LocalOrRemotePath> {
+        let host_id = Self::wsl_connected_host(session, session_id, ctx)?;
         let path = StandardizedPath::try_new(cwd_str).ok()?;
         Some(LocalOrRemotePath::Remote(RemotePath::new(host_id, path)))
     }
