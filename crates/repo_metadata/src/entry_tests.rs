@@ -1409,3 +1409,61 @@ fn build_tree_keeps_the_roots_spelling_so_gitignore_rules_still_match() {
         repo_root,
     );
 }
+
+/// Why the builder must never mix path spellings: `matches_gitignores` cannot
+/// rescue it, and this pins that rather than papering over it.
+///
+/// `Prefix::UNC` and `Prefix::VerbatimUNC` are different variants, and `std`
+/// compares a `PrefixComponent` by parsed variant — so `\\?\UNC\wsl$\host\repo`
+/// does not `strip_prefix` a root of `\\wsl$\host\repo`, and the `Err` arm here
+/// means "not ignored". Every rule in the file silently stops applying.
+///
+/// **Deliberately not fixed by normalizing prefixes inside this function.** That
+/// would be a second normalization that has to agree with the first, which is
+/// the failure mode T16 was: two ways of spelling a path, each correct alone.
+/// The invariant lives one level up, where a child now keeps its root's
+/// spelling and the two cannot diverge — see
+/// `build_tree_keeps_the_roots_spelling_so_gitignore_rules_still_match`.
+///
+/// This is a characterization test. If a future change makes mixed spellings
+/// match, that is not a regression, but the invariant above is still the thing
+/// worth keeping.
+#[cfg(windows)]
+#[test]
+fn a_gitignore_cannot_match_a_child_spelled_with_a_different_unc_prefix() {
+    use std::path::Path;
+
+    use ignore::gitignore::GitignoreBuilder;
+
+    let mut builder = GitignoreBuilder::new(r"\\wsl$\ubuntu\repo");
+    builder.add_line(None, "/target").unwrap();
+    let gitignore = Arc::new(builder.build().unwrap());
+    let gitignores = [gitignore];
+
+    // Control: the same spelling the gitignore was rooted with matches.
+    assert!(
+        matches_gitignores(
+            Path::new(r"\\wsl$\ubuntu\repo\target"),
+            true,
+            &gitignores,
+            false,
+        ),
+        "a child spelled like its root must match — if this fails the rule itself \
+         is wrong, not the prefix handling"
+    );
+
+    // The hazard: `dunce::canonicalize` returns this spelling for a UNC path,
+    // because dunce strips `\\?\` for drive paths but not for UNC. It named the
+    // same directory and matched nothing.
+    assert!(
+        !matches_gitignores(
+            Path::new(r"\\?\UNC\wsl$\ubuntu\repo\target"),
+            true,
+            &gitignores,
+            false,
+        ),
+        "verbatim and non-verbatim UNC now compare equal. If that is deliberate, \
+         delete this test — but check that the builder still guarantees one \
+         spelling, because that is what actually keeps gitignore rules working."
+    );
+}
