@@ -446,7 +446,7 @@ use crate::terminal::model::index::{Point, Side};
 use crate::terminal::model::mouse::MouseState;
 use crate::terminal::model::selection::{SelectAction, SelectionDirection};
 use crate::terminal::model::session::active_session::ActiveSession;
-use crate::terminal::model::session::filesystem::session_filesystem;
+use crate::terminal::model::session::filesystem::{SessionFilesystem, session_filesystem};
 use crate::terminal::model::session::{
     BootstrapSessionType, Session, SessionId, SessionType, Sessions, SessionsEvent,
 };
@@ -23894,6 +23894,21 @@ impl TerminalView {
                 host_id, std_path,
             )))
         }
+    }
+
+    /// Where the active session's files actually live.
+    ///
+    /// Exposed for `warpctrl session inspect`. Until T16 phase 2 the only way
+    /// to find out whether Warp had routed a WSL session to its server was to
+    /// read the app log for a `Remote server connected` line and then infer
+    /// from the *absence* of `repo_metadata::local_model` lines that the tree
+    /// had not been walked from Windows -- an inference from a missing log
+    /// line, which this fork has already been burned by once. It is a fact the
+    /// process knows; it should be possible to ask for it.
+    pub fn active_session_filesystem(&self, ctx: &AppContext) -> Option<SessionFilesystem> {
+        let session_id = self.active_block_session_id()?;
+        let session = self.sessions.as_ref(ctx).get(session_id)?;
+        Some(session_filesystem(&session, session_id, ctx))
     }
 
     /// The host a session's files actually live on, or `None` when this

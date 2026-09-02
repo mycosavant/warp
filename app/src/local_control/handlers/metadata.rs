@@ -21,6 +21,7 @@ use crate::local_control::LocalControlBridge;
 use crate::local_control::resolver::{reject_target_families, require_active_window_id_for_action};
 use crate::pane_group::{PaneGroup, PaneId};
 use crate::settings::{AISettings, CodeSettings};
+use crate::terminal::model::session::filesystem::SessionFilesystem;
 use crate::workspace::Workspace;
 use crate::workspace::tab_settings::TabSettings;
 
@@ -126,6 +127,9 @@ struct SessionEntry {
     pane_id: PaneId,
     pane_index: usize,
     is_active: bool,
+    /// Where this session's files can actually be opened, as
+    /// `session::filesystem` resolves it.
+    filesystem: Option<SessionFilesystem>,
 }
 
 #[derive(Clone, Copy)]
@@ -891,14 +895,18 @@ fn session_entries_for_panes(
 ) -> Vec<SessionEntry> {
     let mut entries = Vec::new();
     for pane in panes {
-        let (has_terminal_session, is_active) = pane.pane_group.read(ctx, |pane_group, ctx| {
-            (
-                pane_group
-                    .terminal_view_from_pane_id(pane.pane_id, ctx)
-                    .is_some(),
-                pane_group.active_session_id(ctx).map(PaneId::from) == Some(pane.pane_id),
-            )
-        });
+        let (has_terminal_session, is_active, filesystem) =
+            pane.pane_group.read(ctx, |pane_group, ctx| {
+                let view = pane_group.terminal_view_from_pane_id(pane.pane_id, ctx);
+                let filesystem = view
+                    .as_ref()
+                    .and_then(|view| view.as_ref(ctx).active_session_filesystem(ctx));
+                (
+                    view.is_some(),
+                    pane_group.active_session_id(ctx).map(PaneId::from) == Some(pane.pane_id),
+                    filesystem,
+                )
+            });
         if has_terminal_session {
             entries.push(SessionEntry {
                 window_id: pane.window_id,
@@ -908,6 +916,7 @@ fn session_entries_for_panes(
                 pane_id: pane.pane_id,
                 pane_index: pane.index,
                 is_active,
+                filesystem,
             });
         }
     }
@@ -927,6 +936,7 @@ fn session_values(entries: Vec<SessionEntry>) -> Vec<Value> {
                 "window_id": entry.window_id.to_string(),
                 "window_index": entry.window_index as u32,
                 "is_active": entry.is_active,
+                "filesystem": filesystem_value(entry.filesystem.as_ref()),
             })
         })
         .collect()
@@ -995,5 +1005,30 @@ fn single_entry(value: Option<&Value>, action: ActionKind) -> Result<Value, Cont
             ErrorCode::AmbiguousTarget,
             format!("{} resolved multiple targets", action.as_str()),
         )),
+    }
+}
+
+/// Reports where a session's files live, in the shape a script can branch on.
+///
+/// `where` is the discriminant; `host_id` is present only when there is a host
+/// to route to. The whole point is that `"local"` here and
+/// `SessionType::Local` are different claims: a WSL session with a connected
+/// server reports `"host"` while its session type stays `Local`, which is what
+/// T16 phase 1 built and what nothing outside the app log could previously
+/// observe.
+fn filesystem_value(filesystem: Option<&SessionFilesystem>) -> Value {
+    match filesystem {
+        Some(SessionFilesystem::Local) => json!({ "where": "local" }),
+        Some(SessionFilesystem::Host(host_id)) => json!({
+            "where": "host",
+            "host_id": host_id.to_string(),
+        }),
+        // The session's files are on another machine and no server is
+        // attached, so nothing can read them -- distinct from "local", which
+        // would send a caller to this machine's filesystem for another
+        // machine's paths.
+        Some(SessionFilesystem::Unreachable) => json!({ "where": "unreachable" }),
+        // No terminal session bootstrapped yet.
+        None => json!({ "where": "unknown" }),
     }
 }
