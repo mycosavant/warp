@@ -343,6 +343,52 @@ either half of it alone is worse than `opencode`. Warp sends the identical
 per-call rejection (`{"outcome": "selected", "optionId": "reject"}`, never
 `Cancelled`) in every case, so the difference is entirely the agent's.
 
+**On the Windows build, name the agent so it starts *inside* the distribution, or
+every turn in a WSL pane fails before it begins.** Measured 2026-09-02, end to
+end. A WSL pane's cwd is a Unix path, Warp passes it verbatim in `session/new`,
+and the agent process is spawned by the Windows Warp — so `claude-agent-acp`
+refuses the session outright:
+
+```
+Invalid params: `cwd` does not exist on the machine running the agent:
+/home/effatha/scratch-t17/repo
+```
+
+**Not caused by routing, and not by T16** — an *unrouted* WSL pane fails
+identically with `/home/effatha`, which is the control that settles the
+attribution. It is structural to Windows-Warp-plus-WSL-pane, and it is invisible
+on the Linux build, where agent and shell share a filesystem and every one of
+this file's other ACP measurements was taken.
+
+The remedy is one variable and no code:
+
+```
+WARP_FORK_ACP_COMMAND='wsl.exe -d Ubuntu -- npx -y @agentclientprotocol/claude-agent-acp'
+```
+
+Measured with that in place: `session/new` accepted, three consecutive turns
+`status: success`, `WARP_FORK_ACP_MODE=default` honoured and reported, and the
+agent's `LSP` tool present and invoked. The alternative — translating the cwd to
+`\\wsl.localhost\<distro>\…` for a Windows-side agent — would also work
+(Windows rust-analyzer over UNC measured at ~5% overhead against a local copy on
+a small crate) but leaves the agent running its shell commands on the wrong side
+of the boundary. `session.windows_path_converter()` already does the *opposite*
+direction; nothing does this one.
+
+**Two traps when reproducing this.** The default shell here is bash-over-Ubuntu,
+so a fresh pane is *already* a WSL session — typing `wsl.exe -d Ubuntu` into it
+makes a nested subshell whose block never completes, after which `input submit`
+answers `queued: true` forever and `agent prompt` refuses with
+`target_state_conflict`. That reads as three separate product defects and is one
+test-setup mistake. And the agent panel takes focus on launch: press Escape to
+reach the shell.
+
+**A crash from the LSP tool is probably your toolchain, not the wiring.**
+`rust-analyzer crashed with exit code 1` here meant the rustup *default*
+toolchain lacked the `rust-analyzer` component while the repo-pinned one had it —
+the server is spawned from the agent's cwd, so the pin that matters is the one
+resolving there, not in the file being asked about.
+
 **And code navigation is a third thing that pairing gets you, which Warp does
 not have and should not build.** Asked 2026-09-02 whether the fork should give
 its agents go-to-definition and find-references, the answer is that the
