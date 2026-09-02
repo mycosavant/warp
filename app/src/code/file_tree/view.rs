@@ -215,6 +215,10 @@ struct PendingEdit {
     id: FileTreeIdentifier,
 }
 
+#[cfg(test)]
+#[path = "view_tests.rs"]
+mod tests;
+
 /// Per-root directory state for the file tree.
 /// Contains all state that varies per root directory.
 struct RootDirectory {
@@ -320,6 +324,29 @@ impl FileTreeView {
         self.root_directories
             .get(&id.root)
             .is_some_and(|r| r.is_remote())
+    }
+
+    /// The on-disk path for `id`, or `None` when the item belongs to a host.
+    ///
+    /// **Every filesystem operation in this view must get its path from here.**
+    /// `StandardizedPath::to_local_path_lossy` will happily turn
+    /// `/home/you/repo` into a `PathBuf` that `std::fs` accepts, and the
+    /// operations below include `std::fs::remove_dir_all`. The only thing
+    /// standing between a remote tree and a delete on the wrong machine was
+    /// seven separate `if !self.is_remote_item(id)` guards at the dispatch
+    /// site -- correct today, and one forgotten `if` on a new action away from
+    /// a data-loss bug that no type would have caught.
+    ///
+    /// The dispatch guards are kept: they stop the whole action rather than
+    /// letting half of it run. This makes each operation safe on its own as
+    /// well, so the two do not have to agree. T16 phase 1 already shipped one
+    /// bug from two places that had to agree and did not.
+    fn local_path_for(&self, id: &FileTreeIdentifier) -> Option<PathBuf> {
+        if self.is_remote_item(id) {
+            return None;
+        }
+        let item = self.root_directories.get(&id.root)?.items.get(id.index)?;
+        Some(item.path().to_local_path_lossy())
     }
 
     #[cfg(feature = "local_fs")]
@@ -2544,29 +2571,16 @@ impl FileTreeView {
     }
 
     fn open_in_new_pane(&mut self, id: &FileTreeIdentifier, ctx: &mut ViewContext<Self>) {
-        let Some(root_dir) = self.root_directories.get(&id.root) else {
+        let Some(path) = self.local_path_for(id) else {
             return;
         };
-        let Some(item) = root_dir.items.get(id.index) else {
-            return;
-        };
-
-        self.open_file(
-            &item.path().to_local_path_lossy(),
-            Some(EditorLayout::SplitPane),
-            ctx,
-        );
+        self.open_file(&path, Some(EditorLayout::SplitPane), ctx);
     }
 
     fn open_in_new_tab(&mut self, id: &FileTreeIdentifier, ctx: &mut ViewContext<Self>) {
-        let Some(root_dir) = self.root_directories.get(&id.root) else {
+        let Some(path) = self.local_path_for(id) else {
             return;
         };
-        let Some(item) = root_dir.items.get(id.index) else {
-            return;
-        };
-
-        let path = item.path().to_local_path_lossy();
         if path.is_dir() {
             ctx.emit(FileTreeEvent::OpenDirectoryInNewTab { path: path.clone() });
         } else {
@@ -2575,14 +2589,9 @@ impl FileTreeView {
     }
 
     fn cd_to_directory(&mut self, id: &FileTreeIdentifier, ctx: &mut ViewContext<Self>) {
-        let Some(root_dir) = self.root_directories.get(&id.root) else {
+        let Some(path) = self.local_path_for(id) else {
             return;
         };
-        let Some(item) = root_dir.items.get(id.index) else {
-            return;
-        };
-
-        let path = item.path().to_local_path_lossy();
 
         if !path.is_dir() {
             log::warn!(
@@ -2607,14 +2616,18 @@ impl FileTreeView {
     }
 
     fn delete_item(&mut self, id: &FileTreeIdentifier, ctx: &mut ViewContext<Self>) {
+        // `local_path_for` first: this function calls
+        // `std::fs::remove_dir_all`, and a remote item's path is a real,
+        // openable path on *this* machine if one happens to exist there.
+        let Some(path) = self.local_path_for(id) else {
+            return;
+        };
         let Some(root_dir) = self.root_directories.get(&id.root) else {
             return;
         };
         let Some(item) = root_dir.items.get(id.index) else {
             return;
         };
-
-        let path = item.path().to_local_path_lossy();
         let std_path = item.path().clone();
 
         let result = if path.is_dir() {
@@ -3185,11 +3198,7 @@ impl TypedActionView for FileTreeView {
                 self.context_menu_state.take();
             }
             FileTreeAction::OpenInFinder { id } => {
-                if !self.is_remote_item(id)
-                    && let Some(root_dir) = self.root_directories.get(&id.root)
-                    && let Some(item) = root_dir.items.get(id.index)
-                {
-                    let path = item.path().to_local_path_lossy();
+                if let Some(path) = self.local_path_for(id) {
                     ctx.open_file_path_in_explorer(&path);
                 }
                 self.context_menu_state.take();

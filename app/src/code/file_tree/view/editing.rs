@@ -159,6 +159,17 @@ impl FileTreeView {
 
         let file_tree_id = pending_edit.id.clone();
 
+        // This function calls `std::fs::File::create_new` and `std::fs::rename`
+        // on a path derived from the tree item. Today a pending edit can only
+        // be started for a local item -- `create_new_file` and `rename_item`
+        // are both behind `is_remote_item` at the dispatch site -- so this is
+        // belt and braces. It is one line, and the thing on the other side of
+        // it renames files on whichever machine this process is running on.
+        // See T16 phase 3.
+        if self.is_remote_item(&file_tree_id) {
+            return;
+        }
+
         let buffer_content = self.editor_view.as_ref(ctx).buffer_text(ctx);
         self.editor_view.update(ctx, |view, ctx| {
             view.clear_buffer(ctx);
