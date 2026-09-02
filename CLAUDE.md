@@ -30,6 +30,27 @@ the project is built on, and it is stated here because it keeps paying:
 When something here has only been read, say so. `.fork/IDEAS.md` marks its
 unverified claims at the top of the file; keep that habit.
 
+**And a scope written from one reading is a scope you will pay to correct.**
+T16 has now produced three of these in two days. Its first draft said the
+Windows build was unusable for WSL work — one measurement, on the worst
+directory in the checkout, generalised. Its phase 2 was written as five broken
+surfaces and **four of them already worked**, because they route on a
+`LocalOrRemotePath` variant that phase 1 had already made `Remote`; only the
+ones that asked `session_type()` were broken. Its phase 3 was written as *"49
+`to_local_path_lossy` call sites"* and the hazard turned out to be **seven**,
+all in the project explorer, because `Repository` models are only ever built by
+`DirectoryWatcher` and are therefore local by construction. Each correction took
+under an hour of running; each would have cost a day of building.
+
+**The subtler one from the same day: measuring the wrong quantity looks exactly
+like measuring.** Project rules for a remote repository were about to be
+recorded as broken, on the evidence that no row appeared in the `project_rules`
+SQLite table. The table is a *persistence cache*: `apply_project_rules` inserts
+remote rules into the live `path_to_rules` and skips only the write. The query
+ran correctly and answered a question nobody had asked. Same shape as reading
+`/proc/<pid>/cwd` to learn what an *agent* sees, and as `git diff A...B` with an
+assumed base — the command works, and it is one step downstream of the mistake.
+
 **And the commonest defect in this fork is not a bug — it is a doc that outlived
 its code.** Twelve found in one day (2026-08-31), every one by asking an agent
 *"name anything whose doc comment claims something the code below it does not
@@ -194,6 +215,7 @@ upstream and rebasable.
 | `app/src/drive/local_sync/` | account-free Warp Drive: snapshot, apply, git-backed sync. |
 | `app/src/ai/mcp/tool_digest.rs` | what each MCP server's tools claimed to be, hashed at connect. The tool rug-pull warning rests on this. |
 | `app/src/local_control/console.*` | the console (T12) — the fork's **only** browser-reachable surface. Four unauthenticated routes serving four constants (page, script, manifest, icon), under `default-src 'none'; script-src 'self'`. The script never assigns `innerHTML` and a test pins that — **and since 2026-08-31 a second test pins the sinks that parse no markup at all**: `setAttribute`, `.href`, `.src`, `.style`, `window.open`, `location.assign`. `script-src 'self'` stops an injected `<script>`; it does not stop a `javascript:` href and it does not govern navigation. The guard was narrower than the rule it guards, which is how a rule stops being true without a diff looking wrong. Both tests are calibrated by making them fail, not by watching them pass. Keep it that way, because everything it draws was authored by an agent. **What the CSP does not cover, stated so nobody credits it with more than it does:** `connect-src 'self'` cannot tell the page's own fetch from a hostile one to the same origin, and no directive governs top-level navigation — so the page's safety rests on the `textContent`-only discipline, and the CSP is what stops that discipline's failure from becoming remote code. **After editing it run `node --check app/src/local_control/console.js`** — it is `include_str!`d, so a syntax error compiles fine, passes every Rust test, and breaks the whole page at runtime. And remember the page draws from `PendingApproval`: a control there must be gated on what the *entry* permits, not only on what the device may do (T14.6). |
+| `app/src/terminal/model/session/filesystem.rs` | **where a session's files actually live**, as one answer. `SessionType` is a *bootstrap* fact and a WSL session's is `Local` — `determine_session_type` compares hostnames and WSL2 inherits the Windows machine name — while its files are inside the distribution. Every call site that asked `session_type()` about a *file* therefore reached back across the 9p redirector, at roughly 20 ms per directory entry, past a server sitting idle beside those files. `session_filesystem` returns `Local`, `Host(id)` or `Unreachable`; the rule is a pure `classify(session_type, is_wsl, connected_host)` with unit tests, the lookups around it are not. **`Unreachable` is a third state on purpose**: a remote session with no server attached is not local, and a caller that treats it as local reads *this* machine's filesystem for another machine's paths — which succeeds often enough to be worse than failing. Two places keep `session_type()` deliberately and say why: the orchestration gate (about where *commands* run, and a WSL shell is already native Linux) and the completer (which had already solved this upstream in `wsl_guest_listing`, APP-3993 — **upstream independently found that enumerating a WSL directory from Windows is wrong, and asks the guest**). A new reader is caught by `every_file_that_reads_session_type_has_been_classified`, which requires every live `session_type()` read in `app/src` to appear in a list with a reason. |
 | `app/src/local_control/`, `crates/local_control/`, `crates/warp_cli/src/local_control/` | the `warpctrl` control plane, 114 actions. The count is pinned by **two** tests in different crates — update both, and never loosen either. **This line said 109 for two phases**: T11.2 took it to 110, T11.4 to 111 and T11.5 to 114, and each updated the pins without updating this table. Read the count off the test, never off prose — and grep for `fn catalog_has_exactly`, because the test's own name embeds the number and so goes stale on exactly the schedule this warning is about. |
 | `app/src/remote_server/wsl_transport.rs`, `crates/remote_server/src/wsl.rs` | the second `RemoteTransport`: Warp's remote-development server, in a WSL distro instead of over SSH. |
 
@@ -1224,6 +1246,28 @@ GPU-composited and the root window never held its pixels. `import -window <id>`
 gets the real contents without raising or focusing anything. The id changes every
 launch, so read it rather than remember it; Warp is the child sized like a window
 (`1246x802+1089+596`), among Weston's own 1x1 and 10x10 stubs.
+
+**A WSL pane's files are not where the session says they are, and `warpctrl
+session inspect` is now the way to ask.** It reports `filesystem` as
+`{"where": "local"}`, `{"where": "host", "host_id": …}` or
+`{"where": "unreachable"}`. Reach for it before theorising about why a tree is
+slow or a file tool is missing: a WSL session keeps `SessionType::Local` even
+when Warp has routed it to a server inside the distribution, so **nothing else
+in any payload distinguishes a routed session from an ordinary one**. Before
+T16 phase 2 the only way to tell was to read the app log for a
+`Remote server connected` line and then infer, from the *absence* of
+`repo_metadata::local_model` lines, that no walk had happened — an inference
+from a missing log line, which is the shape of mistake this file already
+records twice.
+
+**And connect before you `cd`, or rather: it no longer matters, which is the
+point.** Until 2026-09-02 a pane that navigated into a repository and *then* ran
+`remote wsl connect` kept its Windows-side tree for the rest of its life —
+nothing re-derived the repository when a server attached, so whether the routing
+happened at all depended on the order two unrelated commands were typed in.
+Every measurement of T16 phase 1 had happened to connect first. `SessionConnected`
+now re-runs repo detection. If you are testing this, `session inspect` is the
+check: it must say `host` after the connect regardless of order.
 
 **And take the screenshot before believing `warpctrl agent read`.** Measured on
 T14.6: a conversation whose panel was displaying a full error paragraph read back

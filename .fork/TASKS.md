@@ -11472,21 +11472,167 @@ registered the repository. It is a race in the pre-existing remote path, newly
 reachable now that WSL uses it — **not introduced here**, and superseded
 immediately by the full load.
 
-### Still open after phase 1
+### Phases 2 and 3, 2026-09-02 — and half of phase 2 was already done
 
-- [ ] **No automated test on the routing seam.** It needs either a
-      `RemoteTransport` double (a fat async trait, no existing stub) or the
-      integration harness, which observes `RemoteSessionState::Connected`
-      against a real server. **This belongs in `crates/integration`**, asserting
-      that a connected WSL session yields a remote root — not a unit test that
-      mocks the thing under test. Stated rather than quietly carried: phases 0
-      and 1 shipped on gates plus live measurement.
-- [ ] **The registration race**, above. Benign today; it drops one update.
-- [ ] **Phase 2** — buffers, `file open`, `ripgrep_search`, codebase indexing and
-      the agent's execution context still reach across the boundary.
-- [ ] **Phase 3** — a path that belongs to a host should not hand out a
-      `&Path` that `std::fs` accepts. Until then every fix above is one
-      forgetful call site from being undone.
+**Measured before building anything**, because T16's own scope was wrong once
+already. A Windows debug build at phase 1, one WSL pane, a fresh fixture the
+daemon had never seen:
+
+| surface | routed to Linux? | how it was established |
+|---|---|---|
+| file tree | **yes** | 150 ms daemon CPU, zero `local_model` lines, `StandardizedPath(Unix` root in the dispatched action |
+| buffer / `file open` | **yes** | README.md opened and rendered, header reading `/home/effatha/scratch-t16d/…` |
+| global search (`ripgrep_search`) | **yes** | result group labelled **WSL: Ubuntu**, `target/` correctly excluded, 30 ms daemon CPU |
+| git status chip | **yes** | `master ± 0`, correct for a clean tree |
+| **connect after `cd`** | **no** | the pane kept its Windows-side tree permanently |
+| **agent file tools** | **no** | `read_files`, `request_file_edits`, tool selection and `SessionContext` all matched `session_type()` |
+| **`location_for_path`** | **no** | slash commands, skills, blocklist output, AI context |
+| **`session inspect`** | **no** | nothing outside the app log could say whether routing had happened |
+
+So four of the five things phase 2 was written to fix were already working —
+they route on the `LocalOrRemotePath` variant, which phase 1 had already made
+`Remote`. What was left was everything that asked `session_type()`.
+
+### One answer, and the reason there has to be one
+
+`session::filesystem` promotes phase 1's private `TerminalView` predicate to a
+place everything can reach. It answers *reachability*, not classification:
+`SessionType` stays whatever bootstrap decided, because it also drives path
+conversion, agent execution context, command corrections and chips.
+
+`SessionFilesystem::Unreachable` is a third state on purpose. A remote session
+with no host is not local, and a caller treating it as local reads *this*
+machine's filesystem for another machine's paths — which succeeds often enough
+to be worse than failing.
+
+The rule is split from its lookups as a pure `classify(session_type, is_wsl,
+connected_host)`, so it has tests. **T16 said the seam had none because no
+`RemoteTransport` double exists; that was true of the transport and was never
+true of the rule.** Seven tests, calibrated by three mutations.
+
+Six call sites moved onto it: `location_for_path`, `SessionContext` (which fans
+out to agent tool selection, file edits, codebase search, remote codebase
+context, the `@` menu's skill list and `read_skill`), `read_files`,
+`request_file_edits`, and phase 1's two.
+
+**Two keep `session_type()` deliberately**, with the reason written where the
+next reader will hit it. The orchestration gate is about where *commands* run,
+and a WSL session's shell is already native Linux — routing it would turn
+subagents off for every WSL pane. And the completer already solved this its own
+way in `wsl_guest_listing` (APP-3993): **upstream had independently found that
+enumerating a WSL directory from Windows is wrong, and asks the guest.**
+
+### Three things the work turned up that were not on the board
+
+**The ordering bug, which is why phase 1 measured as working.** A pane that
+`cd`-ed and *then* connected kept its Windows-side tree for the rest of its
+life. Every measurement so far had connected first. `HostDisconnected` already
+broadcast `RepoChanged` for the symmetric case; connecting had nothing.
+`SessionConnected` now re-runs detection — detection, not just the displayed
+path, because registration is what tells the server the repository exists and
+phase 1 already measured `Repository not found` from routing one without the
+other. Verified on a rebuilt binary: `cd` first, connect second,
+`session inspect` flips to `host`, and the tree root comes back
+`StandardizedPath(Unix`.
+
+**`SearchCodebase` is withheld from a host session, and that is not a loss.**
+Routing means taking the remote feature surface, including
+`RemoteCodebaseIndexing`'s gate — so a WSL session stops being offered the tool.
+Checked before recording it as a regression: that flag, `FullSourceCodeEmbedding`,
+`CodebaseIndexPersistence` and `CrossRepoContext` are **all `DOGFOOD_FLAGS`
+only**, and `warp-oss` never takes that list (only `bin/dev.rs` and
+`bin/local.rs` do). The index is never built in this fork either way. The tool
+was being offered over nothing.
+
+**The instrument that was missing.** `warpctrl session inspect` now reports
+`{"where": "local" | "host" | "unreachable"}`. Phase 1's whole point is that a
+WSL session keeps `SessionType::Local`, so no field distinguished a routed
+session from an ordinary one; confirming the routing meant reading the log for
+a connect line and then inferring, *from the absence of `local_model` lines*,
+that no walk had happened. This fork has been burned by inference-from-a-missing-
+log-line before, and it was a fact the process simply knew.
+
+### The registration race: right about the facts, wrong about their significance
+
+`No remote repository found for incremental update` fired on **every**
+navigation and cost one investigation last session.
+
+It is not a race the client can close, and the reason is the interesting part.
+The key an update is filed under is the repository *root*, and only the server
+computes it: the client asks about a working directory, the server resolves it
+to a root, indexes it, starts watching it, and names the root in the snapshot
+that follows. **The watcher fires during that indexing**, so the first updates
+for a newly navigated repository necessarily carry a key the client has not been
+given — and pre-registering is impossible for the same reason, because the
+client does not know the key either.
+
+Dropping costs nothing because the snapshot is a complete state, not a delta.
+That was load-bearing and resting on a comment, so it is now a test. Downgraded
+to `debug` with a message that says it is superseded.
+
+### Phase 3: the board said 49 call sites; the hazard is seven
+
+Phase 3 was written as *"a path that belongs to a host should not hand out a
+`&Path` that `std::fs` accepts"*, with 49 `to_local_path_lossy` sites behind it.
+Audited rather than assumed, **most of that number is not the hazard**:
+`Repository` models are only ever constructed by `DirectoryWatcher`, which
+watches the local filesystem, so every site reached through
+`Repository::root_dir()` is local by construction — outlines, MCP watchers,
+skills watchers, diff state.
+
+The hazard is the project explorer, because that is the surface phase 1 moved.
+It calls `std::fs::remove_dir_all`, `std::fs::rename` and
+`std::fs::File::create_new` on paths taken straight off tree items, and since
+phase 1 a WSL repository's tree items are remote. What stood between them was
+**seven separate `if !self.is_remote_item(id)` guards at the dispatch site** —
+all seven correct, and one forgotten `if` on a new action away from deleting a
+directory on whichever machine Warp is running on, at the same path.
+
+`local_path_for` makes the path and the guard the same expression. The dispatch
+guards stay, because they stop the whole action rather than letting half of it
+run, and phase 1 already shipped one bug from two places that had to agree.
+
+### What is pinned, and what is still only verified by running
+
+**The seam still has no automated test, and after looking it does not belong in
+`crates/integration` either.** `RemoteSessionState::Connected` holds a live
+`async_process::Child` and an `Arc<RemoteServerClient>`, so a connected session
+cannot be constructed without spawning one; and the harness reaches a remote
+server over SSH with the gcloud SDK — no WSL path through it, and no CI host
+with a distribution to attach to. A mock would be mocking the thing under test.
+So the wiring is verified by running, said plainly rather than carried quietly.
+
+What *is* pinned is the mistake, which has now happened twice — a new call site
+asks `session_type()` about a file and gets `Local`:
+
+- `every_file_that_reads_session_type_has_been_classified` walks `app/src` and
+  requires every live `session_type()` reader to appear in a list with a reason.
+  Thirteen entries. It ignores comments, because three files changed this phase
+  mention `session_type()` only to say they no longer use it, and a guard that
+  fired on those would be switched off within a week.
+- `the_project_explorer_converts_a_path_for_std_fs_in_exactly_seven_places`
+  counts rather than pinning lines, because a guard that fails on unrelated
+  edits gets deleted.
+
+Both calibrated by making them fail.
+
+### Still open
+
+- [ ] **Phase 1's remote-surface inheritance, disclosed rather than fixed.**
+      Routing a WSL session moves it onto upstream's remote feature surface, and
+      that surface is thinner in places: `DetectedGitRepo` fires only from
+      `detect_possible_local_git_repo`, so `RepoOutlines` (the `@` menu's
+      codebase symbols), `file_mcp_watcher` and the skills file watchers never
+      see a remote repository. **Project rules are *not* in this list** — a
+      sqlite check suggested they were, and that was measuring persistence
+      rather than application: `apply_project_rules` handles the remote branch
+      and inserts into the live `path_to_rules`, skipping only the SQLite cache,
+      and `ProjectContextModel` hydrates remote repos from standing queries. The
+      claim was one step from being recorded as fact.
+- [ ] **Whether the outline gap matters in this fork**, given codebase indexing
+      is DOGFOOD-gated off anyway. Unmeasured.
+- [ ] **`RemoteCodebaseIndexing` as a `FORCE_ENABLED` candidate** — only worth it
+      if the daemon actually indexes, which has not been run.
 
 ### Corrections this ticket carries
 
