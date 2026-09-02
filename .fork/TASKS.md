@@ -11436,6 +11436,58 @@ source read before `$HOME` was actually opened. Each was caught by someone
 noticing that lived experience did not match the conclusion, which is a control
 worth more than another measurement of the same thing.
 
+### Phase 1 built and verified end to end, 2026-09-02
+
+**The file tree for a WSL repository is now served from inside Linux.** Measured
+on a Windows debug build against a repo the daemon had never seen:
+
+| | before (this morning) | after phase 1 |
+|---|---|---|
+| who indexes | Windows client, over 9p | **the WSL daemon** |
+| daemon CPU for the load | idle at 0.9% | **110 ms of real work** |
+| `local_model` index events | every load | **zero, whole process** |
+| `~/git/warp` outcome | 32m50s, budget exhausted, never rendered | rendered |
+| `target/` | walked | italic — ignored |
+
+**It needed two edits, and the second only surfaced by running the first.**
+Routing `pwd_as_local_or_remote` alone produced
+`Repository not found: /home/effatha/scratch-t16/repo` — the tree asked the
+server to load a directory for a repository nobody had told it about, because
+repo detection asks `session_is_local` *independently* and still answered
+`Local`, so `navigate_to_directory` was never sent. Both now go through one
+predicate, `TerminalView::wsl_connected_host`.
+
+That is the finding, not the tidy-up. **"Is this session local?" is asked in
+several places, a WSL session answers yes to all of them, and its files are
+somewhere else.** Any future call site that asks without the predicate
+reintroduces exactly this bug, which is the concrete argument for making the
+shortcut unrepresentable rather than fixing call sites one at a time.
+
+**Incremental updates work** — chased before recording this, because recording a
+broken behaviour as ground truth is worse than not recording it. A file created
+in WSL appeared in the tree with no warning and 70 ms of daemon CPU. The
+`No remote repository found for incremental update` warning fires only at
+navigation time, when the server pushes before the client's remote model has
+registered the repository. It is a race in the pre-existing remote path, newly
+reachable now that WSL uses it — **not introduced here**, and superseded
+immediately by the full load.
+
+### Still open after phase 1
+
+- [ ] **No automated test on the routing seam.** It needs either a
+      `RemoteTransport` double (a fat async trait, no existing stub) or the
+      integration harness, which observes `RemoteSessionState::Connected`
+      against a real server. **This belongs in `crates/integration`**, asserting
+      that a connected WSL session yields a remote root — not a unit test that
+      mocks the thing under test. Stated rather than quietly carried: phases 0
+      and 1 shipped on gates plus live measurement.
+- [ ] **The registration race**, above. Benign today; it drops one update.
+- [ ] **Phase 2** — buffers, `file open`, `ripgrep_search`, codebase indexing and
+      the agent's execution context still reach across the boundary.
+- [ ] **Phase 3** — a path that belongs to a host should not hand out a
+      `&Path` that `std::fs` accepts. Until then every fix above is one
+      forgetful call site from being undone.
+
 ### Corrections this ticket carries
 
 - **T6.4's verdict is a workaround recorded as a law.** Its direction survives
