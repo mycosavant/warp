@@ -242,8 +242,30 @@ impl RemoteRepoMetadataModel {
             .cloned();
 
         let Some(id) = matching_id else {
-            log::warn!(
-                "No remote repository found for incremental update: {}",
+            // Expected, and not a race the client can close. The key an update
+            // is filed under is the repository *root*, and that is a value only
+            // the server computes: the client asks about a working directory,
+            // the server resolves it to a root, indexes it, starts watching it,
+            // and names the root in the snapshot that follows. The watcher
+            // fires while that indexing is happening, so the first updates for
+            // a newly navigated repository necessarily carry a key the client
+            // has not been given yet. Pre-registering is impossible for the
+            // same reason: the client does not know the key either.
+            //
+            // Dropping costs nothing because the snapshot that follows is a
+            // complete state, not a delta -- pinned by
+            // `an_update_before_the_snapshot_is_dropped_and_the_snapshot_still_wins`,
+            // and verified by running (T16): after this fired on navigation the
+            // tree rendered correctly and a later file creation appeared in it
+            // with no warning at all.
+            //
+            // `debug`, not `warn`. It fired on every single navigation and read
+            // like a defect; that cost one investigation already, and this fork
+            // has a standing note about a phantom zero from a similar misread
+            // being one inference away from a security review.
+            log::debug!(
+                "Incremental update for a remote repository the server has not \
+                 announced yet; superseded by the snapshot that follows: {}",
                 update.repo_path
             );
             return;
