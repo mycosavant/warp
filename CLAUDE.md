@@ -366,9 +366,26 @@ The remedy is one variable and no code:
 WARP_FORK_ACP_COMMAND='wsl.exe -d Ubuntu -- npx -y @agentclientprotocol/claude-agent-acp'
 ```
 
-Measured with that in place: `session/new` accepted, three consecutive turns
-`status: success`, `WARP_FORK_ACP_MODE=default` honoured and reported, and the
-agent's `LSP` tool present and invoked. The alternative — translating the cwd to
+Measured with that in place, end to end on a **routed** session
+(`session inspect` → `{"where": "host"}`, `cd` first and connect second):
+`session/new` accepted, turns `status: success`, `WARP_FORK_ACP_MODE=default`
+requested and accepted — the turn opened in `auto` and the agent moved to
+`default`, which is the per-turn re-send earning its keep — and the `LSP` tool
+returning real rust-analyzer output:
+
+```
+WslMarker (Struct) - Line 1
+  id (Field) u32 - Line 3
+build_wsl_marker (Function) fn(id: u32) -> WslMarker - Line 6
+main (Function) fn() - Line 11
+```
+
+**Checked the way an LSP answer has to be checked**, because a plausible one and
+a real one read identically: the two symbols carrying doc comments report the
+*doc* line (items at 2 and 7), the two without report the item line exactly.
+Only the documented ones are offset, each by its own doc length — a fabrication
+would have to know which symbols have docs, offset only those, and invent the
+field type and signature correctly. The alternative — translating the cwd to
 `\\wsl.localhost\<distro>\…` for a Windows-side agent — would also work
 (Windows rust-analyzer over UNC measured at ~5% overhead against a local copy on
 a small crate) but leaves the agent running its shell commands on the wrong side
