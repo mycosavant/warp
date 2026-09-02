@@ -1016,6 +1016,18 @@ impl Session {
         self.info.launch_data.as_ref()
     }
 
+    /// The WSL distribution this session runs in, or `None` if it is not a WSL
+    /// session.
+    ///
+    /// Note this is orthogonal to [`Self::session_type`], and deliberately so:
+    /// a WSL session is `SessionType::Local`, because WSL2 inherits the Windows
+    /// machine name and `determine_session_type` decides by hostname equality.
+    /// So this is the only honest signal that a session's files live somewhere
+    /// the client should not be reading directly. See T16.
+    pub fn wsl_name(&self) -> Option<&str> {
+        self.info.wsl_name()
+    }
+
     pub fn maybe_convert_to_native_path(&self, path: &TypedPath) -> anyhow::Result<PathBuf> {
         self.info.maybe_convert_to_native_path(path)
     }

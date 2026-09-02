@@ -2463,6 +2463,26 @@ impl RemoteServerManager {
         }
     }
 
+    /// The host a session belongs to, but **only once that session is actually
+    /// connected**.
+    ///
+    /// Reads `host_id` off the `Connected` state rather than consulting
+    /// `host_to_sessions`, so "is connected" and "has a host" are the same fact
+    /// rather than two lookups that have to agree. `host_to_sessions` retains
+    /// an entry while a session is still `Connecting`/`Initializing`, and
+    /// answering with a host id then would route requests to a server that
+    /// cannot serve them yet.
+    ///
+    /// Added for the WSL routing seam (T16), where a session's own type says
+    /// `Local` and the only evidence that its files live on a host is that a
+    /// server was attached to it.
+    pub fn host_for_connected_session(&self, session_id: SessionId) -> Option<&HostId> {
+        match self.sessions.get(&session_id) {
+            Some(RemoteSessionState::Connected { host_id, .. }) => Some(host_id),
+            _ => None,
+        }
+    }
+
     /// Returns an iterator over all currently connected clients.
     pub fn all_connected_clients(&self) -> impl Iterator<Item = &Arc<RemoteServerClient>> {
         self.sessions.values().filter_map(|state| match state {
