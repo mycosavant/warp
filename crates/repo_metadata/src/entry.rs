@@ -356,6 +356,31 @@ impl Entry {
                         // Do not materialize directory symlinks in the canonical tree. Standing
                         // project-skill queries still follow eligible provider children locally
                         // and retain their lexical paths in the result set.
+                        //
+                        // **A non-symlink child keeps the spelling `read_dir` gave it, and that
+                        // is load-bearing rather than an optimisation.** `read_dir_entry_paths`
+                        // joins each name onto `job.path`, and a directory symlink is dropped
+                        // below rather than descended, so no symlinked ancestor can ever appear
+                        // in the tree. Every path is therefore already the root's spelling
+                        // joined with on-disk names — canonical by construction, by induction
+                        // from the root.
+                        //
+                        // Canonicalising each child instead broke that invariant on exactly one
+                        // configuration, and it is the one this fork exists for. `dunce`
+                        // strips `\\?\` for drive paths but *not* for UNC, so on a
+                        // `\\wsl$\ubuntu\...` root every child came back verbatim
+                        // `\\?\UNC\wsl$\...`. `std` compares prefixes by parsed variant and
+                        // `Prefix::UNC != Prefix::VerbatimUNC`, so `matches_gitignores`'
+                        // `strip_prefix` (see below) failed for *every* child, `/target` never
+                        // matched, and the walk descended into build output until the 200,000
+                        // budget ran out. Measured 2026-09-01 on a live Windows build against a
+                        // WSL repo: `Repository exceeded max file budget` after **32m50s**, the
+                        // project explorer never leaving its loading skeleton. See T16.
+                        //
+                        // It was also 65% of the per-entry cost. `dunce::canonicalize` is
+                        // `GetFinalPathNameByHandle` — a handle open per entry — measured at
+                        // **13.3 ms** of a ~20 ms per-entry total over 9p, against ~0.19 ms for
+                        // a plain enumeration. Removing it is the same edit as fixing the bug.
                         let canonical_path = if entry_path.is_symlink() {
                             if entry_path.is_dir() {
                                 if let Some(state) = standing_queries.as_deref_mut() {
@@ -369,7 +394,7 @@ impl Entry {
                                 Some(entry_path)
                             }
                         } else {
-                            dunce::canonicalize(entry_path).ok()
+                            Some(entry_path)
                         };
                         let Some(child_path) = canonical_path else {
                             continue;

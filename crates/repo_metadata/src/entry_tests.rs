@@ -1318,3 +1318,94 @@ fn build_tree_fail_fast_succeeds_within_budget() {
     ));
     assert!(result.is_ok(), "FailFast must succeed when within budget");
 }
+
+/// The invariant that makes gitignore matching work at all: **every path in a
+/// built tree is the root's own spelling joined with on-disk names.**
+///
+/// `matches_gitignores` decides by `path.strip_prefix(gitignore.path())` and
+/// treats an `Err` as "not ignored". A gitignore's root is the spelling of the
+/// directory it was found in, so the instant a child is spelled differently from
+/// its ancestors, *every* rule silently stops matching and the walk descends
+/// into whatever the repo meant to exclude.
+///
+/// This is pinned on Unix with a symlinked ancestor because that is the shape
+/// available here, but the bug it guards was found on Windows and cost T16 a
+/// 32m50s indexing run that ended in `Repository exceeded max file budget`:
+/// `dunce` does not strip `\\?\` for UNC, so a `\\wsl$\ubuntu\...` root gave
+/// verbatim `\\?\UNC\wsl$\...` children, and `Prefix::UNC != Prefix::VerbatimUNC`.
+/// Same failure, same line, different spelling of "different spelling".
+///
+/// Calibrated by making it fail: restoring `dunce::canonicalize(entry_path)` for
+/// non-symlink children reddens this test.
+#[cfg(unix)]
+#[test]
+fn build_tree_keeps_the_roots_spelling_so_gitignore_rules_still_match() {
+    use std::os::unix::fs::symlink;
+
+    let temp_dir = tempfile::tempdir().unwrap();
+    let base = dunce::canonicalize(temp_dir.path()).unwrap();
+
+    let real = base.join("real");
+    let repo = real.join("repo");
+    fs::create_dir_all(&repo).unwrap();
+    fs::write(repo.join(".gitignore"), "/target\n").unwrap();
+    fs::create_dir(repo.join("target")).unwrap();
+    fs::write(repo.join("target").join("build.o"), "").unwrap();
+    fs::create_dir(repo.join("src")).unwrap();
+    fs::write(repo.join("src").join("main.rs"), "").unwrap();
+
+    // The symlink is an *ancestor* of the root, not the root itself: a symlinked
+    // root is rejected outright by design (classification failure at the root
+    // propagates). So the root is a real directory reached by a non-canonical
+    // spelling — which is exactly the WSL case, where `\\wsl$\...` and
+    // `\\?\UNC\wsl$\...` name the same real directory.
+    let link = base.join("link");
+    symlink(&real, &link).unwrap();
+    let repo_root = link.join("repo");
+
+    let mut files = Vec::new();
+    let mut gitignores = Vec::<Arc<Gitignore>>::new();
+    let tree = run(Entry::build_tree(
+        &repo_root,
+        &mut files,
+        &mut gitignores,
+        None,
+        10,
+        0,
+        &IgnoredPathStrategy::Include,
+        super::BudgetExceededBehavior::StopAndLazyLoad,
+    ))
+    .unwrap();
+
+    let Entry::Directory(root) = tree else {
+        panic!("root should be a directory");
+    };
+
+    let target = root
+        .children
+        .iter()
+        .find(|entry| entry.path().file_name() == Some("target"))
+        .expect("target/ should be in the tree");
+    assert!(
+        target.ignored(),
+        "`/target` is gitignored, but the rule did not match. That is what a \
+         spelling mismatch between the gitignore's root and its children looks \
+         like, and on Windows it walks the whole of target/ until the file \
+         budget runs out."
+    );
+
+    // The mechanism, pinned directly rather than only through its consequence:
+    // a child must still be spelled with the root the caller passed.
+    let src = root
+        .children
+        .iter()
+        .find(|entry| entry.path().file_name() == Some("src"))
+        .expect("src/ should be in the tree");
+    assert!(
+        src.path().as_str().starts_with(repo_root.to_str().unwrap()),
+        "child was spelled {:?}, which is not under the root the caller gave ({:?}) \
+         — canonicalization has crept back into the child path",
+        src.path().as_str(),
+        repo_root,
+    );
+}
