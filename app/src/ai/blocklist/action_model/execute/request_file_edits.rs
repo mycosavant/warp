@@ -30,12 +30,13 @@ use crate::ai::agent::{
     AIAgentAction, AIAgentActionId, AIAgentActionResultType, AIAgentActionType,
     AIAgentOutputMessage, AIAgentOutputMessageType, AIIdentifiers, RequestFileEditsResult,
 };
+use crate::ai::blocklist::controller::SessionContext;
 use crate::ai::blocklist::diff_storage::RegisteredDiffStorage;
 use crate::ai::blocklist::diff_types::{DiffSessionType, FileDiff};
 use crate::ai::blocklist::{BlocklistAIPermissions, RequestedEditResolution};
 use crate::ai::paths::host_native_absolute_path;
-use crate::terminal::model::session::SessionType;
 use crate::terminal::model::session::active_session::ActiveSession;
+use crate::terminal::model::session::filesystem::SessionFilesystem;
 use crate::workspaces::user_workspaces::TeamContext;
 use crate::{BlocklistAIHistoryModel, safe_warn};
 
@@ -325,13 +326,15 @@ impl RequestFileEditsExecutor {
         }
 
         // Set the session type so save/delete/create routes through the
-        // correct FileModel backend.
-        let diff_session_type = match self.active_session.as_ref(ctx).session_type(ctx) {
-            Some(SessionType::WarpifiedRemote {
-                host_id: Some(host_id),
-            }) => DiffSessionType::Remote(host_id.clone()),
-            _ => DiffSessionType::Local,
-        };
+        // correct FileModel backend. This is a question about where the file
+        // is, so it asks `filesystem()` rather than `session_type()`: a WSL
+        // session answers `Local` to the latter and would have written a
+        // `/home/...` path with `std::fs` on Windows. See T16.
+        let diff_session_type =
+            match SessionContext::from_session(self.active_session.as_ref(ctx), ctx).filesystem() {
+                SessionFilesystem::Host(host_id) => DiffSessionType::Remote(host_id.clone()),
+                SessionFilesystem::Local | SessionFilesystem::Unreachable => DiffSessionType::Local,
+            };
 
         storage.set_candidate_diffs(diffs, diff_session_type, ctx);
     }

@@ -390,6 +390,12 @@ impl RequestParams {
             && BlocklistAIPermissions::as_ref(app)
                 .get_run_agents_setting(app, terminal_view_id)
                 .is_enabled()
+            // Deliberately `session_type()` and not `filesystem()`: this gate
+            // is about where *commands* run, not where files are. Orchestrated
+            // subagents run shell commands in the session, and a WSL session's
+            // shell is already native Linux -- switching this to the filesystem
+            // question would turn orchestration off for every WSL pane with a
+            // server attached. See T16.
             && session_context
                 .session_type()
                 .as_ref()

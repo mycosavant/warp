@@ -97,13 +97,21 @@ pub fn session_filesystem(
 
     use crate::remote_server::manager::RemoteServerManager;
 
-    classify(
-        session.session_type(),
-        session.is_wsl(),
+    // `has_singleton_model` rather than a bare `as_ref`, because this is now
+    // called from `SessionContext::from_session` -- which every skill, chip
+    // and agent-tool decision goes through -- and the manager is genuinely
+    // absent in test apps that register only what they exercise. Panicking
+    // there would make an unrelated test's harness depend on a routing
+    // decision it never asked about. Absent means no host, which is the same
+    // answer as "no server attached".
+    let connected_host = if ctx.has_singleton_model::<RemoteServerManager>() {
         RemoteServerManager::as_ref(ctx)
             .host_for_connected_session(session_id)
-            .cloned(),
-    )
+            .cloned()
+    } else {
+        None
+    };
+    classify(session.session_type(), session.is_wsl(), connected_host)
 }
 
 #[cfg(target_family = "wasm")]

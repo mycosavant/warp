@@ -9,7 +9,7 @@ use super::convert_to::convert_input;
 use super::{ConvertToAPITypeError, RequestParams, ResponseStream};
 use crate::ai::agent::redaction;
 use crate::server::server_api::{AIApiError, ServerApi};
-use crate::terminal::model::session::SessionType;
+use crate::terminal::model::session::filesystem::SessionFilesystem;
 
 pub async fn generate_multi_agent_output(
     server_api: Arc<ServerApi>,
@@ -241,8 +241,13 @@ fn get_supported_tools(params: &RequestParams) -> Vec<api::ToolType> {
         supported_tools.push(api::ToolType::FetchConversation);
     }
 
-    match params.session_context.session_type() {
-        None | Some(SessionType::Local) => {
+    // Keyed on where the session's files are, not on what bootstrap called
+    // the session. A WSL session reports `Local` and its files are inside the
+    // distribution: asking `session_type()` here handed the agent local file
+    // tools for `/home/...` paths, which this process reaches only by going
+    // back out over the 9p redirector. See T16.
+    match params.session_context.filesystem() {
+        SessionFilesystem::Local => {
             supported_tools.extend(&[
                 api::ToolType::ReadFiles,
                 api::ToolType::ApplyFileDiffs,
@@ -253,18 +258,19 @@ fn get_supported_tools(params: &RequestParams) -> Vec<api::ToolType> {
                 supported_tools.push(api::ToolType::UploadFileArtifact);
             }
         }
-        Some(SessionType::WarpifiedRemote { host_id: Some(_) }) => {
-            // Remote session with a known host — enable tools that route
-            // through RemoteServerClient. The host_id is only populated
-            // after a successful connection handshake, so its presence is a
-            // sufficient proxy for client availability.
+        SessionFilesystem::Host(_) => {
+            // A host is attached — enable tools that route through
+            // RemoteServerClient. The host is only known after a successful
+            // connection handshake, so its presence is a sufficient proxy for
+            // client availability.
             supported_tools.extend(&[api::ToolType::ReadFiles, api::ToolType::ApplyFileDiffs]);
             if FeatureFlag::RemoteCodebaseIndexing.is_enabled() {
                 supported_tools.push(api::ToolType::SearchCodebase);
             }
         }
-        Some(SessionType::WarpifiedRemote { host_id: None }) => {
-            // Feature flag off or not yet connected — no remote tools.
+        SessionFilesystem::Unreachable => {
+            // Feature flag off or not yet connected — no file tools at all,
+            // rather than local ones pointed at another machine's paths.
         }
     }
 
@@ -310,18 +316,18 @@ fn get_supported_cli_agent_tools(params: &RequestParams) -> Vec<api::ToolType> {
         supported_cli_agent_tools.push(api::ToolType::TransferShellCommandControlToUser);
     }
 
-    match params.session_context.session_type() {
-        None | Some(SessionType::Local) => {
+    match params.session_context.filesystem() {
+        SessionFilesystem::Local => {
             supported_cli_agent_tools
                 .extend(&[api::ToolType::ReadFiles, api::ToolType::SearchCodebase]);
         }
-        Some(SessionType::WarpifiedRemote { host_id: Some(_) }) => {
+        SessionFilesystem::Host(_) => {
             supported_cli_agent_tools.push(api::ToolType::ReadFiles);
             if FeatureFlag::RemoteCodebaseIndexing.is_enabled() {
                 supported_cli_agent_tools.push(api::ToolType::SearchCodebase);
             }
         }
-        Some(SessionType::WarpifiedRemote { host_id: None }) => {}
+        SessionFilesystem::Unreachable => {}
     }
 
     supported_cli_agent_tools

@@ -13,9 +13,10 @@ use crate::ai::agent::{
     ReadFilesRequest, ReadFilesResult,
 };
 use crate::ai::blocklist::BlocklistAIPermissions;
+use crate::ai::blocklist::controller::SessionContext;
 use crate::ai::paths::host_native_absolute_path;
-use crate::terminal::model::session::SessionType;
 use crate::terminal::model::session::active_session::ActiveSession;
+use crate::terminal::model::session::filesystem::SessionFilesystem;
 use crate::workspaces::user_workspaces::TeamContext;
 
 pub struct ReadFilesExecutor {
@@ -112,24 +113,22 @@ impl ReadFilesExecutor {
 
         let locations = locations.clone();
 
-        // Check if this is a remote session with a connected host.
-        let session_type = self.active_session.as_ref(ctx).session_type(ctx);
-        let host_request_handle = match &session_type {
-            Some(SessionType::WarpifiedRemote {
-                host_id: Some(host_id),
-            }) => Some(
-                remote_server::manager::RemoteServerManager::as_ref(ctx)
-                    .host_request_handle(host_id),
-            ),
-            _ => None,
-        };
+        // Where the files are, not what bootstrap called the session: a WSL
+        // session reports `Local` and its files are inside the distribution,
+        // so asking `session_type()` here read them back out over the 9p
+        // redirector instead of through the server already running beside
+        // them. See T16.
+        let filesystem = SessionContext::from_session(self.active_session.as_ref(ctx), ctx)
+            .filesystem()
+            .clone();
+        let host_request_handle = filesystem.host().map(|host_id| {
+            remote_server::manager::RemoteServerManager::as_ref(ctx).host_request_handle(host_id)
+        });
 
-        // Remote session without a usable remote server connection. File reading
+        // Files on another host with no usable server connection. File reading
         // requires either local access or a connected remote server, neither
         // of which is available.
-        if matches!(session_type, Some(SessionType::WarpifiedRemote { .. }))
-            && host_request_handle.is_none()
-        {
+        if matches!(filesystem, SessionFilesystem::Unreachable) {
             return ActionExecution::Sync(AIAgentActionResultType::ReadFiles(
                 ReadFilesResult::Error(
                     "The file read/edit tool is not available on this remote session. \

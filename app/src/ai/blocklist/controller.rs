@@ -81,6 +81,7 @@ use crate::terminal::model::block::{
 };
 use crate::terminal::model::session::SessionType;
 use crate::terminal::model::session::active_session::ActiveSession;
+use crate::terminal::model::session::filesystem::{SessionFilesystem, session_filesystem};
 use crate::terminal::model::terminal_model::TerminalModel;
 use crate::terminal::view::inline_banner::ZeroStatePromptSuggestionType;
 use crate::workspace::OneTimeModalModel;
@@ -90,17 +91,36 @@ use crate::workspaces::user_workspaces::{TeamContext, TeamContextResolver, UserW
 #[derive(Debug, Clone)]
 pub struct SessionContext {
     session_type: Option<SessionType>,
+    /// Where this session's files can actually be opened.
+    ///
+    /// Held beside `session_type` rather than derived from it, because they
+    /// disagree for a WSL session: bootstrap decides `Local` by hostname
+    /// equality and WSL2 inherits the Windows machine name, so every consumer
+    /// below that asked `session_type` alone routed a Linux path through the
+    /// Windows filesystem. See `session::filesystem` and T16.
+    filesystem: SessionFilesystem,
     shell: Option<ShellLaunchData>,
     current_working_directory: Option<String>,
 }
 
 impl SessionContext {
     pub fn from_session(session: &ActiveSession, app: &AppContext) -> Self {
+        let filesystem = match (session.session(app), session.session_id(app)) {
+            (Some(s), Some(session_id)) => session_filesystem(&s, session_id, app),
+            _ => SessionFilesystem::Local,
+        };
         SessionContext {
             session_type: session.session_type(app),
+            filesystem,
             shell: session.shell_launch_data(app),
             current_working_directory: session.current_working_directory().cloned(),
         }
+    }
+
+    /// Where this session's files live. Prefer this over `session_type()` for
+    /// anything that opens, reads, writes or searches a path.
+    pub fn filesystem(&self) -> &SessionFilesystem {
+        &self.filesystem
     }
 
     pub fn session_type(&self) -> &Option<SessionType> {
@@ -115,30 +135,27 @@ impl SessionContext {
         &self.current_working_directory
     }
 
-    /// Returns the remote host ID if this is a `WarpifiedRemote` session with
-    /// a connected `RemoteServerClient`.
+    /// The host to route file requests to, if this session's files are not on
+    /// this machine and a server is attached to reach them.
     pub fn host_id(&self) -> Option<&warp_core::HostId> {
-        match &self.session_type {
-            Some(SessionType::WarpifiedRemote { host_id }) => host_id.as_ref(),
-            Some(SessionType::Local) | None => None,
-        }
+        self.filesystem.host()
     }
 
-    /// Returns `true` if this is a remote session (regardless of whether
-    /// the remote server client is connected).
+    /// Returns `true` if this session's files are somewhere this process
+    /// cannot open directly — including when no server is attached yet, so a
+    /// caller never falls through to the local filesystem for paths that
+    /// belong to another machine.
     pub fn is_remote(&self) -> bool {
-        matches!(self.session_type, Some(SessionType::WarpifiedRemote { .. }))
+        !self.filesystem.is_local()
     }
 
     pub fn skill_path_origin(&self) -> SkillPathOrigin {
-        match &self.session_type {
-            Some(SessionType::WarpifiedRemote {
-                host_id: Some(host_id),
-            }) => SkillPathOrigin::Remote {
+        match &self.filesystem {
+            SessionFilesystem::Host(host_id) => SkillPathOrigin::Remote {
                 host_id: host_id.clone(),
             },
-            Some(SessionType::WarpifiedRemote { host_id: None }) => SkillPathOrigin::Unavailable,
-            Some(SessionType::Local) | None => SkillPathOrigin::Local,
+            SessionFilesystem::Unreachable => SkillPathOrigin::Unavailable,
+            SessionFilesystem::Local => SkillPathOrigin::Local,
         }
     }
 
@@ -146,15 +163,38 @@ impl SessionContext {
     pub fn new_for_test() -> Self {
         SessionContext {
             session_type: None,
+            filesystem: SessionFilesystem::Local,
+            shell: None,
+            current_working_directory: None,
+        }
+    }
+
+    /// Builds a context whose filesystem is derived from `session_type` the
+    /// way a non-WSL session's would be. Use `new_with_filesystem_for_test`
+    /// to reach the WSL case, where the two deliberately disagree.
+    #[cfg(test)]
+    pub fn new_with_session_type_for_test(session_type: Option<SessionType>) -> Self {
+        let filesystem = crate::terminal::model::session::filesystem::classify(
+            session_type.clone().unwrap_or(SessionType::Local),
+            false,
+            None,
+        );
+        SessionContext {
+            session_type,
+            filesystem,
             shell: None,
             current_working_directory: None,
         }
     }
 
     #[cfg(test)]
-    pub fn new_with_session_type_for_test(session_type: Option<SessionType>) -> Self {
+    pub fn new_with_filesystem_for_test(
+        session_type: Option<SessionType>,
+        filesystem: SessionFilesystem,
+    ) -> Self {
         SessionContext {
             session_type,
+            filesystem,
             shell: None,
             current_working_directory: None,
         }
