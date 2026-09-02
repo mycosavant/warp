@@ -11783,3 +11783,144 @@ agent's.
   `local_model.rs:995` when no pane references the repo), which is why a working
   day feels fine and a cold start does not. Nothing is cached on disk, and 9p
   itself showed no warm-up across three passes.
+
+---
+
+## T17 — Is LSP-for-agents already built and switched off?
+
+**Asked 2026-09-02**, running this fork's own "look for the gate first" rule
+literally before proposing that Warp give its agents go-to-definition and
+find-references. **Answer: no, and it should not be built.**
+
+### The gate looked exactly right, and was not
+
+`FeatureFlag::LSPAsATool` — doc: *"When enabled, we expose LSP as a tool to the
+agent"* — is off in **both** halves: in no channel list, and `lsp_as_a_tool` is
+declared in `app/Cargo.toml` but absent from `default`. A reader stops there and
+reports the feature as existing behind a switch.
+
+All three call sites are `LspRepoWatcher::ensure`/`teardown`
+(`crates/lsp/src/model.rs:305,335,409`), forwarding repo file changes as
+`workspace/didChangeWatchedFiles`. Nothing about tools, nothing about agents.
+And the tool is **absent from the protocol**, not gated off: `ToolType` comes
+from the `warp-proto-apis` git dependency, 36 variants, none LSP-related, and the
+proto has no mention of `lsp`, `definition`, `references`, `symbol` or
+`diagnostic`. No `warpctrl` action, no built-in MCP server and no `remote_server`
+message touches LSP either.
+
+Recorded as the thirteenth entry in `CLAUDE.md`'s stale-doc table and the first
+in an *upstream* file — the previous twelve were all fork-authored, which quietly
+implied the defect was ours.
+
+### What exists, and one live defect found alongside
+
+Implemented in `crates/lsp`: `textDocument/definition`, `/hover`, `/references`,
+`/formatting`, `publishDiagnostics`. Absent entirely: `documentSymbol`,
+`workspace/symbol`, `codeAction`, `rename`, `implementation`, `typeDefinition`.
+Real server lifecycle — GitHub-release install with SHA256 verification, five
+servers, capability negotiation, per-path enablement in SQLite. Every consumer is
+editor UI.
+
+**And `default_client_capabilities()` advertises `did_change_watched_files`
+unconditionally** (`config.rs:284-289`) while the only sender of those events is
+behind `LSPAsATool`. So Warp tells every language server *"register your globs
+with me"*, the server registers, and Warp never sends one. The other channel,
+`did_change_document`, fires only for **open editor buffers** — so a file changed
+on disk by an agent, or by `git checkout`, is invisible to the server. Not fixed;
+the decision between forcing the flag on and not advertising the capability is
+the maintainer's.
+
+### Why not to build it
+
+Measured rather than argued: the recommended pairing already has the whole
+surface. `claude-agent-acp` 0.70.0 loads Claude Code's `LSP` tool over the
+panel's own transport — definition, references, hover, documentSymbol,
+workspaceSymbol, implementation, call hierarchy **and diagnostics** — with zero
+permission requests.
+
+`opencode` is the cautionary half: its `lsp` tool behind
+`OPENCODE_EXPERIMENTAL_LSP_TOOL` opened, its server failed to attach, and the
+model then invented five symbols. A tool that fabricates is worse than none.
+
+Seams ranked: **do nothing** > a `warpctrl lsp` action advertised by a per-turn
+pointer > that action alone > a built-in MCP server > the ACP protocol (nothing
+there). The prompt-injection seam (`transcript::pointer`) is an *announcement
+layer*, not a seam for query-shaped data, and its own decision — *"the file is
+offered, not explained"* — argues against advertising a capability the agent has.
+
+**Also settled:** Windows rust-analyzer on a WSL-hosted crate over UNC ran 4.26 s
+against 4.19 s for a local copy — ~5%, not a barrier. That is a two-function
+crate and does **not** exercise the repo-scale walk that made T16 expensive, so
+it shows the boundary is crossable, not that it is cheap at size.
+
+---
+
+## T18 — Every turn in a WSL pane died before it began
+
+**Found 2026-09-02 while running T17's end-to-end check**, which never reached
+LSP because the session would not open. On the Windows build, `session/new` was
+refused:
+
+```
+Invalid params: `cwd` does not exist on the machine running the agent:
+/home/effatha/scratch-t17/repo
+```
+
+A WSL session's shell reports a Linux cwd; Warp passes it verbatim; the agent
+process was started by Warp, on Windows. **Attributed by control** rather than
+assumed: an *unrouted* WSL pane fails identically with `/home/effatha`, so this
+is neither routing nor T16. It is invisible on the Linux build, where agent and
+shell share a filesystem — which is where every other ACP measurement in this
+fork was taken.
+
+### As built
+
+The fix already existed one module over. `local_agent::spawn_for` hit the same
+bug in T6.1 and solved it by starting `claude` *inside* the distribution;
+`acp_agent` never got the same treatment. `agent_argv` now wraps the configured
+command in `wsl.exe --distribution <distro> --cd <dir> --exec /bin/sh -lc <cmd>`,
+mirroring `spawn_for` down to the login shell and its reason. A command already
+aimed at the distribution by hand is left alone, so the manual workaround
+documented the same morning keeps working instead of being wrapped twice.
+
+Rewriting to `\\wsl$\<distro>\…` is refused on `spawn_for`'s own measurements —
+~13× the same tree on the Windows disk, ~50× from inside the distribution — and
+because it *succeeds*, which makes it quietly slow rather than loudly wrong.
+
+`spawn_failure_or` explains the failure as a backstop for whatever the wrap does
+not cover. Both rules take `on_windows` as a parameter rather than reading
+`cfg!` inside, so they are pure functions with tests that run on every platform —
+the same shape as `session::filesystem::classify`, and because a
+`#[cfg(windows)]` test is one nobody here can calibrate by making it fail.
+
+**Verified live on a fresh binary with the bare command configured**: `status:
+success`, working directory reported as the pane's own, and the agent's LSP tool
+returning rust-analyzer's real document symbols. Checked the way an LSP answer
+has to be — only the documented symbol is reported at its doc-comment line, the
+three undocumented ones at their item lines.
+
+### What this cost to find, recorded because it will happen again
+
+Three of the four blockers hit on the way were the operator's, not the product's:
+
+- **A fresh pane is already Ubuntu** when that is the default shell. Typing
+  `wsl.exe -d Ubuntu` into it makes a nested subshell whose block never
+  completes; `input submit` then answers `queued: true` forever and `agent
+  prompt` refuses with `target_state_conflict`. That reads as three defects and
+  is one mistake.
+- **The Windows build is a second checkout** (`C:\dev\warp`) that nothing syncs.
+  A build printed *"Finished in 34.12s"*, exited 0 and produced nothing, because
+  that tree was 18 hours behind. `CLAUDE.md`'s existing timestamp remedy cannot
+  catch it — it compares a binary in one tree to source in another.
+- **An LSP crash with exit code 1** was the rustup *default* toolchain lacking
+  the `rust-analyzer` component. The server is spawned from the agent's cwd, so
+  the pin that matters resolves there, not in the file being asked about.
+
+### Still open
+
+- [ ] **`did_change_watched_files` is advertised and never sent** (T17 above).
+      Editor correctness, unrelated to agents. Two candidate fixes, both the
+      maintainer's call.
+- [ ] **`warpctrl acp probe --cwd` validates the path locally**, so it cannot
+      probe a Unix cwd from the Windows binary. Small, and it made the probe
+      useless for exactly the case being investigated.

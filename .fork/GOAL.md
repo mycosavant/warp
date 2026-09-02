@@ -131,6 +131,43 @@ agent's answer instead of hedging about a question settled two lines earlier, an
 renderer's duplicate in place — actually has one home now. Neither is a
 permission-posture change.
 
+## Between run 1 and run 2 — 2026-09-02, the platform was the blocker
+
+**Run 2 could not have happened on the machine this fork is actually used on,
+and nobody knew.** Every turn in every WSL pane on the Windows build died at
+`session/new` — *"`cwd` does not exist on the machine running the agent"* — because
+the shell reports a Linux path and Warp had started the agent on Windows. Fixed
+in T18 by starting the agent inside the distribution, which is the treatment
+`local_agent` has given `claude` since T6.1.
+
+**This matters to the horizon and not just to the board.** Run 1 was seven turns
+on the Linux build, where agent and shell share a filesystem and the bug cannot
+appear. The horizon asks for a long session *doing work someone actually wanted
+done*, and the work is on Windows with WSL panes — so the destination was
+unreachable on the real platform while looking fine on the tested one. That is
+worth naming as a class: **a horizon measured only where the bug cannot occur is
+not measured.**
+
+Also cleared on the way, none of it a permission-posture change: the WSL agent
+path and its gotchas are now in `.fork/README.md` rather than in one session's
+memory; the Windows build's second checkout is documented as something nothing
+syncs; and T17 answered "should Warp give agents LSP" with *no* — the recommended
+pairing already has the whole surface, measured, so that question is closed
+without code.
+
+## Run 2 — the remaining gap, unchanged and now reachable
+
+Three of the four unknowns are answered and the refusal criterion is met. **What
+is left is one long session, on Windows, in a WSL pane**, for unknown 4 and for
+the eight-hours caveat run 1 carried forward.
+
+Nothing new needs building for it. The instruments are on
+(`WARP_FORK_EVENT_LOG`, `WARP_FORK_TRANSCRIPT`), the agent pairing is settled
+(`claude-agent-acp` + `WARP_FORK_ACP_MODE=default`), and as of T18 the bare
+command works in a WSL pane with no manual wrapping. The one thing to resist is
+the one this file already names: **building the compaction detector before
+measuring the cadence.**
+
 ## What "met" looks like, concretely
 
 - A run against **`claude-agent-acp` in plan mode**, long enough to compact at
