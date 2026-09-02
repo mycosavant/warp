@@ -343,6 +343,43 @@ either half of it alone is worse than `opencode`. Warp sends the identical
 per-call rejection (`{"outcome": "selected", "optionId": "reject"}`, never
 `Cancelled`) in every case, so the difference is entirely the agent's.
 
+**And code navigation is a third thing that pairing gets you, which Warp does
+not have and should not build.** Asked 2026-09-02 whether the fork should give
+its agents go-to-definition and find-references, the answer is that the
+recommended agent already has them. Claude Code ships an `LSP` tool
+(`operation`/`filePath`/`line`/`character`, 1-based), enabled per language by
+installing a `*-lsp` plugin, and `claude-agent-acp` 0.70.0 sets
+`settingSources: ["user","project","local"]` so those plugins load on the ACP
+path too. Measured with `acp probe` on the same transport the panel uses:
+`tool_call` titled `LSP`, `operation: documentSymbol`, a real answer in 8 s,
+**zero permission requests**.
+
+Verified rather than taken on trust, and the check is worth copying because it
+is the one that separates a real LSP answer from a plausible one: the returned
+line numbers matched **no commit in the repository**, which looks like
+fabrication until you notice they are each the first line of that symbol's *doc
+comment* — which is what `documentSymbol` reports. They matched the live working
+tree, including a doc comment written hours after the probe binary was built. A
+model cannot recall that.
+
+**`opencode` is the cautionary half.** It has a full LSP client and an
+agent-facing `lsp` tool, gated by `OPENCODE_EXPERIMENTAL_LSP_TOOL`. Setting it
+opens the gate and, measured, the rust server did not attach — the tool answered
+*"No LSP server available for this file type"* and **the model then invented five
+symbols with line numbers matching nothing**. So that variable is not a
+recommendation: it converts a missing capability into a confident wrong answer,
+which is worse.
+
+Nothing to build in Warp for this. `ToolType` comes from `warp-proto-apis` and
+has no LSP variant, so a tool Warp *runs* cannot exist without a protocol change;
+`acp_agent` ignores the tool list entirely; and `local_agent` consumes it only to
+build `--allowedTools`, so a new variant there would need a mapping arm and would
+still just be re-granting the agent its own tool. The one thing Warp is uniquely
+positioned to answer is LSP for a **routed WSL session**, where the agent runs on
+the Windows side and the language server does not — `crates/remote_server` proxies
+no LSP at all. That is the only case where building something here would not be
+duplicating a working tool.
+
 Measured across two working sessions the same day: with `opencode`, one refusal
 cost a whole turn's answer while the conversation still reported
 `status: success`. With the pairing above, seven consecutive turns raised zero
