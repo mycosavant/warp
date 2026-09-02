@@ -11668,6 +11668,45 @@ is `RepoOutlines::get_outline`, which has nothing for that path. **The category
 is offered and empty**, which is a worse failure than its absence and is
 invisible to anything that checks whether the menu rendered.
 
+#### Item 3 is moot: the flag is already on, and something else came with it
+
+`RemoteCodebaseIndexing` was carried as a `FORCE_ENABLED` candidate. It needs no
+forcing — `remote_codebase_indexing` is in `default`, so the flag is on, and
+`SearchCodebase` **is** offered to a `Host` session at
+`api/impl.rs:267`. The earlier note that routing withholds it is wrong.
+
+The reason the flag lists mislead here is sharper than the pairing rule this
+repository already records. `app/Cargo.toml` declares
+
+```toml
+remote_codebase_indexing = ["full_source_code_embedding"]
+```
+
+so a feature that *is* in `default` switches on one that is not. Checking
+`default` for `full_source_code_embedding` says absent; `cfg!` says present.
+**Membership in `default` is not the test — `cfg!` is**, and the test caught it:
+the assertion that it was off failed on first run.
+
+That matters beyond T16. `FullSourceCodeEmbedding` gates the embedding index,
+whose only non-mock `StoreClient` is `ServerApi`; `generate_embeddings` sends
+`Fragment { content: String, .. }` — chunks of the user's source — to Warp's
+GraphQL service to be embedded by OpenAI or Voyage. `egress.rs` is a deny-list
+aimed at telemetry vendors and does not cover Warp's own API.
+
+**It is not a leak, and the reason it is not is entirely upstream's.**
+`auto_indexing_enabled` defaults false, and the only writer that sets it true is
+the `AllowIndexing` arm of a speedbump banner, after the user ticks "always
+allow". So indexing is consented, twice. But the defence is a settings default
+this fork never chose, in a fork whose thesis is that nothing leaves the
+machine, and nothing in `fork.rs` says anything about it.
+`indexing_that_uploads_source_stays_behind_a_default_this_fork_did_not_set`
+pins the default and was calibrated by flipping it.
+
+**Left as a decision, not taken:** whether `FullSourceCodeEmbedding` belongs in
+`FORCE_DISABLED` beside `CrashReporting` and `CocoaSentry`. It is a one-line
+change and it removes a working feature, which makes it the maintainer's call
+rather than a tidy-up. Recorded here so the choice is visible either way.
+
 #### What the outline gap does not cost
 
 On this fork's own agent paths, nothing. `acp_agent` reads `params.input`,

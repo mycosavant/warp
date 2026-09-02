@@ -1128,3 +1128,47 @@ fn the_surfaces_routing_costs_are_switched_on_in_this_build() {
         );
     }
 }
+
+/// The codebase index this fork ships is enabled, and a settings default is
+/// the only thing between it and an upload of the user's source.
+///
+/// T16 carried `RemoteCodebaseIndexing` as a `FORCE_ENABLED` candidate, on the
+/// recorded grounds that it and `FullSourceCodeEmbedding` are "DOGFOOD-only and
+/// `warp-oss` never takes that list". Both halves of that are wrong.
+/// `remote_codebase_indexing` is in `app/Cargo.toml`'s `default` list, so the
+/// flag is already on and there is nothing to force; and that cargo feature is
+/// declared as `["full_source_code_embedding"]`, so it transitively switches on
+/// the embedding index too — which the flag lists do not show and a reader of
+/// them cannot see.
+///
+/// What that reaches matters. The only non-mock `StoreClient` is `ServerApi`,
+/// and `generate_embeddings` sends `Fragment { content: String, .. }` — chunks
+/// of the user's source — to Warp's GraphQL service to be embedded by OpenAI or
+/// Voyage. `egress.rs` is a deny-list aimed at telemetry vendors and does not
+/// cover Warp's own API, so nothing else here would stop it.
+///
+/// It does not happen unasked, and this test pins the reason it does not.
+/// Upstream gates indexing behind a speedbump banner the user clicks, and
+/// behind `auto_indexing_enabled`, which defaults false; `view.rs`'s
+/// `AllowIndexing` arm is the only writer that sets it true, and only when the
+/// user ticked "always allow". So consent is real and upstream's, not this
+/// fork's — which is exactly why the default is worth a test here. Nothing in
+/// `fork.rs` currently asserts a policy over this, and if that default ever
+/// flips, a build whose whole thesis is that nothing leaves the machine starts
+/// uploading source with no diff in this repository to say so.
+#[test]
+fn indexing_that_uploads_source_stays_behind_a_default_this_fork_did_not_set() {
+    assert!(
+        {
+            use ::settings::Setting as _;
+            !crate::settings::AutoIndexingEnabled::default_value()
+        },
+        "the speedbump is the whole defence; a true default would index and \
+         upload on its own"
+    );
+    assert!(
+        !FORCE_ENABLED.contains(&FeatureFlag::FullSourceCodeEmbedding),
+        "a user preference outranks a flag list, so forcing this on would reach \
+         the upload path even if the cargo feature were off"
+    );
+}

@@ -206,6 +206,19 @@ and is on anyway. **`cfg!(feature = "…")` in a test is the only honest check**
 an assertion that it was off is what caught this, by failing on its first run
 against a TOML reading that had just said otherwise.
 
+That one matters past the ticket: `FullSourceCodeEmbedding` gates the embedding
+index, and its only non-mock `StoreClient` is `ServerApi`, whose
+`generate_embeddings` sends `Fragment { content: String, .. }` — chunks of the
+user's source — to Warp's GraphQL service for OpenAI or Voyage to embed.
+`egress.rs` is a deny-list aimed at telemetry vendors and does not cover Warp's
+own API. **It is not a leak**: `auto_indexing_enabled` defaults false and the
+only writer setting it true is a speedbump banner's `AllowIndexing` arm after
+the user ticks "always allow". But that defence is upstream's default, not a
+fork policy, in a fork whose thesis is that nothing leaves the machine — so
+`indexing_that_uploads_source_stays_behind_a_default_this_fork_did_not_set`
+pins it, and whether the flag belongs in `FORCE_DISABLED` is left as the
+maintainer's call rather than taken quietly.
+
 ## Prefer the smallest thing that is still the idea
 
 `crates/warp_cli/src/local_control/graph.rs` is the standard: a run-scale task
