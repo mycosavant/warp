@@ -2344,6 +2344,19 @@ The narrowest useful change, if one is wanted: drop `python:*`, `python3:*`,
 `find` into the project's own `.claude/settings.json` where they can be scoped to
 a path.
 
+## And a fifth route, filed separately: `.fork/CLASSIFIER.md`
+
+A **local** permission classifier — one Warp runs on this machine and logs,
+rather than the vendor's cloud one it cannot see. Filed as its own file
+2026-09-03 because it is a posture question with an implementation behind it and
+both halves need arguing.
+
+It is **not** this entry. I18 is a persistent grant: a decision the person makes
+once and Warp remembers. That is a decision Warp makes each time, on the person's
+behalf, inside a boundary they set. They interact — route 3 above is close enough
+that the two should be scoped together — but conflating them is how this gets
+built twice.
+
 ## A gate for lifting the freeze, as a procedure rather than a feeling
 
 0. **Instrument first.** Pin `WARP_FORK_ACP_COMMAND` to an exact version in all

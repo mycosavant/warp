@@ -1564,6 +1564,11 @@ Five files in `.fork/`, in the order a cold start wants them.
   approvals, Warp's own chrome outweighs the agent's words **9.4 : 1**, and the
   agent's narration never reaches the screen. Read it before touching anything
   the panel draws.
+- **`CLASSIFIER.md`** — a local permission classifier, filed 2026-09-03. The
+  fork's standing line is that a model deciding permissions is not consent; that
+  sentence does two jobs and only one survives, because the objection T14.18
+  actually measured was that **Warp was not in the loop**, not that a model
+  decided. Read it before repeating the line.
 - **`README.md`** — the operating manual: how to build and run on each platform,
   the full `warpctrl` surface, Warp Drive, WSL integration, and the gotchas that
   cost hours. Reach for it whenever you need to *use* something rather than
