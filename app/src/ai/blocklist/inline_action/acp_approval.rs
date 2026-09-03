@@ -231,8 +231,21 @@ impl View for AcpApprovalView {
         if let Some(title) = &parked.title {
             column.add_child(Self::line("", title, app));
         }
+        // **Split into what the agent says it is doing and what it will run.**
+        // Measured 2026-09-03 across a 44-ask session: every parseable request
+        // carried a human-readable `description` -- *"Compare local HEAD to
+        // Windows checkout HEAD"* -- and the card rendered it as one escaped
+        // JSON blob beside a multi-line command, so the one sentence written for
+        // a person to read was the hardest thing on the card to find.
+        //
+        // **Nothing is dropped.** The original comment on `tool_input` is right
+        // that the payload is where the specifics are and must be carried
+        // verbatim, so any key this does not know about is still shown, under
+        // its own name. This reorders and labels; it never summarises.
         if let Some(input) = &parked.tool_input {
-            column.add_child(Self::line("the call", input, app));
+            for (label, value) in describe_tool_input(input) {
+                column.add_child(Self::line(label, &value, app));
+            }
         }
         // Never falls back to the session directory: that is Warp's own choice of
         // where to run the agent, not the agent's claim about where this call
@@ -354,6 +367,63 @@ impl View for AcpApprovalView {
             .with_vertical_padding(10.)
             .finish()
     }
+}
+
+/// Splits a tool call's raw input into labelled lines for the card.
+///
+/// **The agent already writes a sentence for a person and Warp was hiding it.**
+/// `claude-agent-acp` sends `{"command": "...", "description": "..."}` for a
+/// shell call and `{"file_path": "...", "content": "..."}` for a write; the card
+/// rendered the whole object as one escaped string. Measured across a 44-ask
+/// session: 29 of 29 parseable requests carried a filled `description`.
+///
+/// **Ordered so the answer to "what is this?" comes first**, then what will
+/// actually run, then everything else this does not recognise — because the
+/// payload is where the specifics live and a card that quietly dropped a key
+/// would understate a call's reach, which is the failure `acts_on` exists for.
+///
+/// Anything that is not a JSON object is passed through unchanged: an agent that
+/// sends a bare string is describing its call in the only way it knows, and
+/// inventing structure for it would be Warp making a claim the agent did not.
+fn describe_tool_input(input: &str) -> Vec<(&'static str, String)> {
+    let Ok(serde_json::Value::Object(fields)) = serde_json::from_str::<serde_json::Value>(input)
+    else {
+        return vec![("the call", input.to_owned())];
+    };
+
+    // Rendered as the agent wrote it: a JSON string keeps its quotes and its
+    // escapes, and a shell command full of `\n` is unreadable that way.
+    let plain = |value: &serde_json::Value| match value {
+        serde_json::Value::String(text) => text.clone(),
+        other => other.to_string(),
+    };
+
+    let mut lines = Vec::new();
+    if let Some(what) = fields.get("description") {
+        lines.push(("it says", plain(what)));
+    }
+    for key in ["command", "file_path"] {
+        if let Some(value) = fields.get(key) {
+            lines.push(("the call", plain(value)));
+        }
+    }
+    // Everything else, verbatim and named. `content` lands here, which is
+    // deliberate: the bytes a write would put on disk are part of what is being
+    // agreed to.
+    let known = ["description", "command", "file_path"];
+    let rest: Vec<String> = fields
+        .iter()
+        .filter(|(key, _)| !known.contains(&key.as_str()))
+        .map(|(key, value)| format!("{key}: {}", plain(value)))
+        .collect();
+    if !rest.is_empty() {
+        lines.push(("also", rest.join("\n")));
+    }
+    // An object with none of the keys above still has to show something.
+    if lines.is_empty() {
+        lines.push(("the call", input.to_owned()));
+    }
+    lines
 }
 
 #[cfg(test)]

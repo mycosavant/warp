@@ -44,3 +44,75 @@ fn a_conversation_with_nothing_parked_has_no_question() {
             .is_none()
     );
 }
+
+// ── What the card says a call is (COMPOSER) ──────────────────────────────
+
+/// **The measured shape, from a real 44-ask session.** The agent writes a
+/// sentence for a person — *"Compare local HEAD to Windows checkout HEAD"* — and
+/// the card used to render it inside one escaped JSON blob beside a multi-line
+/// command, which made the one human-readable field the hardest thing to find.
+#[test]
+fn a_shell_call_leads_with_what_the_agent_says_it_is_doing() {
+    let input = serde_json::json!({
+        "command": "git log --oneline -1\necho \"---\"\ngit -C /mnt/c/dev/warp log --oneline -1",
+        "description": "Compare local HEAD to Windows checkout HEAD",
+    })
+    .to_string();
+
+    assert_eq!(
+        super::describe_tool_input(&input),
+        vec![
+            (
+                "it says",
+                "Compare local HEAD to Windows checkout HEAD".to_owned()
+            ),
+            (
+                "the call",
+                "git log --oneline -1\necho \"---\"\ngit -C /mnt/c/dev/warp log --oneline -1"
+                    .to_owned()
+            ),
+        ],
+    );
+}
+
+/// **Nothing is dropped, and this is the assertion that keeps it true.** The
+/// payload is where a call's specifics live; a card that quietly discarded a key
+/// it did not recognise would understate the call's reach, which is the exact
+/// failure `acts_on` was built for. `content` is the case that matters — the
+/// bytes a write would put on disk are part of what is being agreed to.
+#[test]
+fn a_key_the_card_does_not_know_about_is_still_shown() {
+    let input = serde_json::json!({
+        "file_path": "/home/effatha/git/warp/notes.md",
+        "content": "hello\n",
+        "some_future_field": 7,
+    })
+    .to_string();
+
+    let rendered = super::describe_tool_input(&input)
+        .iter()
+        .map(|(label, value)| format!("{label} {value}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    assert!(rendered.contains("/home/effatha/git/warp/notes.md"));
+    assert!(
+        rendered.contains("hello"),
+        "content must survive: {rendered}"
+    );
+    assert!(
+        rendered.contains("some_future_field"),
+        "an unknown key must survive under its own name: {rendered}"
+    );
+}
+
+/// An agent that sends something other than an object is describing its call the
+/// only way it knows, and inventing structure for it would be Warp making a
+/// claim the agent did not.
+#[test]
+fn a_payload_that_is_not_an_object_is_passed_through_unchanged() {
+    assert_eq!(
+        super::describe_tool_input("just a string"),
+        vec![("the call", "just a string".to_owned())],
+    );
+}
