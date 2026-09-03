@@ -89,13 +89,20 @@ fn session_for(
     launch: Option<crate::terminal::ShellLaunchData>,
     bootstrap: Option<crate::terminal::model::session::BootstrapSessionType>,
 ) -> Session {
+    session_with_shell(crate::terminal::shell::ShellType::Bash, launch, bootstrap)
+}
+
+fn session_with_shell(
+    shell: crate::terminal::shell::ShellType,
+    launch: Option<crate::terminal::ShellLaunchData>,
+    bootstrap: Option<crate::terminal::model::session::BootstrapSessionType>,
+) -> Session {
     use std::sync::Arc;
 
     use crate::terminal::model::session::SessionInfo;
     use crate::terminal::model::session::command_executor::testing::TestCommandExecutor;
-    use crate::terminal::shell::ShellType;
 
-    let mut info = SessionInfo::new_for_test().with_shell_type(ShellType::Bash);
+    let mut info = SessionInfo::new_for_test().with_shell_type(shell);
     if let Some(bootstrap) = bootstrap {
         info = info.with_session_type(bootstrap);
     }
@@ -198,13 +205,49 @@ fn a_warpified_remote_sessions_paths_are_refused_rather_than_taken_literally() {
 /// An ordinary local session is the identity, and this is the calibration for
 /// the two above: if the conversion were applied unconditionally every local
 /// transcript would move.
+///
+/// **The cwd has to be spelled the way the *running* platform spells one, and
+/// that is behaviour rather than a test detail.** Written first with a POSIX
+/// path on both platforms and run on Windows, where it failed: `PathBuf` there
+/// cannot hold `/home/…`, so `maybe_convert_to_native_path` refuses it and
+/// `native_path` answers `None`. Which is correct — see the sibling below — and
+/// only running it on Windows could say so.
 #[test]
-fn a_plain_local_session_gets_its_path_back_unchanged() {
-    let session = session_for(None, None);
-    assert_eq!(
-        native_path(&session, "/home/effatha/git/warp").as_deref(),
-        Some(std::path::Path::new("/home/effatha/git/warp")),
+fn a_plain_local_session_gets_its_native_path_back_unchanged() {
+    use crate::terminal::shell::ShellType;
+
+    #[cfg(windows)]
+    let (session, cwd) = (
+        session_with_shell(ShellType::PowerShell, None, None),
+        r"C:\dev\warp",
     );
+    #[cfg(not(windows))]
+    let (session, cwd) = (
+        session_with_shell(ShellType::Bash, None, None),
+        "/home/effatha/git/warp",
+    );
+
+    assert_eq!(
+        native_path(&session, cwd).as_deref(),
+        Some(std::path::Path::new(cwd)),
+    );
+}
+
+/// **The T20.1 defect in its non-WSL form, and the answer is the same one.** A
+/// bash session on Windows that is neither WSL nor MSYS2 reports a POSIX cwd
+/// that no `PathBuf` on this platform can hold, so `native_path` refuses it.
+///
+/// The refusal itself is upstream's and already pinned at the layer below, in
+/// `can_resolve_cwd_to_native_path_rejects_unix_encoded_path_on_windows`. It is
+/// worth a second test *here* because the consequence is different and is the
+/// whole point of T20.1: before it, this exact cwd went straight into a `join`
+/// and Windows resolved the result against the current drive. `None` is what
+/// turns that silent mis-rooted write into a log line and no file.
+#[cfg(windows)]
+#[test]
+fn a_unix_encoded_cwd_with_no_distribution_behind_it_is_refused_on_windows() {
+    let session = session_for(None, None);
+    assert_eq!(native_path(&session, "/home/effatha/git/warp"), None);
 }
 
 /// Files that may read `Session::session_type()` in live code.
