@@ -12261,7 +12261,7 @@ about. The check now runs before that line.
 **Not done, and it is the ticket's own note**: the `Parent has crashed` line at
 the head of `warp-oss.log.old.0` remains a red herring, already recorded here.
 
-### T20.4 — Does the composer drop the agent's prose? ← **unblocked 2026-09-03**
+### T20.4 — Does the composer drop the agent's prose? ✅ **answered 2026-09-03: no**
 
 The maintainer's verdict, recorded verbatim in the run log because no instrument
 caught it: tool labels (`Terminal`, `Read File`) and Warp's own permission blurbs
@@ -12274,6 +12274,37 @@ transcript for a single turn — which run 2 could not do, **because of T20.1**.
 That has landed and is verified end to end, so this is startable: a WSL pane on
 the Windows build now writes a readable transcript beside the panel it should be
 compared against.
+
+**Answered 2026-09-03 by measuring the same turn three ways**, which is what
+T20.1 unblocked. The instrument is `acp probe` — the raw ACP stream, on the same
+transport the panel uses — against Warp's own transcript, against a screenshot
+of the panel.
+
+**Prose renders. All of it.** One prompt asking the agent to narrate between
+steps produced, on the wire, `agent_message_chunk` runs before the first tool
+call, between the two tool calls, and after the last. Warp's transcript carried
+every sentence. The panel carried every sentence, matching the transcript word
+for word. A second, shorter turn was run for the one thing the first could not
+show — the panel was scrolled, so the *opening* sentence was above the fold —
+and with everything on one screen it reads: prompt, mode note, `[Warp]`
+announcement, **"About to count the lines."**, `Terminal`, **"That is the
+size."** Nothing is dropped, before or between or after.
+
+**Thinking never arrives, and that is the agent's doing, not Warp's.**
+`claude-agent-acp` emitted **zero** `agent_thought_chunk` updates in two probes —
+the second explicitly asking it to ultrathink — with `reasoningOutputTokens: 0`
+in the stop payload both times. There is nothing on the wire to drop.
+`acp_agent/translate.rs:345` maps `AgentThoughtChunk` to `AgentReasoning`
+("rendered as thinking, not as output") and would render one if it came.
+
+**So the run-2 verdict does not reproduce, and that is recorded as a difference
+in conditions rather than as a correction.** It was a real observation of a real
+session, taken at the end of a long tool-heavy run; these are one- and two-tool
+turns. The obvious reconciliation — prose is present but scrolls past when
+dozens of tool calls follow it, so a glance sees tool labels — is a **hypothesis
+and was not established**. What is established is that the composer has no
+prose-dropping defect to fix, so anything left here is about density and scroll
+position, not about a lost message.
 
 ### T20.5 — Finish `acp probe --cwd` (WIP in the tree)
 
