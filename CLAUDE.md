@@ -1575,9 +1575,13 @@ Five files in `.fork/`, in the order a cold start wants them.
   standing horizon and `TASKS.md` is the plan.
 - **`COMPOSER.md`** — the agent surface, filed 2026-09-03 as its own file
   because it is not a defect and not small. Measured: during a turn with
-  approvals, Warp's own chrome outweighs the agent's words **9.4 : 1**, and the
-  agent's narration never reaches the screen. Read it before touching anything
-  the panel draws.
+  approvals, Warp's own chrome outweighed the agent's words **9.4 : 1**, and the
+  agent's narration never reached the screen. **Warp now has its own message
+  kind** (`ai::warp_note`, a tagged `AgentOutput` mapped at `convert_from`) and
+  the asking note says its mechanics once per conversation; re-measured the same
+  day, the record is 5.6 : 1 and what is drawn is 2.5 : 1. The four reference
+  apps are studied in that file. Read it before touching anything the panel
+  draws.
 - **`CLASSIFIER.md`** — a local permission classifier, filed 2026-09-03. The
   fork's standing line is that a model deciding permissions is not consent; that
   sentence does two jobs and only one survives, because the objection T14.18

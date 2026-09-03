@@ -5,7 +5,10 @@ a defect and it is not small.** The board tracks things that are wrong. This is
 a thing that is *not good enough*, on the surface a person looks at all day, and
 the fork is currently failing it — not by a little.
 
-**Status: nothing built. This is the ticket, not the plan.**
+**Status, 2026-09-03: the reference study is written in, steps 2 and 3 are
+built and measured on the Windows build, and the number moved.** Record
+9.4 : 1 → 5.6 : 1; drawn 10.1 : 1 → 2.5 : 1. Details under *As built*. Tool
+rows, turn shape and layered approvals are next and not started.
 
 ---
 
@@ -72,7 +75,7 @@ argument.
 
 Each of these was seen in a real session, and each is cheap to re-observe.
 
-### 1. Warp outweighs the agent roughly 10:1 during any turn with asks
+### 1. Warp outweighs the agent roughly 10:1 during any turn with asks ✅ **moved, see As built**
 
 Measured above. The asking note alone is ~590 characters and says: what the agent
 wants, the full `warpctrl agent approve <uuid> --digest <64 hex>` command, the
@@ -139,8 +142,11 @@ the reasoning available.
 
 `translate.rs` buffers text and flushes on the next non-text update, on turn end,
 or on the failure path. `mod.rs`'s `take_until` drops the driver future on
-cancellation and nothing flushes `pending` there. **Read, not run.** Worth a test
-before it is worth a fix.
+cancellation and nothing flushes `pending` there. **Read, not run** — re-read
+2026-09-03 and the reading holds: the only flush after the prompt is at
+`mod.rs:809`, inside the future `take_until` drops. Worth a test before it is
+worth a fix, and the test needs a fake agent that streams text and is then
+cancelled, which is more than a unit test on the translator.
 
 ---
 
@@ -600,14 +606,142 @@ These are not preferences. Each has a measurement or a shipped defect behind it.
 
 ## Where to start
 
-1. **Study the reference apps** and write the comparison into this file.
-2. **Give Warp its own message kind**, so its voice is separable at the
-   renderer. This is the enabling change and nothing good is possible before it.
-3. **Abbreviate the asking note after the first ask per conversation.** Smallest
-   change with the largest measured effect: ~500 characters per ask, no posture
-   change.
+1. ~~**Study the reference apps** and write the comparison into this file.~~
+   **Done 2026-09-03**, above.
+2. ~~**Give Warp its own message kind**~~ **Done, `a4a5cb53a`.**
+3. ~~**Abbreviate the asking note after the first ask per conversation.**~~
+   **Done, `b2493ef75`.**
 4. **Then** tool rows, turn shape, and layered approvals — in that order, because
    each is worth more once Warp's chrome is out of the way.
 
 Re-measure the 9.4:1 ratio after each step. It is the number this ticket exists
 to move.
+
+---
+
+## As built
+
+### Step 2 — Warp's own message kind (`a4a5cb53a`)
+
+**The channel is a field, not a variant.** `api::Message` is generated from the
+`warp-proto-apis` git dependency, so the `oneof` cannot grow. It carries
+`server_message_data`, which `task.proto` documents as *"an opaque payload that
+the client should simply roundtrip"* and which nothing in this workspace reads —
+measured, every reference sets it to the empty string. A note is an
+`AgentOutput` whose payload is `warp-fork/note`; `convert_from` maps that to a
+new `AIAgentOutputMessageType::WarpNote { headline, detail }`, and everything
+downstream of the conversion sees a distinct kind. It had to be proto-level:
+conversations persist as `api::Task` and the panel is rebuilt through the same
+conversion on restore. A build that predates the tag renders the note as text,
+which is what it did before — and the restored pre-tag conversation on the
+measurement machine did exactly that, beside the new one.
+
+**Wire form is headline, blank line, detail.** The panel draws the headline as a
+dimmed row labelled `Warp` and the detail behind a chevron, collapsed by
+default. A headline-only note draws one row and no chevron. The detail goes
+through `render_text_sections` exactly when `all_text` counts it, which is the
+invariant link detection depends on. `format_for_copy` writes the note back out
+in wire order, so the transcript and the clipboard carry the same words and
+`strip_chrome` keeps deciding on the same text — constraint 3 held without
+touching the transcript.
+
+**Where it lives**: `app/src/ai/warp_note.rs` (the type, the tag, the wire
+form), `convert_from.rs` (the one arm that decides), `view_impl/output.rs`
+`render_warp_note` (the row), and one arm in each of the six exhaustive matches
+over the enum, the TUI's included. Both translators' `note()` now take a `Note`.
+
+**Pinned and calibrated.** A tagged output converts to the note and the same
+text untagged is the agent's; both translators tag their notes and never the
+agent's words; copy-format writes headline, blank, detail. Disabling the tag
+check reddened exactly the five tag-dependent tests and nothing else.
+
+### Step 3 — the mechanics once per conversation (`b2493ef75`)
+
+`asking_note` takes `first_ask`, answered by a process-scoped per-conversation
+set shaped like `transcript`'s `TOLD`. The first ask is unchanged. A later ask
+keeps the headline, the two commands with their id, the digest's source in one
+clause, and what the call acts on; it drops the digest explanation, what a yes
+covers, the paired-device sentence and the session-directory paragraph. A
+refusal's reason is never abbreviated. **No permission changes**: the same id
+and the same commands answer the same request either way.
+
+On the test fixture (no session directory) 584 characters → 232; in the
+measured session, with the directory paragraph, the second and third asks each
+came back ~350 characters shorter than the first.
+
+### The measurement, re-run
+
+Same prompt as the 9.4 : 1 turn, verbatim. Same machine, same window size
+(778 × 1396), `claude-agent-acp@0.73.0` inside the distribution,
+`WARP_FORK_ACP_MODE=default`, three asks, a screenshot with each ask parked,
+every ask approved from `warpctrl`. Transcript
+`.warp/transcripts/9a88f765-….md`; screenshots
+`C:\dev\shots\composer-after-{ask1,ask2,ask3,done}.png`.
+
+Two numbers, because the record and the screen are now different things:
+
+| | before (`86b763d0`) | after (`9a88f765`) |
+|---|---|---|
+| **record** — Warp chars : agent chars in the transcript | 2558 : 271 = **9.4 : 1** | 1825 : 326 = **5.6 : 1** |
+| **drawn** — headlines only, detail folded | 2738 : 271 = **10.1 : 1** | 824 : 326 = **2.5 : 1** |
+| agent's share of the screen | **9%** | **28%** |
+
+Counted by the same classifier over both transcripts (Warp = mode note, asking
+and answered notes, their detail paragraphs, tool labels; agent = everything
+else). The announcement is drawn in full both times and counted at its length.
+The agent's own output differs between runs (271 vs 326) because it narrates
+slightly differently each time; the Warp column is the like-for-like one.
+
+**A counting mistake worth recording**: the first pass at the *after* number
+reported 2.1 : 1 in the record, which was wrong in this ticket's favour. Once
+the headline was split from the how-to sentence, the how-to line no longer
+started with *"The agent is waiting for permission"* and the classifier filed
+368 characters of Warp's words as the agent's. The rule stands: a number that
+moves in the direction you wanted is the one to re-check.
+
+**What the screenshots show, which the numbers cannot.** With the first ask
+parked, *"Step 1: writing t204-a.txt with the content A."* is on screen in the
+agent's colour, directly above `Preparing file…` and a one-line folded
+`Warp  The agent is waiting for permission: Write t204-a.txt ›`. That sentence
+was the one the ticket opened with as never visible. With the second ask parked
+the whole preceding step is visible above it — narration, tool label, ask,
+answer, narration, tool label, ask. The approval card is unchanged in the
+binary measured (built at `b2493ef75`, before `2c914dc98`'s description-first
+card landed on `dev` from another session) and is now the largest
+Warp-authored thing on the screen, which is the argument for the next step.
+
+### Next: tool rows, and what the transport allows
+
+Read on the way through, so the next session does not rediscover it:
+
+- **A row that changes state needs a message that changes, and this transport
+  has none in use.** Messages arrive by `AddMessagesToTask`, append-only. The
+  proto has `UpdateTaskMessage` with a `FieldMask`, which `acp_agent/mod.rs`
+  records declining to guess at twice. So *"Running `cargo test`…"* → *"Ran
+  `cargo test`, exit 0"* on one row is either that message, or a row emitted
+  only on completion with a live *"running"* line drawn from translator state
+  the way the approval card already is — appended after the output because it
+  belongs to the turn, not to a message.
+- **The wire has everything the references show.** `tool_call` carries
+  `title`, `kind`, `rawInput`, `locations`; `tool_call_update` carries `status`,
+  `content`, a diff for edits, and `_meta.claudeCode.toolResponse` with stdout
+  and stderr. `translate.rs` keeps `announced`, `locations` and `started` per
+  call already; a completed row can be built from those plus the update.
+- **The channel built in step 2 carries this too.** A second tag
+  (`warp-fork/tool`) on the same `server_message_data` field, mapped at the same
+  `convert_from` arm to a `ToolRow` kind, round-trips through persistence for
+  the same reason the note does. It must **never** be `Message::ToolCall`
+  (constraint 4).
+- **What the row says, from the study**: verb + object + state icon, tense
+  following state, Denied drawn like Failed, no duration on the row,
+  consecutive calls foldable into *"Ran N commands"*. The plain label today
+  (`Preparing file…`) is the agent's own title and is the collapsed form's
+  fallback, not its design.
+
+**What is still drawn in full and should not be**: the transcript announcement
+(~230 characters, once per conversation) and the mode note's headline (~200).
+Both are headline-only because the announcement must stay a single line for
+`strip_chrome`, and the mode headline carries the agent's own description of
+the mode. Neither repeats, so neither moved the number; both are candidates for
+a shorter headline with the sentence behind the chevron, once the transcript
+decides by kind rather than by marker.
