@@ -218,10 +218,27 @@ Warp or agent processes running.
 
 ## Board hygiene this replaces, done or noted
 
-- **`PAIRABLE_ACTIONS` has no test pinning its membership**, which is why its
-  count went stale in `CLAUDE.md` for two days while the 114-action catalog —
-  pinned in two crates — stayed right. Adding that pin changes the consent
-  surface's guardrails and wants a ticket.
+- ~~**`PAIRABLE_ACTIONS` has no test pinning its membership.**~~ **Retracted
+  2026-09-01 by calibration; this file kept the wrong version until 2026-09-02.**
+  It is pinned by two tests in `app/src/local_control/pairing_tests.rs`:
+  `a_paired_device_gets_the_read_surface_and_the_safe_half_of_answering:141`
+  asserts the **whole list** against a literal slice — membership, not a count,
+  so it is strictly stronger than the catalog pin it was being compared
+  unfavourably against — and widening the list also reddens
+  `saying_yes_does_not_travel_by_default_and_saying_no_does:169`, which holds the
+  consent asymmetry. **Re-calibrated 2026-09-02 rather than taken from
+  `CLAUDE.md`**, because this correction is what the next run starts from:
+  adding `ActionKind::AgentApprove` to the list turns `local_control::pairing`
+  from 10 passed to 8 passed and reddens exactly those two. Scope named — that
+  filter, not the workspace; `pairing_tests.rs` holds the only references to the
+  list, so a wider sweep was not run.
+
+  **What did go stale is the count in `CLAUDE.md`, and no test can pin prose** —
+  which is the whole reason that file tells you to read a number off the test.
+  The observation was right and the mechanism invented under it was not, the same
+  shape as the discovery-record retraction. So there is **no ticket to raise
+  here**, and this entry stood one edit away from funding a panel task to build a
+  test that already existed.
 - **T14.21 exists in git with no ticket in `TASKS.md`.**
 - **Seven `- [ ]` boxes in `TASKS.md` are stale**: the work landed. Read status
   off the as-built records, not the checkboxes.
