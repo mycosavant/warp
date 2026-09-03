@@ -65,6 +65,23 @@ fn session_directory(
         None => std::env::current_dir()
             .map_err(|error| failed(format!("cannot read the working directory: {error}")))?,
     };
+    // **Asked before `is_dir()`, and the order is the whole point.** T18 found
+    // that `--command` can start the agent inside WSL (`wsl.exe -d <distro> --
+    // ...`), where a POSIX-rooted cwd is exactly right and this process --
+    // running on Windows -- has no filesystem to check it against. Passed
+    // through unverified, on the caller's word, the same trust `--cwd` already
+    // extends by not defaulting it.
+    //
+    // The first cut asked this *after* `is_dir()`, as a fallback for a path
+    // that failed the check. That is the T20.1 defect wearing a guard: on
+    // Windows `/home/effatha/git/warp` resolves against the current drive, so
+    // if `C:\home\effatha\git\warp` happens to exist then `is_dir()` is
+    // **true**, the fallback never runs, and `canonicalize` hands back a
+    // directory on the wrong machine. That tree is not hypothetical -- Warp
+    // created it, which is what T20.1 was.
+    if is_foreign_filesystem_path(&cwd) {
+        return Ok(cwd);
+    }
     if !cwd.is_dir() {
         return Err(invalid(format!(
             "--cwd is not a directory: {}",
@@ -73,6 +90,20 @@ fn session_directory(
     }
     cwd.canonicalize()
         .map_err(|error| invalid(format!("cannot resolve --cwd: {error}")))
+}
+
+/// Whether `path` looking unresolvable from here might just mean it belongs to
+/// a different machine's filesystem than this process's own.
+///
+/// A POSIX-rooted path (`/…`) that this process's own `Path::is_absolute()`
+/// does not recognise as absolute is exactly what a Windows process sees when
+/// handed a WSL cwd. On a POSIX host the same string *is* absolute, so this
+/// never fires there and the strict local check above still runs — the
+/// distinction is load-bearing, not incidental: it is what keeps an ordinary
+/// missing-directory typo refused on the platform where this process really
+/// can check.
+fn is_foreign_filesystem_path(path: &std::path::Path) -> bool {
+    path.to_str().is_some_and(|text| text.starts_with('/')) && !path.is_absolute()
 }
 
 /// Run one prompt against one ACP agent and print what came back.

@@ -1008,6 +1008,9 @@ pub struct AcpProbeArgs {
     pub prompt: String,
 
     /// The directory the session runs in. Defaults to the current directory.
+    /// A POSIX-rooted path this process cannot resolve (for example a WSL
+    /// path when --command starts the agent inside a distribution) is passed
+    /// through unverified rather than refused.
     #[arg(long = "cwd")]
     pub cwd: Option<PathBuf>,
 

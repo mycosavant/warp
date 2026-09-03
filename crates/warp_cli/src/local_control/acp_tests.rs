@@ -67,6 +67,98 @@ fn the_session_directory_is_made_absolute() {
     );
 }
 
+/// On a POSIX host a `/`-rooted path is real and absolute, so
+/// `is_foreign_filesystem_path` must say no and the strict local check above
+/// it must still refuse a path that is genuinely missing — `cfg(unix)` rather
+/// than assumed, so this is honestly green on the platform it runs on instead
+/// of describing the other one.
+#[cfg(unix)]
+#[test]
+fn a_posix_rooted_path_is_not_treated_as_foreign_on_a_posix_host() {
+    assert!(!is_foreign_filesystem_path(std::path::Path::new(
+        "/definitely/not/a/real/directory"
+    )));
+}
+
+#[cfg(unix)]
+#[test]
+fn a_missing_posix_rooted_directory_is_still_refused_on_a_posix_host() {
+    let error = session_directory(Some(std::path::Path::new(
+        "/warpctrl-acp-no-such-directory-here",
+    )))
+    .expect_err("a missing directory should be refused, not passed through");
+
+    assert_eq!(error.code, ErrorCode::InvalidParams);
+}
+
+/// The T18 case, run for real rather than argued: on Windows, `Path::
+/// is_absolute()` for a `/`-rooted path is `false` (no drive prefix), which is
+/// exactly what makes a WSL cwd unresolvable from this process — and exactly
+/// what `is_foreign_filesystem_path` is watching for.
+#[cfg(windows)]
+#[test]
+fn a_posix_rooted_path_this_process_cannot_see_is_treated_as_foreign_on_windows() {
+    assert!(is_foreign_filesystem_path(std::path::Path::new(
+        "/home/effatha/git/warp"
+    )));
+}
+
+#[cfg(windows)]
+#[test]
+fn an_unresolvable_posix_rooted_cwd_is_passed_through_on_windows() {
+    let resolved = session_directory(Some(std::path::Path::new("/home/effatha/git/warp")))
+        .expect("a WSL-style cwd should be passed through, not refused");
+
+    assert_eq!(resolved, std::path::Path::new("/home/effatha/git/warp"));
+}
+
+/// **The ordering defect, pinned by the one case that can tell.** The first cut
+/// asked `is_foreign_filesystem_path` *after* `is_dir()`, as a fallback for a
+/// path that failed the check — which reads as belt-and-braces and is not. On
+/// Windows a POSIX-rooted path resolves against the current drive, so if the
+/// matching `C:\…` tree exists then `is_dir()` is **true**, the fallback never
+/// runs, and `canonicalize` returns a directory on the wrong machine.
+///
+/// That tree is not hypothetical: T20.1 is the ticket about Warp creating
+/// `C:\home\effatha\git\warp` and writing a run's conversation into it. This
+/// test builds the same shape on purpose and asserts the probe is not fooled by
+/// it. Calibrated by moving the check back below `is_dir()`, which reddens this
+/// and nothing else.
+#[cfg(windows)]
+#[test]
+fn a_posix_cwd_is_not_silently_resolved_to_a_matching_windows_tree() {
+    let name = "warpctrl-t20-5-drive-collision";
+    let windows_tree = std::path::PathBuf::from(format!("C:\\{name}"));
+    // Cleaned up first in case a previous failing run left it behind.
+    let _ = std::fs::remove_dir_all(&windows_tree);
+    std::fs::create_dir_all(&windows_tree).expect("the collision directory should be creatable");
+
+    let posix = format!("/{name}");
+    let resolved = session_directory(Some(std::path::Path::new(&posix)));
+
+    let _ = std::fs::remove_dir_all(&windows_tree);
+
+    assert_eq!(
+        resolved.expect("a POSIX-rooted cwd is passed through"),
+        std::path::Path::new(&posix),
+        "the probe resolved a WSL cwd to the Windows tree it collides with",
+    );
+}
+
+/// A Windows path really is missing when it is missing — the pass-through is
+/// only for the POSIX-rooted shape a WSL cwd takes, not a blanket "anything
+/// unresolvable is fine".
+#[cfg(windows)]
+#[test]
+fn a_missing_windows_rooted_directory_is_still_refused_on_windows() {
+    let error = session_directory(Some(std::path::Path::new(
+        "C:\\warpctrl-acp-no-such-directory-here",
+    )))
+    .expect_err("a missing Windows directory should be refused, not passed through");
+
+    assert_eq!(error.code, ErrorCode::InvalidParams);
+}
+
 #[test]
 fn the_default_session_directory_is_the_current_one() {
     let resolved = session_directory(None).expect("the current directory should resolve");
