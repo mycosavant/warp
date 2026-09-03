@@ -1,11 +1,5 @@
 # Handoff: the composer overhaul
 
-**Paste this whole file as the first message of a new session.** It is written to
-be self-contained: a fresh agent should be able to start from it without reading
-this conversation.
-
----
-
 ## What you are doing
 
 Making this fork's agent composer top-of-class. It is currently failing that, and

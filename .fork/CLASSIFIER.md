@@ -50,6 +50,53 @@ Windows instance without `powershell.exe`. That is a build and not this ticket.
 
 ---
 
+## The corpus is contaminated as evidence about *decisions* — read this first
+
+**Added 2026-09-03 after the maintainer pushed back, and it is the most important
+sentence in this file.**
+
+The evaluation set below is built from one run's 44 asks, and the conclusion drawn
+from it was that *every real decision was yes*, therefore a model trained on those
+decisions learns only "yes". That inference does not hold, because **the person
+answering those 44 asks was answering through a surface that was not showing them
+enough to decide on.**
+
+Measured, on the same run:
+
+- The approval card rendered the agent's own one-line `description` — *"Compare
+  local HEAD to Windows checkout HEAD"* — inside an escaped JSON blob beside a
+  multi-line command. **29 of 29 parseable asks carried a filled `description`**
+  and none of them was legible as one.
+- `acts on`, the field that says what a call touches, read **"not stated by the
+  agent" for all 36 execute asks**, because ACP sends no `locations` for a shell
+  call.
+- And separately, Warp's own chrome outweighed the agent's words **9.4 : 1**
+  during turns with approvals, so the narration explaining *why* each call was
+  being made never reached the screen (`.fork/COMPOSER.md`).
+
+A stream of yeses from a person shown a JSON dump, an empty "acts on", and none
+of the agent's reasoning is **not** evidence that those calls were safe. It is
+evidence of what this file already calls the failure mode: rubber-stamping. Using
+it as ground truth would train, or validate, against exactly that.
+
+**So the corpus is sound for one purpose and unsound for another.** It remains a
+good record of *what was asked* — tool kinds, commands, paths, the 30/9/7 split —
+and that is what the rule measurement uses, which is why the rule finding stands.
+It is not usable as labelled ground truth for *what should have been answered*,
+and no model should be trained or evaluated against it.
+
+**What a sound corpus needs:** asks collected after the card shows the
+description and after the composer stops burying the agent's prose — both now
+partly addressed, neither verified in a real session — and labels applied
+deliberately, by a person reading each call, rather than inferred from what was
+clicked under time pressure.
+
+**And one run is one run.** The 30/9/7 split describes a session spent driving a
+Windows host from inside WSL. A session spent writing Rust in one repository will
+have a different shape, and the rule's 14-of-44 hit rate is a fact about that
+afternoon rather than about the tool. Collect several before deciding anything
+irreversible.
+
 ## The problem, measured rather than felt
 
 Run 2 raised **44 permission requests in 50 minutes across 5 prompts** — one

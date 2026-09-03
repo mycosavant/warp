@@ -1,8 +1,5 @@
 # Handoff: the local permission classifier
 
-**Paste this whole file as the first message of a new session.** Written to be
-self-contained.
-
 ---
 
 ## What you are doing
