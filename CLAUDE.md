@@ -556,9 +556,23 @@ horizontal-only drag axis back.
 control plane this fork exists to open is simply absent from the binary.
 
 **Stop a running Warp with `warpctrl window close`** (`CloseMainWindow` on
-Windows). Killing the process leaves a stale discovery record and a
-crash-recovery sibling holding the ports, so the next launch fails. Ordinary
-shutdown cleans both up.
+Windows), because ordinary shutdown cleans up the crash-recovery sibling and a
+killed one leaves it holding the ports.
+
+**But the "stale discovery record" half of that sentence was wrong, and it stood
+here for months.** Measured 2026-09-03 while building T20.3's pre-launch check:
+`taskkill /F /IM warp-oss.exe` left `instance list` **empty**, not holding a
+record. `crates/local_control/src/discovery.rs` prunes dead-PID records on every
+scan — `is_pid_alive`, two call sites, and the module's own docs say so in as
+many words. The check was about to ship a pid filter guarding a condition that
+cannot arise.
+
+**What actually accumulates instances is the opposite case**, and this file
+already records it two paragraphs down without connecting the two: a CLI agent in
+a pane blocks `window close`, the close is *refused*, and the instance stays
+**alive**. Three piled up in one session that way. So `ambiguous_instance` comes
+from live Warps nobody could stop, never from records nobody cleaned — which
+matters, because the two have opposite remedies.
 
 **…and `ok: true` from `window close` never meant the window closed.** Read
 2026-08-30: the handler sends the close with `TerminationMode::Cancellable` —

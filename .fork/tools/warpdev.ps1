@@ -35,6 +35,7 @@ param(
     [switch]$Off,
     [switch]$Status,
     [switch]$Launch,
+    [switch]$Force,
     [string]$Exe = 'C:\dev\warp\target\debug\warp-oss.exe'
 )
 
@@ -49,8 +50,16 @@ $StateFile = Join-Path $HOME '.warpdev'
 # exactly what a launch would set — the variable, the value, and the reason.
 $Instruments = @(
     @{ Name = 'WARP_FORK_ACP_COMMAND'
-       Value = 'npx -y @agentclientprotocol/claude-agent-acp'
-       Why = 'the agent panel answers from this agent instead of upstream' }
+       # **Started inside the distribution, and on this platform that is not
+       # optional (found 2026-09-03 while verifying T20.1).** A WSL pane's cwd
+       # is a Unix path, Warp passes it verbatim in `session/new`, and the agent
+       # is spawned by the *Windows* Warp -- so the unwrapped `npx` form this
+       # entry used refuses the session outright with "`cwd` does not exist on
+       # the machine running the agent". `CLAUDE.md` records the failure and the
+       # remedy; this file was still handing out the form that fails, which is
+       # the one thing a launcher must not do.
+       Value = 'wsl.exe -d Ubuntu -- npx -y @agentclientprotocol/claude-agent-acp'
+       Why = 'the agent panel answers from this agent instead of upstream, started inside WSL so a pane cwd resolves' }
     @{ Name = 'WARP_FORK_ACP_MODE'
        Value = 'default'
        Why = 'makes the agent ask; without it its own classifier answers and Warp is never in the loop' }
@@ -122,6 +131,55 @@ try {
     $head = (git -C 'C:\dev\warp' log --oneline -1 2>$null)
     if ($head) { Write-Host "warpdev: building tree at $head" -ForegroundColor DarkGray }
 } catch { }
+
+# **Refuse to launch on top of a Warp that is already up (T20.3).** Measured in
+# run 2: an agent answered an approval to "launch the Windows Warp build" while
+# one was already running. Warp restores session layout, so the duplicate came up
+# with identical panes and tabs and took foreground -- from the user's seat,
+# indistinguishable from everything having crashed and restarted. Then it
+# compounds, because two instances make every `warpctrl` call without
+# `--instance` answer `ambiguous_instance`, including the agent's own. It was
+# parked on a request to tell the two discovery records apart when the confusion
+# was noticed: working back toward a cause it had created.
+#
+# The query below is the same one this script already ran *after* launching, to
+# confirm the thing came up. Asking it first costs a second and is the whole fix.
+#
+# **Every record it returns is a live Warp, and that was measured rather than
+# assumed.** The first cut of this check filtered the list by pid, on the
+# strength of `CLAUDE.md`'s "killing the process leaves a stale discovery
+# record". It does not: `crates/local_control/src/discovery.rs` prunes dead-PID
+# records on every scan (`is_pid_alive`, two call sites), and killing Warp here
+# left `instance list` empty. The pid filter was dead code guarding a condition
+# that cannot arise, so it is gone and the doc it came from is corrected.
+#
+# What *did* accumulate three instances in one session is the opposite case and
+# is covered: a CLI agent in a pane blocks `window close`, the close is refused,
+# and the instance stays **alive**. Those are exactly the records below.
+$existing = $null
+try {
+    $existing = & $Exe --warpctrl instance list --output-format json 2>$null | ConvertFrom-Json
+} catch { }
+# Fail *open* on a query that did not answer: refusing to launch because the
+# check itself broke would take away the only way to start.
+$live = @($existing.instances)
+
+if ($live.Count -gt 0 -and -not $Force) {
+    Write-Host "warpdev: refusing to launch - Warp is already running." -ForegroundColor Red
+    foreach ($inst in $live) {
+        Write-Host "  $($inst.instance_id)  pid $($inst.pid)  $($inst.channel)" -ForegroundColor DarkGray
+    }
+    Write-Host "  A second instance restores the same panes and takes foreground, which looks" -ForegroundColor DarkGray
+    Write-Host "  exactly like a crash-and-restart; and two instances make every warpctrl call" -ForegroundColor DarkGray
+    Write-Host "  without --instance answer ambiguous_instance." -ForegroundColor DarkGray
+    Write-Host "  Stop it with:  $Exe --warpctrl window close" -ForegroundColor DarkGray
+    Write-Host "  Or pass -Force if a second instance is really what you want." -ForegroundColor DarkGray
+    exit 2
+}
+if ($live.Count -gt 0) {
+    Write-Host "warpdev: -Force given; launching a second instance alongside $($live.Count) already up" -ForegroundColor Yellow
+    Write-Host "  Expect ambiguous_instance from warpctrl calls without --instance." -ForegroundColor DarkGray
+}
 
 if ($enabled) {
     foreach ($i in $Instruments) { Set-Item -Path "env:$($i.Name)" -Value $i.Value }

@@ -12209,7 +12209,7 @@ permitted that was not. Recorded as a question rather than assumed, because the
 freeze exists precisely so this kind of "surely this one is fine" does not
 accumulate.
 
-### T20.3 — An agent can relaunch its own host into a duplicate window
+### T20.3 — An agent can relaunch its own host into a duplicate window ✅ **done 2026-09-03**
 
 Approval `e0c15631-…:7` (*"Enable instrumentation and launch the Windows Warp
 build"*) was answered at `02:08:35.072Z`; a second `warp-oss` (PID 23088) was
@@ -12233,6 +12233,33 @@ is a script change and no app surface, which is the shape this board prefers.
 execution` line at the head of `warp-oss.log.old.0` is a red herring —
 `CLAUDE.md` already records that it marks the recovery sibling's log rather than
 a crash. It cost time here anyway.
+
+**As built (2026-09-03).** `.fork/tools/warpdev.ps1` runs `instance list`
+*before* `Start-Process`, prints what is already up, and exits `2`. `-Force` is
+the escape hatch and says what it costs. Verified by running all three branches:
+nothing up → launches; one up → refuses with no second process created; `-Force`
+→ two Warps, and the next refusal correctly lists both.
+
+**The check's first cut filtered the list by pid and that was dead code.** It was
+written on this repo's own instruction that *"killing the process leaves a stale
+discovery record"*. It does not — `discovery.rs` prunes dead PIDs on every scan
+(`is_pid_alive`, two call sites), and a `taskkill /F` here left `instance list`
+empty. `CLAUDE.md` is corrected. What actually piles up instances is the
+opposite case and is covered: a CLI agent in a pane blocks `window close`, the
+close is refused, and the instance stays **alive**.
+
+**Also fixed in the same file, found while verifying T20.1**: the launcher set
+`WARP_FORK_ACP_COMMAND` to the *unwrapped* `npx … claude-agent-acp`, which
+`CLAUDE.md` records as refusing the session outright for a WSL pane on Windows
+(*"`cwd` does not exist on the machine running the agent"*). A launcher handing
+out the form that fails is the one thing a launcher must not do.
+
+**And the refusal used to print `launching INSTRUMENTED` first**, then refuse —
+a surface saying something the code does not do, which is the family T20.2 is
+about. The check now runs before that line.
+
+**Not done, and it is the ticket's own note**: the `Parent has crashed` line at
+the head of `warp-oss.log.old.0` remains a red herring, already recorded here.
 
 ### T20.4 — Does the composer drop the agent's prose? ← **unblocked 2026-09-03**
 
