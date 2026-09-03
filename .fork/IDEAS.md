@@ -2183,63 +2183,123 @@ cautious on the ACP path. It is the rule correctly refusing the only path that
 can currently act, because that path is the one that cannot describe. And the
 path that can describe cannot act.
 
-## Re-measured 2026-09-03, and the blocking half got *worse*, not better
+## Re-measured 2026-09-03 — and the first re-measurement was itself wrong
 
-The table above was measured against `opencode`. `CLAUDE.md` has since made
-`claude-agent-acp` + `WARP_FORK_ACP_MODE=default` the recommended pairing, and
-`acp_permission_tests` carries a transcribed `claude-agent-acp` always-variant
-that **does** declare — `_meta.permission.version 1`, a `permission_mode` change
-to `acceptEdits`, a human `description`, and `lifetime: {scope: session}`. That
-looks like the row flipping to *"yes, it can describe"*, which would unblock the
-ACP path outright.
+**What was published first, and is retracted:** that `claude-agent-acp` "does
+both, depending on the request" — declaring what an `allow_always` would widen on
+some requests and not others — probed "live at 0.70.0". Both halves of that are
+wrong, and the error was the one this fork keeps paying for: a version was
+assumed rather than computed, exactly like the merge-base in `CONSOLIDATION.md`
+§1.1.
 
-**It does not.** Probed live at 0.70.0 against an ordinary edit request
-(`acp probe`, raw wire), the option is:
+**Measured properly, and it is two versions of the agent.** Two installs sit in
+`~/.npm/_npx/`:
 
-```json
-{"optionId": "allow-with-updates",
- "name": "Yes, allow all edits during this session",
- "kind": "allow_always"}
-```
+| install | version | `allow-with-updates` in `dist/` | `permission_mode` / `policy_rule` change builder |
+|---|---|---|---|
+| `fca12915ff656968` | 0.70.0 | **0 hits** | **present** |
+| `d820eb7d96bc2600` | 0.73.0 | 2 hits | **absent** |
 
-No `_meta` on the option at all. The request carries one — `{"permission":
-{"version": 1, "title": "Write i18-probe.txt"}}` — and it is a *title*, not a
-declaration of what the grant would widen. Warp's own consent report says it in
-those words: `"declared": null, "disclosed_as": "the_options_name_only"`.
+The probe captured `optionId: "allow-with-updates"`, a string that does not exist
+anywhere in 0.70.0 — so **the probe ran 0.73.0**. And the fixture in
+`acp_permission_tests::as_claude_sent_it`, which carries a full
+`_meta.permission.changes` declaration with `lifetime: {scope: session}`, was
+transcribed from 0.70.0, whose builder for it 0.73.0 no longer has.
 
-**So the real finding is that the same agent does both**, and that is a harder
-problem than the original table's. The declaring fixture is real and was measured;
-this non-declaring one is real and was measured. Which you get depends on the
-request. A design that asks *"can this transport describe an always-grant?"* has
-no stable answer, and one built on the declaring case would silently degrade to a
-bare name on the requests that do not carry one — which is the disclosure failure
-the standing rule exists to prevent, arrived at through a feature that worked
-when it was tested.
+So each version is internally consistent: **0.70.0 declares on the option when
+there is a change set; 0.73.0 never declares on any option.** Not one agent
+behaving two ways.
 
-**What that does to the shape of I18.** It removes "wait for the ACP path to
-start declaring" as a plan: it already declares, sometimes, and sometimes is
-worse than never because it makes the gap invisible. Three routes survive:
+**Why the version was ambiguous at all, and the thing to fix first.**
+`WARP_FORK_ACP_COMMAND` is unpinned everywhere it is written down —
+`.fork/tools/warpdev.ps1`, `CLAUDE.md`, `.fork/README.md` — as `npx -y
+@agentclientprotocol/claude-agent-acp`, which resolves to whatever is newest. The
+0.73.0 cache entry dates from 2026-09-02, so **every measurement taken through
+that command on or after that date was 0.73.0, including run 2 and every T20
+verification**, and every "0.70.0" label attached to them is unverified. Warp
+also never reads `agentInfo` from `initialize`, which both versions send, so
+nothing in the event log or `acp probe` records which agent actually answered.
 
-1. **Render `Declaration::Changes` when it is there and refuse when it is not.**
-   Honest, already parseable, and the fork has the vocabulary. The cost is an
-   affordance that appears and disappears between two requests that look
-   identical to the person, which is its own kind of dishonesty.
-2. **Make the Claude Code hook answer**, which is the second consequence below
-   and is still the strongest option: that path *can* describe
-   (`permission_suggestions` names the rules and `destination: session` names the
-   scope) and only cannot act, and it is a plugin-side change in a vendored,
-   versioned protocol the fork already owns.
-3. **Grant it in Warp rather than in the agent.** Neither transport is asked to
-   describe anything: Warp remembers a scope the *person* chose — "edits under
-   this directory, this session" — and keeps answering `allow_once` on their
-   behalf. What is disclosed is Warp's own rule, which Warp can state exactly,
-   instead of the agent's, which it cannot see. **Not scoped, and it is the one
-   that most needs the argument-against above run at it**, because it is the
-   consent architecture with the person removed for a while.
+**Two cheap things, and they are instrumentation rather than posture:** pin the
+version in all three places, and log `agentInfo.version` in `session_start` and
+in `acp probe`. Until then no ACP measurement in this repo is attributable to a
+version, which is a property of the evidence and not of any one finding.
 
-`transitions_offered` in the consent report already records every one of these
-offers with `disclosed_as`, so the evidence for whichever route is chosen is
-being collected today.
+## The routes, and the fourth one is the fork's own precedent
+
+1. **Render the declaration when the option carries one.** **Dead** on 0.73.0:
+   there is never one to render. Alive only on 0.70.0, i.e. by pinning backwards.
+2. **Make the Claude Code hook answer.** The vendor's schema supports it — the
+   `PermissionRequest` hook can return `{behavior: allow|deny, updatedPermissions?}`
+   — and `permission_suggestions` already names the rules and `destination:
+   session`. But it is a **CLI-agent-in-a-pane** feature, and every ask the
+   density complaint is about arrived over **ACP**. It does not touch the
+   measured cost. It is remote consent for the other transport, which is a real
+   ticket and a different one. Recommending it as "next for I18" conflated the
+   two; that was wrong.
+3. **Grant it in Warp.** Narrower than it sounds and safer than the entry
+   implies. Exactness needs `kind` + `locations`, which `edit`/`read` carry and
+   `execute` largely does not — so it can only ever cover the minority of asks.
+   Its real advantage is one the entry undersells: Warp stays in the loop per
+   call, so every auto-answer can be logged `answered_by: grant:<id>` and the
+   disguised-zero hazard (T14.18 — no permission lines meaning *Warp was not
+   asked*) never arises. Any **agent-side** grant makes asks vanish from Warp's
+   view entirely, which is the thing this fork exists to prevent.
+4. **The agent's own config — which this fork has already done once, under the
+   freeze, with the maintainer's explicit approval.** `opencode.json`'s bash
+   allowlist is exactly this move for the other agent. For `claude-agent-acp`,
+   `settingSources: ["user", "project", "local"]` (verified in both versions'
+   `dist/`) means this repo's `.claude/settings.json` — currently `{}` — is the
+   same lever. And for edits specifically there is a **zero-code** variant:
+   `WARP_FORK_ACP_MODE=acceptEdits`, an existing mode the agent describes itself
+   as *"Automatically accept all file edits"*, which Warp already discloses in
+   the panel every turn and re-sends on every turn. That *is* "allow all edits
+   during this session", with the disclosure already built and nothing new to
+   trust.
+
+**And route 4 has an audit attached to it that should happen regardless.**
+`~/.claude/settings.json` on this machine carries **87** allow rules, including
+`Bash(cat:*)`, `Bash(grep:*)`, `Bash(find:*)`, `Bash(wc:*)` and `Bash(ls:*)`
+(read 2026-09-03). Those load into every ACP session through `settingSources`.
+So `CLAUDE.md`'s carefully argued refusal to allow `find*`/`cat*`/`grep*` in
+`opencode.json` — on the reasoning that `cat` and `grep` disclose file *contents*
+at arbitrary paths, and `find -exec` is an arbitrary-command allow wearing a
+read-only name — **is already moot for the recommended agent**, via a file nobody
+audited and which is not in the repository. That is not an argument for or
+against a grant; it is a statement that the fork's permission posture is not
+currently what its own documentation describes, and nothing can be concluded
+about density until it is.
+
+## A gate for lifting the freeze, as a procedure rather than a feeling
+
+0. **Instrument first.** Pin `WARP_FORK_ACP_COMMAND` to an exact version in all
+   three places, and log `agentInfo.version`. Nothing measured before this is
+   attributable.
+1. **Audit `~/.claude/settings.json`**, since it silently governs every ACP
+   session and is not in the repo.
+2. **One representative coding session, event log on.** Classify each ask: what
+   `kind`, inside the session directory or not, and could an agent-side rule have
+   named it.
+3. **Nameable asks → the project's `.claude/settings.json`**, committed, and
+   calibrated by the case that must still *ask* — the discipline `CLAUDE.md`
+   already prescribes for `opencode.json`, where the confirming test cannot fail
+   and proves nothing. This is agent config, the move already approved once, and
+   not a Warp posture change.
+4. **Edits → `WARP_FORK_ACP_MODE=acceptEdits`** per session if wanted. Zero code;
+   Warp discloses the mode it is in every turn already.
+5. **Build route 3 only on the residue**, and only if it is still frequent and of
+   a kind Warp can state exactly. Requirements if it is built: ends with the
+   session, disclosed every turn the way the mode note is, every auto-answer
+   logged `answered_by: grant`, and never matches a request with empty
+   `locations`.
+6. **Route 2 is its own ticket** — CLI-agent remote consent — and is not on this
+   entry's path.
+
+**The falsifier for the whole procedure:** if the representative session's asks
+turn out to be dominated by ad-hoc `execute` calls inside the session directory
+that no rule can name, then none of the above helps, and the honest choice is
+between `default` and a disclosed `auto` — which is the maintainer's, and is not
+a thing to build.
 
 **Two consequences, and the second is the one to keep.**
 
