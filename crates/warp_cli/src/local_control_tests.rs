@@ -357,7 +357,7 @@ fn renders_an_approvable_request_with_the_command_that_answers_it() {
     // annotated everything would be as wrong as one that annotated nothing, and
     // would pass the assertion above.
     assert!(
-        rendered.contains("Allow once, Always allow (Warp never selects this), Reject\n"),
+        rendered.contains("Allow once | Always allow (Warp never selects this) | Reject\n"),
         "only the unselectable option is annotated, got:\n{rendered}"
     );
     assert!(

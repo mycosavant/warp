@@ -681,3 +681,50 @@ fn no_option_is_selectable_when_the_effect_escapes_the_call() {
         );
     }
 }
+
+/// **The separator must not be something an option name can contain.**
+///
+/// A comma was the first choice and a live request showed why it is wrong:
+/// `claude-agent-acp` sends *"Yes, allow all edits during this session"*, so the
+/// list read as four items and a reader could not tell a separator from
+/// punctuation inside a name. A semicolon fails the same way.
+///
+/// Asserted against **both measured agents' real option lists** rather than
+/// against an argument, and it is the lists that make this a measurement: they
+/// are transcribed verbatim from the wire in this file, so if a future agent
+/// starts sending a name containing the separator, the fixture that records it
+/// reddens this.
+#[test]
+fn no_measured_option_name_contains_the_separator_that_joins_them() {
+    use local_control::protocol::OFFERED_SEPARATOR;
+
+    let separator = OFFERED_SEPARATOR.trim();
+    assert!(!separator.is_empty(), "a blank separator separates nothing");
+
+    for options in [
+        as_claude_sent_it(),
+        as_opencode_sent_it(),
+        as_claude_asked_to_leave_plan_mode().options.clone(),
+    ] {
+        for option in options {
+            assert!(
+                !option.name.contains(separator),
+                "{:?} contains {separator:?}, so a joined list cannot be read back",
+                option.name,
+            );
+        }
+    }
+
+    // The calibration: a comma *is* in those names, which is the finding this
+    // exists to keep. Without it the test above would pass for a separator
+    // chosen carelessly and nothing would record why this one was not.
+    assert!(
+        [as_claude_sent_it(), as_opencode_sent_it()]
+            .concat()
+            .iter()
+            .chain(as_claude_asked_to_leave_plan_mode().options.iter())
+            .any(|option| option.name.contains(',')),
+        "the measured names are supposed to contain commas -- that is why the \
+         separator is not one",
+    );
+}

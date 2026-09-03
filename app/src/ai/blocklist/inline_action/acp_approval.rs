@@ -260,19 +260,11 @@ impl View for AcpApprovalView {
         // marked as Warp's, because the point of keeping the offer is that it is
         // a record of what was asked.
         if !parked.options_offered.is_empty() {
-            let offered = parked
-                .options_offered
-                .iter()
-                .map(|option| {
-                    if option.warp_can_select {
-                        option.name.clone()
-                    } else {
-                        format!("{} (Warp never selects this)", option.name)
-                    }
-                })
-                .collect::<Vec<_>>()
-                .join(", ");
-            column.add_child(Self::line("offered", &offered, app));
+            column.add_child(Self::line(
+                "offered",
+                &::local_control::protocol::OfferedOption::render_list(&parked.options_offered),
+                app,
+            ));
         }
 
         let mut buttons = Flex::row().with_cross_axis_alignment(CrossAxisAlignment::Center);

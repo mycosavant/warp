@@ -274,19 +274,10 @@ fn render_approvals(data: &serde_json::Value) -> String {
         // what a yes buys. The record stays the agent's own wording; the note
         // is Warp's, and says whose it is.
         if !approval.options_offered.is_empty() {
-            let offered = approval
-                .options_offered
-                .iter()
-                .map(|option| {
-                    if option.warp_can_select {
-                        option.name.clone()
-                    } else {
-                        format!("{} (Warp never selects this)", option.name)
-                    }
-                })
-                .collect::<Vec<_>>()
-                .join(", ");
-            out.push_str(&format!("  offered   {offered}\n"));
+            out.push_str(&format!(
+                "  offered   {}\n",
+                local_control::protocol::OfferedOption::render_list(&approval.options_offered)
+            ));
         }
         // **Gated on `can_approve`, not on whether a reason came with it** —
         // T14.6's finding, which cost a phone a *Yes* button on rows that could

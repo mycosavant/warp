@@ -430,6 +430,21 @@ pub struct PendingApproval {
     pub options_offered: Vec<OfferedOption>,
 }
 
+/// How the offered-options list is separated where it is drawn.
+///
+/// **A comma was wrong and it took a live request to see it.** The measured
+/// names are sentences — `claude-agent-acp` sends *"Yes, allow all edits during
+/// this session"* — so a comma-joined list reads as one item more than it is,
+/// and the reader cannot tell a separator from punctuation inside a name. A
+/// semicolon has the same defect for the same reason: it is something a sentence
+/// can contain.
+///
+/// `|` is chosen because it is not punctuation. It appears in none of the option
+/// names either measured agent sends (`acp_permission_tests` carries both lists
+/// verbatim), and unlike the alternatives a reader never has to decide whether
+/// this one is part of the name.
+pub const OFFERED_SEPARATOR: &str = " | ";
+
 /// One option an ACP agent offered, and whether Warp could ever send it back.
 ///
 /// **The name alone was not enough, and that was T20.2.** This was a
@@ -459,6 +474,29 @@ pub struct OfferedOption {
     /// answer that goes on the wire cannot drift apart.
     #[serde(default)]
     pub warp_can_select: bool,
+}
+
+impl OfferedOption {
+    /// The line a person reads, for a whole list of these.
+    ///
+    /// **One function because there are two surfaces and they must not drift.**
+    /// The panel and `warpctrl agent approvals` both draw this list, and a
+    /// difference between them would be a difference in what a *yes* appears to
+    /// buy — which is the shape T14.6 removed when the console's listing and its
+    /// answer path disagreed.
+    pub fn render_list(options: &[Self]) -> String {
+        options
+            .iter()
+            .map(|option| {
+                if option.warp_can_select {
+                    option.name.clone()
+                } else {
+                    format!("{} (Warp never selects this)", option.name)
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(OFFERED_SEPARATOR)
+    }
 }
 
 /// Result of `agent.approvals`.
