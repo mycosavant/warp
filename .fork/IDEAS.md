@@ -2270,6 +2270,58 @@ against a grant; it is a statement that the fork's permission posture is not
 currently what its own documentation describes, and nothing can be concluded
 about density until it is.
 
+## The audit of `~/.claude/settings.json`, done 2026-09-03
+
+Read, counted and confirmed by running. **It is not in the repository, it governs
+every ACP session, and it is wider than anything this fork's own documents
+describe.**
+
+`permissions`: **87 allow**, 30 deny, 0 ask, and `defaultMode: auto`. The allow
+list is 71 `Bash`, 12 `Read`, 4 `WebFetch`. **22 of the bash rules are
+whole-command wildcards:**
+
+```
+cargo  cat  cd  cp  echo  find  go  grep  head  ls  make  mkdir
+mv  node  ps  python  python3  tail  touch  uname  wc  which
+```
+
+**Confirmed live, not inferred.** `settingSources: ["user", "project", "local"]`
+is in both agent versions' `dist/`, and two probes settle it: one running
+`wc -l CLAUDE.md` and a file read raised **0** permission requests; one asking
+for a file *write* raised **1**. `wc` and `Read` are on the list; `Write` is not.
+
+**Three things follow, in order of how much they matter.**
+
+1. **`python:*`, `python3:*` and `node:*` are arbitrary code execution**, and
+   they make the 30-rule deny list mostly decorative. Those rules match command
+   prefixes — `sudo:*`, `dd:*`, `mkfs:*`, `ssh:*` — and
+   `python -c "import subprocess; subprocess.run([...])"` matches none of them
+   while matching the `python` allow. `cargo:*` is the same shape (`cargo run`,
+   build scripts), as is `make:*`.
+2. **`cat`, `grep` and `find` are allowed here**, which is exactly the trio
+   `CLAUDE.md` argues at length for refusing in `opencode.json` — `cat`/`grep`
+   disclosing file contents at arbitrary paths, `find -exec` being an
+   arbitrary-command allow wearing a read-only name. That reasoning is sound and
+   it has been moot for the recommended agent the whole time, through a file
+   outside the repo that nobody had read.
+3. **`defaultMode: auto` is set at user level.** `CLAUDE.md` attributes
+   `claude-agent-acp` starting in `auto` to *the agent's own default*. It may in
+   fact be this line. **Not established** — it needs one probe with this key
+   changed — and it matters, because the fork's whole disclosure story around
+   `WARP_FORK_ACP_MODE` is written on the assumption that the mode is the
+   agent's choice rather than the user's.
+
+**Nothing here was changed.** It is the maintainer's personal file, it governs
+tools far beyond this fork, and the appropriate move is a decision rather than an
+edit. But the honest summary is that **the fork's permission posture is not
+currently what its own documentation describes**, and no argument about approval
+density can be settled until this file is either narrowed or knowingly accepted.
+
+The narrowest useful change, if one is wanted: drop `python:*`, `python3:*`,
+`node:*`, `make:*` and `cargo:*` to specific subcommands, and move `cat`, `grep`,
+`find` into the project's own `.claude/settings.json` where they can be scoped to
+a path.
+
 ## A gate for lifting the freeze, as a procedure rather than a feeling
 
 0. **Instrument first.** Pin `WARP_FORK_ACP_COMMAND` to an exact version in all
