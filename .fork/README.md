@@ -3799,45 +3799,98 @@ ClientAliveInterval 60
 ClientAliveCountMax 5
 ```
 
-### 3. Off-LAN access — Tailscale, and not a port-forward
+### 3. Off-LAN access — headscale on a VPS
 
-`CLAUDE.md` already rules on this and the ruling stands: **never a port-forward.**
-Opening 22 to the internet replaces a LAN-scoped firewall rule with a global one,
-and this machine's control plane is plaintext HTTP sitting beside it.
+**Decided 2026-09-02 after measuring this network.** Four facts shaped it and are
+recorded because each of them ruled something out:
 
-Tailscale is the recommended answer there for a reason that also applies here: a
-tailnet address is *one literal IP*, so it fits `WARP_FORK_CONTROL_BIND`'s parser
-unchanged, and binding it is **narrower** than the LAN bind rather than wider —
-it retires the mirrored-networking firewall rule instead of adding to it.
+| measured | consequence |
+|:--|:--|
+| Router WAN address == public address | **not** behind CGNAT, so a port-forward is technically possible |
+| ProtonVPN runs on this PC | a port-forward *to the PC* breaks whenever the VPN connects |
+| Router is a Nokia WiFi Beacon 6 | ISP mesh unit; forwards ports, will not run a WireGuard server |
+| One default route, no blackhole | ProtonVPN's **permanent** kill switch is not armed |
 
-Not installed as of 2026-09-02, and it needs an interactive login, so it is the
-owner's to do:
+The middle two are what matter. Inbound arrives over the LAN; with ProtonVPN up
+the PC's reply leaves through the tunnel, and asymmetric routing drops it
+silently. Terminating WireGuard on the router would sidestep that entirely — the
+PC would be a plain LAN host, and LAN traffic *is* measured working with
+ProtonVPN connected (see the pairing retraction in `CLAUDE.md`) — but the Beacon
+cannot do it.
 
-```powershell
-winget install -e --id tailscale.tailscale
-tailscale up
-tailscale ip -4                     # the address to use from the phone
-```
+So: **a mesh VPN, which coexists with ProtonVPN instead of fighting it.**
+Tailscale-protocol clients claim routes only for `100.64.0.0/10`, which is more
+specific than ProtonVPN's default route, so tailnet traffic wins without
+disturbing anything else, and no inbound port is opened at all.
 
-**Install it on Windows, not inside WSL.** `.wslconfig` here already uses
-`networkingMode=mirrored`, so WSL shares the host's stack and the sshd already
-listening on `0.0.0.0:22` should answer on the tailnet address without further
-work. **Verify that by running it** rather than assuming — mirrored mode is what
-makes it true and it is the kind of thing that quietly is not.
+**Tailscale's own coordination server is account-based**, which is off-thesis for
+this fork. `headscale` replaces exactly that part and nothing else:
 
-Then from Termux, with Tailscale on the phone too:
+| | licence |
+|:--|:--|
+| `juanfont/headscale` — the control server | BSD-3-Clause |
+| `tailscale/tailscale` — the clients | BSD-3-Clause |
+
+Verified from the repositories, not from memory.
 
 ```bash
-ssh warp -t tmux new -A -s main     # same line, from anywhere
+# on a small VPS with a DNS name pointing at it
+curl -fsSL -o headscale.deb \
+  https://github.com/juanfont/headscale/releases/latest/download/headscale_linux_amd64.deb
+sudo apt install ./headscale.deb
+sudo sed -i 's|^server_url:.*|server_url: https://hs.example.com|' /etc/headscale/config.yaml
+sudo systemctl enable --now headscale
+sudo headscale users create me
+sudo headscale preauthkeys create --user me --reusable --expiration 24h
 ```
 
-### Optional: `mosh` for a phone specifically
+```powershell
+# on this PC - the official client, pointed at your own control server
+winget install -e --id tailscale.tailscale
+tailscale up --login-server https://hs.example.com --authkey <key>
+tailscale ip -4
+```
 
-Not installed. `mosh` survives roaming between wifi and cellular and a phone
-being locked, which SSH does not — it is the difference between reconnecting and
-never noticing. It needs a UDP range, which is trivial inside a tailnet and is
-another reason not to port-forward. `apt install mosh` on both ends, then
-`mosh warp -- tmux new -A -s main`.
+The phone runs the same official app; both the Android and iOS clients accept a
+custom coordination server, so nothing proprietary or account-bound is involved
+on either end.
+
+**Two things to be honest about.**
+
+*Headscale does not remove every dependency by default.* It replaces the control
+plane, but the DERP **relays** used when two peers cannot reach each other
+directly still default to Tailscale's public map. Traffic through them is
+end-to-end encrypted and they cannot read it, but it is their infrastructure. For
+a genuinely self-contained tailnet, run your own DERP server and point
+`derp.urls` at it. Most connections here should be direct anyway — no CGNAT on
+this end.
+
+*The kill switch is the thing that will break it.* No permanent kill switch is
+armed today, but if one is ever enabled it blocks non-tunnel traffic and the
+tailnet dies with it. **Test it deliberately rather than discovering it from a
+locked-out phone**: connect ProtonVPN, then confirm `tailscale status` still
+shows peers and `ssh warp` still works.
+
+Then, from anywhere:
+
+```bash
+ssh warp -t tmux new -A -s main
+```
+
+### Fallback — WireGuard on the PC, with ProtonVPN split-tunnelled
+
+Zero cost, no VPS, no accounts, `wireguard-windows` is MIT. The Beacon forwards
+one UDP port to the PC, and ProtonVPN's split tunnelling excludes the WireGuard
+service so replies leave over the LAN instead of the tunnel.
+
+It works. It is second choice for one reason worth stating plainly: **split-tunnel
+rules do not survive client upgrades reliably, and the failure mode is silent.**
+Nothing tells you the exclusion was dropped; you find out when the phone cannot
+connect, which is exactly when you needed it. A forwarded WireGuard port is
+otherwise a good thing to expose — it answers nothing without a valid key, so it
+is indistinguishable from a closed port to a scanner, and the *"never
+port-forward"* ruling elsewhere in these docs is about SSH beside a plaintext
+control plane and does not transfer.
 
 ## Driving the Windows build from WSL
 
