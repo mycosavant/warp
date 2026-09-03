@@ -578,6 +578,15 @@ async fn exchange(
                 .send_request(InitializeRequest::new(ProtocolVersion::V1))
                 .block_task()
                 .await?;
+            // Which agent actually answered, in its own words, before anything
+            // else is recorded about the session. See `model::log_agent_identity`
+            // for the day of measurements this exists to stop.
+            model::log_agent_identity(
+                &conversation_id,
+                &program,
+                &cwd_text,
+                hello.agent_info.as_ref(),
+            );
 
             // New conversation or continued one, and the agent gets a say in
             // the second case. `load_session` is what it declared it can do;

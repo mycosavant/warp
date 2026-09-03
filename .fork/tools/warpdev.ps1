@@ -58,7 +58,7 @@ $Instruments = @(
        # the machine running the agent". `CLAUDE.md` records the failure and the
        # remedy; this file was still handing out the form that fails, which is
        # the one thing a launcher must not do.
-       Value = 'wsl.exe -d Ubuntu -- npx -y @agentclientprotocol/claude-agent-acp'
+       Value = 'wsl.exe -d Ubuntu -- npx -y @agentclientprotocol/claude-agent-acp@0.73.0'
        Why = 'the agent panel answers from this agent instead of upstream, started inside WSL so a pane cwd resolves' }
     @{ Name = 'WARP_FORK_ACP_MODE'
        Value = 'default'

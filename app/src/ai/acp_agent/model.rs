@@ -252,3 +252,62 @@ pub(crate) fn log(conversation_id: &str, agent: &str, cwd: &str, catalog: &Catal
 #[cfg(test)]
 #[path = "model_tests.rs"]
 mod tests;
+
+/// Records which agent actually answered, in the agent's own words.
+///
+/// **Because a whole day's ACP measurements turned out to be unattributable.**
+/// `WARP_FORK_ACP_COMMAND` is `npx -y @agentclientprotocol/claude-agent-acp` in
+/// every place this fork writes it down — unpinned, so it resolves to whatever
+/// is newest. On 2026-09-03 a finding was published as *"probed live at
+/// 0.70.0"* and had in fact run 0.73.0, which was the difference between an
+/// always-option that declares what it would widen and one that does not. The
+/// version was assumed rather than read, and nothing in the event log or in
+/// `acp probe` could have contradicted it.
+///
+/// `initialize` has carried the answer the whole time: `agent_info` is
+/// `{name, title, version}` and the fork read none of it. One line per session,
+/// so *"which agent said this"* stops being a thing anybody has to remember.
+///
+/// `Option`, because `agent_info` is optional in the protocol and an agent that
+/// omits it must be recorded as having omitted it rather than as some default.
+pub(crate) fn log_agent_identity(
+    conversation_id: &str,
+    agent: &str,
+    cwd: &str,
+    info: Option<&agent_client_protocol::schema::v1::Implementation>,
+) {
+    let summary = match info {
+        Some(info) => {
+            let title = info
+                .title
+                .as_deref()
+                .map(|title| format!(" “{title}”"))
+                .unwrap_or_default();
+            format!("{} {}{title}", info.name, info.version)
+        }
+        // Said out loud. A missing line and a line saying "the agent did not
+        // say" are different facts, and only one of them is evidence.
+        None => "the agent sent no agent_info in its initialize reply".to_owned(),
+    };
+    crate::event_log::record(crate::event_log::Entry {
+        v: None,
+        agent,
+        event: "session_agent",
+        source: SOURCE,
+        session_id: Some(conversation_id),
+        linked_session_id: None,
+        call_id: None,
+        parent_call_id: None,
+        cwd: Some(cwd),
+        project: crate::event_log::project_name(cwd),
+        tool_name: None,
+        tool_input_preview: None,
+        summary: Some(&summary),
+        error_type: None,
+        plugin_version: None,
+        decision: None,
+        answered_by: None,
+        can_approve: None,
+        applied: true,
+    });
+}

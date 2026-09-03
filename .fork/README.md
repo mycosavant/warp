@@ -319,7 +319,7 @@ explorer all work in this fork and none of them did upstream; see below.
 starts inside the distribution:
 
 ```powershell
-$env:WARP_FORK_ACP_COMMAND = 'npx -y @agentclientprotocol/claude-agent-acp'
+$env:WARP_FORK_ACP_COMMAND = 'npx -y @agentclientprotocol/claude-agent-acp@0.73.0'
 $env:WARP_FORK_ACP_MODE    = 'default'
 ```
 
@@ -1529,7 +1529,7 @@ built in:
 
 ```
 warpctrl acp probe --command "gemini --acp" --prompt "what is in this directory?"
-warpctrl acp probe --command "npx -y @agentclientprotocol/claude-agent-acp" --prompt "hello"
+warpctrl acp probe --command "npx -y @agentclientprotocol/claude-agent-acp@0.73.0" --prompt "hello"
 warpctrl acp probe --command "opencode acp" --prompt "hello"
 ```
 

@@ -363,8 +363,23 @@ this file's other ACP measurements was taken.
 The remedy is one variable and no code:
 
 ```
-WARP_FORK_ACP_COMMAND='wsl.exe -d Ubuntu -- npx -y @agentclientprotocol/claude-agent-acp'
+WARP_FORK_ACP_COMMAND='wsl.exe -d Ubuntu -- npx -y @agentclientprotocol/claude-agent-acp@0.73.0'
 ```
+
+**Pin the version, and this file did not until 2026-09-03.** Unpinned, `npx -y`
+resolves to whatever is newest, and two installs sat in `~/.npm/_npx/` for a
+week. It is not a cosmetic difference: **0.70.0 declares what an `allow_always`
+option would widen (`_meta.permission.changes`, with a `lifetime` scope) and
+0.73.0 declares nothing on any option** — verified by grepping both `dist/`
+trees. A finding was published as *"probed live at 0.70.0"* that had actually run
+0.73.0, and the two versions give opposite answers to I18's central question.
+
+**And the version was already in hand.** `acp probe`'s first line is the agent's
+`initialize` reply, which carries
+`agentInfo: {name, title, version: "0.73.0"}` — read from the wire, printed, and
+then labelled from memory anyway. The panel path was genuinely blind and now
+writes a `session_agent` event log line; the probe never was. Re-measure before
+trusting any ACP claim in these docs dated before this line.
 
 Measured with that in place, end to end on a **routed** session
 (`session inspect` → `{"where": "host"}`, `cd` first and connect second):
