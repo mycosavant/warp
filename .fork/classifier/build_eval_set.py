@@ -238,6 +238,29 @@ def envelope(kind, inp, cwd, rules, *, strip_env_prefix, edits_inside):
     return "auto" if all(s in BUILTIN_SAFE or rules.bash_segment_allowed(s) for s in segs) else "ask"
 
 
+# What the agent *said* it was doing. Every `execute` ask in run 2 carried a
+# one-sentence `description` beside the command — 36 of 36 — and this file's
+# first version never looked at it, scoring the command text alone and
+# concluding the signal was unreachable inside quoted PowerShell. It was one
+# key over. Agent-authored, so never a boundary; but consent here is about an
+# honest agent (`acp_permission.rs`), and for an honest agent this sentence is
+# the most legible statement of effect on the wire.
+READ_ONLY_OPENERS = (
+    "check", "compare", "confirm", "determine", "find", "inspect", "list", "locate",
+    "read", "verify", "view", "look", "show", "search", "fetch origin (read-only)",
+)
+
+
+def intent_reads_as_read_only(description):
+    """Whether the first word of the agent's own description is a read verb.
+    A *rule over prose*, scored against the hand labels in `report` so its
+    misses are visible; it exists to measure how much the description says, not
+    to answer anything."""
+    if not description:
+        return None
+    return description.strip().lower().startswith(READ_ONLY_OPENERS)
+
+
 # ---------------------------------------------------------------------------
 # Loading and joining.
 # ---------------------------------------------------------------------------
@@ -324,11 +347,13 @@ def main():
             rows.append({
                 "conversation": conv, "source": source, "ts": ts, "call_id": cid,
                 "kind": kind, "input": inp, "cwd": cwd,
+                "intent": inp.get("description"),
                 "asked": bool(ask), "decision": reply.get("decision"), "answered_by": reply.get("answered_by"),
                 "result_error": results.get(cid),
                 "label": {"scope": scope, "effect": effect, "note": note},
                 "rule": {
                     "contain": contain(kind, inp, cwd),
+                    "intent_reads_as_read_only": intent_reads_as_read_only(inp.get("description")),
                     "E0_as_claude_code_did": envelope(kind, inp, cwd, rules, strip_env_prefix=False, edits_inside=False),
                     "E1_declared_rules_env_stripped": envelope(kind, inp, cwd, rules, strip_env_prefix=True, edits_inside=False),
                     "E2_E1_plus_edits_inside": envelope(kind, inp, cwd, rules, strip_env_prefix=True, edits_inside=True),
@@ -372,6 +397,22 @@ def report(rows):
         for r in bad:
             print("   ", r["label"], json.dumps(r["input"])[:100])
         print()
+    ex = [r for r in asked if r["kind"] == "execute"]
+    with_intent = [r for r in ex if r["intent"]]
+    print(f"The agent's own description: present on {len(with_intent)} of {len(ex)} execute asks")
+    agree = collections.Counter()
+    for r in with_intent:
+        says_read = r["rule"]["intent_reads_as_read_only"]
+        is_read = r["label"]["effect"] in ("read",)
+        agree[("description reads as read-only" if says_read else "description reads as an action",
+               "hand label read" if is_read else "hand label " + r["label"]["effect"])] += 1
+    for k in sorted(agree):
+        print(f"  {k[0]:36} x {k[1]:18} {agree[k]:3}")
+    misses = [r for r in with_intent if r["rule"]["intent_reads_as_read_only"] and r["label"]["effect"] != "read"]
+    print(f"  descriptions that read as read-only on a call the hand label says is not: {len(misses)}")
+    for r in misses:
+        print("   ", r["label"]["effect"], "|", r["intent"])
+    print()
     remain = [r for r in asked if r["rule"]["E2_E1_plus_edits_inside"] == "ask"]
     print(f"Residue under E2 — {len(remain)} asks a rule leaves for a person or a model:")
     c = collections.Counter((r["label"]["scope"], r["label"]["effect"]) for r in remain)

@@ -4,27 +4,25 @@
 posture question with an implementation behind it, and both halves need arguing
 before either is built.
 
-**Status: measured 2026-09-03, and the answer is no model.** The evaluation set
-is built (`.fork/classifier/`), the rule was tried, and the falsifier at the
-bottom of this file fired. The section directly below is the result; the rest
-of the file is the argument as it stood before the measurement, kept because the
-posture half of it is still the maintainer's to settle.
+**Status: measured 2026-09-03; the first verdict was "no model" and it was
+retracted the same evening.** The evaluation set is built (`.fork/classifier/`),
+the rule was tried and its result stands. The model half is open again, for the
+reasons in the section directly below; the rest of the file is the argument as
+it stood before the measurement, and the posture half of it is still the
+maintainer's to settle.
 
 ---
 
-## Measured 2026-09-03 — a rule handles a third, and the third was already built
+## Measured 2026-09-03 — a rule handles a third; the verdict on the rest was withdrawn
 
 Full account in `.fork/classifier/README.md`; the corpus, the labels, the rule
-and eighteen probes are beside it. The shape of it:
+and eighteen probes are beside it.
 
-- **The corpus has one class.** Of run 2's 44 asks the person answered **41
-  yes**, 2 went unanswered to an accidental ctrl+c, and the 1 no was the person
-  ending the run. A classifier fitted to the person's decisions learns *yes*;
-  the only informative labels are hand-written ones, and those are an
-  *envelope*, not a model's target.
+**What stands:**
+
 - **Counted from the full inputs, the split is 28 host / 16 project** — the
-  30/9/7 in the next section overlaps and sums to 46. The 16 are 7 edits inside
-  the session cwd, 7 `cargo` commands, and 2 `git` calls to GitHub.
+  30/9/7 below overlaps and sums to 46. The 16 are 7 edits inside the session
+  cwd, 7 `cargo` commands, and 2 `git` calls to GitHub.
 - **A containment rule auto-answers 14 of 44 (32%) with zero unsafe answers**,
   and both halves of it exist today: the seven `cargo` asks are the person's own
   `Bash(cargo:*)` rule defeated by the `CARGO_BUILD_JOBS=8` prefix `CLAUDE.md`
@@ -33,23 +31,37 @@ and eighteen probes are beside it. The shape of it:
   `WARP_FORK_ACP_MODE=acceptEdits` answers, measured scoped to the cwd.
 - **The containment check itself is Claude Code's, already running.** An
   allowed verb on a path outside the cwd asks; `cd` out of it asks. Measured,
-  then found in its docs. Warp building the same rule would duplicate the engine
-  it is talking to.
-- **The 28 host asks are the task.** The agent was syncing, building,
-  screenshotting and driving the Windows Warp through `powershell.exe`. Seventeen
-  are read-only by hand label; the signal separating them from the eleven that
-  write, type into the user's pane, or launch a process sits inside a quoted
-  PowerShell string the agent requoted twice. The one call that did harm was
-  among them and the person approved it. That is the falsifier below, met.
+  then found in its docs.
+- **The decision column is uninformative** — 41 yes, 2 unanswered to an
+  accidental ctrl+c, 1 no that was the person ending the run.
+
+**What was withdrawn, and why (`57f0e866a`, and the README's own data):**
+
+- The first verdict read those 41 yeses as the rubber-stamp this file names,
+  measured. They were given through a card that rendered the agent's
+  description inside an escaped JSON blob, showed *"not stated by the agent"*
+  for *acts on* on every shell call, and drew Warp's chrome over the agent's
+  words at 9.4 : 1. A yes under those conditions is evidence about the card,
+  not about the call. The column is still unusable as ground truth — for a
+  stronger reason than the one first given.
+- The first verdict said the 28 host asks could not be separated because the
+  signal sat inside quoted PowerShell. **Every one of the 36 shell asks carried
+  a one-sentence `description`**, in the evaluation set from the start and never
+  read. Scored by its first verb against the hand labels: none of the sixteen
+  writes, inputs, launches and builds reads as read-only; sixteen of seventeen
+  reads do. The sentence separates the 28 as well as the hand labels, and it was
+  the least findable thing on the card.
+- So the falsifier at the bottom of this file is **not met**. It was declared
+  met on evidence the card had contaminated and a field nobody had opened.
 
 **What this leaves the maintainer:** two configuration lines that remove a third
-of the asks with no Warp change, the posture question below unchanged, and one
-transport observation — the 17 read-only host calls are `warpctrl` read verbs
-Warp could vouch for from its own catalog if the WSL side could reach the
-Windows instance without `powershell.exe`. That is a build and not this ticket.
-
----
-
+of the asks with no Warp change; a run with the fixed card, which is the only
+thing that can say whether 44 legible asks in 50 minutes is the count problem
+this file assumed or a card problem now fixed; and the posture question below,
+unchanged. One transport observation stays: the 17 read-only host calls are
+`warpctrl` read verbs Warp could vouch for from its own catalog if the WSL side
+could reach the Windows instance without `powershell.exe`. A build, not this
+ticket.
 ## The corpus is contaminated as evidence about *decisions* — read this first
 
 **Added 2026-09-03 after the maintainer pushed back, and it is the most important

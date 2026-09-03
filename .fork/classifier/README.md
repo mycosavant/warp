@@ -4,14 +4,21 @@
 Warp does; permission posture stays frozen and every number below is an input
 to the maintainer's decision, not a decision.**
 
-**Verdict, stated first: do not build the model.** A rule handles a third of the
-asks exactly, and every part of that rule already exists — in Claude Code's own
-permission engine and in the maintainer's own allow list — so the third is
-recoverable with two configuration lines and no code. The remaining two thirds
-are the agent working on the Windows host, which was the task it was given; the
-ask is correct under any containment envelope, and a model would be guessing on
-the approving side inside quoted PowerShell strings, where the one call that did
-real harm sat. That is the falsifier `CLASSIFIER.md` named, and it fired.
+**Verdict, corrected 2026-09-03 the same evening — the first version of this
+file said "do not build the model", and that does not stand.** What stands: a
+containment rule handles a third of the asks exactly, and every part of that
+rule already exists — in Claude Code's own permission engine and in the
+maintainer's own allow list — so the third is recoverable with two configuration
+lines and no code. What was retracted, by the maintainer's own re-measurement
+(`57f0e866a`) and then by re-reading this directory's own data: the argument
+that the other two thirds could not be separated. That argument was built on the
+person's 41 yeses and on the command text, and both were the wrong evidence.
+The yeses were given through a card that showed a JSON blob and an empty *acts
+on*; and every one of the 36 shell asks carried a one-sentence description of
+intent that the first version of this file never read, sitting one key over
+from the command it analysed. Details under *The 28 that remain*. **The model
+question is open again, with a concrete input to evaluate; nothing here decides
+it.**
 
 ## What is in this directory
 
@@ -81,7 +88,7 @@ went `unanswered` because the person pressed ctrl+c meaning *copy* and the
 panel read it as *cancel*, and each was then asked again. That is a composer
 finding (`.fork/COMPOSER.md`), and it is two of the 44.
 
-## What the person decided — the column a model would be trained on
+## What the person decided — and why the column says nothing
 
 | decision | count |
 |---|---|
@@ -89,13 +96,25 @@ finding (`.fork/COMPOSER.md`), and it is two of the 44.
 | unanswered (the ctrl+c) | 2 |
 | denied | 1 — the last ask, the person ending the run |
 
-**Every real decision was yes**, including the one that launched a duplicate
-Warp. So the corpus has one class. A classifier fitted to *"what would the
-person have said"* learns *yes*, and an evaluation against the person's
-decisions cannot distinguish it from `bypassPermissions`. The only labels that
-carry information are the hand labels above, and those are not a model's
-target — they are the **envelope** a person would declare. This is the
-rubber-stamp `CLASSIFIER.md` described, measured: 41 of 41.
+Every real decision was yes. **The first version of this file read that as the
+rubber-stamp `CLASSIFIER.md` describes, measured. That was the wrong
+mechanism under a correct observation**, the shape `CLAUDE.md` warns about most.
+Measured by the maintainer's other session against the same run (`57f0e866a`,
+`2c914dc98`): the approval card rendered `raw_input.to_string()` — the agent's
+one-line description sat inside an escaped JSON blob beside a multi-line
+command — *acts on* read *"not stated by the agent"* on all 36 shell asks
+because ACP sends no `locations` for a shell call, and Warp's own chrome
+outweighed the agent's words 9.4 : 1, so none of the narration explaining a call
+reached the screen. A yes given under those conditions is not the person's
+judgement about the call; it is the person's judgement that the card could not
+be read and the work should continue.
+
+So the conclusion survives with a different and stronger reason: the decision
+column cannot calibrate anything, not because the person was careless but
+because the person was blind. The corpus stays sound for **what was asked** —
+the kinds, the inputs, the split — which is what the rule measurement below
+uses. It is not usable as ground truth for what *should* have been answered,
+and the card has since been fixed (presentation only; no permission changed).
 
 ## What a rule handles
 
@@ -140,7 +159,7 @@ project-level rule is a lever in a directory Claude Code already knows and not
 in one it has never seen, and `settingSources` in `dist/` could not have told
 you that.
 
-## The 28 that remain, and why not a model
+## The 28 that remain — and the field this file did not read
 
 Nineteen are `powershell.exe …` invocations and nine name a `/mnt/c` path
 directly. By hand, 17 are read-only — mostly `warpctrl` read verbs (`instance
@@ -148,37 +167,75 @@ list`, `pane read`, `session inspect`, `--help`) — and 11 are not: syncing and
 building the Windows checkout, screenshots written to `C:\dev`, two `input
 submit` calls that typed a command into the user's pane, and the `-Launch`.
 
-The discriminating signal for all 19 PowerShell calls sits inside a quoted
-string, after `-Command '& "C:\dev\warp\target\debug\warp-oss.exe" --warpctrl`,
-and the agent requoted it twice in one session. A prefix rule cannot reach it. A
-model could be asked to, and the cost of its wrong answer on the approving side
-is a command typed into the person's shell or a second Warp on their screen —
-which is precisely the call the person approved. There is no held-out label to
-calibrate such a model against except these hand labels, and the corpus is 28
-calls from one session. **That is the falsifier `CLASSIFIER.md` wrote down, and
-it is met.**
+**The first version of this section argued that the discriminating signal sat
+inside a quoted PowerShell string the agent requoted twice, that a prefix rule
+could not reach it and a model would be guessing, and that the person had
+approved the harmful launch — therefore the falsifier was met. Retracted.** The
+person approved the launch blind (previous section). And the signal was never
+only in the command: **every one of the 36 shell asks carried a one-sentence
+`description`** — *"Enable instrumentation and launch the Windows Warp build"*,
+*"Submit a shell-identifying command to the active pane"*, *"Compare local HEAD
+to Windows checkout HEAD"* — which this directory's own `eval-set.jsonl` had
+held from the start under `input.description`. Scored now against the hand
+labels, by nothing cleverer than the description's first verb
+(`intent_reads_as_read_only` in the builder):
 
-What *would* answer the 17 read-only host calls exactly is not a classifier:
-Warp already knows which `warpctrl` actions are read-only (`PAIRABLE_ACTIONS`
-is the read surface plus the safe half of answering). The obstacle is that the
-agent reaches `warpctrl` through `powershell.exe` because the WSL side has no
-binary that can talk to the Windows instance's discovery record. Giving it one
-would turn those 17 into `warpctrl pane read …` — a shape an ordinary allow
-rule covers and Warp's own catalog can vouch for. That is a build, it is not
-this ticket, and it is recorded here only so the next person does not reach for
-a model to solve a transport problem.
+| the description's first verb | hand label | asks |
+|---|---|---|
+| reads as an action (sync, launch, submit, take, copy, rebuild, run…) | write / input / launch / build | **16** |
+| reads as read-only (check, compare, list, inspect, read, locate…) | read | **16** |
+| reads as read-only | net — `git fetch` / `ls-remote` | 2 |
+| reads as read-only | build — `cargo test` filtered to a listing | 2 |
+| no description | read — the one `find … ls /mnt/c` call | 1 |
+
+**Zero of the sixteen writes, inputs, launches and builds read as read-only.**
+The four over-inclusions are a fetch and a test listing, which is what a read
+verb honestly covers. So the sentence the agent sends on every ask separates
+the 28 as well as the hand labels do, and it was the one thing on the card a
+person could not find.
+
+Two things follow, and neither is a verdict:
+
+- **Ergonomically, the measured problem was the card, not the count.** Forty-four
+  asks with a legible one-line intent and a readable command is what Claude
+  Code's own `default` mode shows, and it is the ordinary experience of the
+  harnesses the maintainer compares this to. Whether 44 asks in 50 minutes is
+  disqualifying *with the fixed card* is unmeasured, and it is what run 3
+  measures before anything here is built.
+- **The description is agent-authored.** It is not a boundary against a hostile
+  agent, and neither is anything else on this path — `acp_permission.rs` says
+  what it defends against is honest agents. For an honest agent, a rule over the
+  description plus Claude Code's containment check is a candidate for *ordering
+  and highlighting* on the card, and a candidate input for a model if one is
+  ever wanted. Whether it is fit to auto-answer inside an envelope is the
+  posture question, unchanged and the maintainer's.
+
+**Still true, and still not this ticket:** the 17 read-only host calls are
+`warpctrl` read verbs Warp could vouch for from its own catalog, if the WSL side
+could reach the Windows instance without `powershell.exe`. That is a transport
+build.
+
+**One run is one run.** This split describes an afternoon driving a Windows host
+from inside WSL. A session writing Rust in one repository will look different,
+and the rule numbers above are numbers about this afternoon.
 
 ## What this changes in the standing argument
 
-- **"Does it need a model?"** — No. The rule handles a third and the third is
-  already built.
-- **"What is it classifying?"** — Containment, and Claude Code classifies it
-  already; Warp would be duplicating the engine it is talking to.
-- **"How is it calibrated?"** — Against 41 yeses, which is to say it cannot be.
+- **"Does it need a model?"** — Unanswered. The rule handles a third and the
+  third is already built; the first version of this file said the rest could not
+  be separated, and that rested on evidence contaminated by the card and on
+  never reading the description field. The next input is a run with the fixed
+  card.
+- **"What is it classifying?"** — Containment is already classified by Claude
+  Code. What remains unclassified is *effect*, and the agent already states it
+  in a sentence on every shell ask; how far that sentence can be trusted is the
+  question.
+- **"How is it calibrated?"** — Not against this run's decisions, which were
+  made blind. Against hand labels, or against decisions from a run where the
+  person could see.
 - **The posture argument in `CLASSIFIER.md` stands unchanged** and is the
-  maintainer's: `auto` versus `default` versus a knowingly widened `default`.
-  What this corpus adds is that the widened `default` costs two lines, and that
-  the 28 asks it does not remove were asks about another machine.
+  maintainer's. What this corpus adds is that a widened `default` costs two
+  lines, and that the asks it does not remove were asks about another machine.
 
 ## Re-running
 
