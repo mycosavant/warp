@@ -354,17 +354,48 @@ pub(crate) fn observe(
     // For `InSessionProject` a missing cwd is a real stop: Warp does not know
     // which project this is, and guessing would write the conversation
     // somewhere nobody named.
+    //
+    // **And resolved against the session's cwd spelled for *this* process, which
+    // is not the same string the agent is handed.** T20.1 measured the cost of
+    // assuming it was: on the Windows build a WSL pane reports
+    // `/home/effatha/git/warp`, Windows resolved the join to
+    // `C:\home\effatha\git\warp\.warp\transcripts`, creating it *succeeded*, and
+    // a run's whole conversation went somewhere neither side of the boundary
+    // would ever look. Two processes, two filesystems, one path string.
+    //
+    // The pointer handed to the agent stays in the *session's* spelling on
+    // purpose (`acp_agent`/`local_agent`), because that is the namespace the
+    // agent greps in. After this the two are deliberately different spellings of
+    // the same directory, and that is the fix rather than a discrepancy.
     let dir = match &location {
         crate::fork::TranscriptLocation::Fixed(path) => path.clone(),
         crate::fork::TranscriptLocation::InSessionProject => {
-            let Some(cwd) = active_session
-                .as_ref(ctx)
-                .current_working_directory()
-                .cloned()
-            else {
+            let active = active_session.as_ref(ctx);
+            let Some(cwd) = active.current_working_directory().cloned() else {
                 return;
             };
-            location.resolve(std::path::Path::new(&cwd))
+            // Silent, unlike the arm below: no `Session` model means the pane
+            // has not finished bootstrapping, and this runs on a *turn ending*
+            // -- a pane that has run an agent turn has one. Nothing to say.
+            let Some(session) = active.session(ctx) else {
+                return;
+            };
+            let Some(native_cwd) =
+                crate::terminal::model::session::filesystem::native_path(&session, &cwd)
+            else {
+                // Warned rather than dropped in silence, because silence is the
+                // defect this replaces: the broken path wrote 43,014 bytes to
+                // the wrong filesystem without a single log line. A session
+                // whose files are on another machine has nowhere local to put
+                // this, and the person who switched the transcript on is owed
+                // the reason it produced nothing.
+                log::warn!(
+                    "fork transcript: nothing written -- session cwd {cwd:?} is not \
+                     openable from this process",
+                );
+                return;
+            };
+            location.resolve(&native_cwd)
         }
     };
     if event

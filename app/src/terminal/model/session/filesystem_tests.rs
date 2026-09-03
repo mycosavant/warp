@@ -82,6 +82,131 @@ fn only_the_host_variant_offers_a_host_to_route_to() {
     assert_eq!(SessionFilesystem::Unreachable.host(), None);
 }
 
+// ── `native_path`: the session's spelling into this process's (T20.1) ────
+
+/// Builds a session with the given launch data and bootstrap type.
+fn session_for(
+    launch: Option<crate::terminal::ShellLaunchData>,
+    bootstrap: Option<crate::terminal::model::session::BootstrapSessionType>,
+) -> Session {
+    use std::sync::Arc;
+
+    use crate::terminal::model::session::SessionInfo;
+    use crate::terminal::model::session::command_executor::testing::TestCommandExecutor;
+    use crate::terminal::shell::ShellType;
+
+    let mut info = SessionInfo::new_for_test().with_shell_type(ShellType::Bash);
+    if let Some(bootstrap) = bootstrap {
+        info = info.with_session_type(bootstrap);
+    }
+    let session = Session::new(info, Arc::new(TestCommandExecutor::default()));
+    match launch {
+        Some(launch) => session.with_shell_launch_data(launch),
+        None => session,
+    }
+}
+
+/// **The T20.1 case, and it is `#[cfg(windows)]` because it can only be true
+/// there.** Measured on the Windows build: a WSL pane reports
+/// `/home/effatha/git/warp`, the transcript joined `.warp/transcripts` onto it
+/// literally, and Windows resolved the result to
+/// `C:\home\effatha\git\warp\.warp\transcripts` — which it then *created*,
+/// wrote 43,014 bytes of the user's prompts into, and never logged a word
+/// about, because a POSIX-rooted path is a valid relative-to-the-current-drive
+/// path on Windows.
+///
+/// **Not run on the machine this fork is developed on**, which is stated rather
+/// than left for someone to discover: `PathBuf::try_from` refuses a
+/// Windows-encoded path on a Unix host, so the conversion cannot produce a
+/// `PathBuf` here at all. That is not a gap in the guard — see the sibling
+/// below, which runs everywhere and pins the half that would let the bug back
+/// in.
+#[cfg(windows)]
+#[test]
+fn a_wsl_sessions_unix_cwd_comes_back_in_the_spelling_this_process_can_open() {
+    let session = session_for(
+        Some(crate::terminal::ShellLaunchData::WSL {
+            distro: "Ubuntu".to_owned(),
+        }),
+        None,
+    );
+
+    let native = native_path(&session, "/home/effatha/git/warp")
+        .expect("a WSL session's files are reachable, through the UNC path");
+
+    // The distribution is lower-cased by `convert_wsl_to_windows_host_path`,
+    // which is the spelling `canonicalize_wsl_unc_path` folds to -- asserted in
+    // that form rather than case-insensitively so a producer that disagreed
+    // with the normal form is caught here rather than as a duplicate map key
+    // somewhere downstream.
+    assert_eq!(
+        native,
+        std::path::Path::new(r"\\wsl$\ubuntu\home\effatha\git\warp")
+    );
+
+    // A `/mnt/c/...` cwd is a Windows path the pane spells the Linux way, and
+    // it converts back to the drive rather than to a UNC path -- the case a
+    // reader assumes is the same one and is not.
+    assert_eq!(
+        native_path(&session, "/mnt/c/dev/warp").expect("the drive is reachable"),
+        std::path::Path::new(r"C:\dev\warp"),
+    );
+}
+
+/// **The half that runs everywhere, and it is the one that pins the defect.**
+/// The bug was never "the conversion produced the wrong string" — it was that
+/// *no conversion happened* and the session's own spelling went straight into a
+/// `join`. So the invariant worth holding on every platform is that a WSL
+/// session never gets its POSIX-rooted path handed back: on Windows it becomes
+/// the UNC spelling, and on a Unix host it is `None`, because `PathBuf` there
+/// cannot hold a Windows-encoded path and a WSL session cannot exist anyway.
+///
+/// Calibrated by making it fail: dropping the conversion and returning the
+/// input verbatim reddens this and nothing else in the file.
+#[test]
+fn a_wsl_session_never_gets_its_own_spelling_back() {
+    let session = session_for(
+        Some(crate::terminal::ShellLaunchData::WSL {
+            distro: "Ubuntu".to_owned(),
+        }),
+        None,
+    );
+
+    let native = native_path(&session, "/home/effatha/git/warp");
+    assert_ne!(
+        native.as_deref(),
+        Some(std::path::Path::new("/home/effatha/git/warp")),
+        "a WSL cwd handed back unchanged is the T20.1 bug",
+    );
+    #[cfg(not(windows))]
+    assert_eq!(native, None);
+}
+
+/// **`None` is a stop, not a fallback.** A warpified-remote session's files are
+/// on another machine and no spelling of the path reaches them, so the caller
+/// must write nothing rather than create the remote machine's directory tree on
+/// this one. Before T20.1 the transcript did exactly that -- `resolve` joined
+/// the remote cwd locally and `create_dir_all` succeeded.
+#[test]
+fn a_warpified_remote_sessions_paths_are_refused_rather_than_taken_literally() {
+    use crate::terminal::model::session::BootstrapSessionType;
+
+    let session = session_for(None, Some(BootstrapSessionType::WarpifiedRemote));
+    assert_eq!(native_path(&session, "/home/someone/project"), None);
+}
+
+/// An ordinary local session is the identity, and this is the calibration for
+/// the two above: if the conversion were applied unconditionally every local
+/// transcript would move.
+#[test]
+fn a_plain_local_session_gets_its_path_back_unchanged() {
+    let session = session_for(None, None);
+    assert_eq!(
+        native_path(&session, "/home/effatha/git/warp").as_deref(),
+        Some(std::path::Path::new("/home/effatha/git/warp")),
+    );
+}
+
 /// Files that may read `Session::session_type()` in live code.
 ///
 /// **This is the guard T16 asked for and could not get any other way.** The

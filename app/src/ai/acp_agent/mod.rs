@@ -730,9 +730,18 @@ async fn exchange(
             // pointer sent only once.
             let mut blocks = vec![ContentBlock::Text(TextContent::new(prompt))];
             if let Some(location) = crate::fork::transcript_dir() {
-                // Resolved against this session's directory, which is the pane's
-                // — the same directory the write side uses, or the pointer would
-                // name a file that is not there.
+                // Resolved against this session's directory, which is the
+                // pane's, and left in the *session's* spelling of it — this is
+                // the string the agent will grep with, and the agent lives in
+                // the session's namespace.
+                //
+                // The write side names the same directory in *this process's*
+                // spelling, which on the Windows build with a WSL pane is a
+                // different string (`\\wsl$\<distro>\…`). It said "the same
+                // directory the write side uses" until T20.1, which was true and
+                // was the bug: the write side used this string literally and
+                // Windows resolved it to `C:\home\…`. See
+                // `session::filesystem::native_path`.
                 let dir = location.resolve(std::path::Path::new(&cwd_text));
                 let path = crate::ai::transcript::path_for(&dir, &conversation_id);
                 blocks.insert(

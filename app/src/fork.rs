@@ -541,7 +541,17 @@ pub enum TranscriptLocation {
 }
 
 impl TranscriptLocation {
-    /// The directory to write in, given the session's working directory.
+    /// The directory, given the session's working directory.
+    ///
+    /// **Whose spelling of that directory is the caller's to decide, and there
+    /// are two.** The agent greps in the session's namespace, so the pointer
+    /// handed to it resolves against the cwd as the pane reported it. Warp
+    /// writes with `std::fs` in its own namespace, so the write side resolves
+    /// against `session::filesystem::native_path` first. On every platform but
+    /// Windows-with-a-WSL-pane those are the same string, which is why this was
+    /// one argument until T20.1 — and there it silently became
+    /// `C:\home\effatha\git\warp\.warp\transcripts`, which Windows created
+    /// without complaint.
     pub fn resolve(&self, session_cwd: &std::path::Path) -> std::path::PathBuf {
         match self {
             Self::InSessionProject => session_cwd.join(".warp").join("transcripts"),
@@ -1222,6 +1232,27 @@ pub(crate) fn create_private_dir(dir: &std::path::Path) -> std::io::Result<()> {
 /// Windows has no mode. Files inherit the ACL of their parent directory, which
 /// for both call sites is under the user's own profile or project — not a
 /// guarantee, and stated here rather than papered over.
+///
+/// **And that ACL sentence has one destination it does not cover, which T20.1
+/// found by breaking the premise underneath it.** The transcript's parent is
+/// the *session's* directory, and on the Windows build a WSL pane's directory
+/// is inside the distribution: the write goes through `\\wsl$\<distro>\…` to
+/// ext4, where a Windows ACL is not what decides. Measured 2026-09-03, writing
+/// from Windows into the distribution and reading the result back from Linux:
+/// the file lands `-rw-r--r--`, owned by the user. Not the `0777` T20.1
+/// observed — that was DrvFs, an artifact of the mis-rooted `C:\home\…` path
+/// this fixed — but not the `0600` this function exists to guarantee either.
+///
+/// **So on the Windows build the transcript is world-readable inside the
+/// distribution, and nothing here can change that**: the mode above is
+/// `#[cfg(unix)]`, so the Windows binary never asks for one, and there is no
+/// `std::fs` call that would carry it across the 9p boundary if it did. T20.1
+/// asked whether a transcript should be *refused* rather than written when its
+/// destination cannot hold the mode. Answered no, and the reason is the
+/// feature's whole point: refusing on Windows would leave the agent nothing to
+/// grep, which is the loss T14.19 exists to prevent, in exchange for a
+/// guarantee that on a single-user machine buys very little. Disclosed instead,
+/// here, where the next person to trust the sentence above will be standing.
 pub(crate) fn create_private_file(
     path: &std::path::Path,
     append: bool,

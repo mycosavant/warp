@@ -123,6 +123,56 @@ pub fn session_filesystem(
     classify(session.session_type(), session.is_wsl(), None)
 }
 
+/// A path this session reported, spelled so **this process** can open it with
+/// `std::fs` — or `None` when this process cannot open it at all.
+///
+/// **This is a sibling of [`session_filesystem`], not a caller of it, and the
+/// difference is the whole reason it exists.** `SessionFilesystem` answers
+/// *which route file operations should take*, and for a WSL session it answers
+/// `Host` as soon as a remote-development server is attached. That is the right
+/// answer for the file tree, which has a server to ask. It is the wrong answer
+/// for a caller that only needs to open one small file, because a WSL session's
+/// files are reachable from Windows either way — through `\\wsl$\<distro>\…` —
+/// and routing on `Host` would make the caller's fate depend on whether anyone
+/// had run `remote wsl connect`, which is exactly the "order two unrelated
+/// commands were typed in" bug T16 phase 3 removed elsewhere.
+///
+/// So the question here is narrower and has a different answer:
+///
+/// | session | answer |
+/// |---|---|
+/// | local | the path, verbatim |
+/// | WSL, routed or not | the `\\wsl$\<distro>\…` spelling of it |
+/// | MSYS2 | the Windows-native spelling of it |
+/// | warpified-remote | `None` — another machine, and no spelling reaches it |
+///
+/// **`None` is a real stop, never "fall back to the path as given".** T20.1
+/// measured what falling back costs: `WARP_FORK_TRANSCRIPT` joined a WSL pane's
+/// `/home/effatha/git/warp` on the Windows side, Windows resolved it to
+/// `C:\home\effatha\git\warp\…`, **creating it succeeded**, and 43,014 bytes of
+/// the user's prompts landed in a tree at the root of `C:` that nothing on
+/// either side of the boundary was ever going to read. Nothing errored and
+/// nothing logged, because there was no error: a POSIX-rooted path is a
+/// perfectly good relative-to-the-current-drive path on Windows.
+///
+/// `None` is also what a Unix-encoded cwd gets on Windows outside WSL and
+/// MSYS2, because [`std::path::PathBuf`] cannot hold it — upstream pins that
+/// refusal in `can_resolve_cwd_to_native_path_rejects_unix_encoded_path_on_windows`.
+/// A caller must treat that as "write nothing and say so", which is the trade
+/// this exists to make: before T20.1 it wrote, and said nothing.
+pub fn native_path(session: &Session, path: &str) -> Option<std::path::PathBuf> {
+    // The one `session_type()` read here, and it is about identity rather than
+    // routing: `WarpifiedRemote` means the files are on a machine this process
+    // has no filesystem access to at all. A WSL session says `Local` and is
+    // emphatically not local, which is what the conversion below is for -- see
+    // this module's header.
+    if matches!(session.session_type(), SessionType::WarpifiedRemote { .. }) {
+        return None;
+    }
+    let typed = session.convert_directory_to_typed_path_buf(path.to_owned());
+    session.maybe_convert_to_native_path(&typed.to_path()).ok()
+}
+
 #[cfg(test)]
 #[path = "filesystem_tests.rs"]
 mod tests;
