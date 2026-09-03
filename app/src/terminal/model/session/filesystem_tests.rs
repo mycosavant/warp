@@ -160,11 +160,11 @@ fn a_wsl_sessions_unix_cwd_comes_back_in_the_spelling_this_process_can_open() {
     );
 }
 
-/// **The rule, asserted on every platform because it is now a pure function.**
+/// **The rule, asserted on every platform because it is a pure function.**
 ///
-/// The row that matters is `!windows` + a distribution: T20.1's first cut made
-/// that `Refuse`, on a sentence it invented — *"a WSL session cannot exist
-/// anyway"* on a Unix host. It can, and it is the normal case here:
+/// The row that matters is `!windows`: T20.1's first cut made a WSL-flagged
+/// session `Refuse` there, on a sentence it invented — *"a WSL session cannot
+/// exist anyway"* on a Unix host. It can, and it is the normal case here:
 /// `bash_body.sh:1423` sends `wsl_name` from `$WSL_DISTRO_NAME` unconditionally,
 /// so a Linux Warp inside WSL reports `is_wsl()` for every pane it owns. The
 /// transcript therefore wrote **nothing at all** on the platform this fork is
@@ -178,41 +178,25 @@ fn a_wsl_sessions_unix_cwd_comes_back_in_the_spelling_this_process_can_open() {
 fn the_spelling_rule_covers_every_host_and_session_pairing() {
     use SessionType::{Local, WarpifiedRemote};
 
-    // A Linux Warp inside a distribution, looking at its own panes.
-    assert_eq!(
-        spelling(false, Local, Some("Ubuntu"), Some("Ubuntu")),
-        Spelling::Verbatim,
-        "a pane in this process's own distribution is already native",
-    );
-    // Distribution names are case-insensitive, as `canonicalize_wsl_unc_path`
-    // already folds them.
-    assert_eq!(
-        spelling(false, Local, Some("Ubuntu"), Some("ubuntu")),
-        Spelling::Verbatim,
-    );
-    // Another distribution, from outside Windows: there is no `\\wsl$` here.
-    assert_eq!(
-        spelling(false, Local, Some("Debian"), Some("Ubuntu")),
-        Spelling::Refuse,
-    );
-    // A plain Linux or macOS session.
-    assert_eq!(spelling(false, Local, None, None), Spelling::Verbatim);
-    // Windows always asks the session to convert -- the UNC spelling for a
-    // distribution, MSYS2's root for MSYS2, and a refusal for a Unix-encoded
-    // path no `PathBuf` here can hold.
-    assert_eq!(
-        spelling(true, Local, Some("Ubuntu"), None),
-        Spelling::Convert
-    );
-    assert_eq!(spelling(true, Local, None, None), Spelling::Convert);
+    // A local session on a Unix host is in this process's own filesystem --
+    // including when that filesystem is inside a WSL distribution, which is what
+    // the first cut refused.
+    assert_eq!(spelling(false, Local), Spelling::Verbatim);
+    // Windows always asks the session's own converter, which handles the UNC
+    // spelling, MSYS2, and refusing a Unix-encoded path.
+    assert_eq!(spelling(true, Local), Spelling::Convert);
     // Another machine, whatever the host.
     for host_is_windows in [true, false] {
         assert_eq!(
+            spelling(host_is_windows, WarpifiedRemote { host_id: None }),
+            Spelling::Refuse,
+        );
+        assert_eq!(
             spelling(
                 host_is_windows,
-                WarpifiedRemote { host_id: None },
-                None,
-                None,
+                WarpifiedRemote {
+                    host_id: Some(host())
+                },
             ),
             Spelling::Refuse,
         );
@@ -222,23 +206,20 @@ fn the_spelling_rule_covers_every_host_and_session_pairing() {
 /// **The end-to-end shape of the regression, on the platform that had it.**
 ///
 /// Kept beside the rule because the rule alone would not have caught it: the
-/// first cut's rule was *also* a pure function and was *also* tested, and the
-/// test asserted the wrong answer with a confident doc comment. This one asserts
-/// the thing a person actually wanted — a pane in this process's own
-/// distribution produces a path, not a refusal.
+/// first cut's rule was *also* pure and *also* tested, and its test asserted the
+/// wrong answer under a confident doc comment. This one asserts what a person
+/// actually wanted — a WSL-flagged pane on a Unix host produces a path rather
+/// than a refusal — and it needs no environment variable to do it, because
+/// `ShellLaunchData::WSL` cannot be constructed on a non-Windows build
+/// (`available_shells.rs:476-482` gates its only caller on `#[cfg(windows)]`),
+/// so the distribution's name was never the question.
 #[cfg(not(windows))]
 #[test]
-fn a_pane_in_this_processs_own_distribution_still_gets_a_transcript_path() {
-    let Some(own) = std::env::var("WSL_DISTRO_NAME")
-        .ok()
-        .filter(|v| !v.is_empty())
-    else {
-        // Not inside WSL, so there is no same-distribution case to exercise and
-        // the plain-Linux row above already covers this machine.
-        return;
-    };
+fn a_wsl_flagged_pane_on_a_unix_host_still_gets_a_transcript_path() {
     let session = session_for(
-        Some(crate::terminal::ShellLaunchData::WSL { distro: own }),
+        Some(crate::terminal::ShellLaunchData::WSL {
+            distro: "Ubuntu".to_owned(),
+        }),
         None,
     );
 

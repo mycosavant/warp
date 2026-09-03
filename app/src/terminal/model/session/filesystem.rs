@@ -135,56 +135,45 @@ pub(crate) enum Spelling {
     Refuse,
 }
 
-/// The rule, with its four inputs named, and split out for the same reason
-/// [`classify`] is: it is the part with a decision in it, and everything around
-/// it is a lookup.
+/// The rule, split out for the same reason [`classify`] is: it is the part with
+/// a decision in it, and everything around it is a lookup.
 ///
-/// **The `!windows` row is here because the first cut got it wrong and shipped.**
-/// T20.1 assumed a WSL session could only exist on a Windows host and made every
-/// non-Windows answer for one `Refuse`. It is exactly backwards on the platform
-/// this fork is developed on: `bash_body.sh:1423` sends `wsl_name` from
-/// `$WSL_DISTRO_NAME` unconditionally, so a **Linux** Warp running inside WSL
-/// reports `is_wsl()` for every pane it owns — and those panes' files are simply
-/// its own. Found by review 2026-09-03; the transcript wrote nothing at all on
-/// that build for as long as the mistake stood.
-pub(crate) fn spelling(
-    host_is_windows: bool,
-    session_type: SessionType,
-    session_distro: Option<&str>,
-    this_process_distro: Option<&str>,
-) -> Spelling {
+/// **The `!host_is_windows` row is here because the first cut got it wrong and
+/// shipped.** T20.1 assumed a WSL session could only exist on a Windows host and
+/// made every non-Windows answer for one `Refuse`. That is exactly backwards on
+/// the platform this fork is developed on: `bash_body.sh:1423` sends `wsl_name`
+/// from `$WSL_DISTRO_NAME` unconditionally, so a **Linux** Warp running inside
+/// WSL reports `is_wsl()` for every pane it owns — and those panes' files are
+/// simply its own. The transcript wrote nothing at all on that build for as long
+/// as the mistake stood.
+///
+/// **The distribution's *name* is deliberately not an input, and the second cut
+/// made it one.** That version compared the session's distro against
+/// `$WSL_DISTRO_NAME` in Warp's own environment, which is both unnecessary and
+/// fragile — unnecessary because `AvailableShell::new_wsl` has exactly one
+/// caller and it is inside `#[cfg(windows)]`
+/// (`terminal/available_shells.rs:476-482`), so on a non-Windows build the only
+/// source of `wsl_name` is a shell **this process spawned**, which is in this
+/// process's own namespace by construction; and fragile because Warp launched
+/// from a desktop entry need not inherit that variable at all, which would have
+/// silently reinstated the bug it was written to fix.
+pub(crate) fn spelling(host_is_windows: bool, session_type: SessionType) -> Spelling {
     // Another machine. No spelling reaches it, and treating it as local reads
     // *this* filesystem for another host's paths -- the hazard `Unreachable`
     // exists for above.
     if matches!(session_type, SessionType::WarpifiedRemote { .. }) {
         return Spelling::Refuse;
     }
-    match (host_is_windows, session_distro) {
-        // Windows looking into a distribution: the UNC spelling. Windows with no
-        // distribution: MSYS2 or plain, which the session's own converter
-        // handles -- including refusing a Unix-encoded path that no `PathBuf`
-        // here can hold.
-        (true, _) => Spelling::Convert,
-        // Same distribution: this process *is* in there, so the path is already
-        // its own. Compared case-insensitively because a distribution name is
-        // (`canonicalize_wsl_unc_path` folds it for the same reason).
-        (false, Some(distro))
-            if this_process_distro.is_some_and(|own| own.eq_ignore_ascii_case(distro)) =>
-        {
-            Spelling::Verbatim
-        }
-        // A different distribution, from outside Windows: there is no `\\wsl$`
-        // to reach it through.
-        (false, Some(_)) => Spelling::Refuse,
-        (false, None) => Spelling::Verbatim,
+    if host_is_windows {
+        // The session's own converter: the UNC spelling for a distribution, the
+        // MSYS2 root for MSYS2, and a refusal for a Unix-encoded path that no
+        // `PathBuf` here can hold.
+        Spelling::Convert
+    } else {
+        // A local session on a Unix host is in this process's own filesystem,
+        // whether or not that filesystem happens to be inside a distribution.
+        Spelling::Verbatim
     }
-}
-
-/// The distribution this process is running inside, if any.
-fn this_process_distro() -> Option<String> {
-    std::env::var("WSL_DISTRO_NAME")
-        .ok()
-        .filter(|v| !v.is_empty())
 }
 
 /// A path this session reported, spelled so **this process** can open it with
@@ -214,12 +203,7 @@ fn this_process_distro() -> Option<String> {
 pub fn native_path(session: &Session, path: &str) -> Option<std::path::PathBuf> {
     // The one `session_type()` read here, and it is about identity rather than
     // routing -- see `spelling`.
-    match spelling(
-        cfg!(windows),
-        session.session_type(),
-        session.wsl_distro_name(),
-        this_process_distro().as_deref(),
-    ) {
+    match spelling(cfg!(windows), session.session_type()) {
         Spelling::Verbatim => Some(std::path::PathBuf::from(path)),
         Spelling::Convert => {
             let typed = session.convert_directory_to_typed_path_buf(path.to_owned());
