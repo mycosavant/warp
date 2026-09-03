@@ -12067,7 +12067,7 @@ maintainer terminated run 2 at 50 minutes. Ordered by what blocks what, not by
 size. **Nothing here was fixed during or after the run** — `GOAL.md` names
 fixing frictions mid-run as a failure mode, and two of these are consent surface.
 
-### T20.1 — The transcript resolves a Unix cwd on the Windows side ← **blocks run 3**
+### T20.1 — The transcript resolves a Unix cwd on the Windows side ✅ **done 2026-09-03**
 
 `TranscriptLocation::resolve` (`app/src/fork.rs:545-547`) does
 `session_cwd.join(".warp").join("transcripts")`, called from
@@ -12121,6 +12121,69 @@ origin remote"*). Warp writes the transcript, from the other side of the
 boundary. Two processes, two filesystems, one path string. Filed as an
 agent-placement bug it would have produced a fix in the wrong file.
 
+**As built (2026-09-03, `76fd267`/`57b2a93`/`7281de9`), verified end to end on
+the Windows build.** A WSL pane at `/home/effatha/git/warp`, an agent turn, and
+the transcript in the repository's own `.warp/transcripts/` — read back *by the
+agent* in the next turn, which recovered the word planted in the first and named
+the file it read. `C:\home` was not created. Run 3's recovery half works.
+
+**The ticket named the wrong seam, and the right one already existed.**
+`session_filesystem()` answers which *route* file operations should take and
+answers `Host` for a WSL session the moment a server attaches — correct for the
+file tree, wrong here, because a WSL session's files are reachable from Windows
+through `\\wsl$\` either way. Routing on it would have made the transcript's fate
+depend on whether anyone had run `remote wsl connect`, which is the same "order
+two unrelated commands were typed in" defect T16 phase 3 removed. The fix is
+`session::filesystem::native_path`, a *sibling* of `session_filesystem`, built on
+upstream's `Session::maybe_convert_to_native_path` — which the completer and the
+slash commands have used for this exact question all along, and which neither the
+ticket nor the first hour of the fix found.
+
+**The shape of it: two processes, two filesystems, one path string.** The
+*pointer* handed to the agent stays in the session's spelling, because that is
+where the agent greps. The *write* moves into this process's. Those had been one
+argument, and on every platform but Windows-with-a-WSL-pane they are the same
+string.
+
+**Three things running found that reading would not.**
+
+1. **A test I wrote was wrong, and only Windows could say so.** The identity case
+   asserted a POSIX cwd comes back unchanged; on Windows it comes back `None`,
+   because `PathBuf` there cannot hold `/home/…`. That is `native_path` behaving
+   as documented — and my calibration contradicted my own doc, on the one
+   platform the ticket is about.
+2. **The pointer had the host's separators.** With the write fixed, the agent was
+   handed `/home/effatha/git/warp\.warp\transcripts\….md`: `PathBuf::join`
+   inserts the host's separator and the cwd belongs to the guest. The agent coped
+   — it found the file and reported the right path back — which is the agent
+   being tolerant, not Warp being right. Closed with `typed_path`'s own
+   inference rather than a rule invented here.
+3. **The second consequence's mechanism was wrong.** The `-rwxrwxrwx` was DrvFs,
+   an artifact of the mis-rooted `C:\` path. Measured 2026-09-03 writing from
+   Windows into the distribution and reading back from Linux: through `\\wsl$\` a
+   file lands `-rw-r--r--`. The `0600` was never lost to a filesystem — it is
+   never *requested*, because `create_private_file`'s mode is `#[cfg(unix)]` and
+   the Windows binary does not ask. So fixing the path improved the mode as a
+   side effect and still does not reach `0600`.
+
+**Decided, on the ticket's own question:** a transcript is **not** refused when
+its destination cannot hold the mode. Refusing on Windows leaves the agent
+nothing to grep, which is the loss the feature exists to prevent, in exchange for
+a guarantee that on a single-user machine buys little. Disclosed instead, in
+`create_private_file`, whose "files inherit the ACL of their parent" sentence is
+true on NTFS and does not describe ext4 behind a 9p share.
+
+**Two numbers in this ticket to distrust.** It says 43,014 bytes landed in
+`C:\home`; the run log says 41,964 there, and 43,014 is the size of the file in
+the *repository*. `C:\home` no longer exists, so the original cannot be
+re-measured — recorded because the figure was carried into a commit message
+before this was noticed.
+
+**Left for T20.3, found in passing**: `.fork/tools/warpdev.ps1` sets
+`WARP_FORK_ACP_COMMAND` to the *unwrapped* `npx … claude-agent-acp`, which
+`CLAUDE.md` records as failing outright for a WSL pane on Windows. Every
+measurement above used the `wsl.exe -d Ubuntu --` form.
+
 ### T20.2 — `options_offered` renders as a menu and means a receipt
 
 The approval surface lists *"Yes"*, *"Yes, and don't ask again for similar
@@ -12171,7 +12234,7 @@ execution` line at the head of `warp-oss.log.old.0` is a red herring —
 `CLAUDE.md` already records that it marks the recovery sibling's log rather than
 a crash. It cost time here anyway.
 
-### T20.4 — Does the composer drop the agent's prose? ← **blocked on T20.1**
+### T20.4 — Does the composer drop the agent's prose? ← **unblocked 2026-09-03**
 
 The maintainer's verdict, recorded verbatim in the run log because no instrument
 caught it: tool labels (`Terminal`, `Read File`) and Warp's own permission blurbs
@@ -12181,7 +12244,9 @@ render; thinking and most of the agent's prose do not.
 agent emits little inside a tool loop is unestablished, and guessing is the
 failure this board keeps paying for. The test is to compare the panel against the
 transcript for a single turn — which run 2 could not do, **because of T20.1**.
-So this is not startable until that lands.
+That has landed and is verified end to end, so this is startable: a WSL pane on
+the Windows build now writes a readable transcript beside the panel it should be
+compared against.
 
 ### T20.5 — Finish `acp probe --cwd` (WIP in the tree)
 
