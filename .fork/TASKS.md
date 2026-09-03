@@ -12254,8 +12254,14 @@ test, which is the calibration that a blanket annotation would otherwise pass.
 one item more than it is. That predates this and the parenthetical now helps
 delimit it, but a list separator that appears inside the items is still wrong.
 
-**Wire shape changed.** `options_offered` entries are objects, not strings. App
-and `warpctrl` are the same binary so no skew is possible in a normal run, and a
+**Wire shape changed.** `options_offered` entries are objects, not strings. The
+"same binary so no skew is possible" reasoning was **wrong** — skew happens in
+this repo's own documented loop, where you rebuild while a GUI is still running.
+The reason it is still safe to leave the protocol version alone is different and
+better: `render_approvals` falls back to a raw JSON dump when a payload will not
+parse, and bumping the version would make `discovery.rs` drop the mismatched
+record, so a freshly built `warpctrl` could no longer `window close` the old GUI
+— which is worse than a degraded listing. A
 lenient "accept a bare string too" shim was **deliberately not** added: it would
 deserialize every option to `warp_can_select: false` and annotate all of them,
 which is a worse answer than a parse error.
@@ -12312,7 +12318,7 @@ about. The check now runs before that line.
 **Not done, and it is the ticket's own note**: the `Parent has crashed` line at
 the head of `warp-oss.log.old.0` remains a red herring, already recorded here.
 
-### T20.4 — Does the composer drop the agent's prose? ✅ **answered 2026-09-03: no**
+### T20.4 — Does the composer drop the agent's prose? ✅ **answered 2026-09-03: no drop found, at zero asks**
 
 The maintainer's verdict, recorded verbatim in the run log because no instrument
 caught it: tool labels (`Terminal`, `Read File`) and Warp's own permission blurbs
@@ -12348,8 +12354,32 @@ in the stop payload both times. There is nothing on the wire to drop.
 `acp_agent/translate.rs:345` maps `AgentThoughtChunk` to `AgentReasoning`
 ("rendered as thinking, not as output") and would render one if it came.
 
-**So the run-2 verdict does not reproduce, and that is recorded as a difference
-in conditions rather than as a correction.** It was a real observation of a real
+**Narrowed after review, 2026-09-03: this was measured at *zero* permission
+requests, and the run it disagrees with had forty-four.** The event log for both
+panel turns (`6a684429`, `8136081e`) shows `permission_request: 0`. So the ask
+path — two Warp-authored notes per ask plus an approval card — was never
+exercised, and that is precisely the condition the maintainer was describing.
+The honest close is **"no drop in the buffered path"**, not "no".
+
+Two things reading adds, neither run:
+
+- **A cancelled turn drops its pending prose.** `translate.rs` buffers text and
+  flushes on the next non-text update, on turn end, or on the failure path;
+  `mod.rs`'s `take_until` drops the driver future on cancellation and nothing
+  flushes there. Run 2 was terminated by the maintainer.
+- **Dilution is a better hypothesis than scroll.** Each ask puts an asking note
+  (several hundred characters), an answered note and a card into the stream. At
+  44 asks that is ~88 Warp-authored blocks against 42 KB of transcript — Warp's
+  own text plausibly the majority of what was on screen. That reconciles the
+  verdict without a scroll hypothesis, and it is a *dilution* problem with a
+  different fix.
+
+The cheap decisive test, not yet run: one turn in `default` with three or four
+asks, screenshot while an ask is parked, and count on-screen characters authored
+by Warp against those authored by the agent.
+
+**So the run-2 verdict does not reproduce under the conditions tested, and that
+is recorded as a difference in conditions rather than as a correction.** It was a real observation of a real
 session, taken at the end of a long tool-heavy run; these are one- and two-tool
 turns. The obvious reconciliation — prose is present but scrolls past when
 dozens of tool calls follow it, so a glance sees tool labels — is a **hypothesis
@@ -12396,10 +12426,33 @@ honestly green on the platform it runs on rather than describing the other one.
 44 permission requests in 50 minutes across 5 prompts — one every 69 seconds,
 ~420 for an eight-hour day — is what ended the run, and it is **not filed as work
 here**. It is permission posture, which `GOAL.md` freezes and which is the
-maintainer's to decide. What changed is the evidence: `CLAUDE.md` retracted I18's
-earlier measured case when the sixteen-ask storm evaporated under a boundary, and
-this is a different one — ordinary scoped work **inside** the session directory,
-where no boundary was crossed and a boundary would not have helped.
+maintainer's to decide.
+
+**And the claim originally made here about *what* those asks were is contradicted
+by the run's own event log.** It said this was "ordinary scoped work **inside**
+the session directory, where no boundary was crossed and a boundary would not
+have helped". Counted 2026-09-03 from
+`27357def-….jsonl` (44 `permission_request` lines, classified on
+`tool_input_preview`):
+
+| what the ask touched | count |
+|---|---|
+| the **Windows host** — `/mnt/c/dev/warp`, `powershell.exe`, `warp-oss.exe` | **30** |
+| `cargo` builds and tests | 9 |
+| inside the session directory and nothing else | **7** |
+
+By tool kind: 36 `execute`, 7 `edit`, 1 `read`. So the agent was driving the
+Windows side of the machine from inside WSL, and *that is exactly the boundary
+crossing which should ask*. The sentence was written from the impression of a
+session spent in one repository; the log says otherwise, and it is the same
+mistake this board keeps recording — a claim about a measurement, made without
+running the measurement.
+
+**Two consequences for I18.** "Yes, allow all edits during this session" would
+have removed **7 of 44**, so the persistent-grant framing is aimed at the
+minority of the cost. And the 30 host-touching asks are the kind an agent-side
+rule can name precisely (see I18 route 4), which is where the cheap relief
+actually is.
 
 The per-request text is a second, separable cost: four paragraphs before two
 controls, every sentence of it true and written for a reason, **sized for the
