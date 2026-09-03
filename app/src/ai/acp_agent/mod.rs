@@ -550,7 +550,11 @@ async fn exchange(
                     // and the sentence a person reads cannot disagree about
                     // which request this was.
                     translator.log_permission_request(&parked, &call_id);
-                    translator.note(asking_note(&parked, crate::fork::local_control_serving()))
+                    translator.note(asking_note(
+                        &parked,
+                        crate::fork::local_control_serving(),
+                        first_ask_in(conversation),
+                    ))
                 });
                 let _ = tx.unbounded_send(Ok(event));
 
@@ -1185,9 +1189,22 @@ fn approvable(
 /// pane's directory decides whether the user's own agent configuration loads at
 /// all, and nothing on the wire distinguishes "your rules allowed it" from "the
 /// agent's defaults did".
+///
+/// **Said in full once per conversation, and abbreviated after that
+/// (COMPOSER, 2026-09-03).** The full note is ~590 characters: how to answer,
+/// what the digest is, what a yes covers, that a paired device can answer,
+/// which directory the session runs in and how Warp chose it. Every sentence
+/// is true and none of it changes between one ask and the next -- only the
+/// id, the title and the locations do. Measured on a four-step turn with
+/// three asks, Warp's words outweighed the agent's 9.4 : 1 and the agent's
+/// narration was pushed off the screen by this note and the card
+/// (`.fork/COMPOSER.md`). So `first_ask` says the mechanics; a later ask says
+/// only what is particular to it. **No permission changes**: the same id and
+/// the same commands answer the same request either way.
 fn asking_note(
     parked: &registry::ParkedRequest,
     answerable_here: bool,
+    first_ask: bool,
 ) -> crate::ai::warp_note::Note {
     let what = parked.title.as_deref().unwrap_or("a request to act");
     let id = &parked.approval_id;
@@ -1206,21 +1223,35 @@ fn asking_note(
     // Warp says what is true rather than pretending to an answer it does not
     // have. The bug does not need the TUI's account bypass: a signed-in TUI with
     // `WARP_FORK_ACP_COMMAND` set parks requests the same way.
-    let how = match (&parked.approve_selects, answerable_here) {
-        (Some(_), true) => format!(
+    let how = match (&parked.approve_selects, answerable_here, first_ask) {
+        (Some(_), true, true) => format!(
             "Answer yes with `warpctrl agent approve {id}` or no with \
              `warpctrl agent deny {id}` — both take the `digest` that \
              `warpctrl agent approvals` reports. A yes covers this one call and \
              nothing after it."
         ),
-        (Some(_), false) => {
+        // The id is the one thing a later ask has to say: it is different
+        // every time and it is what the commands take.
+        (Some(_), true, false) => format!(
+            "`warpctrl agent approve {id}` or `warpctrl agent deny {id}`, with the \
+             digest from `warpctrl agent approvals`."
+        ),
+        (Some(_), false, true) => {
             "**Nothing in this session can answer it.** This process runs no local \
              control server, so `warpctrl`, the console and paired devices are \
              all absent — the request is real and there is no yes or no to give \
              it here. Cancel the turn (Ctrl-C) to take the session back."
                 .to_owned()
         }
-        (None, _) => {
+        (Some(_), false, false) => {
+            "Nothing in this session can answer it; cancel the turn (Ctrl-C) to take \
+             the session back."
+                .to_owned()
+        }
+        // A refusal's reason is particular to the request, so it is never
+        // abbreviated: it is the one sentence that tells a person whether they
+        // are looking at a setting or a fault.
+        (None, _, _) => {
             // Terminated explicitly rather than trusting the reason to end in
             // one. Measured on T14.6 against a live `switch_mode` refusal, the
             // note read "…the policy it already had Answer no with…" — two
@@ -1256,7 +1287,7 @@ fn asking_note(
     // The paired-device sentence rides the same absent server, so it is dropped
     // with the rest rather than left standing as a second impossible
     // instruction.
-    let paired = if answerable_here {
+    let paired = if answerable_here && first_ask {
         " A paired device can answer too, though *yes* only travels there when \
          WARP_FORK_REMOTE_APPROVE is set."
     } else {
@@ -1279,13 +1310,32 @@ fn asking_note(
             parked.acts_on.join("`, `")
         ));
     }
-    if let Some(directory) = parked.session_directory.as_deref() {
+    // A fact about the session, not the call, so it is said with the mechanics
+    // and not again.
+    if let Some(directory) = parked.session_directory.as_deref().filter(|_| first_ask) {
         note.push_str(&format!(
             "\n\nThis session runs in `{directory}` — Warp chose that from the pane. \
              The agent resolves its own permission rules from there, and Warp cannot see them."
         ));
     }
     crate::ai::warp_note::Note::new(headline, note)
+}
+
+/// Conversations in which the asking note has already said how answering
+/// works. Process-scoped, like `transcript`'s `TOLD` and `mode`'s telling:
+/// a conversation restored into a new process is told again, which errs on
+/// the side of the sentence a person might need.
+static MECHANICS_TOLD: std::sync::LazyLock<Mutex<std::collections::HashSet<String>>> =
+    std::sync::LazyLock::new(|| Mutex::new(std::collections::HashSet::new()));
+
+/// Whether this is the conversation's first ask, and so the one that says the
+/// mechanics. Records as it answers, so the second call for the same
+/// conversation is `false`.
+fn first_ask_in(conversation_id: &str) -> bool {
+    MECHANICS_TOLD
+        .lock()
+        .expect("the mechanics lock is held only for a set insert")
+        .insert(conversation_id.to_owned())
 }
 
 /// Holds the request open until a person answers it, without blocking the

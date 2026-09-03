@@ -12,7 +12,57 @@ use super::*;
 /// words, so they read the wire form -- headline, blank line, detail -- which
 /// is also what the transcript sees.
 fn asking_note(parked: &registry::ParkedRequest, answerable_here: bool) -> String {
-    super::asking_note(parked, answerable_here).to_wire()
+    super::asking_note(parked, answerable_here, true).to_wire()
+}
+
+/// **The abbreviation is a presentation change and not a permission one, and
+/// this is the assertion that keeps it so.** After the first ask, the note
+/// drops the sentences that do not change between asks -- the digest
+/// explanation, what a yes covers, the paired device, the session directory
+/// -- and keeps everything particular to the request: the title, the id the
+/// commands take, and what the call acts on. A later ask that lost the id
+/// would be a request a person could not answer from the panel's own words.
+#[test]
+fn after_the_first_ask_the_note_says_only_what_is_particular_to_this_one() {
+    let parked = parked(vec!["/tmp/t146/project/out.txt".to_owned()]);
+    let first = super::asking_note(&parked, true, true).to_wire();
+    let later = super::asking_note(&parked, true, false).to_wire();
+
+    for said_once in [
+        "both take the `digest`",
+        "A yes covers this one call",
+        "A paired device can answer too",
+        "This session runs in",
+    ] {
+        assert!(first.contains(said_once), "the first ask says it: {first}");
+        assert!(!later.contains(said_once), "a later ask does not: {later}");
+    }
+    for every_time in [
+        "The agent is waiting for permission",
+        &format!("warpctrl agent approve {}", parked.approval_id),
+        &format!("warpctrl agent deny {}", parked.approval_id),
+        "acts on `/tmp/t146/project/out.txt`",
+    ] {
+        assert!(later.contains(every_time), "every ask says it: {later}");
+    }
+    // The number the ticket exists to move. Recorded in the failure message
+    // so a change that quietly grows the short form is seen as one.
+    assert!(
+        first.len() - later.len() >= 300,
+        "the later form should return several hundred characters to the agent: \
+         first {} chars, later {} chars",
+        first.len(),
+        later.len()
+    );
+}
+
+/// The gate records as it answers: one conversation's mechanics are said once
+/// and another conversation's are its own.
+#[test]
+fn the_mechanics_are_said_once_per_conversation() {
+    assert!(first_ask_in("conv-mechanics-a"));
+    assert!(!first_ask_in("conv-mechanics-a"));
+    assert!(first_ask_in("conv-mechanics-b"));
 }
 
 fn answered_note(answer: &Result<registry::Answer, oneshot::Canceled>) -> String {
