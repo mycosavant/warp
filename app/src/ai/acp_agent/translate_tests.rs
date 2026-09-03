@@ -828,3 +828,60 @@ fn offered(name: &str) -> ::local_control::protocol::OfferedOption {
         warp_can_select: true,
     }
 }
+
+/// Every message a batch of events carries, whole, in order.
+fn raw_messages(events: &[api::ResponseEvent]) -> Vec<api::Message> {
+    events
+        .iter()
+        .filter_map(|event| match &event.r#type {
+            Some(api::response_event::Type::ClientActions(actions)) => Some(&actions.actions),
+            _ => None,
+        })
+        .flatten()
+        .filter_map(|action| match &action.action {
+            Some(api::client_action::Action::AddMessagesToTask(add)) => Some(&add.messages),
+            _ => None,
+        })
+        .flatten()
+        .cloned()
+        .collect()
+}
+
+/// **Warp's voice is tagged and the agent's is not, on this transport.** The
+/// panel tells them apart by `server_message_data` alone
+/// (`crate::ai::warp_note`), so a note that went out untagged would be drawn
+/// as the agent's prose -- the 9.4 : 1 dilution `.fork/COMPOSER.md` measured --
+/// and agent prose that went out tagged would be filed as Warp's and hidden
+/// behind a chevron. Both halves are asserted.
+#[test]
+fn warps_note_is_tagged_and_the_agents_prose_is_not() {
+    let mut translator = translator();
+
+    let note = translator.note(crate::ai::warp_note::Note::new(
+        "Answered: yes, for this one call.",
+        "Nothing after it is covered.",
+    ));
+    translator.on_update(&SessionUpdate::AgentMessageChunk(text_chunk("Done.")));
+    let prose = translator.flush();
+
+    let note = &raw_messages(std::slice::from_ref(&note))[0];
+    assert!(
+        crate::ai::warp_note::is_tagged(&note.server_message_data),
+        "Warp's note must carry the tag: {note:?}"
+    );
+    assert_eq!(
+        note.message,
+        Some(api::message::Message::AgentOutput(
+            api::message::AgentOutput {
+                text: "Answered: yes, for this one call.\n\nNothing after it is covered."
+                    .to_owned()
+            }
+        )),
+        "and stays an AgentOutput underneath, so an older build still shows it"
+    );
+    let prose = &raw_messages(&prose)[0];
+    assert!(
+        !crate::ai::warp_note::is_tagged(&prose.server_message_data),
+        "the agent's words must never be tagged as Warp's: {prose:?}"
+    );
+}

@@ -888,3 +888,35 @@ fn warps_own_sentence_lands_after_the_task_and_before_the_turn() {
         "the user's own turn must still come last: {turn}"
     );
 }
+
+/// The same pin as `acp_agent`'s `warps_note_is_tagged_and_the_agents_prose_is_not`,
+/// on this transport: the announcement is Warp's and is tagged; the user's
+/// turn and the assistant's text are not. This path has a history of being
+/// the forgotten half (the pointer only landed here 2026-08-31), so it gets
+/// its own assertion rather than inheriting the other's.
+#[test]
+fn warps_announcement_is_tagged_and_nothing_else_is() {
+    let mut translator = translator();
+    translator.announce_transcript(crate::ai::transcript::announcement(std::path::Path::new(
+        "/tmp/project/.warp/transcripts/conv.md",
+    )));
+
+    let events = translator.on_line(INIT);
+    let note = &messages(&events[2])[0];
+    let turn = &messages(&events[3])[0];
+    let reply = translator.on_line(&assistant(r#"{"type":"text","text":"pong"}"#));
+    let prose = &messages(&reply[0])[0];
+
+    assert!(
+        crate::ai::warp_note::is_tagged(&note.server_message_data),
+        "Warp's announcement must carry the tag: {note:?}"
+    );
+    assert!(
+        !crate::ai::warp_note::is_tagged(&turn.server_message_data),
+        "the user's own turn is not Warp's: {turn:?}"
+    );
+    assert!(
+        !crate::ai::warp_note::is_tagged(&prose.server_message_data),
+        "the agent's words must never be tagged as Warp's: {prose:?}"
+    );
+}

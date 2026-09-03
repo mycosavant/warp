@@ -318,9 +318,12 @@ impl Decision {
         let offered = offered_list(state);
         match wanted {
             None if !news => Self::NothingToSay,
+            // A blank line after the first sentence: the panel draws the text
+            // before it as the note's headline and the rest as its detail
+            // (`crate::ai::warp_note`).
             None => Self::Disclose {
                 note: format!(
-                    "{current} Warp did not choose it and cannot tell what it permits — a mode is \
+                    "{current}\n\nWarp did not choose it and cannot tell what it permits — a mode is \
                      the agent's own idea, so only the agent's description above says anything \
                      about it. To ask for a different one, set `WARP_FORK_ACP_MODE` to its id \
                      before starting Warp. This agent offers: {offered}."
@@ -334,11 +337,13 @@ impl Decision {
                 Some(mode) if !news => Self::RequestQuietly {
                     mode: mode.id.clone(),
                 },
+                // The mode in force leads, as the headline; where the turn
+                // started is the detail. Same blank-line convention as above.
                 Some(mode) => Self::Request {
                     mode: mode.id.clone(),
                     note: format!(
-                        "{turn_start} `WARP_FORK_ACP_MODE` asked for {}, and the agent accepted, so \
-                         that is the mode this session is running under.",
+                        "`WARP_FORK_ACP_MODE` asked for {}, and the agent accepted, so \
+                         that is the mode this session is running under.\n\n{turn_start}",
                         described(mode)
                     ),
                 },

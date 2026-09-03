@@ -213,6 +213,24 @@ impl ConvertAPIMessageToClientOutputMessage for api::Message {
             .collect::<Vec<AIAgentCitation>>();
 
         match message {
+            // Warp's own voice (fork): an `AgentOutput` whose opaque payload
+            // carries the note tag. Decided here, on the way in, so nothing
+            // downstream ever has to look at a marker in the text -- see
+            // `crate::ai::warp_note` for why the carrier is this field.
+            api::message::Message::AgentOutput(output)
+                if crate::ai::warp_note::is_tagged(&self.server_message_data) =>
+            {
+                let note = crate::ai::warp_note::Note::from_wire(&output.text);
+                Ok(MaybeAIAgentOutputMessage::Message(
+                    AIAgentOutputMessage::warp_note(
+                        MessageId::new(self.id),
+                        note.headline,
+                        AIAgentText {
+                            sections: parse_markdown_into_text_and_code_sections(&note.detail),
+                        },
+                    ),
+                ))
+            }
             api::message::Message::AgentOutput(output) => Ok(MaybeAIAgentOutputMessage::Message(
                 AIAgentOutputMessage::text(MessageId::new(self.id), output.into())
                     .with_citations(citations),

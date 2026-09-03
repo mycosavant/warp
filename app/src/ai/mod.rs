@@ -59,6 +59,7 @@ pub(crate) mod transcript;
 #[cfg(not(target_family = "wasm"))]
 pub(crate) mod tui_api_keys;
 pub(crate) mod voice;
+pub(crate) mod warp_note;
 pub use agent_tips::*;
 pub use credit_availability::*;
 pub use request_usage_model::*;

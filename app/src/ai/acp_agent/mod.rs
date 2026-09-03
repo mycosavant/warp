@@ -739,7 +739,8 @@ async fn exchange(
                 mode::acknowledged(&conversation_id, mode);
             }
             if let Some(note) = decision.note() {
-                let event = emit(&translator, |translator| translator.note(note.to_owned()));
+                let note = crate::ai::warp_note::Note::from_wire(note);
+                let event = emit(&translator, |translator| translator.note(note));
                 let _ = tx.unbounded_send(Ok(event));
             }
 
@@ -787,7 +788,8 @@ async fn exchange(
                 // instruction the person never saw.
                 if crate::ai::transcript::needs_announcing(&conversation_id) {
                     let text = crate::ai::transcript::announcement(&path);
-                    let event = emit(&translator, |translator| translator.note(text));
+                    let note = crate::ai::warp_note::Note::headline(text);
+                    let event = emit(&translator, |translator| translator.note(note));
                     let _ = tx.unbounded_send(Ok(event));
                 }
             }
@@ -1183,7 +1185,10 @@ fn approvable(
 /// pane's directory decides whether the user's own agent configuration loads at
 /// all, and nothing on the wire distinguishes "your rules allowed it" from "the
 /// agent's defaults did".
-fn asking_note(parked: &registry::ParkedRequest, answerable_here: bool) -> String {
+fn asking_note(
+    parked: &registry::ParkedRequest,
+    answerable_here: bool,
+) -> crate::ai::warp_note::Note {
     let what = parked.title.as_deref().unwrap_or("a request to act");
     let id = &parked.approval_id;
     // **Per entry, not per population.** This said "Warp cannot say yes to this
@@ -1257,7 +1262,11 @@ fn asking_note(parked: &registry::ParkedRequest, answerable_here: bool) -> Strin
     } else {
         ""
     };
-    let mut note = format!("The agent is waiting for permission: **{what}**. {how}{paired}");
+    // The headline is what stays on screen; everything below it is the
+    // detail behind the chevron (`crate::ai::warp_note`). Plain text, no
+    // markdown, because a headline row is drawn as one run of text.
+    let headline = format!("The agent is waiting for permission: {what}");
+    let mut note = format!("{how}{paired}");
     // Said before the session directory, because it is the more specific answer
     // to the question a person is actually asking — *where does this happen* —
     // and because leaving it out invites reading the session directory as the
@@ -1276,7 +1285,7 @@ fn asking_note(parked: &registry::ParkedRequest, answerable_here: bool) -> Strin
              The agent resolves its own permission rules from there, and Warp cannot see them."
         ));
     }
-    note
+    crate::ai::warp_note::Note::new(headline, note)
 }
 
 /// Holds the request open until a person answers it, without blocking the
@@ -1386,20 +1395,21 @@ fn wait_for_a_person(
 /// and shows up as the tool's own output. That distinction is the same one
 /// `approvals.rs` makes by reporting the keystroke it sent rather than
 /// `approved: true`.
-fn answered_note(answer: &Result<registry::Answer, oneshot::Canceled>) -> String {
-    match answer.as_ref().map(|answer| answer.decision) {
+fn answered_note(
+    answer: &Result<registry::Answer, oneshot::Canceled>,
+) -> crate::ai::warp_note::Note {
+    crate::ai::warp_note::Note::headline(match answer.as_ref().map(|answer| answer.decision) {
         Ok(registry::Decision::Allow) => {
-            "Answered: **yes**, for this one call. Nothing after it is covered.".to_owned()
+            "Answered: yes, for this one call. Nothing after it is covered."
         }
-        Ok(registry::Decision::Deny) => "Answered: **no**.".to_owned(),
+        Ok(registry::Decision::Deny) => "Answered: no.",
         // The sender was dropped rather than used, which happens when the turn
         // is torn down around the wait — a cancellation, or the agent exiting.
         // Saying "no" here would credit a person with a decision nobody made.
         Err(_) => {
             "This request ended without an answer, because the turn did. Nothing was allowed."
-                .to_owned()
         }
-    }
+    })
 }
 
 /// The two audit fields, from how the wait ended (T14.17).

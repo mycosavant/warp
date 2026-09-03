@@ -537,3 +537,35 @@ fn ai_agent_attachment_round_trips_untagged_block_variant() {
 
 #[path = "suggestions_tests.rs"]
 mod suggestions;
+
+/// Warp's own note (fork) is copied out in wire order -- headline, blank line,
+/// detail -- so the transcript sees the same text a pre-channel build wrote
+/// and `transcript::strip_chrome` keeps deciding on it. A headline-only note
+/// is one line, with no blank after it.
+#[test]
+fn format_for_copy_writes_a_warp_note_as_headline_blank_detail() {
+    let output = AIAgentOutput {
+        messages: vec![
+            AIAgentOutputMessage::warp_note(
+                MessageId::new("note-1".to_string()),
+                "The agent is waiting for permission: Write file".to_string(),
+                AIAgentText {
+                    sections: vec![AIAgentTextSection::PlainText {
+                        text: "Answer with `warpctrl agent approve 1`.".to_string().into(),
+                    }],
+                },
+            ),
+            AIAgentOutputMessage::warp_note(
+                MessageId::new("note-2".to_string()),
+                "Answered: yes, for this one call.".to_string(),
+                AIAgentText { sections: vec![] },
+            ),
+        ],
+        ..Default::default()
+    };
+
+    assert_eq!(
+        output.format_for_copy(None),
+        "The agent is waiting for permission: Write file\n\nAnswer with `warpctrl agent approve 1`.\nAnswered: yes, for this one call."
+    );
+}

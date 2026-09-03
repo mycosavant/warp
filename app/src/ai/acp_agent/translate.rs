@@ -855,16 +855,19 @@ impl Translator {
         }
     }
 
-    /// One line of plain text in the conversation, from Warp rather than the
-    /// agent.
+    /// Something Warp says in the conversation, in its own voice.
     ///
-    /// Used for the refusal notice. It is `AgentOutput` because there is no
-    /// "the client says" message type on this protocol, so the text itself has
-    /// to carry the attribution — see `mod.rs`.
-    pub(super) fn note(&mut self, text: String) -> api::ResponseEvent {
-        let message = self.message(api::message::Message::AgentOutput(
-            api::message::AgentOutput { text },
-        ));
+    /// **A tagged `AgentOutput`, not a bare one, since 2026-09-03.** This said
+    /// *"it is `AgentOutput` because there is no 'the client says' message type
+    /// on this protocol, so the text itself has to carry the attribution"* --
+    /// and that was the architectural root of the composer's 9.4 : 1
+    /// dilution (`.fork/COMPOSER.md`): the renderer could not tell Warp's
+    /// words from the agent's because they were the same kind. The protocol
+    /// still has no such type; the channel is the message's opaque payload,
+    /// which the fork controls end to end. See `crate::ai::warp_note`.
+    pub(super) fn note(&mut self, note: crate::ai::warp_note::Note) -> api::ResponseEvent {
+        let message = self.message(api::message::Message::AgentOutput(Default::default()));
+        let message = note.into_message(message);
         self.add(vec![message])
     }
 }

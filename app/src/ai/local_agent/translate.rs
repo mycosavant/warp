@@ -440,7 +440,7 @@ impl Translator {
                 // After `CreateTask` and before the user's own turn: the task
                 // now exists to attach to, and Warp's sentence reads first.
                 if let Some(text) = self.pending_announcement.take() {
-                    events.push(self.note(text));
+                    events.push(self.note(crate::ai::warp_note::Note::headline(text)));
                 }
                 let query = self.user_query();
                 events.push(self.add(vec![query]));
@@ -629,13 +629,15 @@ impl Translator {
     /// The mirror of `acp_agent`'s `note`, and it exists for the same reason:
     /// the transcript pointer rides on the prompt where the person cannot see
     /// it, so without this they would be watching an agent act on an
-    /// instruction they were never shown. Marked with the transcript module's
-    /// `[Warp]` chrome, which `strip_chrome` then keeps out of the transcript
-    /// file — an agent must never read Warp's asides back as its own words.
-    pub(super) fn note(&mut self, text: String) -> api::ResponseEvent {
-        let message = self.message(api::message::Message::AgentOutput(
-            api::message::AgentOutput { text },
-        ));
+    /// instruction they were never shown. Tagged as Warp's on the wire
+    /// (`crate::ai::warp_note`) so the panel draws it apart from the agent's
+    /// prose; the announcement's text still carries the transcript module's
+    /// `[Warp]` chrome, which `strip_chrome` keys on to keep it out of the
+    /// transcript file — an agent must never read Warp's asides back as its
+    /// own words.
+    pub(super) fn note(&mut self, note: crate::ai::warp_note::Note) -> api::ResponseEvent {
+        let message = self.message(api::message::Message::AgentOutput(Default::default()));
+        let message = note.into_message(message);
         self.add(vec![message])
     }
 

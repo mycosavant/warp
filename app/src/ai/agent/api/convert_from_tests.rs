@@ -247,3 +247,64 @@ fn transfer_control_tool_call_converts_to_action_message() {
         }
     }
 }
+
+fn agent_output_message(text: &str, server_message_data: &str) -> api::Message {
+    api::Message {
+        fetched_memories: vec![],
+        id: "message-id".to_string(),
+        task_id: "task-id".to_string(),
+        server_message_data: server_message_data.to_string(),
+        citations: vec![],
+        message: Some(api::message::Message::AgentOutput(
+            api::message::AgentOutput {
+                text: text.to_string(),
+            },
+        )),
+        request_id: "request-id".to_string(),
+        timestamp: None,
+    }
+}
+
+fn convert(message: api::Message) -> AIAgentOutputMessageType {
+    let task_id = TaskId::new("task-id".to_string());
+    let converted = message
+        .to_client_output_message(ConversionParams {
+            task_id: &task_id,
+            current_todo_list: None,
+            active_code_review: None,
+            skill_path_origin: &SkillPathOrigin::Local,
+        })
+        .expect("conversion should succeed");
+    let MaybeAIAgentOutputMessage::Message(output_message) = converted else {
+        panic!("expected output message");
+    };
+    output_message.message
+}
+
+/// **The channel, pinned at the one place it is decided (fork).** An
+/// `AgentOutput` whose opaque payload carries the note tag becomes Warp's own
+/// kind, split into the headline and the detail; the same text without the
+/// tag is the agent's prose, as it always was. Everything the panel does to
+/// keep Warp's voice apart from the agent's rests on this arm.
+#[test]
+fn a_tagged_agent_output_is_warps_note_and_an_untagged_one_is_the_agents_prose() {
+    let text = "The agent is waiting for permission: Write file\n\nAnswer with `warpctrl`.";
+
+    let note = convert(agent_output_message(text, crate::ai::warp_note::TAG));
+    let AIAgentOutputMessageType::WarpNote { headline, detail } = note else {
+        panic!("a tagged output must be Warp's note, got {note:?}");
+    };
+    assert_eq!(headline, "The agent is waiting for permission: Write file");
+    assert_eq!(detail.sections.len(), 1);
+    let crate::ai::agent::AIAgentTextSection::PlainText { text: detail } = &detail.sections[0]
+    else {
+        panic!("the detail is prose, got {detail:?}");
+    };
+    assert_eq!(detail.text(), "Answer with `warpctrl`.");
+
+    let prose = convert(agent_output_message(text, ""));
+    assert!(
+        matches!(prose, AIAgentOutputMessageType::Text(_)),
+        "the same words untagged are the agent's, got {prose:?}"
+    );
+}

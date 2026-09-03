@@ -952,6 +952,20 @@ pub(super) fn render(props: Props, app: &AppContext) -> Box<dyn Element> {
                                 ),
                             );
                         }
+                        AIAgentOutputMessageType::WarpNote { headline, detail } => {
+                            if let Some(element) = render_warp_note(
+                                output_message,
+                                headline,
+                                &detail.sections,
+                                props,
+                                &mut has_rendered_first_text_section,
+                                &mut text_section_index,
+                                &mut code_section_index,
+                                app,
+                            ) {
+                                output_items.add_child(element);
+                            }
+                        }
                         AIAgentOutputMessageType::DebugOutput { text } => {
                             if ChannelState::enable_debug_features()
                                 && let Some(element) = render_collapsible_debug_output(
@@ -4236,6 +4250,190 @@ fn render_collapsible_debug_output(
                 .with_margin_bottom(16.0)
                 .finish(),
         );
+    }
+
+    Some(
+        container
+            .finish()
+            .with_agent_output_item_spacing(app)
+            .finish(),
+    )
+}
+
+/// Warp's own voice in the conversation (fork): a labelled headline row, with
+/// the detail behind a chevron.
+///
+/// **Dimmer than the agent, on purpose.** Measured 2026-09-03, during a turn
+/// with three asks Warp's words outweighed the agent's 9.4 : 1 and the
+/// agent's narration never reached the screen (`.fork/COMPOSER.md`). The
+/// headline keeps the sentence a person needs visible; everything that
+/// justifies it is one click away, and it starts collapsed
+/// (`block.rs` registers the state beside `DebugOutput`'s).
+///
+/// **The detail goes through `render_text_sections` exactly when
+/// `AIAgentOutput::all_text` counts it**, which is when its sections are not
+/// all empty. A headline-only note draws one row and advances no index, and
+/// `all_text` filters it out for the same reason. Link detection depends on
+/// those two agreeing.
+#[allow(clippy::too_many_arguments)]
+fn render_warp_note(
+    output_message: &AIAgentOutputMessage,
+    headline: &str,
+    sections: &[AIAgentTextSection],
+    props: Props,
+    has_rendered_first_text_section: &mut bool,
+    text_section_index: &mut usize,
+    code_section_index: &mut usize,
+    app: &AppContext,
+) -> Option<Box<dyn Element>> {
+    let state = props.collapsible_block_states.get(&output_message.id)?;
+    let appearance = Appearance::as_ref(app);
+    let theme = appearance.theme();
+    let label_color = blended_colors::text_disabled(theme, theme.surface_2());
+    let headline_color = theme.sub_text_color(theme.surface_1());
+    let icon_size = icon_size(app);
+    let has_detail = !are_all_text_sections_empty(sections);
+    let is_expanded = matches!(
+        state.expansion_state,
+        CollapsibleExpansionState::Expanded { .. }
+    );
+
+    // The transcript marker is for the file, not the eye: `strip_chrome` keys
+    // on it, and the label beside the row already says who is speaking.
+    let headline = headline
+        .strip_prefix(crate::ai::transcript::CHROME)
+        .map(str::trim_start)
+        .unwrap_or(headline)
+        .to_owned();
+
+    let label = || {
+        Container::new(
+            Text::new(
+                "Warp".to_owned(),
+                appearance.ui_font_family(),
+                appearance.monospace_font_size() - 1.0,
+            )
+            .with_color(label_color)
+            .with_selectable(false)
+            .finish(),
+        )
+        .with_margin_right(8.)
+        .finish()
+    };
+    let headline_text = |selectable: bool| {
+        Text::new(
+            headline.clone(),
+            appearance.ai_font_family(),
+            appearance.monospace_font_size() - 1.0,
+        )
+        .with_color(headline_color.into())
+        .with_selectable(selectable)
+        .finish()
+    };
+
+    let mut container = Flex::column().with_cross_axis_alignment(CrossAxisAlignment::Stretch);
+
+    if !has_detail {
+        let row = Flex::row()
+            .with_cross_axis_alignment(CrossAxisAlignment::Center)
+            .with_child(label())
+            .with_child(Shrinkable::new(1., headline_text(true)).finish())
+            .finish();
+        container.add_child(row);
+        *has_rendered_first_text_section = true;
+        return Some(
+            container
+                .finish()
+                .with_agent_output_item_spacing(app)
+                .finish(),
+        );
+    }
+
+    let chevron_icon = if is_expanded {
+        Icon::ChevronDown
+    } else {
+        Icon::ChevronRight
+    };
+    let message_id = output_message.id.clone();
+    let header = Hoverable::new(state.expansion_toggle_mouse_state.clone(), move |_| {
+        Flex::row()
+            .with_cross_axis_alignment(CrossAxisAlignment::Center)
+            .with_child(label())
+            .with_child(Shrinkable::new(1., headline_text(false)).finish())
+            .with_child(
+                Container::new(
+                    ConstrainedBox::new(chevron_icon.to_warpui_icon(label_color.into()).finish())
+                        .with_width(icon_size - 2.)
+                        .with_height(icon_size - 2.)
+                        .finish(),
+                )
+                .with_horizontal_margin(4.)
+                .finish(),
+            )
+            .finish()
+    })
+    .with_cursor(Cursor::PointingHand)
+    .on_click(move |ctx, _, _| {
+        ctx.dispatch_typed_action(AIBlockAction::ToggleCollapsibleBlockExpanded(
+            message_id.clone(),
+        ));
+    });
+    container.add_child(
+        Container::new(header.finish())
+            .with_margin_bottom(if is_expanded { 8. } else { 0. })
+            .finish(),
+    );
+    *has_rendered_first_text_section = true;
+
+    // Rendered whether or not it is shown, so the section indices advance the
+    // way `all_text` expects; `render_scrollable_collapsible_content` is what
+    // decides whether the result is drawn.
+    let mut table_section_index = 0;
+    let mut image_section_index = 0;
+    let body = render_text_sections(
+        TextSectionsProps {
+            model: props.model,
+            starting_text_section_index: text_section_index,
+            starting_code_section_index: code_section_index,
+            starting_table_section_index: &mut table_section_index,
+            starting_image_section_index: &mut image_section_index,
+            sections,
+            text_color: headline_color.into(),
+            selectable: true,
+            find_context: props.find_context,
+            current_working_directory: props.current_working_directory,
+            shell_launch_data: props.shell_launch_data,
+            embedded_code_editor_views: &[],
+            code_snippet_button_handles: &[],
+            table_section_handles: &[],
+            image_section_tooltip_handles: &[],
+            is_ai_input_enabled: props.is_ai_input_enabled,
+            open_code_block_action_factory: (None as Option<
+                &'static dyn Fn(CodeSource) -> AIBlockAction,
+            >),
+            copy_code_action_factory: (None as Option<&'static dyn Fn(String) -> AIBlockAction>),
+            detected_links: Some(props.detected_links_state),
+            secret_redaction_state: props.secret_redaction_state,
+            is_selecting_text: props.state_handles.selection_handle.is_selecting(),
+            item_spacing: CONTENT_ITEM_VERTICAL_MARGIN,
+            #[cfg(feature = "local_fs")]
+            resolved_code_block_paths: Some(props.resolved_code_block_paths),
+            #[cfg(feature = "local_fs")]
+            resolved_blocklist_image_sources: Some(props.resolved_blocklist_image_sources),
+        },
+        app,
+    )
+    .with_agent_output_item_spacing(app)
+    .finish();
+    let body = Container::new(body).with_margin_bottom(-16.0).finish();
+    if let Some(scrollable) = render_scrollable_collapsible_content(
+        &output_message.id,
+        state,
+        body,
+        props.model.status(app).is_streaming(),
+        360.,
+    ) {
+        container.add_child(Container::new(scrollable).with_margin_bottom(16.0).finish());
     }
 
     Some(

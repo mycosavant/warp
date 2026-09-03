@@ -8,6 +8,17 @@ use agent_client_protocol::schema::v1::{ToolCallUpdate, ToolCallUpdateFields, To
 
 use super::*;
 
+/// The builders return a [`crate::ai::warp_note::Note`]; these tests read the
+/// words, so they read the wire form -- headline, blank line, detail -- which
+/// is also what the transcript sees.
+fn asking_note(parked: &registry::ParkedRequest, answerable_here: bool) -> String {
+    super::asking_note(parked, answerable_here).to_wire()
+}
+
+fn answered_note(answer: &Result<registry::Answer, oneshot::Canceled>) -> String {
+    super::answered_note(answer).to_wire()
+}
+
 /// An answer as the panel button would deliver it.
 ///
 /// The surface is arbitrary for every assertion below: `outcome_for` is

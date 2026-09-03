@@ -1020,6 +1020,7 @@ impl TuiAIBlock {
                         summarization_type: SummarizationType::ConversationSummary,
                         ..
                     } => Some(text),
+                    AIAgentOutputMessageType::WarpNote { detail, .. } => Some(detail),
                     AIAgentOutputMessageType::Action(_)
                     | AIAgentOutputMessageType::TodoOperation(_)
                     | AIAgentOutputMessageType::Subagent(_)
@@ -1614,6 +1615,19 @@ impl TuiAIBlock {
                     // Event IDs contain no display detail. The sender's live
                     // conversation status is shown on rich message rows.
                     AIAgentOutputMessageType::EventsFromAgents { .. } => {}
+                    // Warp's own note (fork): the headline as a plain line, the
+                    // detail as the rich text it is. Section indices are the
+                    // detail's own, matching `sync_code_block_views`.
+                    AIAgentOutputMessageType::WarpNote { headline, detail } => {
+                        sections.push(TuiAIBlockSection::RichText(TuiRichTextSection::PlainText(
+                            headline.clone(),
+                        )));
+                        sections.extend(
+                            Self::rich_text_sections(&message.id, detail)
+                                .into_iter()
+                                .map(TuiAIBlockSection::RichText),
+                        );
+                    }
                     // Other message kinds are not rendered by the TUI transcript yet.
                     AIAgentOutputMessageType::Summarization { .. }
                     | AIAgentOutputMessageType::Subagent(_)

@@ -528,6 +528,9 @@ impl AIAgentOutput {
                     summarization_type: SummarizationType::ConversationSummary,
                     ..
                 } => Some(text),
+                // The detail is rendered through the same section renderer as
+                // the rest, so it must be counted here for the same reason.
+                AIAgentOutputMessageType::WarpNote { detail, .. } => Some(detail),
                 _ => None,
             })
             // It's important to filter these out, because we filter these out when rendering the output
@@ -550,6 +553,7 @@ impl AIAgentOutput {
                     summarization_type: SummarizationType::ConversationSummary,
                     ..
                 } => Some((&message.id, text)),
+                AIAgentOutputMessageType::WarpNote { detail, .. } => Some((&message.id, detail)),
                 _ => None,
             })
             // It's important to filter these out, because we filter these out when rendering the output
@@ -650,6 +654,33 @@ impl AIAgentOutput {
                 }
                 AIAgentOutputMessageType::EventsFromAgents { event_ids } => {
                     result.push(format!("Received {} agent events", event_ids.len()));
+                    last_was_action = false;
+                }
+                // Written back out in wire order -- headline, blank, detail --
+                // so the transcript and the clipboard carry the same words a
+                // pre-channel build wrote. `transcript::strip_chrome` decides
+                // on this text what stays out of the file.
+                AIAgentOutputMessageType::WarpNote { headline, detail } => {
+                    if last_was_action {
+                        result.push(String::new());
+                    }
+                    result.push(headline.clone());
+                    if !are_all_text_sections_empty(&detail.sections) {
+                        result.push(String::new());
+                        for section in &detail.sections {
+                            match section {
+                                AIAgentTextSection::PlainText { text } => {
+                                    result.push(text.text().to_string());
+                                }
+                                AIAgentTextSection::Code { .. }
+                                | AIAgentTextSection::Table { .. }
+                                | AIAgentTextSection::Image { .. }
+                                | AIAgentTextSection::MermaidDiagram { .. } => {
+                                    result.push(format!("{}", MarkdownTextSection(section)));
+                                }
+                            }
+                        }
+                    }
                     last_was_action = false;
                 }
             }
@@ -1821,6 +1852,18 @@ pub enum AIAgentOutputMessageType {
     EventsFromAgents {
         event_ids: Vec<String>,
     },
+    /// Something Warp itself said in the conversation (fork).
+    ///
+    /// Distinct from [`Self::Text`] so the panel can draw Warp's voice apart
+    /// from the agent's, collapse it, and count it. Carried on the wire as an
+    /// `AgentOutput` tagged in `server_message_data`; see `crate::ai::warp_note`.
+    WarpNote {
+        /// The sentence a person needs. Always shown.
+        headline: String,
+        /// The paragraphs behind it, shown on request. Empty for a
+        /// headline-only note.
+        detail: AIAgentText,
+    },
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -1991,6 +2034,7 @@ impl Display for AIAgentOutputMessage {
                 comments: comment_ids,
             } => write!(f, "Addressed {} comments", comment_ids.len())?,
             AIAgentOutputMessageType::DebugOutput { text } => write!(f, "[DEBUG] {text}")?,
+            AIAgentOutputMessageType::WarpNote { headline, .. } => write!(f, "{headline}")?,
             AIAgentOutputMessageType::ArtifactCreated(data) => match data {
                 ArtifactCreatedData::PullRequest { url, branch } => {
                     write!(f, "Created PR: {url} (branch: {branch})")?
@@ -2085,6 +2129,15 @@ impl AIAgentOutputMessage {
         Self {
             id,
             message: AIAgentOutputMessageType::DebugOutput { text },
+            citations: vec![],
+        }
+    }
+
+    /// Something Warp said (fork). See `crate::ai::warp_note`.
+    pub fn warp_note(id: MessageId, headline: String, detail: AIAgentText) -> Self {
+        Self {
+            id,
+            message: AIAgentOutputMessageType::WarpNote { headline, detail },
             citations: vec![],
         }
     }

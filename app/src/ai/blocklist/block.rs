@@ -2371,10 +2371,13 @@ impl AIBlock {
                 }
             }
 
-            // Register element state for debug output messages - start collapsed
+            // Register element state for debug output messages - start collapsed.
+            // Warp's own notes (fork) start collapsed for the same reason: the
+            // headline is always drawn, and the detail is what the chevron is for.
             if matches!(
                 &message.message,
                 AIAgentOutputMessageType::DebugOutput { .. }
+                    | AIAgentOutputMessageType::WarpNote { .. }
             ) {
                 self.collapsible_block_states
                     .entry(message.id.clone())
@@ -2628,7 +2631,8 @@ impl AIBlock {
                 | AIAgentOutputMessageType::DebugOutput { .. }
                 | AIAgentOutputMessageType::ArtifactCreated(_)
                 | AIAgentOutputMessageType::SkillInvoked(_)
-                | AIAgentOutputMessageType::EventsFromAgents { .. } => {}
+                | AIAgentOutputMessageType::EventsFromAgents { .. }
+                | AIAgentOutputMessageType::WarpNote { .. } => {}
             }
         }
     }
