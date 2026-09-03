@@ -12318,7 +12318,7 @@ about. The check now runs before that line.
 **Not done, and it is the ticket's own note**: the `Parent has crashed` line at
 the head of `warp-oss.log.old.0` remains a red herring, already recorded here.
 
-### T20.4 — Does the composer drop the agent's prose? ✅ **answered 2026-09-03: no drop found, at zero asks**
+### T20.4 — Does the composer drop the agent's prose? ✅ **answered: no — it dilutes it 9:1**
 
 The maintainer's verdict, recorded verbatim in the run log because no instrument
 caught it: tool labels (`Terminal`, `Read File`) and Warp's own permission blurbs
@@ -12353,6 +12353,50 @@ the second explicitly asking it to ultrathink — with `reasoningOutputTokens: 0
 in the stop payload both times. There is nothing on the wire to drop.
 `acp_agent/translate.rs:345` maps `AgentThoughtChunk` to `AgentReasoning`
 ("rendered as thinking, not as output") and would render one if it came.
+
+**Re-run 2026-09-03 under the condition that was missing — asks — and the
+maintainer's verdict reproduces exactly, by dilution rather than by dropping.**
+
+The turn: four steps, each with *"one short sentence"* of narration demanded
+before it, three of which need a file write and therefore an ask. Screenshot
+taken with an ask parked. Then every ask approved and the transcript compared
+against what had been on screen.
+
+**The agent's narration exists and was never visible.** *"Creating the first file
+with contents A."* is in the transcript and is nowhere in the screenshot — pushed
+off the top by Warp's own asking note (~590 characters: how to approve, how to
+deny, what a yes covers, what it acts on, which directory the session runs in)
+plus the approval card. What fills the visible panel is Warp's prose and two
+buttons.
+
+Counted over the whole turn:
+
+| author | characters |
+|---|---|
+| **Warp** — mode note, asking notes, `Answered:` notes, tool labels | **2558** |
+| **the agent** — all four narration sentences plus its closing summary | **271** |
+
+**9.4 : 1. The agent's share of its own turn is 9.6%.** At run 2's 44 asks the
+arithmetic is far worse.
+
+**So T20.4's earlier "no" was answering an easier question**, and the honest
+answer is: *the composer drops nothing and shows almost none of it.* Nothing is
+lost, everything is diluted, and from the seat those are indistinguishable. The
+scroll hypothesis recorded here first was the wrong shape — this is not about
+where the viewport sits, it is about **what is in the stream to look at**.
+
+**That relocates the fix.** There is no dropped-message bug to hunt. The lever is
+the asking note, which is four paragraphs sized for the first request of a
+session and paid on every one — already named in *"Not a ticket: approval
+density"* below as a separable cost, and now measured. Saying it once per
+conversation and abbreviating it thereafter would return roughly 500 characters
+per ask to the agent, without changing a single permission.
+
+**Still not established**, and left as read-only: `translate.rs` buffers text and
+flushes on the next non-text update, on turn end, or on the failure path, and
+`take_until` drops the driver future on cancellation with nothing flushing there
+— so a **cancelled** turn plausibly loses its last unflushed sentence. Run 2 was
+cancelled. Not run.
 
 **Narrowed after review, 2026-09-03: this was measured at *zero* permission
 requests, and the run it disagrees with had forty-four.** The event log for both
