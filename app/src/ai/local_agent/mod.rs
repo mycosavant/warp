@@ -357,8 +357,9 @@ async fn run(turn: Turn) -> anyhow::Result<impl Stream<Item = Event> + Send + us
     // deliberately rather than by omission.
     let transcript = match (&ask, crate::fork::transcript_dir()) {
         (Ask::Query(_), Some(location)) => working_directory.as_deref().map(|cwd| {
-            let dir = location.resolve(std::path::Path::new(cwd));
-            crate::ai::transcript::path_for(&dir, &conversation)
+            // The session's spelling, not this process's -- see
+            // `transcript::agent_facing_path`.
+            crate::ai::transcript::agent_facing_path(&location, cwd, &conversation)
         }),
         _ => None,
     };

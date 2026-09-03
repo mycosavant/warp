@@ -114,6 +114,50 @@ pub(crate) fn path_for(dir: &Path, conversation_id: &str) -> PathBuf {
     dir.join(format!("{conversation_id}.md"))
 }
 
+/// The transcript file as the **session** spells it, for the pointer and the
+/// announcement — never for opening it.
+///
+/// **Found by running the T20.1 fix, not by reading it.** With the write side
+/// corrected, the pointer the agent was handed on the Windows build read
+///
+/// ```text
+/// /home/effatha/git/warp\.warp\transcripts\0087fc69-….md
+/// ```
+///
+/// — a Unix root with Windows separators, because [`std::path::PathBuf::join`]
+/// inserts the *host's* separator and the transcript's cwd belongs to the guest.
+/// The agent coped: measured, it found the file and reported the correct
+/// all-forward-slash path back. That is the agent being tolerant, not Warp being
+/// right, and a path string handed across a boundary should not depend on the
+/// receiver's forgiveness.
+///
+/// The separator comes from [`typed_path`]'s own inference over the cwd rather
+/// than from a rule invented here — the same crate `Session` uses to decide
+/// whether a session speaks Unix or Windows paths. A [`crate::fork::
+/// TranscriptLocation::Fixed`] directory is left alone: the caller named an
+/// absolute path on *this* machine and owns its reachability, which is what that
+/// variant's doc already says.
+pub(crate) fn agent_facing_path(
+    location: &crate::fork::TranscriptLocation,
+    session_cwd: &str,
+    conversation_id: &str,
+) -> PathBuf {
+    match location {
+        crate::fork::TranscriptLocation::Fixed(dir) => path_for(dir, conversation_id),
+        crate::fork::TranscriptLocation::InSessionProject => {
+            let path = typed_path::TypedPathBuf::from(session_cwd)
+                .join(".warp")
+                .join("transcripts")
+                .join(format!("{conversation_id}.md"));
+            // Back into a `PathBuf` only to carry the string: `PathBuf` preserves
+            // the separators it is given and only inserts the host's on `join`,
+            // and nothing joins onto this. It is never opened -- the write side
+            // has its own path, in this process's spelling.
+            PathBuf::from(path.to_string_lossy().into_owned())
+        }
+    }
+}
+
 /// The line handed to the agent, naming the file and how to use it.
 ///
 /// **Deliberately imperative about `grep`.** An agent told only that a transcript

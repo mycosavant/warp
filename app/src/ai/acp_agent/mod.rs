@@ -742,8 +742,11 @@ async fn exchange(
                 // was the bug: the write side used this string literally and
                 // Windows resolved it to `C:\home\…`. See
                 // `session::filesystem::native_path`.
-                let dir = location.resolve(std::path::Path::new(&cwd_text));
-                let path = crate::ai::transcript::path_for(&dir, &conversation_id);
+                let path = crate::ai::transcript::agent_facing_path(
+                    &location,
+                    &cwd_text,
+                    &conversation_id,
+                );
                 blocks.insert(
                     0,
                     ContentBlock::Text(TextContent::new(crate::ai::transcript::pointer(&path))),

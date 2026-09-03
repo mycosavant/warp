@@ -301,3 +301,65 @@ fn a_chrome_line_among_the_agent_s_own_leaves_a_mark() {
         "the removed line is marked, not dropped: {stripped:?}"
     );
 }
+
+// ── The pointer's spelling belongs to the session (T20.1) ────────────────
+
+/// **The defect this closes, measured on the Windows build.** With the write
+/// side fixed, the pointer handed to the agent still read
+/// `/home/effatha/git/warp\.warp\transcripts\….md` — a Unix root with Windows
+/// separators, because `PathBuf::join` inserts the host's separator and the cwd
+/// belongs to the guest. Asserted as a whole string rather than by component,
+/// because the components were never wrong.
+///
+/// Runs on every platform and means something on each: `typed_path` infers
+/// Unix from the cwd's shape, so a POSIX cwd produces POSIX separators whichever
+/// machine the test runs on. That is the property — the pointer follows the
+/// *session*, not the host.
+#[test]
+fn the_pointer_is_spelled_the_way_the_session_spells_paths() {
+    let path = super::agent_facing_path(
+        &crate::fork::TranscriptLocation::InSessionProject,
+        "/home/effatha/git/warp",
+        "0087fc69-439f-4751-b79a-c67ce7bb6499",
+    );
+    assert_eq!(
+        path.to_string_lossy(),
+        "/home/effatha/git/warp/.warp/transcripts/0087fc69-439f-4751-b79a-c67ce7bb6499.md",
+    );
+    assert!(
+        !path.to_string_lossy().contains('\\'),
+        "a POSIX session's pointer must carry no Windows separator",
+    );
+}
+
+/// The other half of the inference, so the fix is not just "always use `/`": a
+/// Windows cwd keeps Windows separators.
+#[test]
+fn a_windows_session_gets_a_windows_pointer() {
+    let path = super::agent_facing_path(
+        &crate::fork::TranscriptLocation::InSessionProject,
+        r"C:\dev\warp",
+        "conv",
+    );
+    assert_eq!(
+        path.to_string_lossy(),
+        r"C:\dev\warp\.warp\transcripts\conv.md",
+    );
+}
+
+/// A `Fixed` directory is the caller's own absolute path on *this* machine, and
+/// its doc says the caller owns reachability -- so it is named back verbatim
+/// rather than re-spelled for a session that may not be able to reach it either
+/// way.
+#[test]
+fn a_fixed_directory_is_named_back_as_the_caller_wrote_it() {
+    let dir = std::path::PathBuf::from("/var/log/warp");
+    assert_eq!(
+        super::agent_facing_path(
+            &crate::fork::TranscriptLocation::Fixed(dir.clone()),
+            "/home/effatha/git/warp",
+            "conv",
+        ),
+        super::path_for(&dir, "conv"),
+    );
+}
