@@ -2183,6 +2183,64 @@ cautious on the ACP path. It is the rule correctly refusing the only path that
 can currently act, because that path is the one that cannot describe. And the
 path that can describe cannot act.
 
+## Re-measured 2026-09-03, and the blocking half got *worse*, not better
+
+The table above was measured against `opencode`. `CLAUDE.md` has since made
+`claude-agent-acp` + `WARP_FORK_ACP_MODE=default` the recommended pairing, and
+`acp_permission_tests` carries a transcribed `claude-agent-acp` always-variant
+that **does** declare — `_meta.permission.version 1`, a `permission_mode` change
+to `acceptEdits`, a human `description`, and `lifetime: {scope: session}`. That
+looks like the row flipping to *"yes, it can describe"*, which would unblock the
+ACP path outright.
+
+**It does not.** Probed live at 0.70.0 against an ordinary edit request
+(`acp probe`, raw wire), the option is:
+
+```json
+{"optionId": "allow-with-updates",
+ "name": "Yes, allow all edits during this session",
+ "kind": "allow_always"}
+```
+
+No `_meta` on the option at all. The request carries one — `{"permission":
+{"version": 1, "title": "Write i18-probe.txt"}}` — and it is a *title*, not a
+declaration of what the grant would widen. Warp's own consent report says it in
+those words: `"declared": null, "disclosed_as": "the_options_name_only"`.
+
+**So the real finding is that the same agent does both**, and that is a harder
+problem than the original table's. The declaring fixture is real and was measured;
+this non-declaring one is real and was measured. Which you get depends on the
+request. A design that asks *"can this transport describe an always-grant?"* has
+no stable answer, and one built on the declaring case would silently degrade to a
+bare name on the requests that do not carry one — which is the disclosure failure
+the standing rule exists to prevent, arrived at through a feature that worked
+when it was tested.
+
+**What that does to the shape of I18.** It removes "wait for the ACP path to
+start declaring" as a plan: it already declares, sometimes, and sometimes is
+worse than never because it makes the gap invisible. Three routes survive:
+
+1. **Render `Declaration::Changes` when it is there and refuse when it is not.**
+   Honest, already parseable, and the fork has the vocabulary. The cost is an
+   affordance that appears and disappears between two requests that look
+   identical to the person, which is its own kind of dishonesty.
+2. **Make the Claude Code hook answer**, which is the second consequence below
+   and is still the strongest option: that path *can* describe
+   (`permission_suggestions` names the rules and `destination: session` names the
+   scope) and only cannot act, and it is a plugin-side change in a vendored,
+   versioned protocol the fork already owns.
+3. **Grant it in Warp rather than in the agent.** Neither transport is asked to
+   describe anything: Warp remembers a scope the *person* chose — "edits under
+   this directory, this session" — and keeps answering `allow_once` on their
+   behalf. What is disclosed is Warp's own rule, which Warp can state exactly,
+   instead of the agent's, which it cannot see. **Not scoped, and it is the one
+   that most needs the argument-against above run at it**, because it is the
+   consent architecture with the person removed for a while.
+
+`transitions_offered` in the consent report already records every one of these
+offers with `disclosed_as`, so the evidence for whichever route is chosen is
+being collected today.
+
 **Two consequences, and the second is the one to keep.**
 
 1. A persistent grant built on the ACP path today would have to render
