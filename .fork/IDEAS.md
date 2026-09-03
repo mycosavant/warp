@@ -2256,7 +2256,17 @@ version, which is a property of the evidence and not of any one finding.
    allowlist is exactly this move for the other agent. For `claude-agent-acp`,
    `settingSources: ["user", "project", "local"]` (verified in both versions'
    `dist/`) means this repo's `.claude/settings.json` — currently `{}` — is the
-   same lever. And for edits specifically there is a **zero-code** variant:
+   same lever. **Measured 2026-09-03: true here, and not everywhere.** A
+   `Bash(rustup:*)` rule in this repo's `.claude/settings.local.json` took
+   effect at once (0 requests); the same rule in a fresh scratch directory's
+   `.claude/settings.json` did not, with or without `git init`, across six
+   probes. The mechanism was not established — workspace trust is the
+   candidate — so a project-level rule is a lever in a directory Claude Code
+   already knows and not in one it has never seen, which reading `dist/`
+   could not have found. And the fifth route's measurement is in
+   (`.fork/classifier/README.md`): the seven in-project `cargo` asks in run 2
+   were `Bash(cargo:*)` defeated by the `CARGO_BUILD_JOBS=8` prefix, and the
+   seven edit asks are what `acceptEdits` answers, measured scoped to the cwd. And for edits specifically there is a **zero-code** variant:
    `WARP_FORK_ACP_MODE=acceptEdits`, an existing mode the agent describes itself
    as *"Automatically accept all file edits"*, which Warp already discloses in
    the panel every turn and re-sends on every turn. That *is* "allow all edits

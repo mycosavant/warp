@@ -1,0 +1,362 @@
+[
+ {
+  "file": "probe-a.ndjson",
+  "agent": {
+   "name": "@agentclientprotocol/claude-agent-acp",
+   "title": "Claude Agent",
+   "version": "0.73.0"
+  },
+  "mode_at_session_start": "auto",
+  "mode_requested": [
+   "default"
+  ],
+  "calls": [
+   {
+    "title": "cargo --version",
+    "kind": "execute",
+    "status": "completed",
+    "permission_requests_received": 0
+   }
+  ]
+ },
+ {
+  "file": "probe-b.ndjson",
+  "agent": {
+   "name": "@agentclientprotocol/claude-agent-acp",
+   "title": "Claude Agent",
+   "version": "0.73.0"
+  },
+  "mode_at_session_start": "auto",
+  "mode_requested": [
+   "default"
+  ],
+  "calls": [
+   {
+    "title": "CARGO_BUILD_JOBS=8 cargo --version",
+    "kind": "execute",
+    "status": "failed",
+    "permission_requests_received": 1
+   }
+  ]
+ },
+ {
+  "file": "probe-c.ndjson",
+  "agent": {
+   "name": "@agentclientprotocol/claude-agent-acp",
+   "title": "Claude Agent",
+   "version": "0.73.0"
+  },
+  "mode_at_session_start": "auto",
+  "mode_requested": [
+   "default"
+  ],
+  "calls": [
+   {
+    "title": "cargo --version 2>&1 | tail -1",
+    "kind": "execute",
+    "status": "completed",
+    "permission_requests_received": 0
+   }
+  ]
+ },
+ {
+  "file": "probe-d.ndjson",
+  "agent": {
+   "name": "@agentclientprotocol/claude-agent-acp",
+   "title": "Claude Agent",
+   "version": "0.73.0"
+  },
+  "mode_at_session_start": "auto",
+  "mode_requested": [
+   "default"
+  ],
+  "calls": [
+   {
+    "title": "git remote -v",
+    "kind": "execute",
+    "status": "completed",
+    "permission_requests_received": 0
+   }
+  ]
+ },
+ {
+  "file": "probe-e.ndjson",
+  "agent": {
+   "name": "@agentclientprotocol/claude-agent-acp",
+   "title": "Claude Agent",
+   "version": "0.73.0"
+  },
+  "mode_at_session_start": "auto",
+  "mode_requested": [
+   "default"
+  ],
+  "calls": [
+   {
+    "title": "find .fork -maxdepth 1 -iname \"*.md\" | head -3",
+    "kind": "execute",
+    "status": "completed",
+    "permission_requests_received": 0
+   }
+  ]
+ },
+ {
+  "file": "probe-f.ndjson",
+  "agent": {
+   "name": "@agentclientprotocol/claude-agent-acp",
+   "title": "Claude Agent",
+   "version": "0.73.0"
+  },
+  "mode_at_session_start": "auto",
+  "mode_requested": [
+   "default"
+  ],
+  "calls": [
+   {
+    "title": "ls .fork | head -3\necho \"---\"",
+    "kind": "execute",
+    "status": "completed",
+    "permission_requests_received": 0
+   }
+  ]
+ },
+ {
+  "file": "probe-g.ndjson",
+  "agent": {
+   "name": "@agentclientprotocol/claude-agent-acp",
+   "title": "Claude Agent",
+   "version": "0.73.0"
+  },
+  "mode_at_session_start": "auto",
+  "mode_requested": [
+   "default"
+  ],
+  "calls": [
+   {
+    "title": "ls /mnt/c/dev | head -3",
+    "kind": "execute",
+    "status": "failed",
+    "permission_requests_received": 1
+   }
+  ]
+ },
+ {
+  "file": "probe-h.ndjson",
+  "agent": {
+   "name": "@agentclientprotocol/claude-agent-acp",
+   "title": "Claude Agent",
+   "version": "0.73.0"
+  },
+  "mode_at_session_start": "auto",
+  "mode_requested": [
+   "default"
+  ],
+  "calls": [
+   {
+    "title": "cd /mnt/c/dev && ls | head -3",
+    "kind": "execute",
+    "status": "failed",
+    "permission_requests_received": 1
+   }
+  ]
+ },
+ {
+  "file": "probe-i.ndjson",
+  "agent": {
+   "name": "@agentclientprotocol/claude-agent-acp",
+   "title": "Claude Agent",
+   "version": "0.73.0"
+  },
+  "mode_at_session_start": "auto",
+  "mode_requested": [
+   "default"
+  ],
+  "calls": [
+   {
+    "title": "CARGO_BUILD_JOBS=8 cargo --version",
+    "kind": "execute",
+    "status": "failed",
+    "permission_requests_received": 1
+   }
+  ]
+ },
+ {
+  "file": "probe-j.ndjson",
+  "agent": {
+   "name": "@agentclientprotocol/claude-agent-acp",
+   "title": "Claude Agent",
+   "version": "0.73.0"
+  },
+  "mode_at_session_start": "auto",
+  "mode_requested": [
+   "acceptEdits"
+  ],
+  "calls": [
+   {
+    "title": "Write ae-inside.txt",
+    "kind": "edit",
+    "status": "completed",
+    "permission_requests_received": 0
+   }
+  ]
+ },
+ {
+  "file": "probe-k.ndjson",
+  "agent": {
+   "name": "@agentclientprotocol/claude-agent-acp",
+   "title": "Claude Agent",
+   "version": "0.73.0"
+  },
+  "mode_at_session_start": "auto",
+  "mode_requested": [
+   "acceptEdits"
+  ],
+  "calls": [
+   {
+    "title": "Write /tmp/claude-1000/-home-effatha-git-warp/b9331bde-d1a4-4383-aa67-d2351fbac2e3/scratchpad/ae-outside/ae-outside.txt",
+    "kind": "edit",
+    "status": "failed",
+    "permission_requests_received": 1
+   }
+  ]
+ },
+ {
+  "file": "probe-l.ndjson",
+  "agent": {
+   "name": "@agentclientprotocol/claude-agent-acp",
+   "title": "Claude Agent",
+   "version": "0.73.0"
+  },
+  "mode_at_session_start": "auto",
+  "mode_requested": [
+   "default"
+  ],
+  "calls": [
+   {
+    "title": "rustup --version",
+    "kind": "execute",
+    "status": "failed",
+    "permission_requests_received": 1
+   }
+  ]
+ },
+ {
+  "file": "probe-m.ndjson",
+  "agent": {
+   "name": "@agentclientprotocol/claude-agent-acp",
+   "title": "Claude Agent",
+   "version": "0.73.0"
+  },
+  "mode_at_session_start": "auto",
+  "mode_requested": [
+   "default"
+  ],
+  "calls": [
+   {
+    "title": "CARGO_BUILD_JOBS=8 cargo --version",
+    "kind": "execute",
+    "status": "failed",
+    "permission_requests_received": 1
+   }
+  ]
+ },
+ {
+  "file": "probe-n.ndjson",
+  "agent": {
+   "name": "@agentclientprotocol/claude-agent-acp",
+   "title": "Claude Agent",
+   "version": "0.73.0"
+  },
+  "mode_at_session_start": "auto",
+  "mode_requested": [
+   "default"
+  ],
+  "calls": [
+   {
+    "title": "rustup --version",
+    "kind": "execute",
+    "status": "completed",
+    "permission_requests_received": 0
+   }
+  ]
+ },
+ {
+  "file": "probe-o.ndjson",
+  "agent": {
+   "name": "@agentclientprotocol/claude-agent-acp",
+   "title": "Claude Agent",
+   "version": "0.73.0"
+  },
+  "mode_at_session_start": "auto",
+  "mode_requested": [
+   "default"
+  ],
+  "calls": [
+   {
+    "title": "CARGO_BUILD_JOBS=8 cargo --version",
+    "kind": "execute",
+    "status": "completed",
+    "permission_requests_received": 0
+   }
+  ]
+ },
+ {
+  "file": "probe-i2.ndjson",
+  "agent": {
+   "name": "@agentclientprotocol/claude-agent-acp",
+   "title": "Claude Agent",
+   "version": "0.73.0"
+  },
+  "mode_at_session_start": "auto",
+  "mode_requested": [
+   "default"
+  ],
+  "calls": [
+   {
+    "title": "CARGO_BUILD_JOBS=8 cargo --version",
+    "kind": "execute",
+    "status": "failed",
+    "permission_requests_received": 1
+   }
+  ]
+ },
+ {
+  "file": "probe-l2.ndjson",
+  "agent": {
+   "name": "@agentclientprotocol/claude-agent-acp",
+   "title": "Claude Agent",
+   "version": "0.73.0"
+  },
+  "mode_at_session_start": "auto",
+  "mode_requested": [
+   "default"
+  ],
+  "calls": [
+   {
+    "title": "rustup --version",
+    "kind": "execute",
+    "status": "failed",
+    "permission_requests_received": 1
+   }
+  ]
+ },
+ {
+  "file": "probe-m2.ndjson",
+  "agent": {
+   "name": "@agentclientprotocol/claude-agent-acp",
+   "title": "Claude Agent",
+   "version": "0.73.0"
+  },
+  "mode_at_session_start": "auto",
+  "mode_requested": [
+   "default"
+  ],
+  "calls": [
+   {
+    "title": "CARGO_BUILD_JOBS=8 cargo --version",
+    "kind": "execute",
+    "status": "failed",
+    "permission_requests_received": 1
+   }
+  ]
+ }
+]

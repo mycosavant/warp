@@ -181,6 +181,7 @@ anything.
 | T7 | agent fan-out for a run-scale graph | nothing; the verbs existed, only the *plan* was missing |
 | I15 | screenshots, input, recording, window enumeration | `DOGFOOD_FLAGS` + a non-default cargo feature |
 | I16 | the whole remote-development server | `RELEASE_FLAGS` behind `cfg!(feature = "release_bundle")` — a *packaging* gate, so it is off in every build you make yourself |
+| CLASSIFIER | a cwd-containment rule over an agent's permission requests | **Claude Code's own engine** — an allowed verb on a path outside the cwd already asks, and `cd` out of it already asks. Measured 2026-09-03 before being found in its docs; `.fork/classifier/` |
 
 Gates come in pairs. `crates/warp_features/src/lib.rs` holds `DOGFOOD_FLAGS`
 (runtime); `app/Cargo.toml`'s `default` list holds the compile-time half.
@@ -1244,6 +1245,19 @@ with headroom it was not chosen against. A single `rustc` was sampled at
 was compiling was not verified**, so it is not a like-for-like replacement for
 the 8.1 GB figure and is recorded only as evidence that 8 GB is a floor rather
 than a ceiling. Re-measure properly before re-tuning the cap.
+
+**And the prefix defeats the person's own allow rule — measured 2026-09-03.**
+Claude Code matches `Bash(cargo:*)` against `cargo …` and not against
+`CARGO_BUILD_JOBS=8 cargo …`; its docs say an allow rule *"won't match past an
+assignment of any other variable"*. Probed at `claude-agent-acp` 0.73.0 in
+session mode `default`, the bare command raised 0 permission requests and the
+prefixed one raised 1. **Seven of run 2's 44 asks were exactly this** — cargo
+commands the maintainer had already allowed, asked about again because this
+file told the agent to type the prefix. The rule form that survives it is
+`Bash(CARGO_BUILD_JOBS=8 cargo:*)`, measured 0 requests in this repo, and the
+docs are silent on it; the other remedy is `jobs = 8` under `[build]` in a
+cargo config, which retires the prefix and this instruction with it. Neither is
+a Warp change. Account in `.fork/classifier/README.md`.
 
 **Never share `CARGO_TARGET_DIR` between two checkouts of this workspace.**
 Measured 2026-08-24: running a baseline in a `git worktree` with the main tree's

@@ -4,8 +4,49 @@
 posture question with an implementation behind it, and both halves need arguing
 before either is built.
 
-**Status: nothing built. The infrastructure exists and has not been pointed at
-this problem.**
+**Status: measured 2026-09-03, and the answer is no model.** The evaluation set
+is built (`.fork/classifier/`), the rule was tried, and the falsifier at the
+bottom of this file fired. The section directly below is the result; the rest
+of the file is the argument as it stood before the measurement, kept because the
+posture half of it is still the maintainer's to settle.
+
+---
+
+## Measured 2026-09-03 — a rule handles a third, and the third was already built
+
+Full account in `.fork/classifier/README.md`; the corpus, the labels, the rule
+and eighteen probes are beside it. The shape of it:
+
+- **The corpus has one class.** Of run 2's 44 asks the person answered **41
+  yes**, 2 went unanswered to an accidental ctrl+c, and the 1 no was the person
+  ending the run. A classifier fitted to the person's decisions learns *yes*;
+  the only informative labels are hand-written ones, and those are an
+  *envelope*, not a model's target.
+- **Counted from the full inputs, the split is 28 host / 16 project** — the
+  30/9/7 in the next section overlaps and sums to 46. The 16 are 7 edits inside
+  the session cwd, 7 `cargo` commands, and 2 `git` calls to GitHub.
+- **A containment rule auto-answers 14 of 44 (32%) with zero unsafe answers**,
+  and both halves of it exist today: the seven `cargo` asks are the person's own
+  `Bash(cargo:*)` rule defeated by the `CARGO_BUILD_JOBS=8` prefix `CLAUDE.md`
+  mandates — measured 0 requests without the prefix, 1 with it, 0 with a rule
+  that names the prefix — and the seven edits are what
+  `WARP_FORK_ACP_MODE=acceptEdits` answers, measured scoped to the cwd.
+- **The containment check itself is Claude Code's, already running.** An
+  allowed verb on a path outside the cwd asks; `cd` out of it asks. Measured,
+  then found in its docs. Warp building the same rule would duplicate the engine
+  it is talking to.
+- **The 28 host asks are the task.** The agent was syncing, building,
+  screenshotting and driving the Windows Warp through `powershell.exe`. Seventeen
+  are read-only by hand label; the signal separating them from the eleven that
+  write, type into the user's pane, or launch a process sits inside a quoted
+  PowerShell string the agent requoted twice. The one call that did harm was
+  among them and the person approved it. That is the falsifier below, met.
+
+**What this leaves the maintainer:** two configuration lines that remove a third
+of the asks with no Warp change, the posture question below unchanged, and one
+transport observation — the 17 read-only host calls are `warpctrl` read verbs
+Warp could vouch for from its own catalog if the WSL side could reach the
+Windows instance without `powershell.exe`. That is a build and not this ticket.
 
 ---
 
