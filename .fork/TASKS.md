@@ -12057,3 +12057,153 @@ today, and this one is structural rather than a forgotten call.
       answered — `terminal/view.rs:22356`.
 - [ ] **Hide `HandoffToCloud` under fork policy.** Nothing to point it at.
 - [ ] **Re-run the whole ticket before building.** Read-only as recorded.
+
+---
+
+## T20 — What run 2 left
+
+**Filed 2026-09-02** from `.fork/run-2026-09-02/friction.md`, after the
+maintainer terminated run 2 at 50 minutes. Ordered by what blocks what, not by
+size. **Nothing here was fixed during or after the run** — `GOAL.md` names
+fixing frictions mid-run as a failure mode, and two of these are consent surface.
+
+### T20.1 — The transcript resolves a Unix cwd on the Windows side ← **blocks run 3**
+
+`TranscriptLocation::resolve` (`app/src/fork.rs:545-547`) does
+`session_cwd.join(".warp").join("transcripts")`, called from
+`app/src/ai/transcript.rs:367` with the pane's cwd. On the Windows build with a
+WSL pane that cwd is `/home/effatha/git/warp`, so the join produces a
+POSIX-rooted path that Windows resolves to `C:\home\effatha\git\warp\…` — and
+**creating it succeeds**, so nothing errors and nothing logs.
+
+Measured: `C:\home\` did not exist before the run. Warp created the tree and
+wrote 43,014 bytes of the user's prompts into it, plus a second file under
+`C:\home\effatha\` from the earlier mis-rooted session. The repository's real
+`.warp/transcripts/` received nothing.
+
+**Two consequences, and the second is separable enough to be its own fix.**
+
+- **The feature is inert on this platform**, which is why this blocks run 3. The
+  transcript exists so an agent can grep back what compaction discarded; the
+  agent lives in `/home/effatha/git/warp` and cannot see a file on `C:`. So
+  unknown 4's recovery half was absent for the whole run — **run 2 could not
+  have answered unknown 4 given eight hours.** Same class as run 1 measuring on
+  the Linux build where T18's bug cannot occur: *a horizon measured where the
+  instrument does not work is not measured.*
+- **The owner-only mode is void.** `create_private_file` puts `0600` on the
+  `open` precisely so the window before a chmod cannot leak the first line
+  (2026-08-31). DrvFs carries no Unix mode; the file landed `-rwxrwxrwx`. **The
+  fix is correct and the filesystem is not listening**, and nothing in the fork
+  can notice, because the call succeeded. Worth asking whether a transcript
+  should be *refused* rather than written when its destination cannot hold the
+  mode — the fork's own reasoning elsewhere is that a silent weaker guarantee is
+  worse than a loud refusal.
+
+**The seam already exists and this should not invent one.** T16 built
+`session_filesystem()` — `Local` / `Host(id)` / `Unreachable`
+(`app/src/terminal/model/session/filesystem.rs`) — for exactly the question
+"where do this session's files actually live", and `Unreachable` is a deliberate
+third state for the case a caller must not treat as local. A transcript writer
+asking that question is the shape of the fix; `session.windows_path_converter()`
+is the other candidate and does the opposite direction today.
+
+**Not decided here**: whether to write through `\\wsl.localhost\<distro>\…`,
+write from inside the distribution, or decline and say so. The third is cheapest
+and most honest and is probably wrong for a feature whose whole value is being
+readable by the agent.
+
+**And a trap for whoever takes it**: this is *not* the bug it first looks like.
+The reading at the time was *"the agent isn't on the WSL side"*. The agent **is**,
+and T18 is working — `session/new` was accepted (it fails outright under T18's
+bug), all 228 event lines carry cwd `/home/effatha/git/warp`, and the agent's own
+commands treat Windows as the far side (*"sync Windows checkout from the WSL
+origin remote"*). Warp writes the transcript, from the other side of the
+boundary. Two processes, two filesystems, one path string. Filed as an
+agent-placement bug it would have produced a fix in the wrong file.
+
+### T20.2 — `options_offered` renders as a menu and means a receipt
+
+The approval surface lists *"Yes"*, *"Yes, and don't ask again for similar
+commands"*, *"No"*. **The middle one can never be selected**, and nothing on
+screen says so.
+
+The code is right and says so plainly. `acp_approval.rs`: *"it may offer the
+single-shot yes — and nothing else. The always-variants are not rendered at all,
+because a button that sets a session policy would be authorising something never
+shown."* `acp_permission::choose`
+(`crates/warp_cli/src/local_control/acp_permission.rs:480`) refuses any option
+where `changes_policy` is true. `registry.rs:207` documents `options_offered` as
+kept *"as data rather than as controls"*.
+
+So this is a **rendering** defect: an audit record of what the agent offered,
+drawn where a person reads a menu. It is this fork's most-tracked defect —
+a surface claiming more than the code does — moved out of a doc comment and into
+the consent surface, where the thing misrepresented is what a *yes* buys.
+
+**Posture question, and it is the maintainer's**: making the surface honest about
+what it already does is arguably not a posture change — nothing becomes
+permitted that was not. Recorded as a question rather than assumed, because the
+freeze exists precisely so this kind of "surely this one is fine" does not
+accumulate.
+
+### T20.3 — An agent can relaunch its own host into a duplicate window
+
+Approval `e0c15631-…:7` (*"Enable instrumentation and launch the Windows Warp
+build"*) was answered at `02:08:35.072Z`; a second `warp-oss` (PID 23088) was
+created at `02:08:35`. The agent ran `ggwarpdev launch` against a Warp already
+running.
+
+Warp restores session layout, so the duplicate came up with **identical panes and
+tabs** and took foreground — from the user's seat, indistinguishable from
+everything having crashed and restarted. Then it compounds: two instances make
+every `warpctrl` call without `--instance` answer `ambiguous_instance`, including
+the agent's own, and it was parked on a request to *"distinguish the two
+discovery records"* when the confusion was noticed — working back toward a cause
+it had created.
+
+Smallest fix is in `.fork/tools/warpdev.ps1:148`, which already runs
+`instance list` — but *after* launching, to confirm the thing came up. Run the
+same query *before*, and refuse (or prompt) when one is already alive. That
+is a script change and no app surface, which is the shape this board prefers.
+
+**Note for the ticket, not a fix**: the `Parent has crashed; continuing
+execution` line at the head of `warp-oss.log.old.0` is a red herring —
+`CLAUDE.md` already records that it marks the recovery sibling's log rather than
+a crash. It cost time here anyway.
+
+### T20.4 — Does the composer drop the agent's prose? ← **blocked on T20.1**
+
+The maintainer's verdict, recorded verbatim in the run log because no instrument
+caught it: tool labels (`Terminal`, `Read File`) and Warp's own permission blurbs
+render; thinking and most of the agent's prose do not.
+
+**Deliberately not diagnosed.** Whether Warp drops `agent_message_chunk`s or the
+agent emits little inside a tool loop is unestablished, and guessing is the
+failure this board keeps paying for. The test is to compare the panel against the
+transcript for a single turn — which run 2 could not do, **because of T20.1**.
+So this is not startable until that lands.
+
+### T20.5 — Finish `acp probe --cwd` (WIP in the tree)
+
+Left uncommitted by the panel agent when the run was stopped: 86 lines across
+`crates/warp_cli/src/local_control/{acp.rs,acp_tests.rs,mod.rs}`, all additions,
+59 of them tests. It is T19's open item — `--cwd` validates the path on the
+caller's machine, so the Windows binary cannot probe a Unix cwd — and passes a
+POSIX-rooted path through unverified instead of refusing it.
+
+**Not compiled and not run.** Treat as unverified: read it before trusting it,
+and calibrate the new tests by making them fail.
+
+### Not a ticket: approval density
+
+44 permission requests in 50 minutes across 5 prompts — one every 69 seconds,
+~420 for an eight-hour day — is what ended the run, and it is **not filed as work
+here**. It is permission posture, which `GOAL.md` freezes and which is the
+maintainer's to decide. What changed is the evidence: `CLAUDE.md` retracted I18's
+earlier measured case when the sixteen-ask storm evaporated under a boundary, and
+this is a different one — ordinary scoped work **inside** the session directory,
+where no boundary was crossed and a boundary would not have helped.
+
+The per-request text is a second, separable cost: four paragraphs before two
+controls, every sentence of it true and written for a reason, **sized for the
+first request of a session and paid on every one.**
