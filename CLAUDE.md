@@ -1559,6 +1559,11 @@ Five files in `.fork/`, in the order a cold start wants them.
   "done" means as a *run*. It outranks the board's ordering while it stands, and
   it is meant to be deleted when met or abandoned. Absent means there is no
   standing horizon and `TASKS.md` is the plan.
+- **`COMPOSER.md`** — the agent surface, filed 2026-09-03 as its own file
+  because it is not a defect and not small. Measured: during a turn with
+  approvals, Warp's own chrome outweighs the agent's words **9.4 : 1**, and the
+  agent's narration never reaches the screen. Read it before touching anything
+  the panel draws.
 - **`README.md`** — the operating manual: how to build and run on each platform,
   the full `warpctrl` surface, Warp Drive, WSL integration, and the gotchas that
   cost hours. Reach for it whenever you need to *use* something rather than

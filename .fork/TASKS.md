@@ -12465,6 +12465,14 @@ pass. 11/11 with the fix.
 The WIP's own tests are kept as written and are good — `cfg`-split so each is
 honestly green on the platform it runs on rather than describing the other one.
 
+### Moved out: the composer — see `.fork/COMPOSER.md`
+
+T20.4's answer turned out to be about the composer rather than about a bug, and
+the work it implies is too large for a board entry. Filed as its own file
+2026-09-03 with the 9.4:1 measurement, the architectural root (Warp's notes and
+the agent's prose are the same `AgentOutput` message, so the renderer cannot tell
+them apart), all three transports, and the constraints that must not break.
+
 ### Not a ticket: approval density
 
 44 permission requests in 50 minutes across 5 prompts — one every 69 seconds,
