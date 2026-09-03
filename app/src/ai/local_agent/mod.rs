@@ -196,6 +196,9 @@ pub(crate) struct Turn {
     task_id: String,
     task_needs_announcing: bool,
     working_directory: Option<String>,
+    /// Whether a transcript written under [`Self::working_directory`] would
+    /// actually land. See `SessionContext::cwd_is_openable_here`.
+    transcript_reaches_disk: bool,
     /// The WSL distribution the session lives in, when it is a WSL session.
     /// See [`spawn_for`] for what that changes.
     distro: Option<String>,
@@ -249,6 +252,9 @@ impl Turn {
             task_id,
             task_needs_announcing,
             working_directory: params.session_context.current_working_directory().clone(),
+            // See `SessionContext::cwd_is_openable_here`: the pointer must not
+            // name a file the write side is going to refuse to create.
+            transcript_reaches_disk: params.session_context.cwd_is_openable_here(),
             distro: match params.session_context.shell() {
                 Some(ShellLaunchData::WSL { distro }) => Some(distro.clone()),
                 _ => None,
@@ -334,6 +340,7 @@ async fn run(turn: Turn) -> anyhow::Result<impl Stream<Item = Event> + Send + us
         task_id,
         task_needs_announcing,
         working_directory,
+        transcript_reaches_disk,
         distro,
         allowed_tools,
     } = turn;
@@ -355,7 +362,18 @@ async fn run(turn: Turn) -> anyhow::Result<impl Stream<Item = Event> + Send + us
     // its own context, and prefixing a file pointer to that is a different
     // feature from the one being ported; `Ask::Compact` is left alone
     // deliberately rather than by omission.
-    let transcript = match (&ask, crate::fork::transcript_dir()) {
+    //
+    // **And only when the write side will actually land it** (review
+    // 2026-09-03): T20.1 made the write refuse a cwd this process cannot spell
+    // and left this unconditional, so the pointer named a file that would never
+    // exist. A `Fixed` directory is exempt -- the caller named an absolute path
+    // and owns its reachability.
+    let names_a_file = transcript_reaches_disk
+        || matches!(
+            crate::fork::transcript_dir(),
+            Some(crate::fork::TranscriptLocation::Fixed(_))
+        );
+    let transcript = match (&ask, crate::fork::transcript_dir().filter(|_| names_a_file)) {
         (Ask::Query(_), Some(location)) => working_directory.as_deref().map(|cwd| {
             // The session's spelling, not this process's -- see
             // `transcript::agent_facing_path`.

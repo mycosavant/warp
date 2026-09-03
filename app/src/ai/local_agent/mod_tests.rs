@@ -23,6 +23,7 @@ fn turn(prompt: &str, session: Option<String>) -> Turn {
         task_id: "task-1".to_owned(),
         task_needs_announcing: true,
         working_directory: None,
+        transcript_reaches_disk: true,
         distro: None,
         allowed_tools: None,
     }

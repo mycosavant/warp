@@ -219,6 +219,9 @@ pub(crate) struct Turn {
     task_id: String,
     task_needs_announcing: bool,
     working_directory: Option<String>,
+    /// Whether a transcript written under [`Self::working_directory`] would
+    /// actually land. See `SessionContext::cwd_is_openable_here`.
+    transcript_reaches_disk: bool,
     /// The WSL distribution this session's shell runs in, when it is one.
     ///
     /// Carried for the same reason `local_agent::Turn` carries it, and fixing
@@ -268,6 +271,9 @@ impl Turn {
             task_id,
             task_needs_announcing,
             working_directory: params.session_context.current_working_directory().clone(),
+            // See `SessionContext::cwd_is_openable_here`: the pointer must not
+            // name a file the write side is going to refuse to create.
+            transcript_reaches_disk: params.session_context.cwd_is_openable_here(),
             // Carried for the same reason `local_agent::Turn` carries it: a WSL
             // session's agent has to be started inside the distribution.
             distro: match params.session_context.shell() {
@@ -344,6 +350,7 @@ fn run(command: String, turn: Turn) -> impl Stream<Item = Event> + Send + use<> 
         turn.prompt,
         turn.session,
         turn.working_directory,
+        turn.transcript_reaches_disk,
         turn.distro,
         conversation_id,
         Arc::clone(&translator),
@@ -374,6 +381,7 @@ async fn drive(
     prompt: String,
     session: Option<String>,
     working_directory: Option<String>,
+    transcript_reaches_disk: bool,
     distro: Option<String>,
     conversation_id: String,
     translator: Arc<Mutex<Translator>>,
@@ -384,6 +392,7 @@ async fn drive(
         prompt,
         session,
         working_directory,
+        transcript_reaches_disk,
         distro,
         conversation_id,
         Arc::clone(&translator),
@@ -429,6 +438,7 @@ async fn exchange(
     prompt: String,
     session: Option<String>,
     working_directory: Option<String>,
+    transcript_reaches_disk: bool,
     distro: Option<String>,
     conversation_id: String,
     translator: Arc<Mutex<Translator>>,
@@ -729,7 +739,19 @@ async fn exchange(
             // -- every turn, because the compaction it exists for would eat a
             // pointer sent only once.
             let mut blocks = vec![ContentBlock::Text(TextContent::new(prompt))];
-            if let Some(location) = crate::fork::transcript_dir() {
+            // **Gated on the write side actually reaching disk (T20.1, review
+            // 2026-09-03).** The write refuses a cwd this process cannot spell;
+            // for a day the pointer and the `[Warp]` announcement did not, so
+            // both went on naming a file that would never exist and the only
+            // trace was a `log::warn!`. A `Fixed` directory is the caller's own
+            // absolute path and is not subject to this -- that variant's doc
+            // already puts reachability on whoever named it.
+            let names_a_file = transcript_reaches_disk
+                || matches!(
+                    crate::fork::transcript_dir(),
+                    Some(crate::fork::TranscriptLocation::Fixed(_))
+                );
+            if let Some(location) = crate::fork::transcript_dir().filter(|_| names_a_file) {
                 // Resolved against this session's directory, which is the
                 // pane's, and left in the *session's* spelling of it — this is
                 // the string the agent will grep with, and the agent lives in

@@ -162,7 +162,20 @@ try {
 } catch { }
 # Fail *open* on a query that did not answer: refusing to launch because the
 # check itself broke would take away the only way to start.
-$live = @($existing.instances)
+#
+# **Written as `@($existing.instances)` first, which is fail-*closed*.** In
+# PowerShell `@($null).Count` is **1**, so a query that returned nothing at all
+# -- exe missing, `--warpctrl` absent from the build, a non-zero exit swallowed
+# by the `try` -- produced one phantom instance and refused the launch, printing
+# a blank `pid` line. Exactly the first-build case where the check is least
+# entitled to an opinion. Found by review 2026-09-03 and confirmed by running
+# `@($null.instances).Count` -> 1 against `@(@{instances=@()}.instances).Count`
+# -> 0.
+$live = if ($null -ne $existing -and $null -ne $existing.instances) {
+    @($existing.instances)
+} else {
+    @()
+}
 
 if ($live.Count -gt 0 -and -not $Force) {
     Write-Host "warpdev: refusing to launch - Warp is already running." -ForegroundColor Red
@@ -173,7 +186,12 @@ if ($live.Count -gt 0 -and -not $Force) {
     Write-Host "  exactly like a crash-and-restart; and two instances make every warpctrl call" -ForegroundColor DarkGray
     Write-Host "  without --instance answer ambiguous_instance." -ForegroundColor DarkGray
     Write-Host "  Stop it with:  $Exe --warpctrl window close" -ForegroundColor DarkGray
-    Write-Host "  Or pass -Force if a second instance is really what you want." -ForegroundColor DarkGray
+    # **The bypass is deliberately not advertised here.** The actor in the
+    # incident this check exists for was an *agent*, and an agent that is
+    # refused reads the escape out of the error text and re-runs with it -- at
+    # which point the refusal means nothing. `-Force` stays in the param block
+    # for a person who reads the script; it is not offered to whoever tripped
+    # the guard.
     exit 2
 }
 if ($live.Count -gt 0) {

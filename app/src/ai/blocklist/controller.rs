@@ -101,6 +101,20 @@ pub struct SessionContext {
     filesystem: SessionFilesystem,
     shell: Option<ShellLaunchData>,
     current_working_directory: Option<String>,
+    /// Whether this process could open a file under
+    /// [`Self::current_working_directory`].
+    ///
+    /// **Held because the transcript's two halves must agree, and for a day they
+    /// did not.** T20.1 made the *write* refuse a cwd this process cannot spell
+    /// (`session::filesystem::native_path`) and left the *pointer* handed to the
+    /// agent, and the `[Warp]` announcement shown to the person, unconditional —
+    /// so both went on naming a file that was never going to exist, with a
+    /// `log::warn!` as the only trace. Announcing an effect the process never
+    /// watched is the defect class this fork tracks most.
+    ///
+    /// Computed here because this is the one place with the `Session` in hand;
+    /// `transcript::observe` asks the same function again on the write side.
+    cwd_is_openable_here: bool,
 }
 
 impl SessionContext {
@@ -114,7 +128,24 @@ impl SessionContext {
             filesystem,
             shell: session.shell_launch_data(app),
             current_working_directory: session.current_working_directory().cloned(),
+            cwd_is_openable_here: match (session.session(app), session.current_working_directory())
+            {
+                (Some(s), Some(cwd)) => {
+                    crate::terminal::model::session::filesystem::native_path(&s, cwd).is_some()
+                }
+                // No session or no cwd is not "unopenable": there is simply
+                // nothing to decide yet, and the transcript's own guards handle
+                // both. Answering `false` here would suppress the pointer for a
+                // pane that is merely still bootstrapping.
+                _ => true,
+            },
         }
+    }
+
+    /// Whether a file under [`Self::current_working_directory`] can be opened by
+    /// this process. See the field for why this exists.
+    pub fn cwd_is_openable_here(&self) -> bool {
+        self.cwd_is_openable_here
     }
 
     /// Where this session's files live. Prefer this over `session_type()` for
@@ -166,6 +197,9 @@ impl SessionContext {
             filesystem: SessionFilesystem::Local,
             shell: None,
             current_working_directory: None,
+            // Test contexts carry no `Session`, so there is nothing to ask.
+            // `true` matches `from_session`'s answer for the same absence.
+            cwd_is_openable_here: true,
         }
     }
 
@@ -184,6 +218,9 @@ impl SessionContext {
             filesystem,
             shell: None,
             current_working_directory: None,
+            // Test contexts carry no `Session`, so there is nothing to ask.
+            // `true` matches `from_session`'s answer for the same absence.
+            cwd_is_openable_here: true,
         }
     }
 
@@ -197,6 +234,9 @@ impl SessionContext {
             filesystem,
             shell: None,
             current_working_directory: None,
+            // Test contexts carry no `Session`, so there is nothing to ask.
+            // `true` matches `from_session`'s answer for the same absence.
+            cwd_is_openable_here: true,
         }
     }
 }

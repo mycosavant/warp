@@ -160,33 +160,93 @@ fn a_wsl_sessions_unix_cwd_comes_back_in_the_spelling_this_process_can_open() {
     );
 }
 
-/// **The half that runs everywhere, and it is the one that pins the defect.**
-/// The bug was never "the conversion produced the wrong string" — it was that
-/// *no conversion happened* and the session's own spelling went straight into a
-/// `join`. So the invariant worth holding on every platform is that a WSL
-/// session never gets its POSIX-rooted path handed back: on Windows it becomes
-/// the UNC spelling, and on a Unix host it is `None`, because `PathBuf` there
-/// cannot hold a Windows-encoded path and a WSL session cannot exist anyway.
+/// **The rule, asserted on every platform because it is now a pure function.**
 ///
-/// Calibrated by making it fail: dropping the conversion and returning the
-/// input verbatim reddens this and nothing else in the file.
+/// The row that matters is `!windows` + a distribution: T20.1's first cut made
+/// that `Refuse`, on a sentence it invented — *"a WSL session cannot exist
+/// anyway"* on a Unix host. It can, and it is the normal case here:
+/// `bash_body.sh:1423` sends `wsl_name` from `$WSL_DISTRO_NAME` unconditionally,
+/// so a Linux Warp inside WSL reports `is_wsl()` for every pane it owns. The
+/// transcript therefore wrote **nothing at all** on the platform this fork is
+/// developed on, while the panel went on announcing a file and the agent went on
+/// being handed a pointer to it.
+///
+/// Found by adversarial review 2026-09-03, and it is the plainest instance of
+/// this repo's own rule that a claim written into a test's doc is not a
+/// measurement.
 #[test]
-fn a_wsl_session_never_gets_its_own_spelling_back() {
+fn the_spelling_rule_covers_every_host_and_session_pairing() {
+    use SessionType::{Local, WarpifiedRemote};
+
+    // A Linux Warp inside a distribution, looking at its own panes.
+    assert_eq!(
+        spelling(false, Local, Some("Ubuntu"), Some("Ubuntu")),
+        Spelling::Verbatim,
+        "a pane in this process's own distribution is already native",
+    );
+    // Distribution names are case-insensitive, as `canonicalize_wsl_unc_path`
+    // already folds them.
+    assert_eq!(
+        spelling(false, Local, Some("Ubuntu"), Some("ubuntu")),
+        Spelling::Verbatim,
+    );
+    // Another distribution, from outside Windows: there is no `\\wsl$` here.
+    assert_eq!(
+        spelling(false, Local, Some("Debian"), Some("Ubuntu")),
+        Spelling::Refuse,
+    );
+    // A plain Linux or macOS session.
+    assert_eq!(spelling(false, Local, None, None), Spelling::Verbatim);
+    // Windows always asks the session to convert -- the UNC spelling for a
+    // distribution, MSYS2's root for MSYS2, and a refusal for a Unix-encoded
+    // path no `PathBuf` here can hold.
+    assert_eq!(
+        spelling(true, Local, Some("Ubuntu"), None),
+        Spelling::Convert
+    );
+    assert_eq!(spelling(true, Local, None, None), Spelling::Convert);
+    // Another machine, whatever the host.
+    for host_is_windows in [true, false] {
+        assert_eq!(
+            spelling(
+                host_is_windows,
+                WarpifiedRemote { host_id: None },
+                None,
+                None,
+            ),
+            Spelling::Refuse,
+        );
+    }
+}
+
+/// **The end-to-end shape of the regression, on the platform that had it.**
+///
+/// Kept beside the rule because the rule alone would not have caught it: the
+/// first cut's rule was *also* a pure function and was *also* tested, and the
+/// test asserted the wrong answer with a confident doc comment. This one asserts
+/// the thing a person actually wanted — a pane in this process's own
+/// distribution produces a path, not a refusal.
+#[cfg(not(windows))]
+#[test]
+fn a_pane_in_this_processs_own_distribution_still_gets_a_transcript_path() {
+    let Some(own) = std::env::var("WSL_DISTRO_NAME")
+        .ok()
+        .filter(|v| !v.is_empty())
+    else {
+        // Not inside WSL, so there is no same-distribution case to exercise and
+        // the plain-Linux row above already covers this machine.
+        return;
+    };
     let session = session_for(
-        Some(crate::terminal::ShellLaunchData::WSL {
-            distro: "Ubuntu".to_owned(),
-        }),
+        Some(crate::terminal::ShellLaunchData::WSL { distro: own }),
         None,
     );
 
-    let native = native_path(&session, "/home/effatha/git/warp");
-    assert_ne!(
-        native.as_deref(),
+    assert_eq!(
+        native_path(&session, "/home/effatha/git/warp").as_deref(),
         Some(std::path::Path::new("/home/effatha/git/warp")),
-        "a WSL cwd handed back unchanged is the T20.1 bug",
+        "the transcript wrote nothing on this platform for as long as this was None",
     );
-    #[cfg(not(windows))]
-    assert_eq!(native, None);
 }
 
 /// **`None` is a stop, not a fallback.** A warpified-remote session's files are

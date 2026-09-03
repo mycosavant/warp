@@ -616,8 +616,16 @@ fn a_shared_refusal_names_no_surface_of_its_own() {
 /// a measurement is that they send different lists in different orders.
 #[test]
 fn an_option_is_shown_as_selectable_exactly_when_choose_would_select_it() {
-    for options in [as_claude_sent_it(), as_opencode_sent_it()] {
-        let request = request(options.clone());
+    for request in [
+        request(as_claude_sent_it()),
+        request(as_opencode_sent_it()),
+        // **The one the first version of this test left out**, and the omission
+        // is why it certified a predicate that was wrong on the day it was
+        // written: both fixtures above are *confined*, so neither can exercise
+        // the gate that applies to `Allow` alone.
+        as_claude_asked_to_leave_plan_mode(),
+    ] {
+        let options = request.options.clone();
         let chosen: Vec<String> = [Decision::Allow, Decision::Deny]
             .into_iter()
             .filter_map(|decision| match choose(&request, decision) {
@@ -666,20 +674,34 @@ fn the_single_shot_answers_are_shown_as_selectable() {
     }
 }
 
-/// **A request whose effect is not confined to this call has no real options at
-/// all**, which is `choose`'s first gate and would be easy to miss here: the
-/// options themselves look ordinary, and it is the *request* that disqualifies
-/// them.
+/// **A request whose effect escapes the call still has one real option, and it
+/// is the *no*.** This test asserted the opposite until an adversarial review
+/// 2026-09-03, and it passed — beside
+/// `a_deny_still_answers_a_question_about_which_policy_applies`, which asserts
+/// `choose` selects `plan` on this very request. Two green tests contradicting
+/// each other, because `is_selectable` restated `choose`'s rule instead of
+/// asking it, and got the asymmetry backwards: the confinement gate applies to
+/// `Allow` only, since declining a policy change leaves the session with the
+/// policy it already had.
+///
+/// What that shipped was the panel drawing *"No, keep planning (Warp never
+/// selects this)"* above a **No** button that selects exactly that.
 #[test]
-fn no_option_is_selectable_when_the_effect_escapes_the_call() {
+fn on_an_unconfined_request_only_the_no_is_selectable() {
     let request = as_claude_asked_to_leave_plan_mode();
-    for option in request.options.clone() {
-        assert!(
-            !is_selectable(&request, &option),
-            "{:?} should not be selectable on a switch_mode request",
-            option.name,
-        );
-    }
+
+    let selectable: Vec<&str> = request
+        .options
+        .iter()
+        .filter(|option| is_selectable(&request, option))
+        .map(|option| option.name.as_str())
+        .collect();
+
+    assert_eq!(
+        selectable,
+        ["No, keep planning"],
+        "a no is always expressible; every yes here would set a session policy",
+    );
 }
 
 /// **The separator must not be something an option name can contain.**

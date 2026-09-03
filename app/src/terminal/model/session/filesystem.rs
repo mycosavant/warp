@@ -123,6 +123,70 @@ pub fn session_filesystem(
     classify(session.session_type(), session.is_wsl(), None)
 }
 
+/// Which spelling of a session's path this process can open.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Spelling {
+    /// Already this process's own — open it as given.
+    Verbatim,
+    /// Behind an emulation layer this process can reach; ask the session to
+    /// convert it (`\\wsl$\<distro>\…` from Windows, or the MSYS2 root).
+    Convert,
+    /// No spelling of this path reaches this process.
+    Refuse,
+}
+
+/// The rule, with its four inputs named, and split out for the same reason
+/// [`classify`] is: it is the part with a decision in it, and everything around
+/// it is a lookup.
+///
+/// **The `!windows` row is here because the first cut got it wrong and shipped.**
+/// T20.1 assumed a WSL session could only exist on a Windows host and made every
+/// non-Windows answer for one `Refuse`. It is exactly backwards on the platform
+/// this fork is developed on: `bash_body.sh:1423` sends `wsl_name` from
+/// `$WSL_DISTRO_NAME` unconditionally, so a **Linux** Warp running inside WSL
+/// reports `is_wsl()` for every pane it owns — and those panes' files are simply
+/// its own. Found by review 2026-09-03; the transcript wrote nothing at all on
+/// that build for as long as the mistake stood.
+pub(crate) fn spelling(
+    host_is_windows: bool,
+    session_type: SessionType,
+    session_distro: Option<&str>,
+    this_process_distro: Option<&str>,
+) -> Spelling {
+    // Another machine. No spelling reaches it, and treating it as local reads
+    // *this* filesystem for another host's paths -- the hazard `Unreachable`
+    // exists for above.
+    if matches!(session_type, SessionType::WarpifiedRemote { .. }) {
+        return Spelling::Refuse;
+    }
+    match (host_is_windows, session_distro) {
+        // Windows looking into a distribution: the UNC spelling. Windows with no
+        // distribution: MSYS2 or plain, which the session's own converter
+        // handles -- including refusing a Unix-encoded path that no `PathBuf`
+        // here can hold.
+        (true, _) => Spelling::Convert,
+        // Same distribution: this process *is* in there, so the path is already
+        // its own. Compared case-insensitively because a distribution name is
+        // (`canonicalize_wsl_unc_path` folds it for the same reason).
+        (false, Some(distro))
+            if this_process_distro.is_some_and(|own| own.eq_ignore_ascii_case(distro)) =>
+        {
+            Spelling::Verbatim
+        }
+        // A different distribution, from outside Windows: there is no `\\wsl$`
+        // to reach it through.
+        (false, Some(_)) => Spelling::Refuse,
+        (false, None) => Spelling::Verbatim,
+    }
+}
+
+/// The distribution this process is running inside, if any.
+fn this_process_distro() -> Option<String> {
+    std::env::var("WSL_DISTRO_NAME")
+        .ok()
+        .filter(|v| !v.is_empty())
+}
+
 /// A path this session reported, spelled so **this process** can open it with
 /// `std::fs` — or `None` when this process cannot open it at all.
 ///
@@ -137,14 +201,7 @@ pub fn session_filesystem(
 /// had run `remote wsl connect`, which is exactly the "order two unrelated
 /// commands were typed in" bug T16 phase 3 removed elsewhere.
 ///
-/// So the question here is narrower and has a different answer:
-///
-/// | session | answer |
-/// |---|---|
-/// | local | the path, verbatim |
-/// | WSL, routed or not | the `\\wsl$\<distro>\…` spelling of it |
-/// | MSYS2 | the Windows-native spelling of it |
-/// | warpified-remote | `None` — another machine, and no spelling reaches it |
+/// The rule is [`spelling`]; read its table there rather than restating it here.
 ///
 /// **`None` is a real stop, never "fall back to the path as given".** T20.1
 /// measured what falling back costs: `WARP_FORK_TRANSCRIPT` joined a WSL pane's
@@ -154,23 +211,22 @@ pub fn session_filesystem(
 /// either side of the boundary was ever going to read. Nothing errored and
 /// nothing logged, because there was no error: a POSIX-rooted path is a
 /// perfectly good relative-to-the-current-drive path on Windows.
-///
-/// `None` is also what a Unix-encoded cwd gets on Windows outside WSL and
-/// MSYS2, because [`std::path::PathBuf`] cannot hold it — upstream pins that
-/// refusal in `can_resolve_cwd_to_native_path_rejects_unix_encoded_path_on_windows`.
-/// A caller must treat that as "write nothing and say so", which is the trade
-/// this exists to make: before T20.1 it wrote, and said nothing.
 pub fn native_path(session: &Session, path: &str) -> Option<std::path::PathBuf> {
     // The one `session_type()` read here, and it is about identity rather than
-    // routing: `WarpifiedRemote` means the files are on a machine this process
-    // has no filesystem access to at all. A WSL session says `Local` and is
-    // emphatically not local, which is what the conversion below is for -- see
-    // this module's header.
-    if matches!(session.session_type(), SessionType::WarpifiedRemote { .. }) {
-        return None;
+    // routing -- see `spelling`.
+    match spelling(
+        cfg!(windows),
+        session.session_type(),
+        session.wsl_distro_name(),
+        this_process_distro().as_deref(),
+    ) {
+        Spelling::Verbatim => Some(std::path::PathBuf::from(path)),
+        Spelling::Convert => {
+            let typed = session.convert_directory_to_typed_path_buf(path.to_owned());
+            session.maybe_convert_to_native_path(&typed.to_path()).ok()
+        }
+        Spelling::Refuse => None,
     }
-    let typed = session.convert_directory_to_typed_path_buf(path.to_owned());
-    session.maybe_convert_to_native_path(&typed.to_path()).ok()
 }
 
 #[cfg(test)]

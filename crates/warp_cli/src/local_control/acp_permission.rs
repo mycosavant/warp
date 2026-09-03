@@ -514,13 +514,32 @@ pub fn choose(request: &RequestPermissionRequest, decision: Decision) -> Choice 
 /// surface claiming more than the code does, moved out of a doc comment and into
 /// the place where the thing misrepresented is what a *yes* buys.
 ///
-/// **Written in terms of the same two predicates [`choose`] uses, not beside
-/// them.** A second rule that agreed today is exactly the shape T14.6 removed
-/// when the console's listing and its answer path disagreed about
-/// approvability. `an_option_is_shown_as_selectable_exactly_when_choose_would_
-/// select_it` pins the two together over every kind.
+/// **Asks [`choose`] rather than restating it, and the first cut restated it.**
+/// That cut was `effect_is_confined_to_this_call(request) && !changes_policy(option)`
+/// — the same two predicates, in the same order, and *still wrong*, because
+/// `choose` applies the confinement gate to `Allow` **only**: declining a policy
+/// change leaves the session with the policy it already had, so a `reject_once`
+/// on an unconfined request is selectable and the restatement said it was not.
+///
+/// Measured by an adversarial review 2026-09-03, and the demonstration is that
+/// two tests passed at once: `a_deny_still_answers_a_question_about_which_policy_applies`
+/// asserts `choose` selects `plan` on the plan-mode request, while
+/// `no_option_is_selectable_when_the_effect_escapes_the_call` asserted nothing
+/// there was selectable. The panel therefore drew *"No, keep planning (Warp
+/// never selects this)"* directly above a **No** button that selects exactly
+/// that — the T14.6 shape this whole ticket set out to remove, reintroduced by
+/// the fix for it.
+///
+/// The first cut's own doc claimed it "cannot drift apart" from `choose`. It had
+/// not drifted; it was born disagreeing, which no amount of care in restating a
+/// rule prevents and which asking the rule does.
 pub fn is_selectable(request: &RequestPermissionRequest, option: &PermissionOption) -> bool {
-    effect_is_confined_to_this_call(request) && !changes_policy(option)
+    [Decision::Allow, Decision::Deny]
+        .into_iter()
+        .any(|decision| match choose(request, decision) {
+            Choice::Select(id) => id == option.option_id,
+            Choice::Cancel { .. } => false,
+        })
 }
 
 /// Whether selecting this option would do more than answer the question.

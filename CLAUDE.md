@@ -559,20 +559,39 @@ control plane this fork exists to open is simply absent from the binary.
 Windows), because ordinary shutdown cleans up the crash-recovery sibling and a
 killed one leaves it holding the ports.
 
-**But the "stale discovery record" half of that sentence was wrong, and it stood
-here for months.** Measured 2026-09-03 while building T20.3's pre-launch check:
-`taskkill /F /IM warp-oss.exe` left `instance list` **empty**, not holding a
-record. `crates/local_control/src/discovery.rs` prunes dead-PID records on every
-scan — `is_pid_alive`, two call sites, and the module's own docs say so in as
-many words. The check was about to ship a pid filter guarding a condition that
-cannot arise.
+**The "stale discovery record" half of that sentence is wrong — and the first
+attempt to correct it was wrong in a more instructive way, because it measured a
+different quantity, in the commit that was correcting someone else for exactly
+that.** Both halves measured 2026-09-03:
 
-**What actually accumulates instances is the opposite case**, and this file
-already records it two paragraphs down without connecting the two: a CLI agent in
-a pane blocks `window close`, the close is *refused*, and the instance stays
-**alive**. Three piled up in one session that way. So `ambiguous_instance` comes
-from live Warps nobody could stop, never from records nobody cleaned — which
-matters, because the two have opposite remedies.
+| what was killed | `instance list` afterwards |
+|---|---|
+| `taskkill /F /IM warp-oss.exe` — **every** process of that name, sibling included | **empty** |
+| `taskkill /F /PID <the registered pid>` — *the* process, which is what the sentence describes | **one record**, a different pid |
+
+The first form is what T20.3's pre-launch check was validated against, and on its
+own it says records are pruned. That much is true: `discovery.rs` prunes dead-PID
+records on every scan (`is_pid_alive`, two call sites), so the pid filter that
+check nearly shipped really was dead code.
+
+**The second form is the case the sentence was about, and what survives is not a
+stale record — it is a live Warp.** The crash-recovery sibling is parked in
+`WaitForSingleObject` on the parent handle; the parent dies, it continues into
+normal startup, becomes a full instance, **publishes its own discovery record**,
+and spawns a recovery sibling of its own. Measured: one pid killed, two processes
+afterwards, one fresh record. So the original sentence's *observation* was right
+and its *mechanism* was wrong — a record remains, and it is neither stale nor
+prunable, because the process it names is genuinely running.
+
+That is a better argument for `window close` than either version, and it is why
+T20.3's check refuses on a **live** pid rather than filtering for a dead one.
+
+**What accumulates instances is the same fact from the other side**, and this
+file already records it two paragraphs down without connecting them: a CLI agent
+in a pane blocks `window close`, the close is *refused*, and the instance stays
+alive. Three piled up in one session that way. So `ambiguous_instance` always
+comes from live Warps nobody could stop — whether they refused to close or were
+resurrected by killing their parent — and never from records nobody cleaned.
 
 **…and `ok: true` from `window close` never meant the window closed.** Read
 2026-08-30: the handler sends the close with `TerminationMode::Cancellable` —
