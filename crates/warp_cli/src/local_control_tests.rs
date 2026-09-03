@@ -324,7 +324,11 @@ fn renders_an_approvable_request_with_the_command_that_answers_it() {
                 "tool_name": "execute",
                 "tool_input": "{\"command\":\"git status --short\"}",
                 "acts_on": [],
-                "options_offered": ["Allow once", "Always allow", "Reject"],
+                "options_offered": [
+                    {"name": "Allow once", "warp_can_select": true},
+                    {"name": "Always allow", "warp_can_select": false},
+                    {"name": "Reject", "warp_can_select": true}
+                ],
                 "digest": "abc123",
                 "can_approve": true,
                 "approve_selects": "once"
@@ -339,6 +343,22 @@ fn renders_an_approvable_request_with_the_command_that_answers_it() {
     assert!(
         rendered.contains("warpctrl agent deny 'turn-1:7' --digest abc123"),
         "a no is always offered, got:\n{rendered}"
+    );
+    // **T20.2: the list is a record, and it has to read like one.** This
+    // rendered "Allow once, Always allow, Reject" beside a single approve
+    // command, so a person read a menu whose middle item had simply lost its
+    // control. The middle item can never be selected -- `acp_permission::choose`
+    // refuses any option that would set a session policy -- and nothing said so.
+    assert!(
+        rendered.contains("Always allow (Warp never selects this)"),
+        "an option Warp will never send back has to say so, got:\n{rendered}"
+    );
+    // The other two are untouched, which is the calibration: a renderer that
+    // annotated everything would be as wrong as one that annotated nothing, and
+    // would pass the assertion above.
+    assert!(
+        rendered.contains("Allow once, Always allow (Warp never selects this), Reject\n"),
+        "only the unselectable option is annotated, got:\n{rendered}"
     );
     assert!(
         rendered.contains("not stated by the agent"),
@@ -363,7 +383,11 @@ fn renders_an_unapprovable_request_with_its_reason_and_only_a_no() {
                 "tool_name": "other",
                 "tool_input": "{\"command\":\"cat /etc/hostname\"}",
                 "acts_on": ["/etc"],
-                "options_offered": ["Allow once", "Always allow", "Reject"],
+                "options_offered": [
+                    {"name": "Allow once", "warp_can_select": true},
+                    {"name": "Always allow", "warp_can_select": false},
+                    {"name": "Reject", "warp_can_select": true}
+                ],
                 "digest": "def456",
                 "can_approve": false,
                 "approve_refused_because": "the call's kind is `other`, so Warp cannot tell."

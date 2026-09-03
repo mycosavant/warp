@@ -246,12 +246,33 @@ impl View for AcpApprovalView {
             },
             app,
         ));
+        // **Annotated rather than listed bare, which is what T20.2 was.** This
+        // drew *Yes*, *Yes and don't ask again for similar commands*, *No* and
+        // then two buttons. The middle one can never be selected -- the module
+        // header above says so, `acp_permission::choose` enforces it, and
+        // `registry` documents the list as data rather than controls -- but
+        // nothing on *screen* said it, so a person read a menu with a missing
+        // button. That is this fork's most-tracked defect, a surface claiming
+        // more than the code does, standing in the one place where the thing
+        // misrepresented is what a yes buys.
+        //
+        // The agent's wording is left exactly as it wrote it and the note is
+        // marked as Warp's, because the point of keeping the offer is that it is
+        // a record of what was asked.
         if !parked.options_offered.is_empty() {
-            column.add_child(Self::line(
-                "offered",
-                &parked.options_offered.join(", "),
-                app,
-            ));
+            let offered = parked
+                .options_offered
+                .iter()
+                .map(|option| {
+                    if option.warp_can_select {
+                        option.name.clone()
+                    } else {
+                        format!("{} (Warp never selects this)", option.name)
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join(", ");
+            column.add_child(Self::line("offered", &offered, app));
         }
 
         let mut buttons = Flex::row().with_cross_axis_alignment(CrossAxisAlignment::Center);

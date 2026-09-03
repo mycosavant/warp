@@ -267,11 +267,26 @@ fn render_approvals(data: &serde_json::Value) -> String {
                 approval.acts_on.join(", ")
             }
         ));
+        // **Annotated, because a bare list of the agent's options reads as a
+        // menu (T20.2).** Warp will never send back an option that would set a
+        // session policy, so listing one beside the two it *will* send makes
+        // the surface claim more than the code does -- and what it misclaims is
+        // what a yes buys. The record stays the agent's own wording; the note
+        // is Warp's, and says whose it is.
         if !approval.options_offered.is_empty() {
-            out.push_str(&format!(
-                "  offered   {}\n",
-                approval.options_offered.join(", ")
-            ));
+            let offered = approval
+                .options_offered
+                .iter()
+                .map(|option| {
+                    if option.warp_can_select {
+                        option.name.clone()
+                    } else {
+                        format!("{} (Warp never selects this)", option.name)
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join(", ");
+            out.push_str(&format!("  offered   {offered}\n"));
         }
         // **Gated on `can_approve`, not on whether a reason came with it** —
         // T14.6's finding, which cost a phone a *Yes* button on rows that could

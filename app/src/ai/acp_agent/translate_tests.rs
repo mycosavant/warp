@@ -652,7 +652,7 @@ fn parked(input: Option<&str>, approve_selects: Option<&str>) -> registry::Parke
         session_id: Some("ses_abc".to_owned()),
         conversation_id: "conv-1".to_owned(),
         acts_on: Vec::new(),
-        options_offered: vec!["Allow once".to_owned()],
+        options_offered: vec![offered("Allow once")],
         approve_selects: approve_selects.map(str::to_owned),
         approve_refused_because: None,
     }
@@ -818,3 +818,13 @@ fn every_way_a_permission_question_can_end_is_a_value_on_the_line() {
 // The guarantee is the `-> ()` return type, which the compiler enforces and no
 // test can strengthen. Recorded as prose because a green test over an empty
 // failure set is counted as coverage and is not.
+
+/// An offered option in the agent's own wording, marked as one Warp would send
+/// back. The interesting case is the option that is *not* selectable, so that
+/// one is written out in full where it is used.
+fn offered(name: &str) -> ::local_control::protocol::OfferedOption {
+    ::local_control::protocol::OfferedOption {
+        name: name.to_owned(),
+        warp_can_select: true,
+    }
+}

@@ -374,7 +374,7 @@ fn an_answer_is_bound_to_the_options_that_were_offered() {
         can_approve: false,
         approve_refused_because: None,
         approve_selects: None,
-        options_offered: vec!["Allow once".to_owned(), "Reject".to_owned()],
+        options_offered: vec![offered("Allow once"), offered("Reject")],
     };
 
     let same = PendingApproval { ..base.clone() };
@@ -386,11 +386,11 @@ fn an_answer_is_bound_to_the_options_that_were_offered() {
 
     for changed in [
         vec![
-            "Allow once".to_owned(),
-            "Always allow".to_owned(),
-            "Reject".to_owned(),
+            offered("Allow once"),
+            offered("Always allow"),
+            offered("Reject"),
         ],
-        vec!["Reject".to_owned(), "Allow once".to_owned()],
+        vec![offered("Reject"), offered("Allow once")],
         Vec::new(),
     ] {
         let other = PendingApproval {
@@ -403,6 +403,40 @@ fn an_answer_is_bound_to_the_options_that_were_offered() {
             "a different option list is a different question: {changed:?}"
         );
     }
+}
+
+/// **Warp's own policy is not part of the question, and the digest must not move
+/// when it changes (T20.2).**
+///
+/// `warp_can_select` arrived beside each option's name when the panel started
+/// saying which options are real. It belongs with `can_approve` and
+/// `approve_refused_because`, which the digest deliberately excludes: folding
+/// them in would move a digest without the *agent* having asked anything
+/// different, and a person's parked yes would stop fitting for a reason they
+/// were never shown.
+///
+/// The stronger half is that this also pins the bytes: hashing the name alone is
+/// what the old `Vec<String>` produced, so a digest taken before that field
+/// existed still fits the request it was taken from.
+#[test]
+fn warps_own_policy_on_an_option_is_not_part_of_the_digest() {
+    let base = approval_offering(vec![offered("Allow once"), offered("Reject")]);
+    let reclassified = approval_offering(vec![
+        ::local_control::protocol::OfferedOption {
+            name: "Allow once".to_owned(),
+            warp_can_select: false,
+        },
+        ::local_control::protocol::OfferedOption {
+            name: "Reject".to_owned(),
+            warp_can_select: false,
+        },
+    ]);
+
+    assert_eq!(
+        digest_of(&base),
+        digest_of(&reclassified),
+        "the agent asked the same question; only Warp's answer to it changed",
+    );
 }
 
 /// Where a call acts is part of the question too, so an answer is bound to it.
@@ -461,7 +495,7 @@ fn an_answer_is_bound_to_where_the_call_says_it_acts() {
     // is the arrangement that would find it if they did not.
     let options_carry_it = PendingApproval {
         acts_on: Vec::new(),
-        options_offered: vec!["/tmp/project".to_owned()],
+        options_offered: vec![offered("/tmp/project")],
         ..base.clone()
     };
     assert_ne!(
@@ -499,7 +533,7 @@ fn an_answer_is_bound_to_the_option_a_yes_would_select() {
         can_approve: true,
         approve_refused_because: None,
         approve_selects: Some("once".to_owned()),
-        options_offered: vec!["Allow once".to_owned(), "Reject".to_owned()],
+        options_offered: vec![offered("Allow once"), offered("Reject")],
     };
 
     for changed in [Some("always".to_owned()), Some("reject".to_owned()), None] {
@@ -526,4 +560,39 @@ fn an_answer_is_bound_to_the_option_a_yes_would_select() {
         digest_of(&policy_only),
         "whether Warp would accept a yes is not part of what the agent asked"
     );
+}
+
+/// An offered option in the agent's own wording, marked as one Warp would send
+/// back. The interesting case is the option that is *not* selectable, so that
+/// one is written out in full where it is used.
+fn offered(name: &str) -> ::local_control::protocol::OfferedOption {
+    ::local_control::protocol::OfferedOption {
+        name: name.to_owned(),
+        warp_can_select: true,
+    }
+}
+
+/// A `PendingApproval` that differs only in the options it offered.
+fn approval_offering(
+    options_offered: Vec<::local_control::protocol::OfferedOption>,
+) -> PendingApproval {
+    PendingApproval {
+        approval_id: "req-1".to_owned(),
+        agent: "opencode".to_owned(),
+        source: "acp".to_owned(),
+        kind: "permission".to_owned(),
+        summary: Some("echo hello".to_owned()),
+        tool_name: Some("execute".to_owned()),
+        tool_input: None,
+        cwd: None,
+        project: None,
+        session_id: None,
+        tab_id: None,
+        acts_on: vec!["/tmp/project".to_owned()],
+        digest: String::new(),
+        can_approve: false,
+        approve_refused_because: None,
+        approve_selects: None,
+        options_offered,
+    }
 }

@@ -607,12 +607,24 @@ fn digest_of(approval: &PendingApproval) -> String {
     // as deciding whether anyone was asked at all. Counted first, then each
     // entry length-prefixed, so no arrangement of one list can collide with
     // another.
-    for list in [&approval.options_offered, &approval.acts_on] {
-        hasher.update((list.len() as u64).to_le_bytes());
-        for entry in list {
-            hasher.update((entry.len() as u64).to_le_bytes());
-            hasher.update(entry.as_bytes());
-        }
+    //
+    // **The options are hashed by *name only*, and that is where the line
+    // between the two kinds of field is drawn (T20.2).** `warp_can_select` sits
+    // beside each name now, and it is Warp's policy in exactly the sense
+    // `can_approve` and `approve_refused_because` are -- so folding it in would
+    // move a digest without the agent's question having changed, which is the
+    // rule stated above. Hashing the name alone also keeps these bytes
+    // identical to what this produced when the list was `Vec<String>`, so a
+    // digest taken before that change still fits the request it was taken from.
+    hasher.update((approval.options_offered.len() as u64).to_le_bytes());
+    for option in &approval.options_offered {
+        hasher.update((option.name.len() as u64).to_le_bytes());
+        hasher.update(option.name.as_bytes());
+    }
+    hasher.update((approval.acts_on.len() as u64).to_le_bytes());
+    for entry in &approval.acts_on {
+        hasher.update((entry.len() as u64).to_le_bytes());
+        hasher.update(entry.as_bytes());
     }
     format!("{:x}", hasher.finalize())
 }

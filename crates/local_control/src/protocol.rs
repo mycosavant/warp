@@ -427,7 +427,38 @@ pub struct PendingApproval {
     /// Empty for the CLI-agent population, whose prompt is drawn on a PTY and
     /// whose options Warp never sees.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub options_offered: Vec<String>,
+    pub options_offered: Vec<OfferedOption>,
+}
+
+/// One option an ACP agent offered, and whether Warp could ever send it back.
+///
+/// **The name alone was not enough, and that was T20.2.** This was a
+/// `Vec<String>` until 2026-09-03, so every surface drawing it had the agent's
+/// wording and no way to tell which items were real. The panel therefore listed
+/// three options and drew two buttons, with nothing saying the middle one can
+/// never be selected — a menu with a hole in it, where what is misrepresented is
+/// what a *yes* buys.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OfferedOption {
+    /// The option's name, exactly as the agent wrote it.
+    ///
+    /// **The record, and it is hashed into the approval digest** — an agent that
+    /// re-asks offering a different set is asking something else. Kept verbatim
+    /// for that reason: annotating *this* string would put Warp's policy inside
+    /// the thing the digest is supposed to be a record of.
+    pub name: String,
+    /// Whether Warp would ever select this option.
+    ///
+    /// **Warp's policy, and deliberately outside the digest**, alongside
+    /// `can_approve` and `approve_refused_because` and for the identical reason
+    /// given there: folding it in would move a digest without the agent's
+    /// question having changed.
+    ///
+    /// Decided by `acp_permission::is_selectable`, which is written in terms of
+    /// the same predicates `choose` uses — so the list a person reads and the
+    /// answer that goes on the wire cannot drift apart.
+    #[serde(default)]
+    pub warp_can_select: bool,
 }
 
 /// Result of `agent.approvals`.

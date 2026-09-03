@@ -600,3 +600,84 @@ fn a_shared_refusal_names_no_surface_of_its_own() {
         );
     }
 }
+
+// ── Saying which options are real (T20.2) ────────────────────────────────
+
+/// **The guard that stops `is_selectable` and `choose` drifting apart.**
+///
+/// They are two entry points onto the same rule, and the failure mode of two
+/// rules that agree today is on this fork's record: T14.6's console bug was a
+/// listing and an answer disagreeing about approvability. So this asserts the
+/// property directly rather than trusting the shared helpers — for every option
+/// of every kind, `is_selectable` is true exactly when `choose` would actually
+/// return that option's id for one of the two decisions.
+///
+/// Run over both measured agents, because the whole reason this module's rule is
+/// a measurement is that they send different lists in different orders.
+#[test]
+fn an_option_is_shown_as_selectable_exactly_when_choose_would_select_it() {
+    for options in [as_claude_sent_it(), as_opencode_sent_it()] {
+        let request = request(options.clone());
+        let chosen: Vec<String> = [Decision::Allow, Decision::Deny]
+            .into_iter()
+            .filter_map(|decision| match choose(&request, decision) {
+                Choice::Select(id) => Some(id.to_string()),
+                Choice::Cancel { .. } => None,
+            })
+            .collect();
+
+        for option in &options {
+            assert_eq!(
+                is_selectable(&request, option),
+                chosen.contains(&option.option_id.to_string()),
+                "{:?} ({:?}) is shown as selectable={} but choose picked {chosen:?}",
+                option.name,
+                option.kind,
+                is_selectable(&request, option),
+            );
+        }
+    }
+}
+
+/// The always-variant is the case T20.2 is about, named on its own so a reader
+/// of the failure sees the option rather than a property.
+#[test]
+fn the_always_variant_is_never_shown_as_selectable() {
+    let request = request(as_claude_sent_it());
+    let always = as_claude_sent_it()
+        .into_iter()
+        .find(|option| option.name == "Always Allow")
+        .expect("the measured list carries an always-variant");
+
+    assert!(!is_selectable(&request, &always));
+}
+
+/// And the two that *are* real still are, which is the calibration: a predicate
+/// that answered `false` for everything would pass the test above.
+#[test]
+fn the_single_shot_answers_are_shown_as_selectable() {
+    let request = request(as_claude_sent_it());
+    for name in ["Allow Once", "Deny"] {
+        let option = as_claude_sent_it()
+            .into_iter()
+            .find(|option| option.name == name)
+            .expect("the measured list carries both single-shot answers");
+        assert!(is_selectable(&request, &option), "{name} should be real");
+    }
+}
+
+/// **A request whose effect is not confined to this call has no real options at
+/// all**, which is `choose`'s first gate and would be easy to miss here: the
+/// options themselves look ordinary, and it is the *request* that disqualifies
+/// them.
+#[test]
+fn no_option_is_selectable_when_the_effect_escapes_the_call() {
+    let request = as_claude_asked_to_leave_plan_mode();
+    for option in request.options.clone() {
+        assert!(
+            !is_selectable(&request, &option),
+            "{:?} should not be selectable on a switch_mode request",
+            option.name,
+        );
+    }
+}

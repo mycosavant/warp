@@ -12184,7 +12184,7 @@ before this was noticed.
 `CLAUDE.md` records as failing outright for a WSL pane on Windows. Every
 measurement above used the `wsl.exe -d Ubuntu --` form.
 
-### T20.2 — `options_offered` renders as a menu and means a receipt
+### T20.2 — `options_offered` renders as a menu and means a receipt ✅ **done 2026-09-03**
 
 The approval surface lists *"Yes"*, *"Yes, and don't ask again for similar
 commands"*, *"No"*. **The middle one can never be selected**, and nothing on
@@ -12208,6 +12208,57 @@ what it already does is arguably not a posture change — nothing becomes
 permitted that was not. Recorded as a question rather than assumed, because the
 freeze exists precisely so this kind of "surely this one is fine" does not
 accumulate.
+
+**Maintainer's call, taken 2026-09-03: annotate in place.** The freeze in
+`GOAL.md` is on *permission posture* — what is permitted — and this changes only
+what is shown. Nothing became selectable that was not.
+
+**As built.** Live on the Windows build, a real `claude-agent-acp` edit request,
+both surfaces:
+
+```
+offered   Yes, Yes, allow all edits during this session (Warp never selects this), No
+          [ Yes, once ]   [ No ]
+```
+
+**The record was missing the field that decides this, which is why it was hard
+to say.** `options_offered` was a `Vec<String>` — the agent sends its options
+*typed* (`allow_once`, `allow_always`, `reject_once`) and Warp kept only the
+names, so every surface drawing the list had the wording and no way to tell the
+real options from the ones that can never be selected. It is now
+`Vec<OfferedOption> { name, warp_can_select }`. The agent's wording is untouched;
+the note is Warp's and says so.
+
+**Two lines held deliberately.**
+
+- **`warp_can_select` is outside the digest**, with `can_approve` and
+  `approve_refused_because` and for the reason already written there: folding
+  Warp's policy in would move a digest without the *agent* having asked anything
+  different, and a parked yes would stop fitting for a reason nobody was shown.
+  Hashing the name alone also keeps the bytes identical to the `Vec<String>` era,
+  so a digest taken before the change still fits.
+- **`acp_permission::is_selectable` is written in terms of the same two
+  predicates `choose` uses**, never beside them. Two rules that agree today is
+  precisely T14.6's console bug, where a listing and an answer path disagreed
+  about approvability.
+  `an_option_is_shown_as_selectable_exactly_when_choose_would_select_it` asserts
+  the two agree over every option of both measured agents' lists.
+
+Calibrated by making each fail: `is_selectable` returning `true` always reddens
+three tests and nothing else; folding `warp_can_select` into the digest reddens
+exactly the new digest test; annotating *every* option reddens the CLI render
+test, which is the calibration that a blanket annotation would otherwise pass.
+
+**Residual, not fixed and not a regression**: option names can contain commas
+(*"Yes, allow all edits during this session"*), so the comma-joined list reads as
+one item more than it is. That predates this and the parenthetical now helps
+delimit it, but a list separator that appears inside the items is still wrong.
+
+**Wire shape changed.** `options_offered` entries are objects, not strings. App
+and `warpctrl` are the same binary so no skew is possible in a normal run, and a
+lenient "accept a bare string too" shim was **deliberately not** added: it would
+deserialize every option to `warp_can_select: false` and annotate all of them,
+which is a worse answer than a parse error.
 
 ### T20.3 — An agent can relaunch its own host into a duplicate window ✅ **done 2026-09-03**
 

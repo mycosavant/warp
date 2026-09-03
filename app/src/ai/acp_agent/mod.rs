@@ -1085,10 +1085,20 @@ fn parked_request(
         session_id,
         conversation_id,
         acts_on,
+        // **The agent's wording, plus whether Warp would ever send it back
+        // (T20.2).** Recording only the name left every surface drawing this
+        // with no way to tell the real options from the ones that can never be
+        // selected -- so the panel listed three and drew two buttons, and said
+        // nothing about the gap. `is_selectable` is `acp_permission`'s and is
+        // written in terms of the same predicates `choose` uses, so the list a
+        // person reads and the answer that goes on the wire cannot drift.
         options_offered: request
             .options
             .iter()
-            .map(|option| option.name.clone())
+            .map(|option| ::local_control::protocol::OfferedOption {
+                name: option.name.clone(),
+                warp_can_select: acp_permission::is_selectable(request, option),
+            })
             .collect(),
         approve_selects,
         approve_refused_because,

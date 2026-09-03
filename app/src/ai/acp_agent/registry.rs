@@ -213,7 +213,7 @@ pub(crate) struct ParkedRequest {
     /// `allow_always` carrying no declaration — measured, that is what `opencode`
     /// sends — cannot be shown to a person in terms of what it would widen,
     /// because there is nothing to show but the name.
-    pub options_offered: Vec<String>,
+    pub options_offered: Vec<::local_control::protocol::OfferedOption>,
     /// The option id a **yes** would select, or `None` if this entry cannot be
     /// approved.
     ///

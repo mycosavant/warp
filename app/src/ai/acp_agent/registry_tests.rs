@@ -21,7 +21,7 @@ fn conversation_request(id: &str, conversation: &str) -> ParkedRequest {
         session_directory: Some("/tmp/project".to_owned()),
         session_id: Some("ses_1".to_owned()),
         acts_on: vec!["/tmp/project".to_owned()],
-        options_offered: vec!["Allow once".to_owned(), "Reject".to_owned()],
+        options_offered: vec![offered("Allow once"), offered("Reject")],
         approve_selects: Some("once".to_owned()),
         approve_refused_because: None,
     }
@@ -140,7 +140,14 @@ fn the_options_the_agent_offered_are_kept_as_data() {
     let (_guard, _wait) = park(request(id));
 
     let entry = listed(id).expect("just parked");
-    assert_eq!(entry.options_offered, ["Allow once", "Reject"]);
+    assert_eq!(
+        entry
+            .options_offered
+            .iter()
+            .map(|o| o.name.as_str())
+            .collect::<Vec<_>>(),
+        ["Allow once", "Reject"],
+    );
 }
 
 /// **The cascade this registry shipped with for one build, measured live.**
@@ -261,4 +268,14 @@ fn an_answer_carries_the_surface_it_came_from() {
 fn the_surface_wire_names_are_stable() {
     assert_eq!(Surface::ControlPlane.as_str(), "control_plane");
     assert_eq!(Surface::Panel.as_str(), "panel");
+}
+
+/// An offered option in the agent's own wording, marked as one Warp would send
+/// back. The interesting case is the option that is *not* selectable, so that
+/// one is written out in full where it is used.
+fn offered(name: &str) -> ::local_control::protocol::OfferedOption {
+    ::local_control::protocol::OfferedOption {
+        name: name.to_owned(),
+        warp_can_select: true,
+    }
 }

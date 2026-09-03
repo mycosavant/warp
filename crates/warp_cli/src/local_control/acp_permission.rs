@@ -504,6 +504,25 @@ pub fn choose(request: &RequestPermissionRequest, decision: Decision) -> Choice 
     }
 }
 
+/// Whether Warp could ever select this option in answer to this request.
+///
+/// **Exists so a surface can say which of the agent's options are real.** T20.2:
+/// the panel listed three options — *Yes*, *Yes and don't ask again for similar
+/// commands*, *No* — and drew two buttons. The middle one can never be selected
+/// and nothing on screen said so, so a reader saw a menu with a missing button
+/// rather than a deliberate refusal. That is this fork's most-tracked defect, a
+/// surface claiming more than the code does, moved out of a doc comment and into
+/// the place where the thing misrepresented is what a *yes* buys.
+///
+/// **Written in terms of the same two predicates [`choose`] uses, not beside
+/// them.** A second rule that agreed today is exactly the shape T14.6 removed
+/// when the console's listing and its answer path disagreed about
+/// approvability. `an_option_is_shown_as_selectable_exactly_when_choose_would_
+/// select_it` pins the two together over every kind.
+pub fn is_selectable(request: &RequestPermissionRequest, option: &PermissionOption) -> bool {
+    effect_is_confined_to_this_call(request) && !changes_policy(option)
+}
+
 /// Whether selecting this option would do more than answer the question.
 ///
 /// Two independent signals, either of which is enough: the kind says the choice
