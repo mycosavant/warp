@@ -2246,7 +2246,13 @@ version, which is a property of the evidence and not of any one finding.
    asked*) never arises. Any **agent-side** grant makes asks vanish from Warp's
    view entirely, which is the thing this fork exists to prevent.
 4. **The agent's own config — which this fork has already done once, under the
-   freeze, with the maintainer's explicit approval.** `opencode.json`'s bash
+   freeze, with the maintainer's explicit approval.** **Note on `opencode`,
+   corrected 2026-09-03 by the maintainer:** it is not a tool they use and never
+   has been — it exists on this machine solely because this fork's testing
+   introduced it. So `opencode.json` in this repo is test scaffolding, and the
+   long permission argument `CLAUDE.md` builds on it is reasoning about a config
+   for an agent nobody runs. It is still a valid worked example of the *shape*;
+   it is not evidence about the maintainer's actual exposure. `opencode.json`'s bash
    allowlist is exactly this move for the other agent. For `claude-agent-acp`,
    `settingSources: ["user", "project", "local"]` (verified in both versions'
    `dist/`) means this repo's `.claude/settings.json` — currently `{}` — is the
@@ -2304,12 +2310,28 @@ for a file *write* raised **1**. `wc` and `Read` are on the list; `Write` is not
    arbitrary-command allow wearing a read-only name. That reasoning is sound and
    it has been moot for the recommended agent the whole time, through a file
    outside the repo that nobody had read.
-3. **`defaultMode: auto` is set at user level.** `CLAUDE.md` attributes
-   `claude-agent-acp` starting in `auto` to *the agent's own default*. It may in
-   fact be this line. **Not established** — it needs one probe with this key
-   changed — and it matters, because the fork's whole disclosure story around
-   `WARP_FORK_ACP_MODE` is written on the assumption that the mode is the
-   agent's choice rather than the user's.
+3. **`defaultMode: auto` is set at user level, and that is where the `auto` comes
+   from.** Settled by reading `dist/permissions/modes.js:18-21`:
+   `resolvePermissionMode(undefined)` returns **`"default"`**, so the ACP bridge
+   absent that setting opens in *ask*, not in auto. `CLAUDE.md` attributes the
+   opening `auto` to *the agent's own default*; for the ACP path that is wrong.
+
+   **But the maintainer's point is the one that matters and it is not the same
+   claim.** Auto is Claude Code's shipped default as a *product* — the settings
+   file carrying `defaultMode: auto` is one Claude Code wrote — and it is how
+   these agents are mainstream-used today. So the fork has been treating the
+   near-universal configuration as an aberration to be corrected, which is a
+   posture decision nobody made deliberately. The classifier behind it is
+   Anthropic's, it is shipped, and "a model decided" is not self-evidently worse
+   than "a person clicked yes 44 times without reading". That argument is open,
+   and this file has been assuming its conclusion.
+
+**And the incoherence is the real finding, named by the maintainer rather than
+by this audit:** arbitrary code execution is allowed (`python:*`, `node:*`,
+`cargo:*`) while a file *read* raises an approve-once prompt. Whatever that is,
+it is not a security posture — it is two unrelated defaults meeting. A person
+paying attention gets decision fatigue on the harmless half and rubber-stamps the
+dangerous half, which is worse than either extreme chosen deliberately.
 
 **Nothing here was changed.** It is the maintainer's personal file, it governs
 tools far beyond this fork, and the appropriate move is a decision rather than an
