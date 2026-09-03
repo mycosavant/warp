@@ -316,7 +316,8 @@ const SESSION_TYPE_READERS: &[(&str, &str)] = &[
     ),
     (
         "terminal/model/session/filesystem.rs",
-        "folds session type and WSL host into one answer",
+        "folds session type and WSL host into one answer; `spelling` reads it \
+         again for which namespace a path is in (T20.1)",
     ),
     (
         "terminal/model/session/active_session.rs",
