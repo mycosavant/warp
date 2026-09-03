@@ -12357,7 +12357,7 @@ and was not established**. What is established is that the composer has no
 prose-dropping defect to fix, so anything left here is about density and scroll
 position, not about a lost message.
 
-### T20.5 — Finish `acp probe --cwd` (WIP in the tree)
+### T20.5 — Finish `acp probe --cwd` ✅ **done 2026-09-03**
 
 Left uncommitted by the panel agent when the run was stopped: 86 lines across
 `crates/warp_cli/src/local_control/{acp.rs,acp_tests.rs,mod.rs}`, all additions,
@@ -12367,6 +12367,29 @@ POSIX-rooted path through unverified instead of refusing it.
 
 **Not compiled and not run.** Treat as unverified: read it before trusting it,
 and calibrate the new tests by making them fail.
+
+**As built (2026-09-03).** The WIP's idea is right — a POSIX-rooted `--cwd` the
+probing process cannot resolve is the T18 case, where `--command` starts the
+agent inside WSL and the Windows binary has no filesystem to check against — and
+its ordering was wrong.
+
+`is_foreign_filesystem_path` was asked *after* `is_dir()`, as a fallback for a
+path that failed the check. That reads as belt-and-braces and is not: on Windows
+a POSIX-rooted path resolves against the current drive, so if the matching `C:\…`
+tree exists then `is_dir()` is **true**, the fallback never runs, and
+`canonicalize` returns a directory on the wrong machine. Silently — the same
+family as T20.1, in the fix for T20.1's own ticket. And the collision is not
+hypothetical: `C:\home\effatha\git\warp` had been sitting on the disk that
+morning, put there by Warp.
+
+Asked first now, and pinned by
+`a_posix_cwd_is_not_silently_resolved_to_a_matching_windows_tree`, which builds
+the colliding tree on purpose. **Calibrated on Windows**, the only platform where
+it can fire: with the check back below `is_dir()` it reddens and the other ten
+pass. 11/11 with the fix.
+
+The WIP's own tests are kept as written and are good — `cfg`-split so each is
+honestly green on the platform it runs on rather than describing the other one.
 
 ### Not a ticket: approval density
 
