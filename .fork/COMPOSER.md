@@ -5,12 +5,12 @@ a defect and it is not small.** The board tracks things that are wrong. This is
 a thing that is *not good enough*, on the surface a person looks at all day, and
 the fork is currently failing it — not by a little.
 
-**Status, 2026-09-03: the reference study is written in; steps 2, 3 and the
-first half of 4 (tool rows) are built and measured on the Windows build.**
-Record 9.4 : 1 → 6.0 : 1; drawn 10.1 : 1 → 2.4 : 1; and the tool lines now
-say what ran and whether it finished, where before they said *Preparing
-file…* three times. Details under *As built*. Turn shape and layered
-approvals are next and not started.
+**Status, 2026-09-03: the reference study is written in; steps 2, 3, tool
+rows and turn shape are built and measured on the Windows build.** Record
+9.4 : 1 → 6.0 : 1; drawn 10.1 : 1 → 2.4 : 1 (same-agent-mood runs); the tool
+lines say what ran and whether it finished; a turn shows its elapsed time and
+feeds the context ring. Details under *As built*. Layered approvals are next
+and not started.
 
 ---
 
@@ -119,7 +119,7 @@ Compare what the ACP stream actually delivers, captured with `acp probe`:
 `locations`, a diff for edits, `status`, and `_meta.claudeCode.toolResponse`
 carrying stdout and stderr. Warp renders the title.
 
-### 4. Nothing shows a turn's shape
+### 4. Nothing shows a turn's shape ✅ **moved, see As built, step 4b**
 
 No progress, no step count, no elapsed time, no token or context indication —
 `usage_update` arrives on the wire (`used`, `size`, and a `cost` object) and is
@@ -613,9 +613,9 @@ These are not preferences. Each has a measurement or a shipped defect behind it.
 2. ~~**Give Warp its own message kind**~~ **Done, `a4a5cb53a`.**
 3. ~~**Abbreviate the asking note after the first ask per conversation.**~~
    **Done, `b2493ef75`.**
-4. ~~**Then** tool rows~~ **Done, `146265e37`** — then turn shape, and layered
-   approvals, in that order, because each is worth more once Warp's chrome is
-   out of the way.
+4. ~~**Then** tool rows~~ **Done, `146265e37`**; ~~turn shape~~ **Done,
+   `03fbacb24`**; then layered approvals — last, because it is worth more once
+   Warp's chrome is out of the way.
 
 Re-measure the 9.4:1 ratio after each step. It is the number this ticket exists
 to move.
@@ -817,6 +817,65 @@ before either ask, because the agent narrated steps 2 and 3 in one sentence
 and announced both writes before asking about the first. The transcript is
 faithful. It is also the first live instance of the case the *"Ran N
 commands"* fold is for.
+
+### Step 4b — turn shape (`03fbacb24`)
+
+**Look for the gate first, again.** Item 4 named three things — a working
+indicator, elapsed time, a context ring — and two of them were already built
+upstream and fed by nothing on the fork's path:
+
+- **The context ring.** `agent_input_footer` draws
+  `icon_for_context_window_usage(conversation.context_window_usage())`, which
+  is written from the `StreamFinished`'s `conversation_usage_metadata`,
+  which `acp_agent`'s `finished()` never set — while `translate.rs` dropped
+  every `usage_update` with the note *"Warp's own accounting is on the
+  `StreamFinished`"*. Nothing was. The last `usage_update` of the turn
+  (`used`/`size`; this agent reports a 200,000 window) now rides the finish
+  as `context_window_usage`, and the ring the footer has always drawn at
+  *100% remaining* becomes true. A `size` of zero leaves it alone rather
+  than reading *full*; calibrated by removing that guard.
+- **Elapsed time.** `AIAgentExchange::time_since_start` existed with no
+  caller in the workspace. It is now the number after the working label
+  (*Warping… • 12s*), in the non-shimmering slot the summarization timer
+  already uses so the shimmer does not reset each second, and the status bar
+  ticks once a second while the exchange streams — the summarization timer's
+  own shape, stopping itself the first time it wakes to nothing streaming.
+  Gated on `fork::is_active()`.
+- **The working indicator** upstream has: the shimmering label, and since
+  step 4a a spinner on the running tool row.
+
+**Measured 2026-09-03 on the Windows build at `03fbacb24`**, same prompt,
+same driver, three asks. The ratio this time is **8.0 : 1 record, 3.2 : 1
+drawn** — and Warp's side is byte-identical to the step 4a run (1,774 chars
+of notes, 168 of tool rows). The agent narrated 244 characters instead of
+324. **The denominator is the agent's mood on the day**, which is worth
+writing down beside every one of these numbers: a ±25% swing in the agent's
+prose moves the ratio more than any single change in this file has, so the
+number is for comparing *Warp's* side across runs, and the columns above
+should be read as Warp's chars first.
+
+What the run shows:
+
+- **Elapsed is on screen**: the ask-1 screenshot's status row reads
+  *• 10s* beside the working label. In that window (657 px wide, against
+  778 px for the step 4a run) the label itself clipped to *Wa* — the row is
+  two equal `Shrinkable`s, upstream's own layout for its summarization
+  timer, so a narrow window costs the label and the suffix alike. Left as
+  is, and named: the fix is a shrink weight in upstream's
+  `render_warping_indicator_base`, which deserves its own measurement rather
+  than a drive-by.
+- **The ring is fed**: the persisted conversation carries
+  `context_window_usage: 0.062732` where the step 4a conversation carries
+  `0.0` — read from `agent_conversations` in the app's SQLite, not inferred.
+  The footer re-reads it on `UpdatedConversationStatus`, which fires after
+  the controller has applied the finish's usage. **Not shown**: the icon
+  step. At 6% used the icon is `ContextRemaining90` against `…100`, and the
+  two SVGs differ by four path elements in a 16 px glyph — a 4× crop of both
+  final screenshots looks the same, so whether the *drawing* changed is
+  unsettled here and would need a fuller context to tell. The data path is
+  settled.
+- Zero errors of any relevant kind in the app log; files written; three
+  asks answered.
 
 **What is still drawn in full and should not be**: the transcript announcement
 (~230 characters, once per conversation) and the mode note's headline (~200).
