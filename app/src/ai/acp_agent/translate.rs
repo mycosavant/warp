@@ -22,7 +22,7 @@
 //! | `AvailableCommandsUpdate` | nothing | a menu for a UI that is not here |
 //! | `CurrentModeUpdate` | nothing | T14.3/T14.4: the mode is a claim and must not be rendered as governance |
 //! | `ConfigOptionUpdate`, `SessionInfoUpdate` | nothing | measured: opencode sends 356 models here |
-//! | `UsageUpdate` | nothing | Warp's own accounting is on the `StreamFinished` |
+//! | `UsageUpdate` | the context ring, on the `StreamFinished` | `used / size` becomes `context_window_usage`; see [`Translator::finished`] |
 //! | anything else | nothing | `#[non_exhaustive]`; a new variant must not fail a turn |
 //!
 //! # A tool call is reported, never requested
@@ -221,6 +221,16 @@ pub(super) struct Translator {
     /// agent. A window that closes when the request answers is right whatever
     /// the agent sends, including nothing at all.
     replaying: bool,
+    /// The agent's last word on how full its context is: `(used, size)`.
+    ///
+    /// `usage_update` arrives several times a turn (measured: eight in a
+    /// two-call turn) and was read for nothing until 2026-09-03
+    /// (`.fork/COMPOSER.md` item 4). Only the last one matters, and it is
+    /// spent on the `StreamFinished`, because that is where Warp's own
+    /// context ring already reads from -- `Conversation::context_window_usage`
+    /// feeds `icon_for_context_window_usage` in the input footer, and nothing
+    /// on this path had ever written it.
+    usage: Option<(u64, u64)>,
     /// What the agent said its modes were when this session opened (T14.18).
     ///
     /// Held only so a `current_mode_update` — which carries an id and nothing
@@ -258,6 +268,7 @@ impl Translator {
             cwd,
             started: HashMap::new(),
             completed: HashSet::new(),
+            usage: None,
             replaying: false,
             modes: None,
         }
@@ -399,6 +410,11 @@ impl Translator {
                 if let Some(locations) = &update.fields.locations {
                     self.note_locations(update.tool_call_id.to_string(), locations);
                 }
+            }
+            // A zero-sized window is an agent that does not know; the ring
+            // stays as it was rather than reading "full" or dividing by zero.
+            SessionUpdate::UsageUpdate(usage) if usage.size > 0 => {
+                self.usage = Some((usage.used, usage.size));
             }
             _ => {}
         }
@@ -946,10 +962,22 @@ impl Translator {
             // an unexpected EOF, which is a worse lie than "done".
             _ => stream_finished::Reason::Done(stream_finished::Done {}),
         };
+        // The context ring's one input. `used / size` is what the footer's
+        // `icon_for_context_window_usage` wants and what upstream's server
+        // computes as `total tokens / model context window`; everything else
+        // on the metadata is cost, which this path does not have and leaves
+        // at its default. `size > 0` is checked where the value is recorded.
+        let conversation_usage_metadata =
+            self.usage
+                .map(|(used, size)| stream_finished::ConversationUsageMetadata {
+                    context_window_usage: used as f32 / size as f32,
+                    ..Default::default()
+                });
         api::ResponseEvent {
             r#type: Some(api::response_event::Type::Finished(
                 api::response_event::StreamFinished {
                     reason: Some(reason),
+                    conversation_usage_metadata,
                     ..Default::default()
                 },
             )),

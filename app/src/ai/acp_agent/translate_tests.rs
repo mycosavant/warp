@@ -427,6 +427,45 @@ fn a_turn_that_ends_leaves_no_row_running() {
     assert!(translator.end_of_turn().is_empty());
 }
 
+/// **The context ring was built, wired, and fed by nothing on this path.**
+/// `usage_update` carries `used` and `size`; the footer's ring reads
+/// `Conversation::context_window_usage`, which is written from the
+/// `StreamFinished`. The last update of the turn is what the turn ends with.
+#[test]
+fn the_last_usage_update_of_the_turn_feeds_the_context_ring() {
+    let mut translator = translator();
+    translator.on_update(&SessionUpdate::UsageUpdate(UsageUpdate::new(
+        61_827, 200_000,
+    )));
+    translator.on_update(&SessionUpdate::UsageUpdate(UsageUpdate::new(
+        61_924, 200_000,
+    )));
+    // An agent that does not know the window says size 0; that is not "full".
+    translator.on_update(&SessionUpdate::UsageUpdate(UsageUpdate::new(70_000, 0)));
+
+    let usage = match translator.finished(StopReason::EndTurn).r#type {
+        Some(api::response_event::Type::Finished(finished)) => finished
+            .conversation_usage_metadata
+            .expect("the ring's input rides the finish"),
+        other => panic!("not a finish: {other:?}"),
+    };
+
+    assert!(
+        (usage.context_window_usage - 0.30962).abs() < 1e-4,
+        "{usage:?}"
+    );
+    assert_eq!(usage.credits_spent, 0.0, "nothing here knows a cost");
+
+    // And a turn with no usage_update says nothing, rather than zero.
+    let finished = self::translator().finished(StopReason::EndTurn);
+    match finished.r#type {
+        Some(api::response_event::Type::Finished(finished)) => {
+            assert!(finished.conversation_usage_metadata.is_none());
+        }
+        other => panic!("not a finish: {other:?}"),
+    }
+}
+
 /// A title that is all the agent gives is used whole, with its own verb, and
 /// prefixed only for the states that need saying.
 #[test]

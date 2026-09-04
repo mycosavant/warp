@@ -114,6 +114,9 @@ pub struct BlocklistAIStatusBar {
     /// Handle for the periodic timer that updates the summarization timer UI.
     summarization_timer_handle: Option<SpawnedFutureHandle>,
     summarization_start_time: Option<Instant>,
+    /// Fork: the once-a-second tick that keeps the turn's elapsed time moving
+    /// while the exchange streams. See `render_warping_indicator`.
+    turn_timer_handle: Option<SpawnedFutureHandle>,
     /// Handle for the 1-second periodic timer that refreshes the "Last read …" suffix in
     /// the warping indicator while the active block has a recorded LRC snapshot.
     last_read_refresh_handle: Option<SpawnedFutureHandle>,
@@ -371,6 +374,7 @@ impl BlocklistAIStatusBar {
             is_summarization_cancel_dialog_open: false,
             summarization_timer_handle: None,
             summarization_start_time: None,
+            turn_timer_handle: None,
             last_read_refresh_handle: None,
             ambient_agent_view_model: None,
             current_tip: None,
@@ -516,6 +520,7 @@ impl BlocklistAIStatusBar {
             return;
         };
         let status = model.status(ctx);
+        let is_streaming = status.is_streaming();
 
         // Auto-clear summarization confirmation dialog if summarization is no longer active
         if self.is_summarization_cancel_dialog_open
@@ -543,7 +548,46 @@ impl BlocklistAIStatusBar {
             AIBlockOutputStatus::Pending | AIBlockOutputStatus::Failed { .. } => (),
         }
 
+        if is_streaming {
+            self.start_turn_timer(ctx);
+        } else {
+            self.stop_turn_timer();
+        }
+
         ctx.notify();
+    }
+
+    /// Fork: starts the one-second tick behind the elapsed time in the
+    /// warping indicator, if it is not already running. The same shape as the
+    /// summarization timer below, and it stops itself the first time it wakes
+    /// to find the exchange no longer streaming.
+    fn start_turn_timer(&mut self, ctx: &mut ViewContext<Self>) {
+        if self.turn_timer_handle.is_some() || !crate::fork::is_active() {
+            return;
+        }
+        let handle = ctx.spawn(
+            async move {
+                Timer::after(Duration::from_secs(1)).await;
+            },
+            |me, _unit, ctx| {
+                me.turn_timer_handle = None;
+                let streaming = me
+                    .active_exchange_model
+                    .as_ref()
+                    .is_some_and(|model| model.status(ctx).is_streaming());
+                if streaming {
+                    ctx.notify();
+                    me.start_turn_timer(ctx);
+                }
+            },
+        );
+        self.turn_timer_handle = Some(handle);
+    }
+
+    fn stop_turn_timer(&mut self) {
+        if let Some(handle) = self.turn_timer_handle.take() {
+            handle.abort();
+        }
     }
 
     /// Closes the summarization cancel dialog.

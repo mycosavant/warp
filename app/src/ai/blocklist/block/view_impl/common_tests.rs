@@ -368,3 +368,17 @@ fn is_supported_blocklist_image_source_covers_common_local_formats() {
     assert!(!is_supported_blocklist_image_source("doc.pdf"));
     assert!(!is_supported_blocklist_image_source("notes.md"));
 }
+
+/// The elapsed suffix beside the working label (fork): seconds alone under a
+/// minute, then minutes with zero-padded seconds, then hours with minutes.
+#[test]
+fn compact_elapsed_is_seconds_then_minutes_then_hours() {
+    use std::time::Duration;
+
+    use super::compact_elapsed;
+
+    assert_eq!(compact_elapsed(Duration::from_secs(0)), "0s");
+    assert_eq!(compact_elapsed(Duration::from_secs(12)), "12s");
+    assert_eq!(compact_elapsed(Duration::from_secs(65)), "1m 05s");
+    assert_eq!(compact_elapsed(Duration::from_secs(3_720)), "1h 02m");
+}

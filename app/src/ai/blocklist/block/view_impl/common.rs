@@ -478,6 +478,28 @@ pub fn render_warping_indicator<V: View>(
         MaybeShimmeringText::Static(message.into())
     };
 
+    // Fork: a turn's elapsed time beside the working label, so a long turn has
+    // a shape (`.fork/COMPOSER.md` item 4). `AIAgentExchange::time_since_start`
+    // existed upstream with no caller; this is its first. Kept out of the
+    // shimmering text for the reason the summarization timer gives above, and
+    // not shown over a label that already carries a timer or a countdown.
+    // `BlocklistAIStatusBar` re-renders once a second while streaming so the
+    // number moves.
+    if non_shimmering_text.is_none()
+        && crate::fork::is_active()
+        && props.model.status(app).is_streaming()
+        && let Some(elapsed) = props.model.exchange_id(app).and_then(|exchange_id| {
+            props
+                .model
+                .conversation(app)?
+                .exchange_with_id(exchange_id)?
+                .time_since_start()
+        })
+        && elapsed.as_secs() >= 1
+    {
+        non_shimmering_text = Some(format!(" • {}", compact_elapsed(elapsed)));
+    }
+
     // Only render `Check now` when we also have non-shimmering text, since that's the
     // row we're appending to. This naturally scopes the affordance to situations where
     // `Last seen by agent ...` is visible.
@@ -548,6 +570,17 @@ fn warping_footer_height(monospace_font_size: f32, has_secondary_element: bool) 
 /// Additional text that does not use the shimmering text animation can be passed in via
 /// `non_shimmering_text` which is useful if you want some part of the text to constantly update
 /// without the animation resetting.
+/// `12s`, `1m 05s`, `1h 02m` -- the width a status bar has for a number that
+/// changes every second.
+pub(crate) fn compact_elapsed(elapsed: std::time::Duration) -> String {
+    let secs = elapsed.as_secs();
+    match (secs / 3600, (secs % 3600) / 60, secs % 60) {
+        (0, 0, s) => format!("{s}s"),
+        (0, m, s) => format!("{m}m {s:02}s"),
+        (h, m, _) => format!("{h}h {m:02}m"),
+    }
+}
+
 pub fn render_warping_indicator_base(
     props: WarpingIndicatorProps,
     app: &AppContext,
