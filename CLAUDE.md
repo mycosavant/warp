@@ -1357,6 +1357,28 @@ intersected — 39 of the fork's 204 files on 2026-08-24, of which 4 conflicted.
 That number is the early warning, and it is what makes a soft fork cheap; the
 cost is not paid when divergence is incurred but when a merge is deferred.
 
+**Prose in this repo is exempt from the global `unslop` rule against em
+dashes, and from that rule only.** Sampled 2026-09-04: of seven em dashes drawn
+at random from this file, one was a true mid-sentence parenthetical that no
+other punctuation handles, two were colons introducing a list or a quotation,
+one was a definition item, and three were a period or a comma dressed up. So
+roughly one in seven earns its place and the rest would read better fixed four
+different ways, not replaced by one substitute. That is a reason to use fewer,
+not a reason to ban them, and the ones that survive are load-bearing: they mark
+a correction as an aside rather than as a fresh claim, which is most of what
+this file does.
+
+Every other `unslop` rule applies here in full. The three that bite hardest on
+this file are *say the concrete thing*, *shorten or split dense sentences*, and
+*significance inflation*, because the real cost of this document is not its
+punctuation. It is that every paragraph opens with a bolded thesis and almost
+every passage is built as a reversal, so nothing is allowed to be a quiet
+supporting detail and the reader is asked for a small revelation every few
+hundred words. That structure makes retractions stick, which is why it took
+hold and why it stays. At this length it also buries the lookup-shaped facts
+inside the narrative ones, and those are the facts people actually come here
+for.
+
 **Formatting: run `./script/format`, and disregard `AGENTS.md` on this point.**
 Measured 2026-08-21: `cargo fmt` with the project's config wants to change **11
 files, every one of them fork-authored, with no upstream drive-bys** — so the
