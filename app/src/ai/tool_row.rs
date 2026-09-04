@@ -78,6 +78,18 @@ pub enum ToolRowState {
 /// `also` carries whatever else counts as bare for the caller: the row passes
 /// its own verb, the card passes the tool kind the agent typed.
 ///
+/// **On the card this is insurance, not a fix for anything observed** -- said
+/// here so the next reader does not conclude from its presence that it was
+/// needed. Read in the agent's source (2026-09-04, both versions this fork has
+/// run): the placeholder is a property of the *notification stream*, where a
+/// `tool_call` can go out before the input has finished streaming and
+/// `input.command` is still empty. A permission request is built from the
+/// complete input -- 0.70.0 by the same `toolInfoFromToolUse`, 0.73.0 by a
+/// separate presentation that titles a shell ask with its `description` -- so
+/// on `claude-agent-acp` the ask cannot carry the placeholder, and across 67
+/// recorded asks none did. What the guard buys on the card is the agent this
+/// fork has *not* measured. The row is the surface that saw the real thing.
+///
 /// [`acp_approval::layered`]: crate::ai::blocklist::inline_action::acp_approval::layered
 pub(crate) fn is_placeholder_title(title: &str, also: &[&str]) -> bool {
     let title = title.trim();

@@ -420,10 +420,9 @@ fn a_turn_that_ends_leaves_no_row_running() {
         state_of(&rewrites[0].1.server_message_data),
         Some(ToolRowState::Interrupted)
     );
-    assert_eq!(
-        row_text(&rewrites[0].1),
-        "Interrupted while running cargo test"
-    );
+    // Prefixed, not re-tensed: the same string the renderer writes when it
+    // demotes a row the sweep never reached, so one state has one wording.
+    assert_eq!(row_text(&rewrites[0].1), "Interrupted: Running cargo test");
     assert!(translator.end_of_turn().is_empty());
 }
 

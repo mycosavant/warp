@@ -251,6 +251,37 @@ fn a_placeholder_title_is_refused_and_the_call_headlines_instead() {
     );
 }
 
+/// **The agent's sentence is drawn once, even when it arrives twice.** At
+/// `claude-agent-acp` 0.73.0 a shell ask is titled with the call's
+/// `description` -- the request is built from Claude Code's own prompt text,
+/// not from the tool-call stream -- so the title and the payload's description
+/// are the same string, and the card drew it as the headline and again as *it
+/// says* one line below. Measured on 29 of 36 recorded shell asks. The call
+/// still follows, because now it is the line the headline is not.
+#[test]
+fn the_agents_sentence_is_not_drawn_twice_when_it_is_already_the_headline() {
+    let input = serde_json::json!({
+        "command": "git log --oneline -1",
+        "description": "Compare local HEAD to Windows checkout HEAD",
+    })
+    .to_string();
+    let mut request = parked(Some(&input), Some("allow_once"));
+    request.title = Some("Compare local HEAD to Windows checkout HEAD".to_owned());
+    request.tool_name = Some("execute".to_owned());
+
+    let layers = super::layered(&request);
+
+    assert_eq!(
+        layers.headline,
+        "Compare local HEAD to Windows checkout HEAD"
+    );
+    assert_eq!(
+        layers.always,
+        vec![("the call", "git log --oneline -1".to_owned())],
+        "the description is the headline and is not repeated beneath it"
+    );
+}
+
 /// The one line that must never be behind a toggle is the reason there is no
 /// yes: a person deciding needs to know they are looking at a setting, not a
 /// fault, before they look for the button that is not there.

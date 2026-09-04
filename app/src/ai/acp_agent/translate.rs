@@ -1153,32 +1153,46 @@ impl RowDraft {
     /// states that need saying and left alone for the two that do not, because
     /// re-tensing someone else's sentence is how a row starts lying. Failing
     /// both, the verb stands alone.
+    ///
+    /// **Interrupted is the running headline with a prefix, in every shape.**
+    /// The first cut re-tensed it here (*"Interrupted while running X"*) while
+    /// the renderer, demoting a row the sweep never reached, could only prefix
+    /// (*"Interrupted: Running X"*) -- so one state had two wordings depending
+    /// on which code path noticed the turn had ended, and the renderer's
+    /// reason for prefixing (it cannot re-tense a title it did not write)
+    /// applies to the title shape here too. One wording,
+    /// [`tool_row::demoted_headline`]'s, and the row a person was watching
+    /// keeps the line it had, which is how Claude Code's own rows read after
+    /// an interrupt.
     fn headline(&self) -> String {
+        self.headline_in(self.state)
+    }
+
+    fn headline_in(&self, state: ToolRowState) -> String {
+        if state == ToolRowState::Interrupted {
+            return tool_row::demoted_headline(&self.headline_in(ToolRowState::Running));
+        }
         let verb = self.verb;
         match (self.object.as_deref(), self.usable_title()) {
-            (Some(object), _) => match self.state {
+            (Some(object), _) => match state {
                 ToolRowState::Running => format!("{} {object}", verb.running),
                 ToolRowState::Done => format!("{} {object}", verb.done),
                 ToolRowState::Failed => format!("Failed to {} {object}", verb.base),
                 ToolRowState::Denied => format!("Denied: {} {object}", verb.base),
-                ToolRowState::Interrupted => {
-                    format!("Interrupted while {} {object}", verb.running.to_lowercase())
-                }
+                ToolRowState::Interrupted => unreachable!("handled above"),
             },
-            (None, Some(title)) => match self.state {
+            (None, Some(title)) => match state {
                 ToolRowState::Running | ToolRowState::Done => title.to_owned(),
                 ToolRowState::Failed => format!("Failed: {title}"),
                 ToolRowState::Denied => format!("Denied: {title}"),
-                ToolRowState::Interrupted => format!("Interrupted: {title}"),
+                ToolRowState::Interrupted => unreachable!("handled above"),
             },
-            (None, None) => match self.state {
+            (None, None) => match state {
                 ToolRowState::Running => format!("{}\u{2026}", verb.running),
                 ToolRowState::Done => verb.done.to_owned(),
                 ToolRowState::Failed => format!("Failed to {}", verb.base),
                 ToolRowState::Denied => format!("Denied: {}", verb.base),
-                ToolRowState::Interrupted => {
-                    format!("Interrupted while {}", verb.running.to_lowercase())
-                }
+                ToolRowState::Interrupted => unreachable!("handled above"),
             },
         }
     }

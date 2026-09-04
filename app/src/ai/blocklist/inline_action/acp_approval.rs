@@ -445,6 +445,8 @@ pub(crate) struct Layers {
     pub(crate) headline: String,
     /// Drawn with the headline: the agent's description of the call, **the call
     /// itself**, a write's bytes, and the reason when Warp has no yes to offer.
+    /// Whichever of the first two the headline already is, verbatim, is not
+    /// drawn again beneath it.
     ///
     /// The call is here rather than behind the toggle because everything else
     /// on the closed card is the agent's own account of what it is about to do,
@@ -494,13 +496,20 @@ pub(crate) fn layered(parked: &ParkedRequest) -> Layers {
     let mut details = Vec::new();
     for (label, value) in described {
         match label {
-            "it says" => always.push((label, value)),
             // Never behind the toggle: the description is what the agent says
             // it is doing and the call is what will happen, and a person
             // answering yes has agreed to the second one.
+            //
+            // Unless the headline already *is* that line, verbatim -- then a
+            // second copy of it is noise, not disclosure. Which line that is
+            // depends on the agent's version, not on Warp (`.fork/COMPOSER.md`,
+            // *the ask's title is a fact about the version*): `claude-agent-acp`
+            // 0.70.0 titles a shell ask with the command, 0.73.0 with the
+            // description, and measured at 0.73.0 the title equalled the
+            // description byte for byte on 29 of 36 shell asks -- so the card
+            // was drawing the agent's one sentence twice, one line apart.
+            "it says" => always.push((label, value)),
             "the call" => {
-                // Unless the headline already is the call, verbatim -- then a
-                // second copy of it is noise, not disclosure.
                 if value != headline {
                     always.push((label, value));
                 }

@@ -1027,15 +1027,53 @@ answerable from disk:
 
 | recorded asks on this machine | with a placeholder title |
 |---|---|
-| **64** across 27 event-log files (`edit` 27, `execute` 36, `read` 1) | **0** |
+| **67** distinct (session id × approval id; 27 Windows event-log files plus the Linux probe and job logs — 131 lines before de-duplicating copies, 81 in the T20 session's own sweep) | **0** |
 
-No *Terminal*, no *Preparing file…*, nothing ending in an ellipsis. And for
-every `execute` ask the title at the ask is the agent's **description**
-(*"Compare local HEAD to Windows checkout HEAD"*), not the command — so the
-permission request carries the corrected title from the start, and the
-placeholder fallback `is_placeholder_title` guards against is, on this agent,
-a property of the notification stream and not of the ask. The guard costs
-nothing and stays; it is not doing anything measured.
+No *Terminal*, no *Preparing file…*, nothing ending in an ellipsis. 64 of the
+67 are `claude-agent-acp`, the agent whose placeholders `146265e37` measured on
+the tool-call stream — so the guard on the *card* is unexercised on the agent
+it was written for, and `is_placeholder_title`'s doc now says it is insurance
+rather than a fix for anything observed.
+
+**What the ask is titled with is a fact about the agent's version, and the
+paragraph that stood here said it was a fact about the agent.** It said *"for
+every `execute` ask the title at the ask is the agent's description"*. The T20
+session, sweeping wider, found the same corpus holds both shapes — a 0.70.0
+`acp probe` (`wire.html`, 2026-09-01) titled its shell ask with the command
+verbatim, `git log --grep=T14.21` — and attributed the split to the two
+unpinned `npx` installs. **The split is real; the mechanism offered for it is
+not, and the actual one was read 2026-09-04 in both versions' source** (the
+0.70.0 tarball is still in `~/.npm/_cacache` after the install directory was
+deleted, which is how it could be read at all):
+
+| | tool-call stream (`tools.js`) | permission request |
+|---|---|---|
+| 0.70.0 | shell title = `input.command`, *"Terminal"* while the input is still streaming | the **same** `toolInfoFromToolUse` → the command |
+| 0.73.0 | identical line | a separate `permissions/presentation.js`: shell title = `input.description ?? "Bash"`, from the `title`/`displayName`/`description` the Claude Code SDK now passes to `canUseTool` |
+
+So both versions title the *stream* with the command, and the placeholder is a
+property of the stream at both — a `tool_call` can go out before the input has
+finished streaming and the command is empty. A permission request is built
+from the complete input on both, which is why no ask has ever carried one and
+why the card's guard cannot fire on this agent: not unmeasured, unreachable.
+
+**And the version that titles with the description was drawing it twice.**
+`layered` headlines with the title and then pushes *it says* from the
+payload's `description`; at 0.73.0 those are the same string, byte for byte,
+on **29 of the 36** recorded shell asks. Closed in `acp_approval.rs` by the
+rule the call already had — a line the headline already *is* is not drawn
+beneath it — so the closed card is now, on either version, the agent's one
+sentence and then the line it is not: *description / the call* at 0.73.0,
+*command / it says* at 0.70.0. Pinned by
+`the_agents_sentence_is_not_drawn_twice_when_it_is_already_the_headline`.
+
+**One wording for an interrupted row.** The sweep in `translate.rs` re-tensed
+(*"Interrupted while running X"*) while the renderer, demoting a row the sweep
+never reached, could only prefix (*"Interrupted: Running X"*, `087764d89`) —
+one state, two strings, chosen by which code path noticed the turn had ended.
+Now both prefix, through `tool_row::demoted_headline`, so the row a person was
+watching keeps its line with a status in front of it, which is how Claude
+Code's own rows read after an interrupt.
 
 **Left for a next session, in the order they are worth doing**: the
 transcript announcement and the mode note shortened (below); the *"Ran N
