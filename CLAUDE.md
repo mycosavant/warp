@@ -1229,6 +1229,39 @@ in `crates/persistence` missing T8.3's `settled`. The persistence one **was
 already red before the merge** — T8.3 shipped a required field without ever
 compiling that crate's tests. A clean `cargo build` proves nothing here.
 
+**Measured 2026-09-04, and the headline number below is wrong by 2x: a single
+`rustc` on the `warp` crate holds 16.6 GB RSS, not 8.1.** Sampled every 10 s
+through an uncapped release build: peak **17,028 MB in one process**, and at
+that moment **exactly one `rustc` was running** — the app crate is the tail of
+the graph and compiles alone. 19.8 GB stayed available, swap moved 250 MB.
+This supersedes both the 8.1 GB figure and the unverified 13.7 GB one, and it
+names the crate, which neither of those did.
+
+**That makes the cap *more* defensible, not less, and it is the opposite of what
+this measurement was expected to show.** At 16.6 GB per large crate against
+~39 GB of guest memory, **two** concurrent large crates is the ceiling and three
+is the crash — so the mechanism recorded below is right and its arithmetic was
+optimistic by half. `-j 8` is safe not because eight jobs fit but because seven
+of the eight are small.
+
+**What this run does NOT establish is whether uncapping is safe, and the reason
+is the trap this file already names twice.** The build compiled **4 crates** —
+it was incremental against a Sep 1 tree — so `-j` was never the binding
+constraint, the sampled maximum concurrency was 7, and the run says nothing
+about the many-crates-in-parallel case that actually took the VM down. The
+command ran correctly and answered a question nobody asked. **A clean build is
+the test**, it costs 30+ minutes, and it carries the real risk; it has not been
+run. Until it is, treat the cap as unresolved rather than lifted, and treat
+"am I building on both sides at once?" as the question that matters more than
+either number.
+
+**The specific hazard to keep in view is not the VM's size, it is the host's.**
+Windows-side tests and builds draw on the same 64 GB, so an uncapped WSL build
+concurrent with a Windows build is the exact scenario that took the guest down —
+and it is the one case the extra guest headroom does not help with, because the
+pressure is one level up. Treat "am I building on both sides at once?" as the
+question, not "how much has WSL got?".
+
 **Cap the release build: `CARGO_BUILD_JOBS=8 cargo build --release …`.**
 Measured 2026-08-29 on WSL: an uncapped release build **took the whole VM down**
 — the guest came back at `up 1 min` with an empty `dmesg`, which is the
