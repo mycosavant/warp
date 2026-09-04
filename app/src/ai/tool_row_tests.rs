@@ -110,3 +110,21 @@ fn the_update_mask_replaces_the_body_and_the_tag_and_nothing_else() {
     );
     assert_eq!(merged.message, existing.message, "the body was not touched");
 }
+
+/// **The renderer may not re-tense a headline it did not write.** A row that
+/// falls back to the agent's own title carries a sentence Warp has no grammar
+/// for; the guard is that demotion only ever prefixes.
+#[test]
+fn a_demoted_row_is_prefixed_and_never_re_tensed() {
+    // Warp's own headline: still legible, and still true.
+    assert_eq!(
+        super::demoted_headline("Running cargo test"),
+        "Interrupted: Running cargo test"
+    );
+    // The agent's title used whole. The first word ends in "ing" and is not a
+    // verb, which is the case the sniffing version mangled.
+    assert_eq!(
+        super::demoted_headline("Ping the host"),
+        "Interrupted: Ping the host"
+    );
+}

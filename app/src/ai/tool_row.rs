@@ -61,6 +61,51 @@ pub enum ToolRowState {
     Interrupted,
 }
 
+/// Whether an agent's title for a tool call names *this* call, or is the
+/// placeholder it sends before it knows.
+///
+/// **Measured on `claude-agent-acp` 0.73.0** (`146265e37`): the first
+/// `tool_call` carries *"Preparing file…"* or *"Terminal"*, and the real title
+/// arrives on a later update. A row that took the first one at face value drew
+/// the one line the agent had not meant anyone to read.
+///
+/// **Shared with the approval card on purpose.** The row distrusted the title
+/// and [`acp_approval::layered`] trusted it, so the same request could headline
+/// as *"Terminal"* above the buttons while its row said *"Running `cargo
+/// test`"* -- two surfaces disagreeing about the same string, with the
+/// credulous one being the one a person answers.
+///
+/// `also` carries whatever else counts as bare for the caller: the row passes
+/// its own verb, the card passes the tool kind the agent typed.
+///
+/// [`acp_approval::layered`]: crate::ai::blocklist::inline_action::acp_approval::layered
+pub(crate) fn is_placeholder_title(title: &str, also: &[&str]) -> bool {
+    let title = title.trim();
+    title.is_empty()
+        || title.ends_with('\u{2026}')
+        || title.ends_with("...")
+        || title.eq_ignore_ascii_case("terminal")
+        || also
+            .iter()
+            .any(|bare| !bare.is_empty() && title.eq_ignore_ascii_case(bare))
+}
+
+/// How a row's headline reads once the renderer alone has demoted it -- a row
+/// left `Running` in an exchange that has stopped streaming, which the wire
+/// never got round to rewriting.
+///
+/// **Prefixed, never re-tensed.** The first cut rewrote any headline whose
+/// first word ended in *"ing"* into *"Interrupted while {word} …"*. That is
+/// right for the verbs Warp writes itself and wrong for the ones it does not:
+/// a row with no object falls back to the agent's title used whole, so *"Ping
+/// the host"* came out as *"Interrupted while ping the host"*. Re-tensing
+/// someone else's sentence is how a row starts lying, which the translator
+/// says where it picks that fallback -- and this was the same mistake one file
+/// over, in the half that cannot tell the two kinds of headline apart.
+pub(crate) fn demoted_headline(headline: &str) -> String {
+    format!("Interrupted: {headline}")
+}
+
 const TAG_PREFIX: &str = "warp-fork/tool/";
 
 /// The value of `server_message_data` for a row in `state`.

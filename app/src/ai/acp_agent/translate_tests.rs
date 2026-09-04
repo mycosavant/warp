@@ -427,6 +427,33 @@ fn a_turn_that_ends_leaves_no_row_running() {
     assert!(translator.end_of_turn().is_empty());
 }
 
+/// **A refusal is an outcome, and the sweep must not overwrite it with the
+/// turn's ending.** `claude-agent-acp` sends a `failed` update after a *no*, so
+/// the row is already `Denied` by the time the turn ends there; an agent that
+/// simply stops after a refusal leaves the row open, and sweeping it to
+/// *Interrupted* would point at the turn ending when the reason was the
+/// person's own answer.
+#[test]
+fn a_row_warp_refused_is_swept_to_denied_and_not_to_interrupted() {
+    let mut translator = translator();
+    translator.on_update(&SessionUpdate::ToolCall(
+        ToolCall::new("call_1", "Terminal")
+            .kind(ToolKind::Execute)
+            .raw_input(serde_json::json!({"command": "rm -rf build"})),
+    ));
+    translator.log_permission_replied("approval-1", "call_1", "denied", Some("console"));
+
+    let rewrites = updates(&translator.end_of_turn());
+
+    assert_eq!(rewrites.len(), 1);
+    assert_eq!(
+        state_of(&rewrites[0].1.server_message_data),
+        Some(ToolRowState::Denied),
+        "the answer is the outcome"
+    );
+    assert_eq!(row_text(&rewrites[0].1), "Denied: run rm -rf build");
+}
+
 /// **The context ring was built, wired, and fed by nothing on this path.**
 /// `usage_update` carries `used` and `size`; the footer's ring reads
 /// `Conversation::context_window_usage`, which is written from the
@@ -537,9 +564,10 @@ fn an_update_for_an_unannounced_call_produces_nothing() {
 ///
 /// Measured on T14.6: a `session/request_permission` arrives with
 /// `locations: []`, while the `tool_call_update` carrying the path came moments
-/// earlier — *in progress*, not completed. `tool_update_text` returns early for
-/// anything that is not `Completed`, so recording from the display path would
-/// drop the one update this exists for. Showing and remembering are separate
+/// earlier — *in progress*, not completed. The display path of the day
+/// (`tool_update_text`, since replaced by the tool row) returned early for
+/// anything that was not `Completed`, so recording from it would have dropped
+/// the one update this exists for. Showing and remembering are separate
 /// concerns and this test is the seam between them: no events, and the location
 /// nonetheless known.
 #[test]

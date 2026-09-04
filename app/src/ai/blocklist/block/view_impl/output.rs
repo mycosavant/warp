@@ -4517,13 +4517,18 @@ fn render_tool_row(
     };
     // The translator writes "Running …" and the sweep rewrites it; a row the
     // renderer alone has demoted still says "Running", so the text follows.
+    //
+    // **Prefixed, never re-tensed.** A first cut rewrote any headline whose
+    // first word ended in "ing" into *"Interrupted while {word} …"*, which is
+    // right for the verbs Warp itself writes and wrong for the ones it does
+    // not: a row that falls back to the agent's own title uses it whole, so
+    // *"Ping the host"* came out as *"Interrupted while ping the host"*.
+    // `translate.rs` names that hazard where the fallback is chosen --
+    // re-tensing someone else's sentence is how a row starts lying -- and this
+    // was the same mistake one file over. The prefix costs a little grace on
+    // Warp's own headlines and cannot mangle anybody else's.
     let headline = if state != state_on_the_wire {
-        match headline.split_once(' ') {
-            Some((verb, rest)) if verb.ends_with("ing") => {
-                format!("Interrupted while {} {rest}", verb.to_lowercase())
-            }
-            _ => format!("Interrupted: {headline}"),
-        }
+        crate::ai::tool_row::demoted_headline(headline)
     } else {
         headline.to_owned()
     };

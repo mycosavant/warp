@@ -23,7 +23,15 @@
 //! option may only be selected by a surface capable of showing what that option
 //! declares.** This surface shows the agent, the title, the verbatim tool input,
 //! where the call said it would act, and every option the agent offered. So it
-//! may offer the single-shot yes — and nothing else. The always-variants are not
+//! may offer the single-shot yes — and nothing else.
+//!
+//! **"Shows" means without a further interaction**, and that sentence is load
+//! bearing rather than decorative: it is the whole argument for the button, so
+//! a layout that moves the tool input behind a toggle is not a presentation
+//! change, it is this rule quietly failing. One exception, stated so it is not
+//! discovered later: the tail of a payload past [`CONTENT_PREVIEW_CHARS`] is
+//! under *details*, and the closed card says how much is there rather than
+//! trailing off. The always-variants are not
 //! rendered at all, because a button that sets a session policy would be
 //! authorising something never shown.
 //!
@@ -61,9 +69,20 @@
 //! reasoning one interaction away; none of them drops the reasoning.
 //!
 //! So [`layered`] splits what the card knows into what is always drawn -- who
-//! is asking, the agent's own title, the sentence it wrote for a person, and
-//! the reason when there is no yes -- and what sits behind *details*: the
-//! verbatim call, the rest of the payload, where it acts, what was offered.
+//! is asking, the agent's own title, the sentence it wrote for a person, **the
+//! call itself**, and the reason when there is no yes -- and what sits behind
+//! *details*: the rest of the payload, where it acts, what was offered.
+//!
+//! **The call was behind the toggle for one commit, and that was the wrong side
+//! of the line.** Everything else on the closed card is the agent's own account
+//! of what it is about to do; the call is the only line a person can check that
+//! account against. Measured over the 52-ask corpus in
+//! `.fork/classifier/eval-set.jsonl`: 36 asks carry a `command` and 15 a
+//! written file's `content`, so on 51 of 52 the operative fact would have been
+//! one click away. It also falsified the paragraph above it, which justifies
+//! offering a yes at all on the grounds that this surface *shows* the verbatim
+//! tool input -- the stale-doc defect this fork tracks, landing on the file
+//! that states the consent rule.
 //! **Nothing is dropped and nothing is summarised**; the detail lines are the
 //! same lines, in the same order, and the toggle is keyed to the approval id
 //! like arming is, so a request that replaced the one a person opened arrives
@@ -424,31 +443,76 @@ pub(crate) struct Layers {
     /// The decision, in the agent's own words: its title, or failing that the
     /// call itself, or failing that the kind of tool.
     pub(crate) headline: String,
-    /// Drawn with the headline: the agent's description of the call, and the
-    /// reason when Warp has no yes to offer.
+    /// Drawn with the headline: the agent's description of the call, **the call
+    /// itself**, a write's bytes, and the reason when Warp has no yes to offer.
+    ///
+    /// The call is here rather than behind the toggle because everything else
+    /// on the closed card is the agent's own account of what it is about to do,
+    /// and this is the one line that says what will actually happen. A first
+    /// cut put it behind the toggle; the split then ran exactly along
+    /// *authored by the agent* / *checkable against the agent*, with the
+    /// checkable half hidden -- and it falsified this module's own reason for
+    /// offering a yes at all (see the header).
     pub(crate) always: Vec<(&'static str, String)>,
-    /// Behind the toggle: the call verbatim, the rest of the payload, where it
-    /// acts, what was offered. The same lines the card drew before it was
-    /// layered, in the same order.
+    /// Behind the toggle: the rest of the payload, the tail of a long write,
+    /// where the call said it acts, what was offered.
     pub(crate) details: Vec<(&'static str, String)>,
 }
 
 /// Splits a parked request into the two layers. Pure, so the split is tested
-/// without a view context; the rule it keeps is that every line the card ever
-/// drew is in one of the two, and the description is never behind the toggle.
+/// without a view context; the rules it keeps are that every line the card ever
+/// drew is in one of the two, and that neither the description, the call, nor
+/// the reason there is no yes is ever behind the toggle.
 pub(crate) fn layered(parked: &ParkedRequest) -> Layers {
     let described = parked
         .tool_input
         .as_deref()
         .map(describe_tool_input)
         .unwrap_or_default();
+    let call = described
+        .iter()
+        .find(|(label, _)| *label == "the call")
+        .map(|(_, value)| value.clone());
+    // The agent's title, unless it is the placeholder it sends before it knows
+    // -- the same rule the tool row applies, for the reason given there.
+    let headline = parked
+        .title
+        .as_deref()
+        .map(str::trim)
+        .filter(|title| {
+            !crate::ai::tool_row::is_placeholder_title(
+                title,
+                &[parked.tool_name.as_deref().unwrap_or_default()],
+            )
+        })
+        .map(str::to_owned)
+        .or_else(|| call.clone())
+        .or_else(|| parked.tool_name.clone())
+        .unwrap_or_else(|| "a tool call".to_owned());
+
     let mut always = Vec::new();
     let mut details = Vec::new();
     for (label, value) in described {
-        if label == "it says" {
-            always.push((label, value));
-        } else {
-            details.push((label, value));
+        match label {
+            "it says" => always.push((label, value)),
+            // Never behind the toggle: the description is what the agent says
+            // it is doing and the call is what will happen, and a person
+            // answering yes has agreed to the second one.
+            "the call" => {
+                // Unless the headline already is the call, verbatim -- then a
+                // second copy of it is noise, not disclosure.
+                if value != headline {
+                    always.push((label, value));
+                }
+            }
+            "content" => match elided(&value) {
+                Some(preview) => {
+                    always.push((label, preview));
+                    details.push(("content in full", value));
+                }
+                None => always.push((label, value)),
+            },
+            _ => details.push((label, value)),
         }
     }
     // Never falls back to the session directory: that is Warp's own choice of
@@ -479,22 +543,32 @@ pub(crate) fn layered(parked: &ParkedRequest) -> Layers {
             }),
         ));
     }
-    let headline = parked
-        .title
-        .clone()
-        .or_else(|| {
-            details
-                .iter()
-                .find(|(label, _)| *label == "the call")
-                .map(|(_, value)| value.clone())
-        })
-        .or_else(|| parked.tool_name.clone())
-        .unwrap_or_else(|| "a tool call".to_owned());
     Layers {
         headline,
         always,
         details,
     }
+}
+
+/// How much of a write's bytes the closed card shows before deferring the rest.
+///
+/// Long enough for the first lines of a file to be recognisable, short enough
+/// that a large write cannot push the buttons off the bottom of the panel --
+/// which is the failure the layering exists to fix, and would be reintroduced
+/// by putting an unbounded payload back above the fold.
+const CONTENT_PREVIEW_CHARS: usize = 400;
+
+/// The head of `value` plus a note of what was left off, or `None` when the
+/// whole of it fits.
+///
+/// Counts `char`s rather than bytes: a truncation that split a multi-byte
+/// character would panic on the slice, and the payload most likely to be long
+/// is a file the agent wrote.
+fn elided(value: &str) -> Option<String> {
+    let mut chars = value.chars();
+    let head: String = chars.by_ref().take(CONTENT_PREVIEW_CHARS).collect();
+    let left = chars.count();
+    (left > 0).then(|| format!("{head}\u{2026}\n(+{left} more characters, under details)"))
 }
 
 /// Splits a tool call's raw input into labelled lines for the card.
@@ -535,10 +609,14 @@ fn describe_tool_input(input: &str) -> Vec<(&'static str, String)> {
             lines.push(("the call", plain(value)));
         }
     }
-    // Everything else, verbatim and named. `content` lands here, which is
-    // deliberate: the bytes a write would put on disk are part of what is being
-    // agreed to.
-    let known = ["description", "command", "file_path"];
+    // Labelled on its own rather than folded into `also`, because the bytes a
+    // write would put on disk are part of what is being agreed to and
+    // [`layered`] has to be able to find them to keep them on the closed card.
+    if let Some(value) = fields.get("content") {
+        lines.push(("content", plain(value)));
+    }
+    // Everything else, verbatim and named.
+    let known = ["description", "command", "file_path", "content"];
     let rest: Vec<String> = fields
         .iter()
         .filter(|(key, _)| !known.contains(&key.as_str()))

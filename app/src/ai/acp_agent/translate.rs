@@ -70,7 +70,7 @@ use chrono::{DateTime, Utc};
 use warp_multi_agent_api as api;
 
 use super::registry;
-use crate::ai::tool_row::{Row, ToolRowState, UPDATE_MASK};
+use crate::ai::tool_row::{self, Row, ToolRowState, UPDATE_MASK};
 use crate::event_log::Entry;
 
 /// How much of a call's output the row keeps behind its chevron.
@@ -125,9 +125,14 @@ pub(super) struct Translator {
     /// Buffering to a natural boundary gives exactly the granularity
     /// `local_agent` already produces. The alternative is
     /// `AppendToMessageContent`, which the protocol has and which is built for
-    /// precisely this — but its `FieldMask` path into the `Message` oneof is not
-    /// used anywhere in this repo, so shipping it would mean guessing an input
-    /// and finding out from a silent failure. Named on T14.6 instead.
+    /// precisely this. Its `FieldMask` path is no longer unexplored -- [`rewrite`]
+    /// uses `UpdateTaskMessage` with a mask pinned against the proto descriptor,
+    /// and the calibration there found that masking the oneof's own name is a
+    /// silent no-op rather than an error. So the objection now is the narrower
+    /// one: appending per chunk would restore the granularity this buffer exists
+    /// to coarsen, not that the path is unknown.
+    ///
+    /// [`rewrite`]: Translator::rewrite
     pending: Option<(Pending, String)>,
     /// One row per tool call, by `toolCallId`, in the order announced.
     ///
@@ -621,7 +626,18 @@ impl Translator {
             .collect();
         for id in open {
             let mut draft = self.take_row(&id).expect("just listed");
-            draft.state = ToolRowState::Interrupted;
+            // A call Warp refused is not a call nobody watched: the answer is
+            // the outcome, and it is Warp's own. `claude-agent-acp` sends a
+            // `failed` update after a rejection so this rarely fires there, but
+            // an agent that simply stops after a no would leave the row saying
+            // *Interrupted while running X* -- which points at the turn ending
+            // when the reason was the person's answer. Same rule as the
+            // `Failed`/`Denied` split, applied one step later.
+            draft.state = if self.denied.contains(&id) {
+                ToolRowState::Denied
+            } else {
+                ToolRowState::Interrupted
+            };
             events.push(self.rewrite(&draft));
             self.rows.push((id, draft));
         }
@@ -691,10 +707,14 @@ impl Translator {
             cwd: self.cwd.as_deref(),
             project: self.cwd.as_deref().and_then(crate::event_log::project_name),
             tool_name: Some(kind),
-            // ACP's notification stream has no `rawInput`; that lives on the
-            // permission request, which `mod.rs` handles and which this
-            // module deliberately does not reach. So the preview stays
-            // absent and the log says nothing rather than the wrong thing.
+            // Deliberately absent, and no longer because the stream lacks the
+            // input: `row_announced` reads `call.raw_input` to name what a row
+            // acts on, so a preview could be written here. It is not, because
+            // the event log's preview is what a *permission request* showed,
+            // and `mod.rs` writes that from the request itself. A second
+            // preview from the notification stream would look like the same
+            // field and answer a different question -- what the agent said it
+            // would run, rather than what a person was shown before answering.
             tool_input_preview: None,
             summary: None,
             // A start is not a failure; a failure, when the wire reports one,
@@ -965,8 +985,12 @@ impl Translator {
         // The context ring's one input. `used / size` is what the footer's
         // `icon_for_context_window_usage` wants and what upstream's server
         // computes as `total tokens / model context window`; everything else
-        // on the metadata is cost, which this path does not have and leaves
-        // at its default. `size > 0` is checked where the value is recorded.
+        // on the metadata is cost. `claude-agent-acp` does send one
+        // (`total_cost_usd` on its usage update), so this is a deliberate
+        // omission rather than an absence: a fork whose thesis is the user's own
+        // subscription has no per-turn bill to show, and upstream's footer draws
+        // the credits entry from these fields. Left at its default, which reads
+        // as zero. `size > 0` is checked where the value is recorded.
         let conversation_usage_metadata =
             self.usage
                 .map(|(used, size)| stream_finished::ConversationUsageMetadata {
@@ -1116,11 +1140,7 @@ impl RowDraft {
     /// in an ellipsis or are the bare kind (*"Terminal"*, *"read"*).
     fn usable_title(&self) -> Option<&str> {
         let title = self.title.as_deref()?;
-        let placeholder = title.ends_with('\u{2026}')
-            || title.ends_with("...")
-            || title.eq_ignore_ascii_case("terminal")
-            || title.eq_ignore_ascii_case(self.verb.base)
-            || title.eq_ignore_ascii_case(self.verb.done);
+        let placeholder = tool_row::is_placeholder_title(title, &[self.verb.base, self.verb.done]);
         (!placeholder).then_some(title)
     }
 

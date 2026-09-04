@@ -139,11 +139,15 @@ fn parked(input: Option<&str>, approve_selects: Option<&str>) -> ParkedRequest {
     }
 }
 
-/// **Decision first, disclosure one interaction away, nothing dropped.** The
-/// agent's title is the headline, its own sentence stays beside it, and every
-/// other line the card used to draw is behind the toggle in the order it was.
+/// **Decision first, disclosure one interaction away, and the call is part of
+/// the decision.** The agent's title headlines, its own sentence stays beside
+/// it, and so does the command -- everything else goes behind the toggle.
+///
+/// The first cut of the layering put `the call` in `details`, which left the
+/// closed card carrying only what the agent had written about itself. This is
+/// the assertion that keeps it on the near side.
 #[test]
-fn the_description_stays_on_top_and_the_call_goes_behind_the_toggle() {
+fn the_description_and_the_call_stay_on_top_and_the_rest_goes_behind_the_toggle() {
     let input = serde_json::json!({
         "command": "cargo test -p warp",
         "description": "Run the app crate's tests",
@@ -154,12 +158,14 @@ fn the_description_stays_on_top_and_the_call_goes_behind_the_toggle() {
     assert_eq!(layers.headline, "Write out.txt");
     assert_eq!(
         layers.always,
-        vec![("it says", "Run the app crate's tests".to_owned())]
+        vec![
+            ("it says", "Run the app crate's tests".to_owned()),
+            ("the call", "cargo test -p warp".to_owned()),
+        ]
     );
     assert_eq!(
         layers.details,
         vec![
-            ("the call", "cargo test -p warp".to_owned()),
             ("acts on", "/tmp/project/out.txt".to_owned()),
             (
                 "offered",
@@ -168,6 +174,80 @@ fn the_description_stays_on_top_and_the_call_goes_behind_the_toggle() {
                 )
             ),
         ]
+    );
+}
+
+/// **No line a person needs in order to answer may be behind the toggle**, said
+/// as a rule over the labels rather than as one example of it, so a later key
+/// cannot be added to the wrong side without this going red.
+#[test]
+fn nothing_the_answer_depends_on_is_behind_the_toggle() {
+    let input = serde_json::json!({
+        "command": "rm -rf /tmp/scratch",
+        "description": "Clear the scratch directory",
+        "content": "short",
+    })
+    .to_string();
+    let mut request = parked(Some(&input), None);
+    request.approve_refused_because = Some("no single-shot yes was offered".to_owned());
+
+    let hidden: Vec<&str> = super::layered(&request)
+        .details
+        .iter()
+        .map(|(label, _)| *label)
+        .collect();
+
+    for label in ["it says", "the call", "content", "no yes"] {
+        assert!(
+            !hidden.contains(&label),
+            "`{label}` must be on the closed card, found in details: {hidden:?}"
+        );
+    }
+}
+
+/// A write's bytes are shown, and a long one is cut with the amount left said
+/// rather than trailing off -- the whole of it stays under the toggle.
+#[test]
+fn a_long_write_is_previewed_above_the_fold_and_kept_whole_below_it() {
+    let content = "x".repeat(super::CONTENT_PREVIEW_CHARS + 25);
+    let input =
+        serde_json::json!({ "file_path": "/tmp/project/out.txt", "content": content }).to_string();
+
+    let layers = super::layered(&parked(Some(&input), Some("allow_once")));
+
+    let preview = layers
+        .always
+        .iter()
+        .find(|(label, _)| *label == "content")
+        .expect("the bytes are on the closed card");
+    assert!(preview.1.contains("+25 more characters"), "{preview:?}");
+    assert!(
+        layers
+            .details
+            .contains(&("content in full", content.clone())),
+        "the whole payload stays under the toggle: {layers:?}"
+    );
+}
+
+/// **The card distrusts a placeholder title exactly as the tool row does.**
+/// `claude-agent-acp` sends *"Terminal"* before it knows what the call is; the
+/// row refuses that title and headlines from `rawInput`, and the card headlining
+/// it anyway would put the agent's least informative string above the buttons.
+#[test]
+fn a_placeholder_title_is_refused_and_the_call_headlines_instead() {
+    let mut request = parked(
+        Some(r#"{"command": "cargo test -p warp"}"#),
+        Some("allow_once"),
+    );
+    request.title = Some("Terminal".to_owned());
+    request.tool_name = Some("execute".to_owned());
+
+    let layers = super::layered(&request);
+
+    assert_eq!(layers.headline, "cargo test -p warp");
+    assert!(
+        !layers.always.iter().any(|(label, _)| *label == "the call"),
+        "the headline is the call verbatim, so a second copy is noise: {layers:?}"
     );
 }
 

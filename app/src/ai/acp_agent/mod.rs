@@ -1419,8 +1419,13 @@ fn wait_for_a_person(
         // person to type has already been dropped from the registry. Measured
         // T14.7: `warpctrl agent approve` on it answers `missing_target`. A
         // second note rather than an edit of the first, because amending a
-        // message needs `UpdateTaskMessage`'s `FieldMask` path, which nothing in
-        // this repo uses and which this module has twice declined to guess.
+        // message needs `UpdateTaskMessage`'s `FieldMask` path. That path is no
+        // longer a guess -- `translate::Translator::rewrite` uses it to keep a
+        // tool row on one line -- but the reason for a second note here is
+        // unchanged and is not about the mechanism: the first note is what the
+        // transcript already records the person having been asked, and editing
+        // it away would leave a settled conversation with no account of the
+        // question.
         let event = emit(&translator, |translator| {
             // Logged before the responder answers, so a record of the decision
             // exists even if delivering it fails -- and a failure to deliver is

@@ -1020,8 +1020,9 @@ how refusals are already kept (`transcript_tests.rs`, and verified in real
 transcripts on disk).
 
 **And the last word of it is won't-fix, measured 2026-08-30 rather than
-argued.** `tool_update_text` early-returns on anything that is not `Completed`,
-so a `Failed` call emits no text of its own — which looked like the one real gap
+argued.** `tool_update_text` (the display path of the day, replaced by the tool
+row in `146265e37`) early-returned on anything that is not `Completed`, so a
+`Failed` call emitted no text of its own — which looked like the one real gap
 left. The test was the cheap one: a panel session was asked to `cat` a
 nonexistent file. The transcript came back carrying
 
@@ -1029,7 +1030,12 @@ nonexistent file. The transcript came back carrying
 > file doesn't exist, so `cat` exited non-zero.
 
 So the failure is legible in the prose regardless, and a status marker would add
-a greppable token and nothing else. **T14.19's leftover is closed without code.**
+a greppable token and nothing else. **T14.19's leftover was closed without code** — and then closed *with* code
+anyway, from the other end: `146265e37` gave every call its own row, so a
+failure now carries a marker (`Failed to run …`, `Denied: run …`) as well as its
+prose. The verdict below still stands as a verdict about the prose; what changed
+is that the greppable token turned out to be worth having for a different
+reason.
 Everything the ticket wanted is already there: tool names in the prose, refusals
 in the prose with their reason, and now failures too.
 
