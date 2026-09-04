@@ -7,10 +7,11 @@
 
 use agent_client_protocol::schema::v1::{
     AvailableCommandsUpdate, ContentChunk, CurrentModeUpdate, SessionModeId, TextContent, ToolCall,
-    ToolCallLocation, ToolCallUpdateFields, ToolKind, UsageUpdate,
+    ToolCallContent, ToolCallLocation, ToolCallUpdateFields, ToolKind, UsageUpdate,
 };
 
 use super::*;
+use crate::ai::tool_row::state_of;
 
 fn translator() -> Translator {
     Translator::new(
@@ -78,7 +79,63 @@ fn a_tool_call_is_never_emitted_as_a_tool_call_message() {
             .any(|body| matches!(body, api::message::Message::ToolCall(_))),
         "a ToolCall message would ask Warp to run a tool the agent already ran"
     );
-    assert_eq!(output(&events), vec!["`Write a.txt`".to_owned()]);
+    assert_eq!(output(&events), vec!["Write a.txt".to_owned()]);
+
+    // The rewrites too: an update is the same message again, and the same
+    // hazard again.
+    let events = translator.on_update(&SessionUpdate::ToolCallUpdate(ToolCallUpdate::new(
+        "call_1",
+        ToolCallUpdateFields::new().status(ToolCallStatus::Completed),
+    )));
+    let rewrites = updates(&events);
+    assert_eq!(rewrites.len(), 1);
+    assert!(
+        !matches!(
+            rewrites[0].1.message,
+            Some(api::message::Message::ToolCall(_))
+        ),
+        "a rewrite must not become a ToolCall either"
+    );
+}
+
+/// The rewrites a batch of events carries: `(task_id, message, mask paths)`.
+fn updates(events: &[api::ResponseEvent]) -> Vec<(String, api::Message, Vec<String>)> {
+    events
+        .iter()
+        .filter_map(|event| match &event.r#type {
+            Some(api::response_event::Type::ClientActions(actions)) => Some(&actions.actions),
+            _ => None,
+        })
+        .flatten()
+        .filter_map(|action| match &action.action {
+            Some(api::client_action::Action::UpdateTaskMessage(update)) => Some((
+                update.task_id.clone(),
+                update.message.clone().expect("a message"),
+                update.mask.clone().expect("a mask").paths,
+            )),
+            _ => None,
+        })
+        .collect()
+}
+
+fn row_text(message: &api::Message) -> String {
+    match &message.message {
+        Some(api::message::Message::AgentOutput(output)) => output.text.clone(),
+        other => panic!("not an AgentOutput: {other:?}"),
+    }
+}
+
+fn claude_meta(tool_name: &str) -> agent_client_protocol::schema::v1::Meta {
+    let mut meta = agent_client_protocol::schema::v1::Meta::new();
+    meta.insert(
+        "claudeCode".to_owned(),
+        serde_json::json!({ "toolName": tool_name }),
+    );
+    meta
+}
+
+fn text_content(text: &str) -> ToolCallContent {
+    ToolCallContent::from(ContentBlock::Text(TextContent::new(text)))
 }
 
 /// **The defect the first live turn produced.** ACP streams tokens, so one
@@ -117,7 +174,7 @@ fn a_tool_call_flushes_the_text_before_it() {
 
     assert_eq!(
         output(&events),
-        vec!["looking now".to_owned(), "`read`".to_owned()],
+        vec!["looking now".to_owned(), "Reading\u{2026}".to_owned()],
         "the sentence, then the tool, in that order"
     );
 }
@@ -170,41 +227,260 @@ fn an_empty_chunk_produces_nothing() {
     );
 }
 
-/// Measured on both agents: `tool_call` carries a placeholder title and a later
-/// `tool_call_update` corrects it — Claude sent "Preparing file…" then
-/// "Write a.txt", opencode sent "read" then the path. The corrected one is the
-/// useful one, and printing both is noise.
+/// **The measured sequence at `claude-agent-acp` 0.73.0, and the defect it
+/// exposed.** `tool_call` carries a placeholder (*"Terminal"*), the real title
+/// and `rawInput` arrive on an update with *no status*, the description
+/// arrives on another, and the completion carries content and status but no
+/// title. The old display path showed a corrected title only on a `Completed`
+/// update, so a person saw *"Terminal"* and nothing else -- the last measured
+/// transcript reads *"Preparing file…"* three times.
+///
+/// Now it is one message, announced once and rewritten in place: same id
+/// every time, the mask naming the body and the tag, the tag carrying the
+/// state, and the headline tensed for it.
 #[test]
-fn a_corrected_title_is_shown_once_more_and_only_when_it_changed() {
+fn the_measured_sequence_is_one_row_rewritten_until_it_says_what_ran() {
     let mut translator = translator();
-    translator.on_update(&SessionUpdate::ToolCall(
-        ToolCall::new("call_1", "Preparing file…").kind(ToolKind::Edit),
+    let announced = translator.on_update(&SessionUpdate::ToolCall(
+        ToolCall::new("call_1", "Terminal")
+            .kind(ToolKind::Execute)
+            .meta(claude_meta("Bash")),
     ));
+    let announced = &raw_messages(&announced)[0];
+    assert_eq!(
+        state_of(&announced.server_message_data),
+        Some(ToolRowState::Running)
+    );
+    assert_eq!(row_text(announced), "Running\u{2026}");
 
-    let corrected = translator.on_update(&SessionUpdate::ToolCallUpdate(ToolCallUpdate::new(
+    let titled = translator.on_update(&SessionUpdate::ToolCallUpdate(ToolCallUpdate::new(
         "call_1",
         ToolCallUpdateFields::new()
-            .title("Write a.txt".to_owned())
-            .status(ToolCallStatus::Completed),
+            .kind(ToolKind::Execute)
+            .title("CARGO_BUILD_JOBS=8 cargo --version".to_owned())
+            .raw_input(serde_json::json!({"command": "CARGO_BUILD_JOBS=8 cargo --version"})),
     )));
+    let described = translator.on_update(&SessionUpdate::ToolCallUpdate(ToolCallUpdate::new(
+        "call_1",
+        ToolCallUpdateFields::new().content(vec![text_content("Print cargo version")]),
+    )));
+    let completed = translator.on_update(&SessionUpdate::ToolCallUpdate(ToolCallUpdate::new(
+        "call_1",
+        ToolCallUpdateFields::new()
+            .status(ToolCallStatus::Completed)
+            .content(vec![text_content("```console\ncargo 1.92.0\n```")])
+            .raw_output(serde_json::json!("cargo 1.92.0")),
+    )));
+
+    let rewrites: Vec<_> = [titled, described, completed]
+        .iter()
+        .map(|events| {
+            assert!(bodies(events).is_empty(), "a rewrite is not an append");
+            let mut rewrites = updates(events);
+            assert_eq!(rewrites.len(), 1, "one rewrite per change");
+            rewrites.remove(0)
+        })
+        .collect();
+    for (task_id, message, paths) in &rewrites {
+        assert_eq!(task_id, "task-1");
+        assert_eq!(
+            message.id, announced.id,
+            "a rewrite names the announced message"
+        );
+        assert_eq!(message.task_id, announced.task_id);
+        assert_eq!(message.request_id, announced.request_id);
+        assert_eq!(message.timestamp, announced.timestamp);
+        assert_eq!(paths, &["agent_output", "server_message_data"]);
+    }
+    assert_eq!(
+        row_text(&rewrites[0].1),
+        "Running CARGO_BUILD_JOBS=8 cargo --version"
+    );
+    assert_eq!(
+        state_of(&rewrites[0].1.server_message_data),
+        Some(ToolRowState::Running)
+    );
+    assert_eq!(
+        row_text(&rewrites[1].1),
+        "Running CARGO_BUILD_JOBS=8 cargo --version\n\nPrint cargo version"
+    );
+    assert_eq!(
+        row_text(&rewrites[2].1),
+        "Ran CARGO_BUILD_JOBS=8 cargo --version\n\nPrint cargo version\n\n```console\ncargo 1.92.0\n```"
+    );
+    assert_eq!(
+        state_of(&rewrites[2].1.server_message_data),
+        Some(ToolRowState::Done)
+    );
+
+    // The echoed completion the measured streams send: the same fact twice.
     let repeated = translator.on_update(&SessionUpdate::ToolCallUpdate(ToolCallUpdate::new(
         "call_1",
+        ToolCallUpdateFields::new().status(ToolCallStatus::Completed),
+    )));
+    assert!(repeated.is_empty(), "a terminal row stays as it is");
+}
+
+/// A write, as the same agent reports one: `Write` is a `ToolKind::Edit`, and
+/// *"Wrote"* is the truer word. The path is said from the session directory.
+#[test]
+fn a_write_is_said_as_one_and_its_path_from_the_session_directory() {
+    let mut translator = translator();
+    translator.on_update(&SessionUpdate::ToolCall(
+        ToolCall::new("call_1", "Preparing file\u{2026}")
+            .kind(ToolKind::Edit)
+            .meta(claude_meta("Write")),
+    ));
+    let events = translator.on_update(&SessionUpdate::ToolCallUpdate(ToolCallUpdate::new(
+        "call_1",
         ToolCallUpdateFields::new()
             .title("Write a.txt".to_owned())
+            .raw_input(serde_json::json!({"file_path": "/tmp/project/notes/a.txt"}))
             .status(ToolCallStatus::Completed),
     )));
 
-    assert_eq!(output(&corrected), vec!["`Write a.txt`".to_owned()]);
-    assert!(
-        repeated.is_empty(),
-        "the same title twice is the same fact twice"
+    assert_eq!(row_text(&updates(&events)[0].1), "Wrote notes/a.txt");
+}
+
+/// A call Warp answered *no* to fails on the wire like any other; the row
+/// says which it was, because a person reading *"Failed to run"* would look
+/// for a fault in the command and not in their own answer.
+#[test]
+fn a_call_warp_refused_is_drawn_as_denied_not_failed() {
+    let mut translator = translator();
+    translator.on_update(&SessionUpdate::ToolCall(
+        ToolCall::new("call_1", "Terminal")
+            .kind(ToolKind::Execute)
+            .raw_input(serde_json::json!({"command": "rm -rf build"})),
+    ));
+    translator.log_permission_replied("approval-1", "call_1", "denied", Some("console"));
+    let events = translator.on_update(&SessionUpdate::ToolCallUpdate(ToolCallUpdate::new(
+        "call_1",
+        ToolCallUpdateFields::new().status(ToolCallStatus::Failed),
+    )));
+
+    let (_, message, _) = &updates(&events)[0];
+    assert_eq!(
+        state_of(&message.server_message_data),
+        Some(ToolRowState::Denied)
+    );
+    assert_eq!(row_text(message), "Denied: run rm -rf build");
+
+    // And a failure nobody refused is a failure.
+    translator.on_update(&SessionUpdate::ToolCall(
+        ToolCall::new("call_2", "Terminal")
+            .kind(ToolKind::Execute)
+            .raw_input(serde_json::json!({"command": "cargo test"})),
+    ));
+    let events = translator.on_update(&SessionUpdate::ToolCallUpdate(ToolCallUpdate::new(
+        "call_2",
+        ToolCallUpdateFields::new().status(ToolCallStatus::Failed),
+    )));
+    let (_, message, _) = &updates(&events)[0];
+    assert_eq!(
+        state_of(&message.server_message_data),
+        Some(ToolRowState::Failed)
+    );
+    assert_eq!(row_text(message), "Failed to run cargo test");
+}
+
+/// When the turn ends, no row may still say *Running*: Warp has stopped
+/// listening, and a spinner over a process nobody is watching claims more
+/// than the code does. The sweep is idempotent, so a driver that ends a turn
+/// twice does not rewrite twice.
+#[test]
+fn a_turn_that_ends_leaves_no_row_running() {
+    let mut translator = translator();
+    translator.on_update(&SessionUpdate::ToolCall(
+        ToolCall::new("call_1", "Terminal")
+            .kind(ToolKind::Execute)
+            .raw_input(serde_json::json!({"command": "cargo test"})),
+    ));
+    translator.on_update(&SessionUpdate::ToolCall(
+        ToolCall::new("call_2", "Write a.txt").kind(ToolKind::Edit),
+    ));
+    translator.on_update(&SessionUpdate::ToolCallUpdate(ToolCallUpdate::new(
+        "call_2",
+        ToolCallUpdateFields::new().status(ToolCallStatus::Completed),
+    )));
+    translator.on_update(&SessionUpdate::AgentMessageChunk(text_chunk(
+        "tests are slow",
+    )));
+
+    let events = translator.end_of_turn();
+
+    assert_eq!(
+        output(&events),
+        vec!["tests are slow".to_owned()],
+        "the tail is flushed"
+    );
+    let rewrites = updates(&events);
+    assert_eq!(rewrites.len(), 1, "only the open row is rewritten");
+    assert_eq!(
+        state_of(&rewrites[0].1.server_message_data),
+        Some(ToolRowState::Interrupted)
+    );
+    assert_eq!(
+        row_text(&rewrites[0].1),
+        "Interrupted while running cargo test"
+    );
+    assert!(translator.end_of_turn().is_empty());
+}
+
+/// A title that is all the agent gives is used whole, with its own verb, and
+/// prefixed only for the states that need saying.
+#[test]
+fn a_bare_title_is_used_as_the_agents_sentence_and_not_re_tensed() {
+    let mut translator = translator();
+    let events = translator.on_update(&SessionUpdate::ToolCall(
+        ToolCall::new("call_1", "Search for callers of flush").kind(ToolKind::Search),
+    ));
+    assert_eq!(
+        output(&events),
+        vec!["Search for callers of flush".to_owned()]
+    );
+
+    let events = translator.on_update(&SessionUpdate::ToolCallUpdate(ToolCallUpdate::new(
+        "call_1",
+        ToolCallUpdateFields::new().status(ToolCallStatus::Failed),
+    )));
+    assert_eq!(
+        row_text(&updates(&events)[0].1),
+        "Failed: Search for callers of flush"
     );
 }
 
-/// An unfinished update is the common case — the measured streams send several
-/// per call — and each one rendered would bury the answer.
+/// The detail is bounded: a `cargo test` run is unbounded and the row is for
+/// a person. The agent's own store keeps the whole thing.
 #[test]
-fn an_in_progress_update_produces_nothing() {
+fn the_detail_is_cut_rather_than_carried_whole() {
+    let mut translator = translator();
+    translator.on_update(&SessionUpdate::ToolCall(
+        ToolCall::new("call_1", "Terminal")
+            .kind(ToolKind::Execute)
+            .raw_input(serde_json::json!({"command": "cargo test"})),
+    ));
+    let long = "x".repeat(DETAIL_CHARS + 500);
+    let events = translator.on_update(&SessionUpdate::ToolCallUpdate(ToolCallUpdate::new(
+        "call_1",
+        ToolCallUpdateFields::new()
+            .status(ToolCallStatus::Completed)
+            .content(vec![text_content(&long)]),
+    )));
+
+    let text = row_text(&updates(&events)[0].1);
+    assert!(
+        text.ends_with("\u{2026} (truncated)"),
+        "{}",
+        &text[text.len() - 40..]
+    );
+    assert!(text.chars().count() < DETAIL_CHARS + 100);
+}
+
+/// An update for a call Warp never saw announced has no row to rewrite, and
+/// inventing one would draw a call whose start was never reported.
+#[test]
+fn an_update_for_an_unannounced_call_produces_nothing() {
     let mut translator = translator();
 
     let events = translator.on_update(&SessionUpdate::ToolCallUpdate(ToolCallUpdate::new(

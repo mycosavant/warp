@@ -217,6 +217,27 @@ impl ConvertAPIMessageToClientOutputMessage for api::Message {
             // carries the note tag. Decided here, on the way in, so nothing
             // downstream ever has to look at a marker in the text -- see
             // `crate::ai::warp_note` for why the carrier is this field.
+            // A tool row is the same channel with the state in the tag; see
+            // `crate::ai::tool_row`. Matched before the note so neither tag
+            // can be read as the other, and before the plain arm for the same
+            // reason the note is.
+            api::message::Message::AgentOutput(output)
+                if crate::ai::tool_row::state_of(&self.server_message_data).is_some() =>
+            {
+                let state = crate::ai::tool_row::state_of(&self.server_message_data)
+                    .expect("checked by the guard");
+                let row = crate::ai::tool_row::Row::from_wire(state, &output.text);
+                Ok(MaybeAIAgentOutputMessage::Message(
+                    AIAgentOutputMessage::tool_row(
+                        MessageId::new(self.id),
+                        row.state,
+                        row.headline,
+                        AIAgentText {
+                            sections: parse_markdown_into_text_and_code_sections(&row.detail),
+                        },
+                    ),
+                ))
+            }
             api::message::Message::AgentOutput(output)
                 if crate::ai::warp_note::is_tagged(&self.server_message_data) =>
             {

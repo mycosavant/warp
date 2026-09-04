@@ -1020,7 +1020,8 @@ impl TuiAIBlock {
                         summarization_type: SummarizationType::ConversationSummary,
                         ..
                     } => Some(text),
-                    AIAgentOutputMessageType::WarpNote { detail, .. } => Some(detail),
+                    AIAgentOutputMessageType::WarpNote { detail, .. }
+                    | AIAgentOutputMessageType::ToolRow { detail, .. } => Some(detail),
                     AIAgentOutputMessageType::Action(_)
                     | AIAgentOutputMessageType::TodoOperation(_)
                     | AIAgentOutputMessageType::Subagent(_)
@@ -1618,7 +1619,10 @@ impl TuiAIBlock {
                     // Warp's own note (fork): the headline as a plain line, the
                     // detail as the rich text it is. Section indices are the
                     // detail's own, matching `sync_code_block_views`.
-                    AIAgentOutputMessageType::WarpNote { headline, detail } => {
+                    AIAgentOutputMessageType::WarpNote { headline, detail }
+                    | AIAgentOutputMessageType::ToolRow {
+                        headline, detail, ..
+                    } => {
                         sections.push(TuiAIBlockSection::RichText(TuiRichTextSection::PlainText(
                             headline.clone(),
                         )));

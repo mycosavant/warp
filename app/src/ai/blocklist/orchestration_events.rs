@@ -413,7 +413,8 @@ impl OrchestrationEventService {
                     | AIAgentOutputMessageType::DebugOutput { .. }
                     | AIAgentOutputMessageType::ArtifactCreated(_)
                     | AIAgentOutputMessageType::SkillInvoked(_)
-                    | AIAgentOutputMessageType::WarpNote { .. } => {}
+                    | AIAgentOutputMessageType::WarpNote { .. }
+                    | AIAgentOutputMessageType::ToolRow { .. } => {}
                 }
             }
         }

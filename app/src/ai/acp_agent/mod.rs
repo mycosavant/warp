@@ -420,7 +420,7 @@ async fn drive(
         let opened = emit(&translator, |translator| translator.stream_was_opened());
         if opened {
             let closing = emit(&translator, |translator| {
-                let mut events = translator.flush();
+                let mut events = translator.end_of_turn();
                 events.push(translator.failed(format!("{error:#}")));
                 events
             });
@@ -806,7 +806,7 @@ async fn exchange(
             // The buffered tail first, or the agent's last sentence — usually
             // its whole answer — is dropped on the floor. See `Translator::flush`.
             let closing = emit(&translator, |translator| {
-                let mut events = translator.flush();
+                let mut events = translator.end_of_turn();
                 events.push(translator.finished(answer.stop_reason));
                 events
             });
@@ -1547,7 +1547,7 @@ impl Drop for AsksNothingMore {
         // can run while an unwind is in progress, where a panic aborts the
         // process — so a poisoned lock costs one missing log line here instead
         // of taking Warp down over one.
-        let Ok(translator) = translator.lock() else {
+        let Ok(mut translator) = translator.lock() else {
             return;
         };
         translator.log_permission_replied(&approval_id, &tool_call_id, "unanswered", None);

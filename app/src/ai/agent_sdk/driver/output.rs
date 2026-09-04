@@ -485,7 +485,8 @@ pub mod text {
                 AIAgentOutputMessageType::DebugOutput { text } => {
                     writeln!(w, "[DEBUG] {text}")?;
                 }
-                AIAgentOutputMessageType::WarpNote { headline, .. } => {
+                AIAgentOutputMessageType::WarpNote { headline, .. }
+                | AIAgentOutputMessageType::ToolRow { headline, .. } => {
                     writeln!(w, "{headline}")?;
                 }
                 AIAgentOutputMessageType::ArtifactCreated(data) => match data {
@@ -1170,6 +1171,7 @@ pub mod json {
                 AIAgentOutputMessageType::WebFetch(_) => None,
                 AIAgentOutputMessageType::DebugOutput { .. } => None,
                 AIAgentOutputMessageType::WarpNote { .. } => None,
+                AIAgentOutputMessageType::ToolRow { .. } => None,
                 AIAgentOutputMessageType::CommentsAddressed { comments } => {
                     Some(JsonMessage::CommentsAddressed {
                         addressed_comments: JsonComment::from_review_comments(comments),

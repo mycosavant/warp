@@ -530,7 +530,8 @@ impl AIAgentOutput {
                 } => Some(text),
                 // The detail is rendered through the same section renderer as
                 // the rest, so it must be counted here for the same reason.
-                AIAgentOutputMessageType::WarpNote { detail, .. } => Some(detail),
+                AIAgentOutputMessageType::WarpNote { detail, .. }
+                | AIAgentOutputMessageType::ToolRow { detail, .. } => Some(detail),
                 _ => None,
             })
             // It's important to filter these out, because we filter these out when rendering the output
@@ -553,7 +554,8 @@ impl AIAgentOutput {
                     summarization_type: SummarizationType::ConversationSummary,
                     ..
                 } => Some((&message.id, text)),
-                AIAgentOutputMessageType::WarpNote { detail, .. } => Some((&message.id, detail)),
+                AIAgentOutputMessageType::WarpNote { detail, .. }
+                | AIAgentOutputMessageType::ToolRow { detail, .. } => Some((&message.id, detail)),
                 _ => None,
             })
             // It's important to filter these out, because we filter these out when rendering the output
@@ -660,7 +662,10 @@ impl AIAgentOutput {
                 // so the transcript and the clipboard carry the same words a
                 // pre-channel build wrote. `transcript::strip_chrome` decides
                 // on this text what stays out of the file.
-                AIAgentOutputMessageType::WarpNote { headline, detail } => {
+                AIAgentOutputMessageType::WarpNote { headline, detail }
+                | AIAgentOutputMessageType::ToolRow {
+                    headline, detail, ..
+                } => {
                     if last_was_action {
                         result.push(String::new());
                     }
@@ -1864,6 +1869,18 @@ pub enum AIAgentOutputMessageType {
         /// headline-only note.
         detail: AIAgentText,
     },
+    /// A tool call the agent ran, as one row whose state changes (fork).
+    ///
+    /// Reported, never requested: the agent has already run it. Carried as an
+    /// `AgentOutput` tagged with its state in `server_message_data` and
+    /// updated in place; see `crate::ai::tool_row`.
+    ToolRow {
+        state: crate::ai::tool_row::ToolRowState,
+        /// Verb and object, tensed for the state. Always shown.
+        headline: String,
+        /// The agent's description and the call's output, shown on request.
+        detail: AIAgentText,
+    },
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -2034,7 +2051,8 @@ impl Display for AIAgentOutputMessage {
                 comments: comment_ids,
             } => write!(f, "Addressed {} comments", comment_ids.len())?,
             AIAgentOutputMessageType::DebugOutput { text } => write!(f, "[DEBUG] {text}")?,
-            AIAgentOutputMessageType::WarpNote { headline, .. } => write!(f, "{headline}")?,
+            AIAgentOutputMessageType::WarpNote { headline, .. }
+            | AIAgentOutputMessageType::ToolRow { headline, .. } => write!(f, "{headline}")?,
             AIAgentOutputMessageType::ArtifactCreated(data) => match data {
                 ArtifactCreatedData::PullRequest { url, branch } => {
                     write!(f, "Created PR: {url} (branch: {branch})")?
@@ -2138,6 +2156,24 @@ impl AIAgentOutputMessage {
         Self {
             id,
             message: AIAgentOutputMessageType::WarpNote { headline, detail },
+            citations: vec![],
+        }
+    }
+
+    /// A tool call the agent ran (fork). See `crate::ai::tool_row`.
+    pub fn tool_row(
+        id: MessageId,
+        state: crate::ai::tool_row::ToolRowState,
+        headline: String,
+        detail: AIAgentText,
+    ) -> Self {
+        Self {
+            id,
+            message: AIAgentOutputMessageType::ToolRow {
+                state,
+                headline,
+                detail,
+            },
             citations: vec![],
         }
     }

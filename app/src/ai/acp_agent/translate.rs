@@ -15,8 +15,8 @@
 //! |---|---|---|
 //! | `AgentMessageChunk` | `AgentOutput` | the answer |
 //! | `AgentThoughtChunk` | `AgentReasoning` | rendered as thinking, not as output |
-//! | `ToolCall` | `AgentOutput`, as text | **never a `ToolCall` message** — see below |
-//! | `ToolCallUpdate` | `AgentOutput`, on completion only | a title that arrives late is the useful one |
+//! | `ToolCall` | a tool row: a tagged `AgentOutput`, appended | **never a `ToolCall` message** — see below |
+//! | `ToolCallUpdate` | the same row, updated in place | `UpdateTaskMessage` with a mask; see `crate::ai::tool_row` |
 //! | `UserMessageChunk` | nothing | Warp already holds the prompt it sent |
 //! | `Plan`, `PlanUpdate`, `PlanRemoved` | nothing | Warp has a todo model; wiring it is not this step |
 //! | `AvailableCommandsUpdate` | nothing | a menu for a UI that is not here |
@@ -70,7 +70,14 @@ use chrono::{DateTime, Utc};
 use warp_multi_agent_api as api;
 
 use super::registry;
+use crate::ai::tool_row::{Row, ToolRowState, UPDATE_MASK};
 use crate::event_log::Entry;
+
+/// How much of a call's output the row keeps behind its chevron.
+///
+/// The transcript keeps the detail too, and a `cargo test` run is unbounded.
+/// The agent's own store has the whole thing; the row is for a person.
+const DETAIL_CHARS: usize = 8_000;
 
 /// How much of the prompt becomes the conversation's name in the history panel.
 ///
@@ -122,15 +129,20 @@ pub(super) struct Translator {
     /// used anywhere in this repo, so shipping it would mean guessing an input
     /// and finding out from a silent failure. Named on T14.6 instead.
     pending: Option<(Pending, String)>,
-    /// Tool calls whose title has already been shown, so a late correction is
-    /// not printed twice.
+    /// One row per tool call, by `toolCallId`, in the order announced.
     ///
     /// Measured: both agents send `tool_call` with a placeholder title and then
     /// correct it on `tool_call_update` — Claude sent *"Preparing file…"* before
-    /// *"Write a.txt"*, opencode sent *"read"* before the path. So the first
-    /// title is usually the useless one, and this is what lets the second be
-    /// shown without showing both.
-    announced: Vec<(String, String)>,
+    /// *"Write a.txt"*, opencode sent *"read"* before the path. Until
+    /// 2026-09-03 the correction was shown only if it rode the *completion*,
+    /// and on `claude-agent-acp` 0.73.0 it never does, so the placeholder was
+    /// the only thing ever drawn. Now the row is one message, appended at the
+    /// announcement and rewritten in place as the call is corrected, finishes,
+    /// fails or is refused. See `crate::ai::tool_row`.
+    rows: Vec<(String, RowDraft)>,
+    /// Tool call ids Warp answered *no* to, so their failure is drawn as a
+    /// refusal rather than as a fault of the agent's.
+    denied: HashSet<String>,
     /// Where each tool call said it would act, by `toolCallId`.
     ///
     /// Accumulated from the notification stream because the permission request
@@ -236,7 +248,8 @@ impl Translator {
             next_message: 0,
             started_at,
             pending: None,
-            announced: Vec::new(),
+            rows: Vec::new(),
+            denied: HashSet::new(),
             locations: Vec::new(),
             opened: false,
             session_id: None,
@@ -365,11 +378,12 @@ impl Translator {
         }
 
         // **Before the display dispatch, and deliberately not inside it.** The
-        // update that carries `locations` is a *status* update, and
-        // `tool_update_text` returns early for anything that is not `Completed`
-        // — so recording from there would drop exactly the one this exists for.
-        // Recording is not showing: nothing below reads this map to draw
-        // anything, only to answer "where does this run" for a parked request.
+        // update that carries `locations` is a *status* update, and until
+        // 2026-09-03 the display path returned early for anything that was not
+        // `Completed` — so recording from there would have dropped exactly the
+        // one this exists for. The row now absorbs locations too, but this map
+        // is the one a parked request is answered from, and it is kept apart so
+        // that answering "where does this run" never depends on what is drawn.
         match update {
             SessionUpdate::ToolCall(call) => {
                 self.log_tool_start(call);
@@ -389,19 +403,29 @@ impl Translator {
             _ => {}
         }
 
+        // A tool call is a row, not a body: appended once, then rewritten in
+        // place. The text before it is still flushed first, so the row never
+        // lands mid-sentence.
+        let row_event = match update {
+            SessionUpdate::ToolCall(call) => Some(self.row_announced(call)),
+            SessionUpdate::ToolCallUpdate(update) => self.row_updated(update),
+            _ => None,
+        };
+        if matches!(
+            update,
+            SessionUpdate::ToolCall(_) | SessionUpdate::ToolCallUpdate(_)
+        ) {
+            return match row_event {
+                Some(event) => {
+                    let mut events = self.flush();
+                    events.push(event);
+                    events
+                }
+                None => Vec::new(),
+            };
+        }
+
         let body = match update {
-            SessionUpdate::ToolCall(call) => match self.tool_text(call) {
-                Some(text) => {
-                    api::message::Message::AgentOutput(api::message::AgentOutput { text })
-                }
-                None => return Vec::new(),
-            },
-            SessionUpdate::ToolCallUpdate(update) => match self.tool_update_text(update) {
-                Some(text) => {
-                    api::message::Message::AgentOutput(api::message::AgentOutput { text })
-                }
-                None => return Vec::new(),
-            },
             // The agent moved its own session's policy. The spec permits this
             // outright -- "Agents may also change modes autonomously and notify
             // the client via `current_mode_update`" -- so a mode Warp disclosed
@@ -453,44 +477,139 @@ impl Translator {
         vec![self.add(vec![message])]
     }
 
-    /// What a newly announced tool call is shown as, if anything.
+    /// The row for a call the agent has just announced, appended.
     ///
     /// **Deliberately not a `ToolCall` message** — see the module docs. The
-    /// agent has already run it; this says what happened rather than asking for
-    /// it to happen again.
-    fn tool_text(&mut self, call: &ToolCall) -> Option<String> {
-        let title = call.title.trim();
-        if title.is_empty() {
-            return None;
+    /// agent has already run it; the row says what is happening rather than
+    /// asking for it to happen again.
+    ///
+    /// A re-announcement of a known id is treated as an update, so a second
+    /// `tool_call` for the same call rewrites the row instead of adding one.
+    fn row_announced(&mut self, call: &ToolCall) -> api::ResponseEvent {
+        let id = call.tool_call_id.to_string();
+        if self.rows.iter().any(|(seen, _)| seen == &id) {
+            let mut draft = self.take_row(&id).expect("just found");
+            draft.absorb(
+                Some(call.kind),
+                tool_name(call.meta.as_ref()),
+                call.raw_input.as_ref(),
+                &call.locations,
+                Some(&call.title),
+                &call.content,
+                call.raw_output.as_ref(),
+                self.cwd.as_deref(),
+            );
+            let event = self.rewrite(&draft);
+            self.rows.push((id, draft));
+            return event;
         }
-        self.remember(call.tool_call_id.to_string(), title.to_owned());
-        Some(format!("`{title}`"))
+        let message = self.message(api::message::Message::AgentOutput(Default::default()));
+        let mut draft = RowDraft::new(message.id.clone());
+        draft.absorb(
+            Some(call.kind),
+            tool_name(call.meta.as_ref()),
+            call.raw_input.as_ref(),
+            &call.locations,
+            Some(&call.title),
+            &call.content,
+            call.raw_output.as_ref(),
+            self.cwd.as_deref(),
+        );
+        if matches!(
+            call.status,
+            ToolCallStatus::Completed | ToolCallStatus::Failed
+        ) {
+            draft.finish(call.status, self.denied.contains(&id));
+        }
+        let message = draft.row().into_message(message);
+        self.rows.push((id, draft));
+        self.add(vec![message])
     }
 
-    /// A later update for a call already seen.
+    /// A later update for a call already announced: the row rewritten, if
+    /// anything it shows changed.
     ///
-    /// Only a *changed* title on a *finished* call is worth a second line. The
-    /// measured streams send several updates per call — status transitions,
-    /// content, raw output — and printing each would bury the answer.
-    fn tool_update_text(&mut self, update: &ToolCallUpdate) -> Option<String> {
-        if !matches!(update.fields.status, Some(ToolCallStatus::Completed)) {
-            return None;
-        }
-        let title = update.fields.title.as_deref()?.trim();
-        if title.is_empty() {
-            return None;
-        }
+    /// An update for an id never announced is dropped — there is no row to
+    /// rewrite and inventing one would draw a call whose start Warp never saw.
+    /// A terminal row stays terminal; the measured streams echo the final
+    /// status, and a second `completed` is the same fact twice.
+    fn row_updated(&mut self, update: &ToolCallUpdate) -> Option<api::ResponseEvent> {
         let id = update.tool_call_id.to_string();
-        let shown = self
-            .announced
-            .iter()
-            .find(|(seen, _)| seen == &id)
-            .map(|(_, title)| title.clone());
-        if shown.as_deref() == Some(title) {
-            return None;
+        let mut draft = self.take_row(&id)?;
+        let before = draft.row();
+        if !draft.terminal() {
+            draft.absorb(
+                update.fields.kind,
+                tool_name(update.meta.as_ref()),
+                update.fields.raw_input.as_ref(),
+                update.fields.locations.as_deref().unwrap_or(&[]),
+                update.fields.title.as_deref(),
+                update.fields.content.as_deref().unwrap_or(&[]),
+                update.fields.raw_output.as_ref(),
+                self.cwd.as_deref(),
+            );
+            if let Some(status @ (ToolCallStatus::Completed | ToolCallStatus::Failed)) =
+                update.fields.status
+            {
+                draft.finish(status, self.denied.contains(&id));
+            }
         }
-        self.remember(id, title.to_owned());
-        Some(format!("`{title}`"))
+        let event = (draft.row() != before).then(|| self.rewrite(&draft));
+        self.rows.push((id, draft));
+        event
+    }
+
+    fn take_row(&mut self, id: &str) -> Option<RowDraft> {
+        let index = self.rows.iter().position(|(seen, _)| seen == id)?;
+        Some(self.rows.remove(index).1)
+    }
+
+    /// The `UpdateTaskMessage` that rewrites a row's body and tag in place.
+    ///
+    /// Identity and time are the announcement's, restated so the update finds
+    /// its message; the mask names only what changes.
+    fn rewrite(&self, draft: &RowDraft) -> api::ResponseEvent {
+        let message = draft.row().into_message(api::Message {
+            id: draft.message_id.clone(),
+            task_id: self.task_id.clone(),
+            request_id: self.request_id.clone(),
+            timestamp: Some(self.timestamp()),
+            ..Default::default()
+        });
+        actions(vec![api::client_action::Action::UpdateTaskMessage(
+            api::client_action::UpdateTaskMessage {
+                task_id: self.task_id.clone(),
+                message: Some(message),
+                mask: Some(prost_types::FieldMask {
+                    paths: UPDATE_MASK.iter().map(|path| (*path).to_owned()).collect(),
+                }),
+            },
+        )])
+    }
+
+    /// Everything the end of a turn owes the panel: the buffered text, and
+    /// every row still `Running` rewritten as interrupted.
+    ///
+    /// Warp has stopped listening, whichever way the turn ended, so a row left
+    /// `Running` would be a spinner over a process nobody is watching — the
+    /// one thing a surface must not claim. Called by the driver before
+    /// `finished`/`failed`; `finished` itself deliberately does not do this,
+    /// for the reason `flush` gives.
+    pub(super) fn end_of_turn(&mut self) -> Vec<api::ResponseEvent> {
+        let mut events = self.flush();
+        let open: Vec<String> = self
+            .rows
+            .iter()
+            .filter(|(_, draft)| draft.state == ToolRowState::Running)
+            .map(|(id, _)| id.clone())
+            .collect();
+        for id in open {
+            let mut draft = self.take_row(&id).expect("just listed");
+            draft.state = ToolRowState::Interrupted;
+            events.push(self.rewrite(&draft));
+            self.rows.push((id, draft));
+        }
+        events
     }
 
     /// Records the file paths a tool call said it would touch.
@@ -689,12 +808,17 @@ impl Translator {
     /// **`decision` is always present**, `unanswered` included — see the
     /// field's own note on why an absent key would be unreadable here.
     pub(super) fn log_permission_replied(
-        &self,
+        &mut self,
         approval_id: &str,
         tool_call_id: &str,
         decision: &str,
         answered_by: Option<&str>,
     ) {
+        // Remembered for the row, not decided here: the answer has already
+        // gone to the agent, and this only changes how its failure is drawn.
+        if decision == "denied" {
+            self.denied.insert(tool_call_id.to_owned());
+        }
         // The approval id, because `call_id` alone cannot pair a re-asked call:
         // an agent may ask about the same `toolCallId` more than once, which is
         // the stale-answer hazard `ParkedRequest::approval_id` is keyed to
@@ -735,13 +859,6 @@ impl Translator {
             return;
         }
         crate::event_log::record(entry);
-    }
-
-    fn remember(&mut self, id: String, title: String) {
-        match self.announced.iter_mut().find(|(seen, _)| seen == &id) {
-            Some(entry) => entry.1 = title,
-            None => self.announced.push((id, title)),
-        }
     }
 
     /// The user's own turn, written into the transcript.
@@ -870,6 +987,278 @@ impl Translator {
         let message = note.into_message(message);
         self.add(vec![message])
     }
+}
+
+/// What Warp knows about one tool call, from which its row is composed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct RowDraft {
+    /// The id of the message the row was announced as; every rewrite names it.
+    message_id: String,
+    state: ToolRowState,
+    verb: Verb,
+    /// What the verb acts on -- a command, a path, a pattern -- once known.
+    object: Option<String>,
+    /// The agent's last title, kept as the object of last resort.
+    title: Option<String>,
+    /// Text the agent attached to the call, in order, without repeats.
+    content: Vec<String>,
+    /// The raw output, used only when the agent attached no content.
+    raw_output: Option<String>,
+}
+
+/// The one verb of a row, in the three forms the states need.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Verb {
+    running: &'static str,
+    done: &'static str,
+    base: &'static str,
+}
+
+impl RowDraft {
+    fn new(message_id: String) -> Self {
+        Self {
+            message_id,
+            state: ToolRowState::Running,
+            verb: verb(ToolKind::Other, None),
+            object: None,
+            title: None,
+            content: Vec::new(),
+            raw_output: None,
+        }
+    }
+
+    fn terminal(&self) -> bool {
+        self.state != ToolRowState::Running
+    }
+
+    /// Folds one announcement's or update's fields in. Absent fields leave
+    /// what was known; a present one is the agent's more recent statement.
+    #[allow(clippy::too_many_arguments)]
+    fn absorb(
+        &mut self,
+        kind: Option<ToolKind>,
+        tool_name: Option<&str>,
+        raw_input: Option<&serde_json::Value>,
+        locations: &[ToolCallLocation],
+        title: Option<&str>,
+        content: &[agent_client_protocol::schema::v1::ToolCallContent],
+        raw_output: Option<&serde_json::Value>,
+        cwd: Option<&str>,
+    ) {
+        if kind.is_some() || tool_name.is_some() {
+            let kind = kind.unwrap_or(ToolKind::Other);
+            self.verb = verb(kind, tool_name);
+        }
+        if let Some(object) = object_from_input(raw_input, cwd) {
+            self.object = Some(object);
+        } else if self.object.is_none()
+            && let Some(location) = locations.first()
+        {
+            self.object = Some(relative_to(&location.path.to_string_lossy(), cwd));
+        }
+        if let Some(title) = title.map(str::trim).filter(|title| !title.is_empty()) {
+            self.title = Some(title.to_owned());
+        }
+        for text in content.iter().filter_map(content_text) {
+            if !self.content.contains(&text) {
+                self.content.push(text);
+            }
+        }
+        if let Some(raw) = raw_output {
+            let text = match raw {
+                serde_json::Value::String(text) => text.clone(),
+                other => other.to_string(),
+            };
+            if !text.trim().is_empty() {
+                self.raw_output = Some(text);
+            }
+        }
+    }
+
+    fn finish(&mut self, status: ToolCallStatus, denied: bool) {
+        self.state = match status {
+            ToolCallStatus::Completed => ToolRowState::Done,
+            ToolCallStatus::Failed if denied => ToolRowState::Denied,
+            ToolCallStatus::Failed => ToolRowState::Failed,
+            _ => self.state,
+        };
+    }
+
+    /// The agent's title, unless it is a placeholder -- the measured ones end
+    /// in an ellipsis or are the bare kind (*"Terminal"*, *"read"*).
+    fn usable_title(&self) -> Option<&str> {
+        let title = self.title.as_deref()?;
+        let placeholder = title.ends_with('\u{2026}')
+            || title.ends_with("...")
+            || title.eq_ignore_ascii_case("terminal")
+            || title.eq_ignore_ascii_case(self.verb.base)
+            || title.eq_ignore_ascii_case(self.verb.done);
+        (!placeholder).then_some(title)
+    }
+
+    /// Verb and object, tensed for the state.
+    ///
+    /// Three shapes, in order of what is known. An object read from the input
+    /// gets Warp's verb in the state's tense. Failing that, the agent's own
+    /// title is used whole -- it is already a sentence with its own verb
+    /// (*"Write a.txt"*, *"Search for callers"*), so it is prefixed for the
+    /// states that need saying and left alone for the two that do not, because
+    /// re-tensing someone else's sentence is how a row starts lying. Failing
+    /// both, the verb stands alone.
+    fn headline(&self) -> String {
+        let verb = self.verb;
+        match (self.object.as_deref(), self.usable_title()) {
+            (Some(object), _) => match self.state {
+                ToolRowState::Running => format!("{} {object}", verb.running),
+                ToolRowState::Done => format!("{} {object}", verb.done),
+                ToolRowState::Failed => format!("Failed to {} {object}", verb.base),
+                ToolRowState::Denied => format!("Denied: {} {object}", verb.base),
+                ToolRowState::Interrupted => {
+                    format!("Interrupted while {} {object}", verb.running.to_lowercase())
+                }
+            },
+            (None, Some(title)) => match self.state {
+                ToolRowState::Running | ToolRowState::Done => title.to_owned(),
+                ToolRowState::Failed => format!("Failed: {title}"),
+                ToolRowState::Denied => format!("Denied: {title}"),
+                ToolRowState::Interrupted => format!("Interrupted: {title}"),
+            },
+            (None, None) => match self.state {
+                ToolRowState::Running => format!("{}\u{2026}", verb.running),
+                ToolRowState::Done => verb.done.to_owned(),
+                ToolRowState::Failed => format!("Failed to {}", verb.base),
+                ToolRowState::Denied => format!("Denied: {}", verb.base),
+                ToolRowState::Interrupted => {
+                    format!("Interrupted while {}", verb.running.to_lowercase())
+                }
+            },
+        }
+    }
+
+    fn detail(&self) -> String {
+        let mut detail = self.content.join("\n\n");
+        if detail.trim().is_empty()
+            && let Some(raw) = &self.raw_output
+        {
+            detail = format!("```\n{}\n```", raw.trim_end());
+        }
+        if detail.chars().count() > DETAIL_CHARS {
+            let cut: String = detail.chars().take(DETAIL_CHARS).collect();
+            detail = format!("{cut}\n\n\u{2026} (truncated)");
+        }
+        detail
+    }
+
+    fn row(&self) -> Row {
+        Row::new(self.state, self.headline(), self.detail())
+    }
+}
+
+/// The agent's own name for the tool, where it says one.
+///
+/// `claude-agent-acp` puts it at `_meta.claudeCode.toolName` (measured at
+/// 0.73.0: `Bash`, `Write`, `Read`, …). It is read only to pick a verb -- a
+/// `Write` and an `Edit` are both `ToolKind::Edit`, and *"Wrote"* is the truer
+/// word for the first -- and an agent that names nothing gets the kind's verb.
+fn tool_name(meta: Option<&agent_client_protocol::schema::v1::Meta>) -> Option<&str> {
+    meta?.get("claudeCode")?.get("toolName")?.as_str()
+}
+
+fn verb(kind: ToolKind, tool_name: Option<&str>) -> Verb {
+    const fn v(running: &'static str, done: &'static str, base: &'static str) -> Verb {
+        Verb {
+            running,
+            done,
+            base,
+        }
+    }
+    match tool_name {
+        Some("Write") => return v("Writing", "Wrote", "write"),
+        Some("Edit" | "MultiEdit" | "NotebookEdit") => return v("Editing", "Edited", "edit"),
+        Some("Task") => return v("Delegating", "Delegated", "delegate"),
+        Some("TodoWrite") => return v("Updating the plan", "Updated the plan", "update the plan"),
+        _ => {}
+    }
+    match kind {
+        ToolKind::Read => v("Reading", "Read", "read"),
+        ToolKind::Edit => v("Editing", "Edited", "edit"),
+        ToolKind::Delete => v("Deleting", "Deleted", "delete"),
+        ToolKind::Move => v("Moving", "Moved", "move"),
+        ToolKind::Search => v("Searching", "Searched", "search"),
+        ToolKind::Execute => v("Running", "Ran", "run"),
+        ToolKind::Think => v("Thinking", "Thought", "think"),
+        ToolKind::Fetch => v("Fetching", "Fetched", "fetch"),
+        ToolKind::SwitchMode => v("Switching mode", "Switched mode", "switch mode"),
+        _ => v("Using", "Used", "use"),
+    }
+}
+
+/// The object a call's `rawInput` names, if it names one Warp recognises.
+///
+/// The keys are the measured agent's, in the order that picks the right one
+/// when several are present: a `Grep` carries `pattern` and `path`, and the
+/// pattern is what was searched for. A command is cut to its first line.
+fn object_from_input(raw_input: Option<&serde_json::Value>, cwd: Option<&str>) -> Option<String> {
+    let input = raw_input?.as_object()?;
+    for key in [
+        "command",
+        "file_path",
+        "notebook_path",
+        "pattern",
+        "query",
+        "url",
+        "path",
+        "description",
+    ] {
+        let Some(value) = input.get(key).and_then(|value| value.as_str()) else {
+            continue;
+        };
+        let value = value.trim();
+        if value.is_empty() {
+            continue;
+        }
+        return Some(match key {
+            "command" => match value.split_once('\n') {
+                Some((first, _)) => format!("{}\u{2026}", first.trim_end()),
+                None => value.to_owned(),
+            },
+            "file_path" | "notebook_path" | "path" => relative_to(value, cwd),
+            _ => value.to_owned(),
+        });
+    }
+    None
+}
+
+/// A path under the session directory, said from there.
+fn relative_to(path: &str, cwd: Option<&str>) -> String {
+    if let Some(cwd) = cwd
+        && let Some(rest) = path.strip_prefix(cwd)
+        && let Some(rest) = rest.strip_prefix(['/', '\\'])
+        && !rest.is_empty()
+    {
+        return rest.to_owned();
+    }
+    path.to_owned()
+}
+
+/// The text of one piece of attached content, for the detail.
+fn content_text(content: &agent_client_protocol::schema::v1::ToolCallContent) -> Option<String> {
+    use agent_client_protocol::schema::v1::ToolCallContent;
+    match content {
+        ToolCallContent::Content(content) => match &content.content {
+            ContentBlock::Text(text) => Some(text.text.clone()),
+            ContentBlock::ResourceLink(link) => Some(format!("[{}]", link.uri)),
+            _ => None,
+        },
+        ToolCallContent::Diff(diff) => Some(format!(
+            "{}\n```\n{}\n```",
+            diff.path.to_string_lossy(),
+            diff.new_text.trim_end()
+        )),
+        ToolCallContent::Terminal(terminal) => Some(format!("terminal {}", terminal.terminal_id)),
+        _ => None,
+    }
+    .filter(|text| !text.trim().is_empty())
 }
 
 /// The text of a content chunk, ignoring the parts Warp cannot render inline.

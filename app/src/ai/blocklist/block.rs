@@ -2378,6 +2378,7 @@ impl AIBlock {
                 &message.message,
                 AIAgentOutputMessageType::DebugOutput { .. }
                     | AIAgentOutputMessageType::WarpNote { .. }
+                    | AIAgentOutputMessageType::ToolRow { .. }
             ) {
                 self.collapsible_block_states
                     .entry(message.id.clone())
@@ -2632,7 +2633,8 @@ impl AIBlock {
                 | AIAgentOutputMessageType::ArtifactCreated(_)
                 | AIAgentOutputMessageType::SkillInvoked(_)
                 | AIAgentOutputMessageType::EventsFromAgents { .. }
-                | AIAgentOutputMessageType::WarpNote { .. } => {}
+                | AIAgentOutputMessageType::WarpNote { .. }
+                | AIAgentOutputMessageType::ToolRow { .. } => {}
             }
         }
     }

@@ -952,6 +952,25 @@ pub(super) fn render(props: Props, app: &AppContext) -> Box<dyn Element> {
                                 ),
                             );
                         }
+                        AIAgentOutputMessageType::ToolRow {
+                            state,
+                            headline,
+                            detail,
+                        } => {
+                            if let Some(element) = render_tool_row(
+                                output_message,
+                                *state,
+                                headline,
+                                &detail.sections,
+                                props,
+                                &mut has_rendered_first_text_section,
+                                &mut text_section_index,
+                                &mut code_section_index,
+                                app,
+                            ) {
+                                output_items.add_child(element);
+                            }
+                        }
                         AIAgentOutputMessageType::WarpNote { headline, detail } => {
                             if let Some(element) = render_warp_note(
                                 output_message,
@@ -4431,6 +4450,209 @@ fn render_warp_note(
         state,
         body,
         props.model.status(app).is_streaming(),
+        360.,
+    ) {
+        container.add_child(Container::new(scrollable).with_margin_bottom(16.0).finish());
+    }
+
+    Some(
+        container
+            .finish()
+            .with_agent_output_item_spacing(app)
+            .finish(),
+    )
+}
+
+/// A tool call the agent ran, as one row (fork). See `crate::ai::tool_row`.
+///
+/// Verb, object and a state icon on one line; the agent's description and the
+/// call's output behind a chevron. The icons are the history panel's own map
+/// for an exchange's status (`AIQueryHistoryOutputStatus::icon`), so a row and
+/// the conversation it sits in say "done" and "failed" the same way.
+///
+/// **A `Running` row in a settled exchange is drawn as interrupted.** The
+/// translator sweeps open rows when a turn ends, but a turn cancelled from
+/// outside ends without it, and a restored conversation carries whatever state
+/// the row had when the stream closed. A spinner over a process nobody is
+/// watching would claim more than the code does, so the renderer refuses to
+/// draw one.
+#[allow(clippy::too_many_arguments)]
+fn render_tool_row(
+    output_message: &AIAgentOutputMessage,
+    state_on_the_wire: crate::ai::tool_row::ToolRowState,
+    headline: &str,
+    sections: &[AIAgentTextSection],
+    props: Props,
+    has_rendered_first_text_section: &mut bool,
+    text_section_index: &mut usize,
+    code_section_index: &mut usize,
+    app: &AppContext,
+) -> Option<Box<dyn Element>> {
+    use crate::ai::tool_row::ToolRowState;
+
+    let element_state = props.collapsible_block_states.get(&output_message.id)?;
+    let appearance = Appearance::as_ref(app);
+    let theme = appearance.theme();
+    let is_streaming = props.model.status(app).is_streaming();
+    let state = match state_on_the_wire {
+        ToolRowState::Running if !is_streaming => ToolRowState::Interrupted,
+        state => state,
+    };
+    let label_color = blended_colors::text_disabled(theme, theme.surface_2());
+    let headline_color = theme.sub_text_color(theme.surface_1());
+    let error_color = theme.ui_error_color();
+    let icon_size = icon_size(app);
+    let has_detail = !are_all_text_sections_empty(sections);
+    let is_expanded = matches!(
+        element_state.expansion_state,
+        CollapsibleExpansionState::Expanded { .. }
+    );
+
+    let (icon, icon_color) = match state {
+        ToolRowState::Running => (Icon::Loading, label_color),
+        ToolRowState::Done => (Icon::Check, label_color),
+        ToolRowState::Failed => (Icon::AlertTriangle, error_color),
+        ToolRowState::Denied => (Icon::SlashCircle, error_color),
+        ToolRowState::Interrupted => (Icon::SlashCircle, label_color),
+    };
+    // The translator writes "Running …" and the sweep rewrites it; a row the
+    // renderer alone has demoted still says "Running", so the text follows.
+    let headline = if state != state_on_the_wire {
+        match headline.split_once(' ') {
+            Some((verb, rest)) if verb.ends_with("ing") => {
+                format!("Interrupted while {} {rest}", verb.to_lowercase())
+            }
+            _ => format!("Interrupted: {headline}"),
+        }
+    } else {
+        headline.to_owned()
+    };
+
+    let state_icon = || {
+        Container::new(
+            ConstrainedBox::new(icon.to_warpui_icon(icon_color.into()).finish())
+                .with_width(icon_size - 2.)
+                .with_height(icon_size - 2.)
+                .finish(),
+        )
+        .with_margin_right(8.)
+        .finish()
+    };
+    let headline_text = |selectable: bool| {
+        Text::new(
+            headline.clone(),
+            appearance.ai_font_family(),
+            appearance.monospace_font_size() - 1.0,
+        )
+        .with_color(headline_color.into())
+        .with_selectable(selectable)
+        .finish()
+    };
+
+    let mut container = Flex::column().with_cross_axis_alignment(CrossAxisAlignment::Stretch);
+
+    if !has_detail {
+        let row = Flex::row()
+            .with_cross_axis_alignment(CrossAxisAlignment::Center)
+            .with_child(state_icon())
+            .with_child(Shrinkable::new(1., headline_text(true)).finish())
+            .finish();
+        container.add_child(row);
+        *has_rendered_first_text_section = true;
+        return Some(
+            container
+                .finish()
+                .with_agent_output_item_spacing(app)
+                .finish(),
+        );
+    }
+
+    let chevron_icon = if is_expanded {
+        Icon::ChevronDown
+    } else {
+        Icon::ChevronRight
+    };
+    let message_id = output_message.id.clone();
+    let header = Hoverable::new(
+        element_state.expansion_toggle_mouse_state.clone(),
+        move |_| {
+            Flex::row()
+                .with_cross_axis_alignment(CrossAxisAlignment::Center)
+                .with_child(state_icon())
+                .with_child(Shrinkable::new(1., headline_text(false)).finish())
+                .with_child(
+                    Container::new(
+                        ConstrainedBox::new(
+                            chevron_icon.to_warpui_icon(label_color.into()).finish(),
+                        )
+                        .with_width(icon_size - 2.)
+                        .with_height(icon_size - 2.)
+                        .finish(),
+                    )
+                    .with_horizontal_margin(4.)
+                    .finish(),
+                )
+                .finish()
+        },
+    )
+    .with_cursor(Cursor::PointingHand)
+    .on_click(move |ctx, _, _| {
+        ctx.dispatch_typed_action(AIBlockAction::ToggleCollapsibleBlockExpanded(
+            message_id.clone(),
+        ));
+    });
+    container.add_child(
+        Container::new(header.finish())
+            .with_margin_bottom(if is_expanded { 8. } else { 0. })
+            .finish(),
+    );
+    *has_rendered_first_text_section = true;
+
+    // Rendered whether or not it is shown, so the section indices advance the
+    // way `all_text` expects -- the same reason `render_warp_note` gives.
+    let mut table_section_index = 0;
+    let mut image_section_index = 0;
+    let body = render_text_sections(
+        TextSectionsProps {
+            model: props.model,
+            starting_text_section_index: text_section_index,
+            starting_code_section_index: code_section_index,
+            starting_table_section_index: &mut table_section_index,
+            starting_image_section_index: &mut image_section_index,
+            sections,
+            text_color: headline_color.into(),
+            selectable: true,
+            find_context: props.find_context,
+            current_working_directory: props.current_working_directory,
+            shell_launch_data: props.shell_launch_data,
+            embedded_code_editor_views: &[],
+            code_snippet_button_handles: &[],
+            table_section_handles: &[],
+            image_section_tooltip_handles: &[],
+            is_ai_input_enabled: props.is_ai_input_enabled,
+            open_code_block_action_factory: (None as Option<
+                &'static dyn Fn(CodeSource) -> AIBlockAction,
+            >),
+            copy_code_action_factory: (None as Option<&'static dyn Fn(String) -> AIBlockAction>),
+            detected_links: Some(props.detected_links_state),
+            secret_redaction_state: props.secret_redaction_state,
+            is_selecting_text: props.state_handles.selection_handle.is_selecting(),
+            item_spacing: CONTENT_ITEM_VERTICAL_MARGIN,
+            #[cfg(feature = "local_fs")]
+            resolved_code_block_paths: Some(props.resolved_code_block_paths),
+            #[cfg(feature = "local_fs")]
+            resolved_blocklist_image_sources: Some(props.resolved_blocklist_image_sources),
+        },
+        app,
+    )
+    .with_agent_output_item_spacing(app)
+    .finish();
+    let body = Container::new(body).with_margin_bottom(-16.0).finish();
+    if let Some(scrollable) = render_scrollable_collapsible_content(
+        &output_message.id,
+        element_state,
+        body,
+        is_streaming,
         360.,
     ) {
         container.add_child(Container::new(scrollable).with_margin_bottom(16.0).finish());
