@@ -992,18 +992,50 @@ Four more from the same review, each calibrated by breaking it:
   and now says so); and `tool_update_text`, which no longer exists, cited in
   `translate_tests.rs` and in `CLAUDE.md`.
 
-**Not measured, and the record should not be amended until it is**: no GUI
-run. The closed card's new shape and the placeholder fallback need a
-screenshot before 4c's measurement above is rewritten.
+**Measured 2026-09-03 on the Windows build at `299ff4af2`**, same prompt,
+same driver, the toggle clicked at the first ask (`click.ps1`):
 
-**One thing this review could not answer, which is worth a field somewhere**:
-the headline is now the first thing a person reads, and **nothing records what
-it said at the ask**. `event_log/mod.rs` writes `tool_name` and
-`tool_input_preview` and no title; `acp_consent.rs`'s ledger keeps one title
-per call and *overwrites* it on each update, and `observe_request` does not
-record the request's own. So the fidelity of the line above the buttons cannot
-be checked from any corpus this fork has — which `GOAL.md`'s horizon, the
-consent path *seen on the wire*, needs. One field in each.
+- **Closed**: *wsl.exe asks* / *Write t204-a.txt* / *the call
+  /home/effatha/git/warp/t204-a.txt* / *content A* / *[Yes, once] [No] ›
+  details*. Five lines: the decision, the path the bytes go to, and the bytes,
+  all before the buttons — which is what the module header promises and what
+  4c had put one click away. Above it the agent's narration, the spinner row
+  and Warp's folded note are all on screen at once.
+- **Open**: *acts on* and *offered* (with its *Warp never selects this* note)
+  under the buttons. Nothing else was left to disclose for a one-character
+  write; a long `content` would put its tail here with the closed card saying
+  how much.
+- **The status row survived this window**: *Warping… • 8s* and, later,
+  *• 36s*, label intact. The run at `03fbacb24` clipped it to *Wa* in a 657 px
+  window; this window was wider, so the shrink-weight item below stands as
+  written and is not contradicted.
+- **Ratio**: Warp's side byte-identical for the fourth run running (1,774
+  chars of notes, 168 of tool rows); the agent wrote 475 characters this time,
+  so 4.1 : 1 record, 1.6 : 1 drawn, agent share 38% — the denominator again.
+  Zero relevant errors in the app log; three files written; three asks
+  answered.
+
+**The paragraph that stood here until this measurement said the headline's
+fidelity could not be checked from any corpus, because nothing records the
+title at the ask. That was false, and its author withdrew it the same
+evening**: `ask_summary` (`translate.rs`) writes the title into every
+`permission_request` line's `summary` as *approval `<id>` · `<title>`*, and it
+is there in the real logs. The field list was read and the summary's contents
+were not — a doc claim about an instrument, made without running the
+instrument. So no field needs adding, and the placeholder question is
+answerable from disk:
+
+| recorded asks on this machine | with a placeholder title |
+|---|---|
+| **64** across 27 event-log files (`edit` 27, `execute` 36, `read` 1) | **0** |
+
+No *Terminal*, no *Preparing file…*, nothing ending in an ellipsis. And for
+every `execute` ask the title at the ask is the agent's **description**
+(*"Compare local HEAD to Windows checkout HEAD"*), not the command — so the
+permission request carries the corrected title from the start, and the
+placeholder fallback `is_placeholder_title` guards against is, on this agent,
+a property of the notification stream and not of the ask. The guard costs
+nothing and stays; it is not doing anything measured.
 
 **Left for a next session, in the order they are worth doing**: the
 transcript announcement and the mode note shortened (below); the *"Ran N
