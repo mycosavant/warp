@@ -1102,6 +1102,50 @@ Now both prefix, through `tool_row::demoted_headline`, so the row a person was
 watching keeps its line with a status in front of it, which is how Claude
 Code's own rows read after an interrupt.
 
+**Measured 2026-09-04 on the Windows build at `b0e3cfa99`**, `claude-agent-acp`
+0.73.0 in `default`, three runs because the first two exercised nothing:
+
+- **Run 1 asked nothing.** `wc -l CLAUDE.md` is covered by the user's global
+  Claude Code allow list, and the agent's own harness refused a foreground
+  `sleep 60` (*"Blocked: standalone sleep"*), so there was no card and nothing
+  to cancel. What it did show was the verb defect above — *"Used wc -l …"* —
+  and a `Failed to use sleep 60` row with the harness's refusal behind the
+  chevron, which is the failure-legible-in-the-row claim from 4a holding on a
+  refusal Warp never saw.
+- **Run 2 asked nothing either**, for `stat -c %s CLAUDE.md`, which is in no
+  allow list — so the agent has a way of running a read-only shell command
+  unasked in `default` that this fork's docs do not name (the sandbox runtime
+  is installed here; not verified as the cause). The row read **"Ran stat -c
+  %s …"** on the rebuilt binary, which is the verb fix measured.
+- **Run 3 asked**, because the command wrote outside the session directory —
+  the shape the classifier notes already record as asking. Closed card, four
+  lines: *wsl.exe asks* / **Write probe file and read it back** / *the call
+  `echo composer-probe > /home/effatha/composer-probe.txt && cat …`* / *[Yes,
+  once] [No] › details*. The event log's `permission_request` carries the same
+  title, which is the agent's `description` — the 0.73.0 shape — and the card
+  drew it **once**. Before `52b002481` this card had an *it says* line
+  repeating the headline between it and the call. Above the card the row read
+  *"Running echo …"* with a spinner; after the yes, **"✓ Ran echo …"**.
+- **The cancel.** `python3 -c "import time; time.sleep(90)"` in the
+  foreground, `agent cancel` at 24 s quiet: the row reads **"⊘ Interrupted:
+  Running python3 -c "import time; time.sleep(90)""** — the prefix form, on
+  screen. `agent read` afterwards still returns *"Running python3 …"* for that
+  row, so the string on screen came from the renderer's demotion and not from
+  the sweep's rewrite — the sweep's `UpdateTaskMessage` lands after the
+  exchange has stopped streaming and `upsert_output_for_message` drops it.
+  That is item 7 below, unchanged; what changed is that the two paths now
+  agree on the string, so which one drew it is no longer visible.
+- **Two things observed and not chased.** The pane behind the panel shows a
+  `^C` at the prompt after the cancel, and the conversation's event log has no
+  line after the second turn's `tool_start` — no `stop`, nothing saying the
+  turn ended. Neither is this ticket's; both are recorded so the next reader
+  does not measure them as new.
+- Zero relevant errors in the app log across the three runs. The runs were
+  driven from a script the harness killed twice for memory pressure (a 7.8 GB
+  `rustc` from another session was compiling alongside); the third run's
+  second turn was finished by hand, which is why its screenshots are two
+  commands rather than one.
+
 **Left for a next session, in the order they are worth doing**: the
 transcript announcement and the mode note shortened (below); the *"Ran N
 commands"* fold once a turn shows enough rows; the status row's shrink
