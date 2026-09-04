@@ -1051,11 +1051,38 @@ deleted, which is how it could be read at all):
 | 0.70.0 | shell title = `input.command`, *"Terminal"* while the input is still streaming | the **same** `toolInfoFromToolUse` → the command |
 | 0.73.0 | identical line | a separate `permissions/presentation.js`: shell title = `input.description ?? "Bash"`, from the `title`/`displayName`/`description` the Claude Code SDK now passes to `canUseTool` |
 
-So both versions title the *stream* with the command, and the placeholder is a
-property of the stream at both — a `tool_call` can go out before the input has
-finished streaming and the command is empty. A permission request is built
-from the complete input on both, which is why no ask has ever carried one and
-why the card's guard cannot fire on this agent: not unmeasured, unreachable.
+So both versions title the *stream* with the command, and the ellipsis and
+*"Terminal"* placeholders are a property of the stream at both — a `tool_call`
+can go out before the input has finished streaming and the command is empty. A
+permission request is built from the complete input on both, so those two
+cannot reach the card from this agent.
+
+**But "cannot carry a placeholder" was written here for an hour and is too
+strong, and the T20 session read the line that falsifies it.** 0.73.0's
+`compactText` is `humanText(value, 160, true)`, and `humanText` does not
+truncate — over 160 characters, or not a string, it returns `undefined`, and
+the `?? value.toolName` then titles the ask with the literal **`Bash`**. That
+is a placeholder the card's check could not see, because the kind Warp holds
+is `execute` and `"Bash" != "execute"`. Not observed: across the 64 titled
+asks, titles ran 0 to **85** characters against the 160 cap (two instruments
+agree — the event-log summaries and the classifier eval set's descriptions).
+Headroom under 2x is a fact about short descriptions, not about structure, so
+`ParkedRequest` now carries the agent's own tool name from
+`_meta.claudeCode.toolName` — which the row always read for its verb and the
+card never did — and `layered` passes it into the check beside the kind.
+Pinned by `the_agents_own_bare_tool_name_does_not_headline_either`. The
+commit body of `52b002481` still says *unreachable*; this paragraph is the
+correction.
+
+**And the first GUI run at `52b002481` measured a different defect on the
+row.** *"Used wc -l /home/effatha/git/warp/CLAUDE.md"* — the verb table says
+*Ran*. The `tool_call` carries `kind: execute`; the `tool_call_update` carries
+`_meta.claudeCode.toolName` and no kind; `absorb` recomputed the verb from each
+message alone, so the update reset the kind to `Other`. The unit test for the
+measured sequence had put the kind on the update as well, which the agent does
+not — a fixture that was kinder than the wire. `RowDraft` now remembers both
+and `an_update_that_names_the_tool_but_not_the_kind_keeps_the_kinds_verb` is
+written from the wire.
 
 **And the version that titles with the description was drawing it twice.**
 `layered` headlines with the title and then pushes *it says* from the

@@ -1117,6 +1117,7 @@ fn parked_request(
             .kind
             .and_then(|kind| serde_json::to_value(kind).ok())
             .and_then(|kind| kind.as_str().map(str::to_owned)),
+        agent_tool_name: translate::tool_name(request.tool_call.meta.as_ref()).map(str::to_owned),
         tool_input,
         session_directory: Some(session_directory),
         session_id,

@@ -17,6 +17,7 @@ fn conversation_request(id: &str, conversation: &str) -> ParkedRequest {
         title: Some("echo hello > greeting.txt".to_owned()),
         conversation_id: conversation.to_owned(),
         tool_name: Some("execute".to_owned()),
+        agent_tool_name: None,
         tool_input: Some("echo hello > greeting.txt".to_owned()),
         session_directory: Some("/tmp/project".to_owned()),
         session_id: Some("ses_1".to_owned()),

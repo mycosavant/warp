@@ -1048,6 +1048,17 @@ struct RowDraft {
     message_id: String,
     state: ToolRowState,
     verb: Verb,
+    /// The kind and the agent's own tool name, each kept once said, because
+    /// the verb is a function of *both* and the wire delivers them on
+    /// different messages. Measured 2026-09-04 on the Windows build: the
+    /// `tool_call` carried `kind: execute` and the `tool_call_update` carried
+    /// `_meta.claudeCode.toolName` and no kind, and a first cut recomputed the
+    /// verb from each message alone -- so the row was announced as *"Running
+    /// wc -l …"* and finished as *"Used wc -l …"*, the kind having defaulted
+    /// to `Other` on the update. The unit test for that sequence had put the
+    /// kind on the update too, which the agent does not.
+    kind: Option<ToolKind>,
+    tool_name: Option<String>,
     /// What the verb acts on -- a command, a path, a pattern -- once known.
     object: Option<String>,
     /// The agent's last title, kept as the object of last resort.
@@ -1072,6 +1083,8 @@ impl RowDraft {
             message_id,
             state: ToolRowState::Running,
             verb: verb(ToolKind::Other, None),
+            kind: None,
+            tool_name: None,
             object: None,
             title: None,
             content: Vec::new(),
@@ -1097,9 +1110,17 @@ impl RowDraft {
         raw_output: Option<&serde_json::Value>,
         cwd: Option<&str>,
     ) {
+        if let Some(kind) = kind {
+            self.kind = Some(kind);
+        }
+        if let Some(tool_name) = tool_name {
+            self.tool_name = Some(tool_name.to_owned());
+        }
         if kind.is_some() || tool_name.is_some() {
-            let kind = kind.unwrap_or(ToolKind::Other);
-            self.verb = verb(kind, tool_name);
+            self.verb = verb(
+                self.kind.unwrap_or(ToolKind::Other),
+                self.tool_name.as_deref(),
+            );
         }
         if let Some(object) = object_from_input(raw_input, cwd) {
             self.object = Some(object);
@@ -1222,7 +1243,8 @@ impl RowDraft {
 /// 0.73.0: `Bash`, `Write`, `Read`, …). It is read only to pick a verb -- a
 /// `Write` and an `Edit` are both `ToolKind::Edit`, and *"Wrote"* is the truer
 /// word for the first -- and an agent that names nothing gets the kind's verb.
-fn tool_name(meta: Option<&agent_client_protocol::schema::v1::Meta>) -> Option<&str> {
+/// The approval card reads it too, as the second bare string a title may be.
+pub(super) fn tool_name(meta: Option<&agent_client_protocol::schema::v1::Meta>) -> Option<&str> {
     meta?.get("claudeCode")?.get("toolName")?.as_str()
 }
 

@@ -426,6 +426,46 @@ fn a_turn_that_ends_leaves_no_row_running() {
     assert!(translator.end_of_turn().is_empty());
 }
 
+/// **The kind arrives on the announcement and the agent's tool name on the
+/// update, and the verb needs both.** Measured on the Windows build: a shell
+/// call announced *"Running wc -l …"* finished as *"Used wc -l …"*, because the
+/// update carried `_meta.claudeCode.toolName` and no `kind`, and the verb was
+/// recomputed from the update alone with the kind defaulted to `Other`. The
+/// measured-sequence test above did not catch it because it had put the kind
+/// on the update too, which the agent does not.
+#[test]
+fn an_update_that_names_the_tool_but_not_the_kind_keeps_the_kinds_verb() {
+    let mut translator = translator();
+    translator.on_update(&SessionUpdate::ToolCall(
+        ToolCall::new("call_1", "wc -l CLAUDE.md")
+            .kind(ToolKind::Execute)
+            .raw_input(serde_json::json!({"command": "wc -l CLAUDE.md"})),
+    ));
+    let updated = translator.on_update(&SessionUpdate::ToolCallUpdate(
+        ToolCallUpdate::new(
+            "call_1",
+            ToolCallUpdateFields::new().title("wc -l CLAUDE.md"),
+        )
+        .meta(claude_meta("Bash")),
+    ));
+    let done = translator.on_update(&SessionUpdate::ToolCallUpdate(
+        ToolCallUpdate::new(
+            "call_1",
+            ToolCallUpdateFields::new().status(ToolCallStatus::Completed),
+        )
+        .meta(claude_meta("Bash")),
+    ));
+
+    // An update that changes nothing the row says is not redrawn -- and with
+    // the verb reset it *was*, to "Using wc -l …", which is how this fails.
+    assert!(
+        updates(&updated).is_empty(),
+        "the update moved the verb: {:?}",
+        updates(&updated).first().map(|(_, m, _)| row_text(m))
+    );
+    assert_eq!(row_text(&updates(&done)[0].1), "Ran wc -l CLAUDE.md");
+}
+
 /// **A refusal is an outcome, and the sweep must not overwrite it with the
 /// turn's ending.** `claude-agent-acp` sends a `failed` update after a *no*, so
 /// the row is already `Denied` by the time the turn ends there; an agent that
@@ -989,6 +1029,7 @@ fn parked(input: Option<&str>, approve_selects: Option<&str>) -> registry::Parke
         agent: "test-agent".to_owned(),
         title: Some("Write out.txt".to_owned()),
         tool_name: Some("edit".to_owned()),
+        agent_tool_name: None,
         tool_input: input.map(str::to_owned),
         session_directory: Some("/tmp/project".to_owned()),
         session_id: Some("ses_abc".to_owned()),

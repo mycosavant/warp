@@ -168,6 +168,16 @@ pub(crate) struct ParkedRequest {
     pub title: Option<String>,
     /// The tool kind as the agent typed it — `execute`, `edit`, `read`, …
     pub tool_name: Option<String>,
+    /// The agent's *own* name for the tool, where it says one —
+    /// `claude-agent-acp` puts `Bash`, `Write`, `Read` at
+    /// `_meta.claudeCode.toolName`. The row always read this to pick its verb;
+    /// the card did not, and needed it: at 0.73.0 a shell ask whose
+    /// description is missing, not a string, or over 160 characters is titled
+    /// with this bare name (`permissions/presentation.js`, `compactText(...) ??
+    /// value.toolName`), which is a placeholder the kind alone cannot
+    /// recognise — `"Bash"` is not `"execute"`. Found by the T20 session
+    /// reading the agent's source, 2026-09-04.
+    pub agent_tool_name: Option<String>,
     /// The command, or whatever `rawInput` carried, as text.
     pub tool_input: Option<String>,
     /// The directory Warp put this session in, which it knows first-hand

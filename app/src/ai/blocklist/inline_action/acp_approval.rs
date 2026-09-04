@@ -475,8 +475,13 @@ pub(crate) fn layered(parked: &ParkedRequest) -> Layers {
         .iter()
         .find(|(label, _)| *label == "the call")
         .map(|(_, value)| value.clone());
-    // The agent's title, unless it is the placeholder it sends before it knows
-    // -- the same rule the tool row applies, for the reason given there.
+    // The agent's title, unless it is a placeholder -- the same rule the tool
+    // row applies, for the reason given there. Two bare strings count: the
+    // kind Warp knows (`execute`) and the agent's own name for the tool
+    // (`Bash`), because at `claude-agent-acp` 0.73.0 the second is what a
+    // shell ask is titled when its description is absent or over 160
+    // characters, and the first cut checked only the kind, so `Bash` would
+    // have headlined the card verbatim. See `ParkedRequest::agent_tool_name`.
     let headline = parked
         .title
         .as_deref()
@@ -484,7 +489,10 @@ pub(crate) fn layered(parked: &ParkedRequest) -> Layers {
         .filter(|title| {
             !crate::ai::tool_row::is_placeholder_title(
                 title,
-                &[parked.tool_name.as_deref().unwrap_or_default()],
+                &[
+                    parked.tool_name.as_deref().unwrap_or_default(),
+                    parked.agent_tool_name.as_deref().unwrap_or_default(),
+                ],
             )
         })
         .map(str::to_owned)
@@ -508,8 +516,7 @@ pub(crate) fn layered(parked: &ParkedRequest) -> Layers {
             // description, and measured at 0.73.0 the title equalled the
             // description byte for byte on 29 of 36 shell asks -- so the card
             // was drawing the agent's one sentence twice, one line apart.
-            "it says" => always.push((label, value)),
-            "the call" => {
+            "it says" | "the call" => {
                 if value != headline {
                     always.push((label, value));
                 }

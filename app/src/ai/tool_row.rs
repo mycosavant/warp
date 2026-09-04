@@ -76,19 +76,23 @@ pub enum ToolRowState {
 /// credulous one being the one a person answers.
 ///
 /// `also` carries whatever else counts as bare for the caller: the row passes
-/// its own verb, the card passes the tool kind the agent typed.
+/// its own verb, the card passes the tool kind the agent typed *and* the
+/// agent's own name for the tool.
 ///
-/// **On the card this is insurance, not a fix for anything observed** -- said
-/// here so the next reader does not conclude from its presence that it was
-/// needed. Read in the agent's source (2026-09-04, both versions this fork has
-/// run): the placeholder is a property of the *notification stream*, where a
-/// `tool_call` can go out before the input has finished streaming and
-/// `input.command` is still empty. A permission request is built from the
-/// complete input -- 0.70.0 by the same `toolInfoFromToolUse`, 0.73.0 by a
-/// separate presentation that titles a shell ask with its `description` -- so
-/// on `claude-agent-acp` the ask cannot carry the placeholder, and across 67
-/// recorded asks none did. What the guard buys on the card is the agent this
-/// fork has *not* measured. The row is the surface that saw the real thing.
+/// **On the card, none of this has been observed -- said here so the next
+/// reader does not conclude from its presence that it was.** Read in the
+/// agent's source (2026-09-04, both versions this fork has run): the ellipsis
+/// and *"Terminal"* placeholders are a property of the *notification stream*,
+/// where a `tool_call` can go out before the input has finished streaming. A
+/// permission request is built from the complete input on both versions, so
+/// those two cannot reach the card from this agent. What *can* is the bare
+/// tool name: 0.73.0 titles a shell ask with its `description` only when that
+/// is a single string of at most 160 characters, and with the literal `Bash`
+/// otherwise (`permissions/presentation.js`, `compactText(...) ??
+/// value.toolName`). Across 67 recorded asks none did -- descriptions ran 0 to
+/// 85 characters -- which is a fact about short descriptions, not about
+/// structure, and is why the card passes the agent's own name in `also` rather
+/// than the kind alone. The row is the surface that saw the real thing.
 ///
 /// [`acp_approval::layered`]: crate::ai::blocklist::inline_action::acp_approval::layered
 pub(crate) fn is_placeholder_title(title: &str, also: &[&str]) -> bool {

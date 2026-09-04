@@ -125,6 +125,7 @@ fn parked(input: Option<&str>, approve_selects: Option<&str>) -> ParkedRequest {
         agent: "test-agent".to_owned(),
         title: Some("Write out.txt".to_owned()),
         tool_name: Some("edit".to_owned()),
+        agent_tool_name: Some("Write".to_owned()),
         tool_input: input.map(str::to_owned),
         session_directory: Some("/tmp/project".to_owned()),
         session_id: Some("ses_abc".to_owned()),
@@ -279,6 +280,33 @@ fn the_agents_sentence_is_not_drawn_twice_when_it_is_already_the_headline() {
         layers.always,
         vec![("the call", "git log --oneline -1".to_owned())],
         "the description is the headline and is not repeated beneath it"
+    );
+}
+
+/// **The agent's own bare tool name is a placeholder too, and the kind alone
+/// cannot see it.** At `claude-agent-acp` 0.73.0 a shell ask is titled with
+/// its description only when that is one string of at most 160 characters;
+/// otherwise the title is the literal `Bash`. The kind Warp holds is
+/// `execute`, so a check against the kind alone lets `Bash` headline the card.
+/// Not observed in 67 recorded asks -- descriptions ran 0 to 85 characters
+/// against the cap -- but read in the agent's source, and headroom under 2x is
+/// not structure.
+#[test]
+fn the_agents_own_bare_tool_name_does_not_headline_either() {
+    let mut request = parked(
+        Some(r#"{"command": "cargo test -p warp"}"#),
+        Some("allow_once"),
+    );
+    request.title = Some("Bash".to_owned());
+    request.tool_name = Some("execute".to_owned());
+    request.agent_tool_name = Some("Bash".to_owned());
+
+    let layers = super::layered(&request);
+
+    assert_eq!(layers.headline, "cargo test -p warp");
+    assert!(
+        !layers.always.iter().any(|(label, _)| *label == "the call"),
+        "the call headlines, so it is not drawn twice: {layers:?}"
     );
 }
 
