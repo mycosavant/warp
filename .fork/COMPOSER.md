@@ -5,12 +5,14 @@ a defect and it is not small.** The board tracks things that are wrong. This is
 a thing that is *not good enough*, on the surface a person looks at all day, and
 the fork is currently failing it — not by a little.
 
-**Status, 2026-09-03: the reference study is written in; steps 2, 3, tool
-rows and turn shape are built and measured on the Windows build.** Record
-9.4 : 1 → 6.0 : 1; drawn 10.1 : 1 → 2.4 : 1 (same-agent-mood runs); the tool
-lines say what ran and whether it finished; a turn shows its elapsed time and
-feeds the context ring. Details under *As built*. Layered approvals are next
-and not started.
+**Status, 2026-09-03: every step in the handoff is built and measured on the
+Windows build.** Warp's own message kind; the asking note's mechanics said
+once; tool calls as rows that change state; a turn's elapsed time and the
+context ring fed; the approval card layered with the decision first. Record
+9.4 : 1 → 6.0 : 1 and drawn 10.1 : 1 → 2.4 : 1 on same-mood runs, with
+Warp's side byte-identical across the last three runs while the agent's prose
+swung ±30% — so read the numbers as Warp's characters first. Details under
+*As built*. What remains is listed at the end of that section.
 
 ---
 
@@ -134,7 +136,7 @@ So there is nothing to render today. **Do not treat that as settled** — it is 
 fact about one agent at one version, and the moment an agent sends thinking the
 composer needs somewhere to put it that is not the output stream.
 
-### 6. The approval card is a wall, and its controls are the smallest thing on it
+### 6. The approval card is a wall, and its controls are the smallest thing on it ✅ **moved, see As built, step 4c**
 
 Four labelled lines of disclosure, then `Yes, once` / `No`. The disclosure is
 good and should not be deleted. It should be *layered* — the decision visible,
@@ -614,8 +616,7 @@ These are not preferences. Each has a measurement or a shipped defect behind it.
 3. ~~**Abbreviate the asking note after the first ask per conversation.**~~
    **Done, `b2493ef75`.**
 4. ~~**Then** tool rows~~ **Done, `146265e37`**; ~~turn shape~~ **Done,
-   `03fbacb24`**; then layered approvals — last, because it is worth more once
-   Warp's chrome is out of the way.
+   `03fbacb24`**; ~~layered approvals~~ **Done, `002482c13`.**
 
 Re-measure the 9.4:1 ratio after each step. It is the number this ticket exists
 to move.
@@ -876,6 +877,66 @@ What the run shows:
   settled.
 - Zero errors of any relevant kind in the app log; files written; three
   asks answered.
+
+### Step 4c — layered approvals (`002482c13`)
+
+**Decision first, disclosure one interaction away, nothing dropped.** The card
+drew four labelled lines and then the buttons, and the buttons were the
+smallest thing on it (item 6). `acp_approval::layered` now splits a parked
+request into what is always drawn — who is asking, the agent's own title as
+the headline, the sentence it wrote for a person (*it says*), and the reason
+when there is no yes — and what sits behind a *details* toggle: the verbatim
+call, the rest of the payload, *acts on*, *offered*. The detail lines are the
+same lines in the same order; a test pins that the description is never
+behind the toggle and the no-yes reason is never behind it either.
+
+**The toggle is keyed to the approval id, like arming.** A request that
+replaces the one a person opened arrives closed, because what they opened was
+a different question — the stale-answer hazard this file's card already
+argues at length, applied to disclosure.
+
+**No carousel, on purpose.** VS Code's carousel lets a person answer any of
+several asks; this card answers the oldest first and says *N more waiting*
+beside the agent's name. The order rule (*an agent that asks twice should not
+have its second question jump the first*) is the reason there is no
+navigation, and `claude-agent-acp` asks serially anyway — the parallel
+announcement seen in step 4a still arrived as two asks in sequence.
+
+**What is unchanged, so nobody reads this as I18**: the buttons, what a yes
+buys, which options are selectable, and every word on the card. The
+always-visible half is the agent's own title and description; Warp adds a
+count and a chevron.
+
+**Measured 2026-09-03 on the Windows build at `002482c13`**, same prompt,
+same driver, with a pause at the first ask so the toggle could be clicked
+(`click.ps1`, window-relative, no cursor taken).
+
+- **Closed**, with the ask parked: *wsl.exe asks* / *Write t204-a.txt* /
+  *[Yes, once] [No] › details* — three lines where the card was nine, and
+  above it the agent's narration (*"Step 1: writing t204-a.txt with A."*), the
+  spinner row, and Warp's folded note, all on screen at once in a 657 px
+  window. The *it says* line is absent because a `Write` carries no
+  description; a shell call would show it.
+- **Open**, after one click: the same four lines the card drew before —
+  *the call*, *also content: A*, *acts on*, *offered* with its
+  *(Warp never selects this)* note — below the buttons, in order. Nothing
+  missing, and the buttons stayed where they were.
+- **Ratio**: Warp's side byte-identical to the two previous runs
+  (1,774 chars of notes, 168 of tool rows). The agent wrote 424 characters
+  this time, so the number reads 4.6 : 1 record, 1.8 : 1 drawn, agent share
+  36% — which is the denominator moving, not Warp. The card is not in the
+  transcript, so this step's gain is on screen only: six fewer lines under
+  the buttons every time an ask is parked.
+- Zero relevant errors in the app log; three files written; three asks
+  answered; the synthetic click left a stray tooltip on the footer, which is
+  the pointer's doing and not the card's.
+
+**Left for a next session, in the order they are worth doing**: the
+transcript announcement and the mode note shortened (below); the *"Ran N
+commands"* fold once a turn shows enough rows; the status row's shrink
+weights so the label survives a narrow window; a diff view behind an edit
+row; and item 7, the cancelled turn's last sentence, which now also leaves a
+tool row that the renderer demotes but the transport never closes.
 
 **What is still drawn in full and should not be**: the transcript announcement
 (~230 characters, once per conversation) and the mode note's headline (~200).

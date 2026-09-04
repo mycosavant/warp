@@ -1583,7 +1583,10 @@ Five files in `.fork/`, in the order a cold start wants them.
   is one row that changes state** (`ai::tool_row`, rewritten in place through
   `UpdateTaskMessage` — the field-mask path this file's ACP notes say was
   declined twice is settled and pinned), because the label it replaced was the
-  agent's *placeholder* title and the real one never showed. The four reference
+  agent's *placeholder* title and the real one never showed. The approval
+  card is layered (decision and buttons, disclosure behind *details*), a turn
+  shows its elapsed time, and the context ring is fed from `usage_update`;
+  every step of the handoff is measured in that file. The four reference
   apps are studied in that file. Read it before touching anything the panel
   draws.
 - **`CLASSIFIER.md`** — a local permission classifier, filed 2026-09-03. The
