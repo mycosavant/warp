@@ -931,6 +931,80 @@ same driver, with a pause at the first ask so the toggle could be clicked
   answered; the synthetic click left a stray tooltip on the footer, which is
   the pointer's doing and not the card's.
 
+### Step 4c, corrected — the call belongs on the closed card (`087764d89`)
+
+**Found by reviewing 4c rather than by using it**, twice independently, and
+the two reviews landed on the same seam. The layering put the agent's title
+and the agent's `description` in the always-visible half and the verbatim
+command — and a write's `content` — behind the toggle. So the split ran
+exactly along *authored by the agent* / *checkable against the agent*, with
+the checkable half hidden: everything a person read before pressing *Yes*
+was the agent's own account of itself.
+
+**Measured against the corpus rather than the run it was seen in**, which is
+the correction `57f0e866a` asked for: of the 52 asks in
+`.fork/classifier/eval-set.jsonl`, **36 carry a `command` and 15 a
+`content`** — so on **51 of 52** the operative fact was one click away. The
+single exception is a `read`. That is a claim about what the payloads
+contain, which is what that corpus is sound for; it says nothing about how
+the asks were answered.
+
+**And it falsified `acp_approval.rs`'s own header**, which justifies offering
+the single-shot yes on the grounds that *"this surface shows the agent, the
+title, the verbatim tool input…"*. That paragraph is the argument for the
+button existing. The fourteenth instance of this fork's most-tracked defect,
+and the first to land on the file that states the consent rule — written
+carefully, true when written, falsified by a change one screen below it
+hours later. The header now says **"shows" means without a further
+interaction**, and names the one exception it tolerates: a payload's tail
+past `CONTENT_PREVIEW_CHARS` (400), with the closed card saying how much is
+under *details* rather than trailing off.
+
+**Nothing about what a yes buys moved**: `choose`, `is_selectable`, the
+digest and every option's wording are untouched, verified by both reviews.
+The closed card is four lines where 4c made it three and the original nine.
+
+Four more from the same review, each calibrated by breaking it:
+
+- **The card headlined `parked.title` unfiltered** while the sibling commit's
+  `usable_title` refuses the placeholders `claude-agent-acp` sends —
+  *"Terminal"*, *"Preparing file…"*. Two surfaces disagreeing about one
+  string, and the credulous one was the one a person answers. The rule is now
+  `tool_row::is_placeholder_title`, shared by both; a refused title falls back
+  to the call. **Unmeasured**: whether a permission request ever carries a
+  placeholder. The measured write ask did not, and no instrument records the
+  title at the ask (below).
+- **The renderer re-tensed a headline it did not write.** Demotion rewrote any
+  headline whose first word ended in *"ing"*, so an agent title used whole
+  became *"Interrupted while ping the host"* — the hazard `translate.rs` names
+  where it picks that fallback, repeated one file over by the half that cannot
+  tell Warp's verbs from the agent's sentence. Prefixed now, never re-tensed,
+  in `tool_row::demoted_headline` so it is testable at all.
+- **`end_of_turn` swept a denied row to Interrupted**, pointing at the turn
+  ending when the reason was the person's answer. Does not fire on
+  `claude-agent-acp`, which sends `failed` after a rejection; `opencode` is
+  unmeasured.
+- **Five stale doc comments**, each true when written: the `FieldMask` path
+  *"nothing in this repo uses"* (`rewrite()` uses it — in the commit that
+  declined it); the same claim in `translate.rs`; *"the notification stream has
+  no `rawInput`"* (`row_announced` reads it); cost *"which this path does not
+  have"* (`claude-agent-acp` sends `total_cost_usd`; the omission is deliberate
+  and now says so); and `tool_update_text`, which no longer exists, cited in
+  `translate_tests.rs` and in `CLAUDE.md`.
+
+**Not measured, and the record should not be amended until it is**: no GUI
+run. The closed card's new shape and the placeholder fallback need a
+screenshot before 4c's measurement above is rewritten.
+
+**One thing this review could not answer, which is worth a field somewhere**:
+the headline is now the first thing a person reads, and **nothing records what
+it said at the ask**. `event_log/mod.rs` writes `tool_name` and
+`tool_input_preview` and no title; `acp_consent.rs`'s ledger keeps one title
+per call and *overwrites* it on each update, and `observe_request` does not
+record the request's own. So the fidelity of the line above the buttons cannot
+be checked from any corpus this fork has — which `GOAL.md`'s horizon, the
+consent path *seen on the wire*, needs. One field in each.
+
 **Left for a next session, in the order they are worth doing**: the
 transcript announcement and the mode note shortened (below); the *"Ran N
 commands"* fold once a turn shows enough rows; the status row's shrink
