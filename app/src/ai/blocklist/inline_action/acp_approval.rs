@@ -51,6 +51,24 @@
 //! The console's asymmetry, for the console's reason: saying yes runs something
 //! on this machine, and saying no can only ever make less happen. A misclick on
 //! *No* costs the agent a retry; a misclick on *Yes* costs whatever it asked for.
+//!
+//! # Layered, since 2026-09-03 (`.fork/COMPOSER.md` item 6)
+//!
+//! The card was four labelled lines of disclosure and then the buttons, and the
+//! buttons were the smallest thing on it. Measured with an ask parked, Warp's
+//! chrome outweighed the agent's words ten to one and the card was most of it.
+//! Every reference app studied for that file draws the decision first and the
+//! reasoning one interaction away; none of them drops the reasoning.
+//!
+//! So [`layered`] splits what the card knows into what is always drawn -- who
+//! is asking, the agent's own title, the sentence it wrote for a person, and
+//! the reason when there is no yes -- and what sits behind *details*: the
+//! verbatim call, the rest of the payload, where it acts, what was offered.
+//! **Nothing is dropped and nothing is summarised**; the detail lines are the
+//! same lines, in the same order, and the toggle is keyed to the approval id
+//! like arming is, so a request that replaced the one a person opened arrives
+//! closed. The always-visible half never says more than the code does: the
+//! title and description are the agent's own words, drawn as such.
 
 use ui_components::{Component as _, Options as _, button};
 use warp_core::ui::appearance::Appearance;
@@ -58,6 +76,7 @@ use warpui::elements::{Container, CrossAxisAlignment, Element, Flex, ParentEleme
 use warpui::{AppContext, Entity, SingletonEntity as _, TypedActionView, View, ViewContext};
 
 use crate::ai::acp_agent::registry::{self, ParkedRequest};
+use crate::ui_components::icons::Icon;
 
 pub enum AcpApprovalViewEvent {
     /// A person answered. The block uses this to drop the view rather than
@@ -79,6 +98,10 @@ pub enum AcpApprovalViewAction {
     Deny {
         approval_id: String,
     },
+    /// Show or hide the disclosure behind the decision, for this request only.
+    ToggleDetails {
+        approval_id: String,
+    },
 }
 
 pub struct AcpApprovalView {
@@ -91,8 +114,13 @@ pub struct AcpApprovalView {
     /// a bool means arming one request and then clicking after a different one
     /// arrived does nothing.
     armed: Option<String>,
+    /// The approval id whose details are open, if any. Keyed like `armed`: a
+    /// request that replaces the one a person opened arrives closed, because
+    /// what they opened was a different question.
+    details_open_for: Option<String>,
     allow: button::Button,
     deny: button::Button,
+    details: button::Button,
 }
 
 impl AcpApprovalView {
@@ -100,20 +128,29 @@ impl AcpApprovalView {
         Self {
             conversation_id,
             armed: None,
+            details_open_for: None,
             allow: button::Button::default(),
             deny: button::Button::default(),
+            details: button::Button::default(),
         }
     }
 
-    /// The request this view is currently about, if any.
+    fn details_open_for(&self, approval_id: &str) -> bool {
+        self.details_open_for.as_deref() == Some(approval_id)
+    }
+
+    /// The request this view is currently about, if any, and how many are
+    /// waiting behind it.
     ///
     /// The oldest, because requests are answered in the order they were asked
     /// and an agent that asks twice should not have its second question jump the
-    /// first. `waiting_for` preserves registry order.
-    fn current(&self) -> Option<ParkedRequest> {
-        registry::waiting_for(&self.conversation_id)
-            .into_iter()
-            .next()
+    /// first. `waiting_for` preserves registry order. The count is drawn, not
+    /// navigable: the order rule is the reason there is no carousel, and a
+    /// person who wants the second question answers the first.
+    fn current(&self) -> Option<(ParkedRequest, usize)> {
+        let waiting = registry::waiting_for(&self.conversation_id);
+        let behind = waiting.len().saturating_sub(1);
+        waiting.into_iter().next().map(|parked| (parked, behind))
     }
 
     /// Whether a second tap on this id should answer it.
@@ -197,6 +234,13 @@ impl TypedActionView for AcpApprovalView {
                 self.armed = None;
                 ctx.emit(AcpApprovalViewEvent::Answered);
             }
+            AcpApprovalViewAction::ToggleDetails { approval_id } => {
+                self.details_open_for = if self.details_open_for(approval_id) {
+                    None
+                } else {
+                    Some(approval_id.clone())
+                };
+            }
         }
         ctx.notify();
     }
@@ -208,135 +252,96 @@ impl View for AcpApprovalView {
     }
 
     fn render(&self, app: &AppContext) -> Box<dyn Element> {
-        let Some(parked) = self.current() else {
+        let Some((parked, behind)) = self.current() else {
             // Nothing waiting: an empty column rather than a placeholder, so a
             // conversation with no question looks exactly as it did before.
             return Flex::column().finish();
         };
         let appearance = Appearance::as_ref(app);
         let theme = appearance.theme();
+        let layers = layered(&parked);
+        let details_open = self.details_open_for(&parked.approval_id);
 
         let mut column = Flex::column().with_cross_axis_alignment(CrossAxisAlignment::Stretch);
 
+        // Who is asking, and how many questions are queued behind this one.
+        let who = if behind == 0 {
+            format!("{} asks", parked.agent)
+        } else {
+            format!("{} asks · {behind} more waiting", parked.agent)
+        };
         column.add_child(
-            Text::new_inline(
-                format!("{} wants permission", parked.agent),
+            Text::new(
+                who,
                 appearance.ui_font_family(),
-                appearance.monospace_font_size(),
+                appearance.monospace_font_size() - 1.0,
             )
-            .with_color(theme.main_text_color(theme.surface_1()).into())
+            .with_color(theme.sub_text_color(theme.surface_1()).into())
+            .with_selectable(false)
             .finish(),
         );
-
-        if let Some(title) = &parked.title {
-            column.add_child(Self::line("", title, app));
-        }
-        // **Split into what the agent says it is doing and what it will run.**
-        // Measured 2026-09-03 across a 44-ask session: every parseable request
-        // carried a human-readable `description` -- *"Compare local HEAD to
-        // Windows checkout HEAD"* -- and the card rendered it as one escaped
-        // JSON blob beside a multi-line command, so the one sentence written for
-        // a person to read was the hardest thing on the card to find.
-        //
-        // **Nothing is dropped.** The original comment on `tool_input` is right
-        // that the payload is where the specifics are and must be carried
-        // verbatim, so any key this does not know about is still shown, under
-        // its own name. This reorders and labels; it never summarises.
-        if let Some(input) = &parked.tool_input {
-            for (label, value) in describe_tool_input(input) {
-                column.add_child(Self::line(label, &value, app));
-            }
-        }
-        // Never falls back to the session directory: that is Warp's own choice of
-        // where to run the agent, not the agent's claim about where this call
-        // acts, and drawing one as the other is the vagueness T14.6 measured.
-        column.add_child(Self::line(
-            "acts on",
-            &if parked.acts_on.is_empty() {
-                "not stated by the agent".to_owned()
-            } else {
-                parked.acts_on.join(", ")
-            },
-            app,
-        ));
-        // **Annotated rather than listed bare, which is what T20.2 was.** This
-        // drew *Yes*, *Yes and don't ask again for similar commands*, *No* and
-        // then two buttons. The middle one can never be selected -- the module
-        // header above says so, `acp_permission::choose` enforces it, and
-        // `registry` documents the list as data rather than controls -- but
-        // nothing on *screen* said it, so a person read a menu with a missing
-        // button. That is this fork's most-tracked defect, a surface claiming
-        // more than the code does, standing in the one place where the thing
-        // misrepresented is what a yes buys.
-        //
-        // The agent's wording is left exactly as it wrote it and the note is
-        // marked as Warp's, because the point of keeping the offer is that it is
-        // a record of what was asked.
-        if !parked.options_offered.is_empty() {
-            column.add_child(Self::line(
-                "offered",
-                &::local_control::protocol::OfferedOption::render_list(&parked.options_offered),
-                app,
-            ));
+        // The decision, in the agent's own words.
+        column.add_child(
+            Container::new(
+                Text::new(
+                    layers.headline.clone(),
+                    appearance.ai_font_family(),
+                    appearance.monospace_font_size(),
+                )
+                .with_color(theme.main_text_color(theme.surface_1()).into())
+                .finish(),
+            )
+            .with_vertical_padding(2.)
+            .finish(),
+        );
+        for (label, value) in &layers.always {
+            column.add_child(Self::line(label, value, app));
         }
 
         let mut buttons = Flex::row().with_cross_axis_alignment(CrossAxisAlignment::Center);
 
-        match &parked.approve_selects {
-            Some(_) => {
-                let armed = self.armed.as_deref() == Some(parked.approval_id.as_str());
-                let id = parked.approval_id.clone();
-                buttons.add_child(
-                    Container::new(
-                        self.allow.render(
-                            appearance,
-                            button::Params {
-                                content: button::Content::Label(
-                                    if armed {
-                                        "tap again to allow"
+        if parked.approve_selects.is_some() {
+            let armed = self.armed.as_deref() == Some(parked.approval_id.as_str());
+            let id = parked.approval_id.clone();
+            buttons.add_child(
+                Container::new(
+                    self.allow.render(
+                        appearance,
+                        button::Params {
+                            content: button::Content::Label(
+                                if armed {
+                                    "tap again to allow"
+                                } else {
+                                    "Yes, once"
+                                }
+                                .into(),
+                            ),
+                            theme: &button::themes::Primary,
+                            options: button::Options {
+                                size: button::Size::Small,
+                                on_click: Some(Box::new(move |ctx, _, _| {
+                                    ctx.dispatch_typed_action(if armed {
+                                        AcpApprovalViewAction::Allow {
+                                            approval_id: id.clone(),
+                                        }
                                     } else {
-                                        "Yes, once"
-                                    }
-                                    .into(),
-                                ),
-                                theme: &button::themes::Primary,
-                                options: button::Options {
-                                    size: button::Size::Small,
-                                    on_click: Some(Box::new(move |ctx, _, _| {
-                                        ctx.dispatch_typed_action(if armed {
-                                            AcpApprovalViewAction::Allow {
-                                                approval_id: id.clone(),
-                                            }
-                                        } else {
-                                            AcpApprovalViewAction::ArmAllow {
-                                                approval_id: id.clone(),
-                                            }
-                                        });
-                                    })),
-                                    ..button::Options::default(appearance)
-                                },
+                                        AcpApprovalViewAction::ArmAllow {
+                                            approval_id: id.clone(),
+                                        }
+                                    });
+                                })),
+                                ..button::Options::default(appearance)
                             },
-                        ),
-                    )
-                    .with_padding_right(8.)
-                    .finish(),
-                );
-            }
-            None => {
-                // The reason, not a disabled button. A greyed control says "not
-                // now"; this is "not by Warp, and here is why" — and the
-                // sentence is the only thing that tells a person whether they
-                // are looking at a setting or a fault.
-                column.add_child(Self::line(
-                    "no yes",
-                    parked
-                        .approve_refused_because
-                        .as_deref()
-                        .unwrap_or("Warp will not say yes to this request, and did not say why."),
-                    app,
-                ));
-            }
+                        },
+                    ),
+                )
+                .with_padding_right(8.)
+                .finish(),
+            );
         }
+        // When there is no yes, the reason is in `layers.always` -- a sentence,
+        // not a disabled button. A greyed control says "not now"; this is "not
+        // by Warp, and here is why".
 
         let deny_id = parked.approval_id.clone();
         buttons.add_child(self.deny.render(
@@ -356,16 +361,139 @@ impl View for AcpApprovalView {
             },
         ));
 
+        if !layers.details.is_empty() {
+            let details_id = parked.approval_id.clone();
+            buttons.add_child(
+                Container::new(self.details.render(
+                    appearance,
+                    button::Params {
+                        content: button::Content::IconAndLabel(
+                            if details_open {
+                                Icon::ChevronDown
+                            } else {
+                                Icon::ChevronRight
+                            },
+                            "details".into(),
+                        ),
+                        theme: &button::themes::Naked,
+                        options: button::Options {
+                            size: button::Size::Small,
+                            on_click: Some(Box::new(move |ctx, _, _| {
+                                ctx.dispatch_typed_action(AcpApprovalViewAction::ToggleDetails {
+                                    approval_id: details_id.clone(),
+                                });
+                            })),
+                            ..button::Options::default(appearance)
+                        },
+                    },
+                ))
+                .with_padding_left(8.)
+                .finish(),
+            );
+        }
+
         column.add_child(
             Container::new(buttons.finish())
                 .with_padding_top(6.)
                 .finish(),
         );
 
+        if details_open {
+            let mut details = Flex::column().with_cross_axis_alignment(CrossAxisAlignment::Stretch);
+            for (label, value) in &layers.details {
+                details.add_child(Self::line(label, value, app));
+            }
+            column.add_child(
+                Container::new(details.finish())
+                    .with_padding_top(6.)
+                    .finish(),
+            );
+        }
+
         Container::new(column.finish())
             .with_horizontal_padding(12.)
             .with_vertical_padding(10.)
             .finish()
+    }
+}
+
+/// What the card draws before a person does anything, and what it draws once
+/// they ask for the rest.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Layers {
+    /// The decision, in the agent's own words: its title, or failing that the
+    /// call itself, or failing that the kind of tool.
+    pub(crate) headline: String,
+    /// Drawn with the headline: the agent's description of the call, and the
+    /// reason when Warp has no yes to offer.
+    pub(crate) always: Vec<(&'static str, String)>,
+    /// Behind the toggle: the call verbatim, the rest of the payload, where it
+    /// acts, what was offered. The same lines the card drew before it was
+    /// layered, in the same order.
+    pub(crate) details: Vec<(&'static str, String)>,
+}
+
+/// Splits a parked request into the two layers. Pure, so the split is tested
+/// without a view context; the rule it keeps is that every line the card ever
+/// drew is in one of the two, and the description is never behind the toggle.
+pub(crate) fn layered(parked: &ParkedRequest) -> Layers {
+    let described = parked
+        .tool_input
+        .as_deref()
+        .map(describe_tool_input)
+        .unwrap_or_default();
+    let mut always = Vec::new();
+    let mut details = Vec::new();
+    for (label, value) in described {
+        if label == "it says" {
+            always.push((label, value));
+        } else {
+            details.push((label, value));
+        }
+    }
+    // Never falls back to the session directory: that is Warp's own choice of
+    // where to run the agent, not the agent's claim about where this call
+    // acts, and drawing one as the other is the vagueness T14.6 measured.
+    details.push((
+        "acts on",
+        if parked.acts_on.is_empty() {
+            "not stated by the agent".to_owned()
+        } else {
+            parked.acts_on.join(", ")
+        },
+    ));
+    // Annotated rather than listed bare (T20.2): the agent's wording exactly as
+    // it wrote it, with Warp's note on the option it will never select, so a
+    // person does not read a menu with a missing button.
+    if !parked.options_offered.is_empty() {
+        details.push((
+            "offered",
+            ::local_control::protocol::OfferedOption::render_list(&parked.options_offered),
+        ));
+    }
+    if parked.approve_selects.is_none() {
+        always.push((
+            "no yes",
+            parked.approve_refused_because.clone().unwrap_or_else(|| {
+                "Warp will not say yes to this request, and did not say why.".to_owned()
+            }),
+        ));
+    }
+    let headline = parked
+        .title
+        .clone()
+        .or_else(|| {
+            details
+                .iter()
+                .find(|(label, _)| *label == "the call")
+                .map(|(_, value)| value.clone())
+        })
+        .or_else(|| parked.tool_name.clone())
+        .unwrap_or_else(|| "a tool call".to_owned());
+    Layers {
+        headline,
+        always,
+        details,
     }
 }
 
