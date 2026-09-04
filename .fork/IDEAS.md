@@ -2200,6 +2200,22 @@ assumed rather than computed, exactly like the merge-base in `CONSOLIDATION.md`
 | `fca12915ff656968` | 0.70.0 | **0 hits** | **present** |
 | `d820eb7d96bc2600` | 0.73.0 | 2 hits | **absent** |
 
+**Both of those cache directories were deleted 2026-09-04, so re-run the grep
+against a spec rather than a hash.** The `npx` cache keys on a hash of the
+*spec string typed*, not on the version it resolves to, which is why three
+directories existed for two versions and why a path like the ones above reads
+as a pin and is not one. To reproduce either row:
+
+```
+npx -y @agentclientprotocol/claude-agent-acp@0.70.0 --version   # populates the cache
+grep -rc "allow-with-updates" "$(dirname "$(readlink -f "$(command -v claude-agent-acp)")")/../dist"
+```
+
+Or more simply, name the version in `WARP_FORK_ACP_COMMAND` and let `npx`
+fetch it. The finding does not rest on the directories surviving; it rests on
+0.70.0 and 0.73.0 remaining published, and the recipe above is what this
+paragraph exists to preserve.
+
 The probe captured `optionId: "allow-with-updates"`, a string that does not exist
 anywhere in 0.70.0 — so **the probe ran 0.73.0**. And the fixture in
 `acp_permission_tests::as_claude_sent_it`, which carries a full
