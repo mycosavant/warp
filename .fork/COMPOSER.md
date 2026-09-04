@@ -5,10 +5,12 @@ a defect and it is not small.** The board tracks things that are wrong. This is
 a thing that is *not good enough*, on the surface a person looks at all day, and
 the fork is currently failing it — not by a little.
 
-**Status, 2026-09-03: the reference study is written in, steps 2 and 3 are
-built and measured on the Windows build, and the number moved.** Record
-9.4 : 1 → 5.6 : 1; drawn 10.1 : 1 → 2.5 : 1. Details under *As built*. Tool
-rows, turn shape and layered approvals are next and not started.
+**Status, 2026-09-03: the reference study is written in; steps 2, 3 and the
+first half of 4 (tool rows) are built and measured on the Windows build.**
+Record 9.4 : 1 → 6.0 : 1; drawn 10.1 : 1 → 2.4 : 1; and the tool lines now
+say what ran and whether it finished, where before they said *Preparing
+file…* three times. Details under *As built*. Turn shape and layered
+approvals are next and not started.
 
 ---
 
@@ -106,7 +108,7 @@ say it was the hardest thing on the card to find. `describe_tool_input`
 structurally empty for every shell call, and nothing yet derives reach from the
 command itself.
 
-### 3. Tool calls render as bare labels
+### 3. Tool calls render as bare labels ✅ **moved, see As built, step 4a**
 
 `Terminal`. `Read File`. `Preparing file…`. No command, no path, no result, no
 duration, no status marker on failure. The information exists — the transcript
@@ -611,8 +613,9 @@ These are not preferences. Each has a measurement or a shipped defect behind it.
 2. ~~**Give Warp its own message kind**~~ **Done, `a4a5cb53a`.**
 3. ~~**Abbreviate the asking note after the first ask per conversation.**~~
    **Done, `b2493ef75`.**
-4. **Then** tool rows, turn shape, and layered approvals — in that order, because
-   each is worth more once Warp's chrome is out of the way.
+4. ~~**Then** tool rows~~ **Done, `146265e37`** — then turn shape, and layered
+   approvals, in that order, because each is worth more once Warp's chrome is
+   out of the way.
 
 Re-measure the 9.4:1 ratio after each step. It is the number this ticket exists
 to move.
@@ -710,33 +713,110 @@ binary measured (built at `b2493ef75`, before `2c914dc98`'s description-first
 card landed on `dev` from another session) and is now the largest
 Warp-authored thing on the screen, which is the argument for the next step.
 
-### Next: tool rows, and what the transport allows
+### Step 4a — tool rows (`146265e37`)
 
-Read on the way through, so the next session does not rediscover it:
+**Item 3 understated the defect.** It said the panel shows *the title*. It
+showed the *first* title, and on `claude-agent-acp` 0.73.0 that is a
+placeholder the agent corrects immediately: `tool_call` says *"Terminal"* or
+*"Preparing file…"*, the real title and `rawInput` ride the next
+`tool_call_update` with no status, and the completion carries content and
+status but no title. `tool_update_text` showed a corrected title only on a
+`Completed` update, so it never showed one. The transcript of the step 3
+measurement reads *"Preparing file…"* three times and nothing else — the
+panel was drawing the one line the agent had not meant anyone to read, and
+this file had counted those lines as tool labels without noticing what they
+said.
 
-- **A row that changes state needs a message that changes, and this transport
-  has none in use.** Messages arrive by `AddMessagesToTask`, append-only. The
-  proto has `UpdateTaskMessage` with a `FieldMask`, which `acp_agent/mod.rs`
-  records declining to guess at twice. So *"Running `cargo test`…"* → *"Ran
-  `cargo test`, exit 0"* on one row is either that message, or a row emitted
-  only on completion with a live *"running"* line drawn from translator state
-  the way the approval card already is — appended after the output because it
-  belongs to the turn, not to a message.
-- **The wire has everything the references show.** `tool_call` carries
-  `title`, `kind`, `rawInput`, `locations`; `tool_call_update` carries `status`,
-  `content`, a diff for edits, and `_meta.claudeCode.toolResponse` with stdout
-  and stderr. `translate.rs` keeps `announced`, `locations` and `started` per
-  call already; a completed row can be built from those plus the update.
-- **The channel built in step 2 carries this too.** A second tag
-  (`warp-fork/tool`) on the same `server_message_data` field, mapped at the same
-  `convert_from` arm to a `ToolRow` kind, round-trips through persistence for
-  the same reason the note does. It must **never** be `Message::ToolCall`
-  (constraint 4).
-- **What the row says, from the study**: verb + object + state icon, tense
-  following state, Denied drawn like Failed, no duration on the row,
-  consecutive calls foldable into *"Ran N commands"*. The plain label today
-  (`Preparing file…`) is the agent's own title and is the collapsed form's
-  fallback, not its design.
+**The transport question above is settled by reading, not guessing.**
+`UpdateTaskMessage` with a `FieldMask` is applied by `Task::upsert_message`
+through `crates/field_mask`, and `Exchange::upsert_output_for_message`
+re-converts the merged proto in place while the exchange streams. So a row can
+be appended once and rewritten in place. The pin that matters is the path
+name: the mask must say `agent_output`, the oneof member's own field name.
+Naming the oneof (`message`) is **not an error** — `apply_path` skips an
+unknown segment with `Ok(())` — so a wrong path would have left every row
+`Running` for ever, with nothing to search for. That case is in the test.
+
+**Built**: `ai::tool_row`, a second tag family on the same field
+(`warp-fork/tool/running|done|failed|denied|interrupted`) mapped at
+`convert_from` to a `ToolRow` kind, drawn in `output.rs` as a state icon, a
+headline, and the description and output behind a chevron. The icons are the
+history panel's own map for an exchange's status, so a row and its
+conversation say "done" and "failed" the same way. Never `Message::ToolCall`;
+the existing test now covers the rewrites too.
+
+**What the row says, and where each word comes from**:
+
+| state | headline | example |
+|---|---|---|
+| running | *verb-ing object* | Running `CARGO_BUILD_JOBS=8 cargo --version` |
+| done | *verb-ed object* | Wrote `notes/a.txt` |
+| failed | *Failed to verb object* | Failed to run `cargo test` |
+| denied | *Denied: verb object* | Denied: run `rm -rf build` |
+| interrupted | *Interrupted while verb-ing object* | Interrupted while running `cargo test` |
+
+The verb is `ToolKind`'s, or `_meta.claudeCode.toolName`'s where the agent
+names one — a `Write` is `ToolKind::Edit` on the wire and *"Wrote"* is the
+truer word. The object is read from `rawInput` (`command`, `file_path`,
+`pattern`, `url`, …) and a path is said from the session directory. When
+neither is known the agent's own title is used **whole and never re-tensed**,
+prefixed only for the states that need saying: re-tensing someone else's
+sentence is how a row starts lying. *Denied* is a separate state because a
+person reading *"Failed to run"* looks for a fault in the command and not in
+their own answer; the translator learns it from the same `permission_replied`
+it already logs.
+
+**A row may not say *Running* after Warp has stopped listening.**
+`end_of_turn` sweeps open rows to *interrupted* before `finished`/`failed`,
+and the renderer draws a `Running` row in a settled exchange as interrupted
+regardless — a turn cancelled from outside ends without the sweep (item 7),
+and a restored conversation carries whatever the stream left. A spinner over a
+process nobody is watching is the exact thing constraint 5 forbids.
+
+**Deliberately not built, from the study**: no duration on the row; no
+folding of consecutive calls into *"Ran N commands"* (worth doing once a turn
+shows enough calls for it to matter — the measured prompt has three); no
+rendered diff (the detail carries the written text in a fence, which is what
+the transcript can keep); no `_meta.claudeCode.toolResponse` reading, because
+the agent's `content` already carries the output formatted as it meant it
+and the meta is vendor-shaped.
+
+**Measured 2026-09-03 on the Windows build at `146265e37`**, same prompt,
+same window, three asks, `claude-agent-acp@0.73.0`, `WARP_FORK_ACP_MODE=default`
+(`ratio.py` v2, which puts tool rows and their detail in a third bucket; the
+step 3 transcript re-run through v2 gives 2.4 : 1 drawn where v1 said 2.5):
+
+| | after step 3 | after tool rows |
+|---|---|---|
+| record, (Warp + tool) : agent | 5.6 : 1 | **6.0 : 1** |
+| drawn, headlines : agent | 2.4 : 1 | **2.4 : 1** |
+| agent's share of what is drawn | 30% | 30% |
+| what the three tool lines say | *Preparing file…* ×3 | *Writing t204-a.txt* with a spinner while the ask is parked; *Wrote t204-a.txt* with a check after |
+
+**The number did not move and was not expected to**: a row replaces a label
+one for one and is about as long. What moved is what the line *says*, and
+whether it is true — the record went up by 0.4 because the transcript now
+keeps each written file's text behind its row, which is the detail bucket
+and a real cost the earlier number did not carry.
+
+Verified by running, not by the tests alone: the ask-1 screenshot shows the
+narration, then a spinner row *Writing t204-a.txt ›*, then Warp's folded
+note, then the card; the final screenshot shows *✓ Wrote t204-c.txt ›*. So
+the in-place rewrite works on the live path. Zero `UpdateTaskMessage`,
+`ExchangeNotFound` or `FieldMask` errors in the app log; the event log holds
+three asks, three `allowed`, three `tool_complete`. After two relaunches,
+`agent read` on the restored conversation returns *Wrote* three times and
+*Writing* never, so the rewrite reached the stored proto. **What that run does
+not show** is the kind on restore — `agent read` prints text, and a Done
+row's text is the same whether or not the tag survived — so the tag's
+round-trip rests on the unit tests (`into_message`/`state_of`, and the
+`convert_from` arm), not on this run.
+
+One thing seen on the way: rows *b* and *c* sit adjacent in the transcript,
+before either ask, because the agent narrated steps 2 and 3 in one sentence
+and announced both writes before asking about the first. The transcript is
+faithful. It is also the first live instance of the case the *"Ran N
+commands"* fold is for.
 
 **What is still drawn in full and should not be**: the transcript announcement
 (~230 characters, once per conversation) and the mode note's headline (~200).
