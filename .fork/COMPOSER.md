@@ -1113,10 +1113,15 @@ Code's own rows read after an interrupt.
   chevron, which is the failure-legible-in-the-row claim from 4a holding on a
   refusal Warp never saw.
 - **Run 2 asked nothing either**, for `stat -c %s CLAUDE.md`, which is in no
-  allow list — so the agent has a way of running a read-only shell command
-  unasked in `default` that this fork's docs do not name (the sandbox runtime
-  is installed here; not verified as the cause). The row read **"Ran stat -c
-  %s …"** on the rebuilt binary, which is the verb fix measured.
+  allow list. This entry said for an hour that the fork's docs do not name
+  that path; they do — `.fork/classifier/README.md`'s calibration table has
+  *"a built-in read-only set exists"*, probed with `git remote -v` two days
+  earlier, and `stat` is the same class. The T20 session found the line. Its
+  caveat, recorded here so it is not rediscovered: the user's own
+  `~/.claude/settings.json` sets `permissions.defaultMode: auto`, and a
+  built-in read-only set and a model classifier both answer 0 on that probe,
+  so the probe cannot tell them apart. The row read **"Ran stat -c %s …"** on
+  the rebuilt binary, which is the verb fix measured.
 - **Run 3 asked**, because the command wrote outside the session directory —
   the shape the classifier notes already record as asking. Closed card, four
   lines: *wsl.exe asks* / **Write probe file and read it back** / *the call
