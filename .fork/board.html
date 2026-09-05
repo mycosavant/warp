@@ -114,7 +114,7 @@
       <li><small>day 2</small>Measure egress on Windows, against the merged binary.</li>
       <li><small>day 3&ndash;4</small>Composer cancel path, test before fix.</li>
       <li><small>day 4</small>Hide the two cloud chips.</li>
-      <li><small>then</small>The viewer, phase 0 first.</li>
+      <li><small>then</small>The viewer, phase 0 first. <em>Done 2026-09-05; phase 1 next.</em></li>
       <li><small>day 1 of living</small>WSL parity: connect automatically, then diffs, then LSP.</li>
     </ol>
   </section>
@@ -250,21 +250,22 @@
     </div>
   </article>
 
-  <article class="item" data-id="viewer">
+  <article class="item" data-id="viewer" data-default="active">
     <div class="rank">6</div>
     <div class="body">
       <div class="head">
         <h2>The viewer: one trace from the record the agent already keeps</h2>
         <button class="status" type="button" aria-label="cycle status">open</button>
       </div>
-      <div class="meta"><span>.fork/docs/observability.md</span><span>specified 2026-09-04, unbuilt</span></div>
+      <div class="meta"><span>.fork/docs/observability.md</span><span>specified 2026-09-04</span><span>phase 0 done 2026-09-05, <code>7bb323cbc</code></span></div>
       <p>The observability target, reframed. The harness's own session file is the record: for run 2 it held the full input for all 59 calls where Warp's log truncated 14, and the two joined on the tool-call id Warp already writes. Warp adds only what no harness file has: what it decided, which surface answered, why a request was refused, and live state. The viewer merges the two on that id, orders by time, labels every line by author, and never writes. Compaction is a boundary row, so a session can always be viewed without being compacted, which was I21's whole ask.</p>
       <div class="split">
         <div>
-          <h3>Phase 0, before any rendering</h3>
+          <h3>Phase 0, done 2026-09-05</h3>
           <ul>
-            <li><code>local_agent</code> writes <code>linked_session_id: None</code>. The join key exists there and is not written. Fix first.</li>
-            <li>Confirm on a live product-profile session that the join holds under <code>auto</code>, where Warp is never asked.</li>
+            <li><code>local_agent</code> now writes Claude's session id, read off the stream's <code>init</code>; four tests pin it.</li>
+            <li>Measured live, product profile plus the log (<code>warpdev.ps1 -EventLog</code>), agent in <code>auto</code>: two tool calls, both logged with the join key, zero permission lines, both ids found in the agent's own session file. <code>.fork/runs/viewer-phase0-2026-09-05/</code></li>
+            <li>On the ACP path Warp's log has <em>no</em> tool input, not a truncated one. The harness file is the only record of what ran.</li>
           </ul>
         </div>
         <div>

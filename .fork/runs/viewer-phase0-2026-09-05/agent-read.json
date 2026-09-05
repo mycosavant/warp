@@ -1,0 +1,24 @@
+{
+  "action": "agent.read",
+  "ok": true,
+  "instance_id": "inst_fce5b316e2b64806bdc678ec83753d6b",
+  "conversation": {
+    "conversation_id": "ebacd6e3-445c-41db-8edd-5b6f5b781b8c",
+    "title": "Use your Read tool to read the first line of CLAUDE.md and q…",
+    "status": "success",
+    "is_busy": false,
+    "pane_id": "Pane Pane Terminal (2674)",
+    "tab_id": "1967",
+    "session_mode": "auto"
+  },
+  "exchanges": [
+    {
+      "index": 0,
+      "input": "Use your Read tool to read the first line of CLAUDE.md and quote it exactly. Then run `git log --oneline -1` with your Bash tool and quote its output. Two tool calls, then answer in two lines.",
+      "output": "This session is in the agent's `auto` mode, which the agent describes as “Claude handles permission decisions”.\n\nWarp did not choose it and cannot tell what it permits — a mode is the agent's own idea, so only the agent's description above says anything about it. To ask for a different one, set `WARP_FORK_ACP_MODE` to its id before starting Warp. This agent offers: `default` (“Always ask before making changes”); `acceptEdits` (“Automatically accept all file edits”); `plan` (“Create a plan before making changes”); `auto` (“Claude handles permission decisions”); `bypassPermissions` (“Accepts all permissions”).\nReading the first line of CLAUDE.md and the latest commit.\nRead CLAUDE.md\n\n```\n1\t# Working in this fork\n```\nRan git log --oneline -1\n\nShow latest commit\n\n```console\n7bb323cbc fork: the local agent's log lines name claude's session, the viewer's join key (VIEWER)\n```\nFirst line of CLAUDE.md: `# Working in this fork`\nLatest commit: `7bb323cbc fork: the local agent's log lines name claude's session, the viewer's join key (VIEWER)`",
+      "is_complete": true
+    }
+  ],
+  "exchange_count": 1,
+  "included_tool_results": false
+}

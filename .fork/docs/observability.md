@@ -1,8 +1,9 @@
 # The viewer: one trace, from the record the agent already keeps
 
-**Filed 2026-09-04.** Specified, not built. Every field named below was read off
-a real file on this machine the same day; the section headed *Unverified* is the
-list of what was not.
+**Filed 2026-09-04. Phase 0 done 2026-09-05**, `7bb323cbc` and the run in
+`.fork/runs/viewer-phase0-2026-09-05/`. Every field named below was read off
+a real file on this machine; the section headed *Unverified* is the list of
+what was not.
 
 ## The frame
 
@@ -60,11 +61,20 @@ file above. Permission lines carry what the harness never records: `decision`,
 `answered_by` (`control_plane`, the panel, a paired device), `can_approve`, and
 the reason a request was refused.
 
-**One defect, and it is phase 0.** `app/src/event_log/local_agent.rs:102`
-writes `linked_session_id: None`. `local_agent` knows Claude's session id
-(it is the conversation token it round-trips for `--resume`), so the join key
-exists and is simply not written. Until it is, the viewer works for the ACP
-path and not for the other one.
+**One defect, and it was phase 0, closed 2026-09-05.**
+`app/src/event_log/local_agent.rs` wrote `linked_session_id: None`.
+`local_agent` knows Claude's session id (it is the conversation token it
+round-trips for `--resume`), so the join key existed and was not written. It
+is now taken off the stream's `system/init`, which is the first line Claude
+writes and precedes every tool event, so the first tool line of a turn already
+carries it; a `--resume` that misses relinks to the session Claude actually
+ran. Pinned in `translate_tests.rs` and `event_log/local_agent_tests.rs`.
+
+**And on the ACP path the log carries no tool input at all**, measured on the
+phase 0 run: `tool_name` is the ACP kind (`read`, `execute`) and
+`tool_input_preview` is `None`. Run 2's "truncated at 320 characters" was the
+`local_agent` shape. For the ACP path the harness file is the only record of
+what ran, which makes the join load-bearing rather than convenient.
 
 ### opencode: `~/.local/share/opencode/opencode.db`
 
@@ -191,12 +201,16 @@ the ACP shim already gave opposite answers to one question in a week. The rules:
 
 ## Phases
 
-0. **Before any rendering.** Write `linked_session_id` on the `local_agent`
-   path. Then launch the product profile, run one panel turn, and confirm on a
-   live session that the event log carries `linked_session_id` and a
-   `tool_start` per call under `auto`, where Warp is never asked; the join must
-   not depend on permissions being exercised. Measure the slug rule for the
-   project directory name on a cwd containing characters other than `/`.
+0. **Done 2026-09-05.** `linked_session_id` written on the `local_agent` path
+   (`7bb323cbc`). Measured live on the Windows build, the user's own profile,
+   `warpdev.ps1 -EventLog` (product plus the log, agent in its own `auto`):
+   two tool calls, two `tool_start`/`tool_complete` pairs each carrying
+   `linked_session_id`, zero permission lines, both `call_id`s found as
+   `tool_use`/`tool_result` in `~/.claude/projects/-home-effatha-git-warp/<id>.jsonl`
+   (Claude Code 2.1.257). The join does not depend on permissions being
+   exercised. Slug rule measured: `[^A-Za-z0-9]` → `-`, case kept, so it is
+   lossy and is computed from the `cwd` on Warp's lines, never inverted.
+   `.fork/runs/viewer-phase0-2026-09-05/`.
 1. **`agent trace`, JSON lines.** The merge, the join, the four authors. Pinned
    against one real fixture per harness version.
 2. **`--pretty` and `--html`.** The static page is the deliverable the frame
@@ -205,9 +219,18 @@ the ACP shim already gave opposite answers to one question in a week. The rules:
 
 ## Unverified, as of filing
 
-- The slug rule for `~/.claude/projects/<slug>` beyond `/` → `-`.
-- Whether `local_agent` has the session id at the moment the first tool event
-  is written, or only after `init`.
+- ~~The slug rule for `~/.claude/projects/<slug>` beyond `/` → `-`.~~ Measured
+  2026-09-05: `/`, space, `_` and `.` all become `-`. Non-ASCII letters not
+  tried.
+- ~~Whether `local_agent` has the session id at the moment the first tool
+  event is written, or only after `init`.~~ Read 2026-09-05: `init` is the
+  first line of the stream, a `tool_use` never shares a line with it, and the
+  loop links the log before draining tool events. It also has one *before*
+  `init`, the `--session-id`/`--resume` argument, and deliberately does not
+  use it: a `--resume` that misses starts a fresh session.
+- The first line of a session file can be a bookkeeping kind with no `cwd`,
+  `version` or `gitBranch` (seen: `operation`, `sessionId`, `timestamp`,
+  `type`). Take those from the first line that carries them.
 - What `part.data` in opencode's database looks like; not read.
 - Whether `native_path` returns `Some` for a `~/.claude/…` path when the
   session is not routed (T16's `Host`/`Local` distinction should not matter

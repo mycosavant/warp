@@ -1,0 +1,22 @@
+[22:34:27] launching PRODUCT + EVENT LOG
+[22:42:48] instance already up
+[22:42:48] cd the pane
+[22:42:55] prompt
+[22:42:56] conversation ebacd6e3-445c-41db-8edd-5b6f5b781b8c
+[22:43:06] turn over after ~9s, is_busy=False
+[22:43:06] event kinds:
+      1 "event":"session_agent"
+      1 "event":"session_mode"
+      1 "event":"session_model"
+      1 "event":"session_start"
+      1 "event":"stop"
+      2 "event":"tool_complete"
+      2 "event":"tool_start"
+"linked_session_id":"dc585483-6b63-4ded-9b07-f58c85f28502"
+[22:43:06] linked_session_id = dc585483-6b63-4ded-9b07-f58c85f28502
+[22:43:06] harness file: 24 lines
+[22:43:06] join on call_id:
+[22:43:06]   toolu_016nenDgNPeZYgmE581CPZYZ  in harness file: 3 lines
+[22:43:06]   toolu_01DcLScexaEsFEd5RD5w39f1  in harness file: 3 lines
+[22:43:06] permission lines: 1
+[22:43:07] closing

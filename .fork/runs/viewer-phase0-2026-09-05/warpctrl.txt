@@ -1,0 +1,15 @@
+{
+  "action": "input.submit",
+  "ok": true,
+  "instance_id": "inst_fce5b316e2b64806bdc678ec83753d6b",
+  "executed": true,
+  "queued": false
+}
+
+{
+  "action": "agent.prompt",
+  "ok": true,
+  "instance_id": "inst_fce5b316e2b64806bdc678ec83753d6b",
+  "conversation_id": "ebacd6e3-445c-41db-8edd-5b6f5b781b8c",
+  "created": true
+}

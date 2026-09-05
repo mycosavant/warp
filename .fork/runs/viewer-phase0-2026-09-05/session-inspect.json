@@ -1,0 +1,7 @@
+{
+  "ok": false,
+  "error": {
+    "code": "ambiguous_target",
+    "message": "session.inspect resolved multiple targets by active session"
+  }
+}
