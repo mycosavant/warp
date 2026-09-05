@@ -587,6 +587,17 @@ impl AIAgentOutput {
         &self,
         action_model: Option<&crate::ai::blocklist::BlocklistAIActionModel>,
     ) -> String {
+        self.format_for_copy_settled(action_model, false)
+    }
+
+    /// [`Self::format_for_copy`], told whether the exchange has finished so a
+    /// tool row left `Running` can be written as interrupted (fork; see
+    /// `AIAgentExchange::format_output_for_copy`).
+    pub fn format_for_copy_settled(
+        &self,
+        action_model: Option<&crate::ai::blocklist::BlocklistAIActionModel>,
+        settled: bool,
+    ) -> String {
         let mut result = Vec::new();
         let mut last_was_action = false;
 
@@ -669,7 +680,18 @@ impl AIAgentOutput {
                     if last_was_action {
                         result.push(String::new());
                     }
-                    result.push(headline.clone());
+                    let demoted = matches!(
+                        &message.message,
+                        AIAgentOutputMessageType::ToolRow {
+                            state: crate::ai::tool_row::ToolRowState::Running,
+                            ..
+                        }
+                    ) && settled;
+                    result.push(if demoted {
+                        crate::ai::tool_row::demoted_headline(headline)
+                    } else {
+                        headline.clone()
+                    });
                     if !are_all_text_sections_empty(&detail.sections) {
                         result.push(String::new());
                         for section in &detail.sections {
@@ -3480,12 +3502,21 @@ impl AIAgentExchange {
     }
 
     /// Format the output part of this exchange for copying to clipboard.
+    ///
+    /// Fork: a tool row still `Running` in an exchange that has finished reads
+    /// as interrupted here, as it draws in the panel (`view_impl/output.rs`).
+    /// A cancelled turn drops its transport before anything can rewrite the
+    /// row, so the text is the one place left to say the process is not being
+    /// watched -- measured 2026-09-03, `agent read` returning *"Running …"* for
+    /// a row the panel drew as *"Interrupted: Running …"*.
     pub fn format_output_for_copy(
         &self,
         action_model: Option<&crate::ai::blocklist::BlocklistAIActionModel>,
     ) -> String {
         match self.output_status.output() {
-            Some(output) => output.get().format_for_copy(action_model),
+            Some(output) => output
+                .get()
+                .format_for_copy_settled(action_model, self.finish_time.is_some()),
             None => String::new(),
         }
     }

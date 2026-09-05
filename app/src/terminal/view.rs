@@ -8885,9 +8885,16 @@ impl TerminalView {
         let should_interrupt_active_command = {
             let mut model = self.model.lock();
             let active_block = model.block_list_mut().active_block_mut();
+            // Fork: under an ACP or local agent the pane's foreground command
+            // is the person's, never the agent's, so stopping the conversation
+            // interrupts only a block this conversation itself created --
+            // which on those transports is none. Upstream's wider test, the
+            // visible or active conversation, is what sent Ctrl-C to a user's
+            // `sleep 300` on 2026-09-05. See `fork::panel_agent_is_external`.
             let active_block_matches = active_block.ai_conversation_id() == Some(conversation_id)
-                || visible_conversation_id == Some(conversation_id)
-                || history_active_conversation_id == Some(conversation_id);
+                || (!crate::fork::panel_agent_is_external()
+                    && (visible_conversation_id == Some(conversation_id)
+                        || history_active_conversation_id == Some(conversation_id)));
             let command_is_running = active_block.is_executing()
                 || active_block.is_command_grid_active()
                 || active_block.is_active_and_long_running();

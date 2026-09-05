@@ -249,7 +249,7 @@ fn has_validated_identity(auth_state: &AuthState) -> bool {
 /// turns are authenticated server-side before the request is even built. The
 /// bypass is only honest when the turn is never going to reach Warp at all.
 fn fork_agent_will_answer() -> bool {
-    crate::fork::acp_agent_command().is_some() || crate::fork::local_agent_enabled()
+    crate::fork::panel_agent_is_external()
 }
 
 fn initial_login_phase(auth_state: &AuthState) -> TuiLoginPhase {

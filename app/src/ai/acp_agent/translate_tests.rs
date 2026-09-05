@@ -48,6 +48,77 @@ fn bodies(events: &[api::ResponseEvent]) -> Vec<api::message::Message> {
         .collect()
 }
 
+/// Every append in `events`: the message id and the text appended, with the
+/// mask path it named.
+fn appends(events: &[api::ResponseEvent]) -> Vec<(String, api::message::Message, Vec<String>)> {
+    events
+        .iter()
+        .filter_map(|event| match &event.r#type {
+            Some(api::response_event::Type::ClientActions(actions)) => Some(&actions.actions),
+            _ => None,
+        })
+        .flatten()
+        .filter_map(|action| match &action.action {
+            Some(api::client_action::Action::AppendToMessageContent(append)) => {
+                let message = append.message.clone()?;
+                Some((
+                    message.id.clone(),
+                    message.message.clone()?,
+                    append
+                        .mask
+                        .clone()
+                        .map(|mask| mask.paths)
+                        .unwrap_or_default(),
+                ))
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+/// What the panel would hold after `events`: each added text message with
+/// every append to it applied, through the same descriptor-driven operation
+/// the consumer runs.
+fn panel_text(events: &[api::ResponseEvent]) -> Vec<String> {
+    let mut messages: Vec<api::Message> = Vec::new();
+    for event in events {
+        let Some(api::response_event::Type::ClientActions(actions)) = &event.r#type else {
+            continue;
+        };
+        for action in &actions.actions {
+            match &action.action {
+                Some(api::client_action::Action::AddMessagesToTask(add)) => {
+                    messages.extend(add.messages.iter().cloned());
+                }
+                Some(api::client_action::Action::AppendToMessageContent(append)) => {
+                    let patch = append.message.clone().expect("an append carries a message");
+                    let existing = messages
+                        .iter_mut()
+                        .find(|message| message.id == patch.id)
+                        .expect("an append names a message already added");
+                    *existing = field_mask::FieldMaskOperation::append(
+                        &api::MESSAGE_DESCRIPTOR,
+                        existing,
+                        &patch,
+                        append.mask.clone().expect("an append carries a mask"),
+                    )
+                    .apply()
+                    .expect("the append mask applies against the real descriptor");
+                }
+                _ => {}
+            }
+        }
+    }
+    messages
+        .into_iter()
+        .filter_map(|message| match message.message {
+            Some(api::message::Message::AgentOutput(output)) => Some(output.text),
+            Some(api::message::Message::AgentReasoning(reasoning)) => Some(reasoning.reasoning),
+            _ => None,
+        })
+        .collect()
+}
+
 fn output(events: &[api::ResponseEvent]) -> Vec<String> {
     bodies(events)
         .into_iter()
@@ -138,61 +209,143 @@ fn text_content(text: &str) -> ToolCallContent {
     ToolCallContent::from(ContentBlock::Text(TextContent::new(text)))
 }
 
-/// **The defect the first live turn produced.** ACP streams tokens, so one
-/// message per chunk rendered `"notes.txt doesn"`, `"'t exist in this"`,
-/// `" directory"` as three messages in Warp's panel. Text accumulates and is
-/// emitted at a boundary instead.
+/// **The defect the first live turn produced, and the one the fix for it
+/// produced.** ACP streams tokens, so one message per chunk rendered
+/// `"notes.txt doesn"`, `"'t exist in this"`, `" directory"` as three messages
+/// in Warp's panel. Buffering them to a boundary rendered *nothing* for a
+/// pure-text turn until it ended, and a cancel mid-way lost it all (measured
+/// 2026-09-05). So the first chunk is a message and every later one is
+/// appended to it: one message, on the panel from its first word.
 #[test]
-fn token_chunks_are_joined_into_one_message() {
+fn token_chunks_stream_into_one_message() {
     let mut translator = translator();
+    let mut events = Vec::new();
 
-    for chunk in ["notes.txt doesn", "'t exist in this", " directory"] {
+    let first = translator.on_update(&SessionUpdate::AgentMessageChunk(text_chunk(
+        "notes.txt doesn",
+    )));
+    assert_eq!(
+        output(&first),
+        vec!["notes.txt doesn".to_owned()],
+        "the first chunk is on the panel when it arrives"
+    );
+    events.extend(first);
+    for chunk in ["'t exist in this", " directory"] {
+        let more = translator.on_update(&SessionUpdate::AgentMessageChunk(text_chunk(chunk)));
         assert!(
-            translator
-                .on_update(&SessionUpdate::AgentMessageChunk(text_chunk(chunk)))
-                .is_empty(),
-            "a chunk on its own is not a message"
+            output(&more).is_empty(),
+            "a later chunk is not a new message"
         );
+        assert_eq!(appends(&more).len(), 1, "a later chunk is one append");
+        events.extend(more);
     }
-    let events = translator.flush();
+    assert!(
+        translator.flush().is_empty(),
+        "nothing is held back for the end"
+    );
 
     assert_eq!(
-        output(&events),
+        panel_text(&events),
         vec!["notes.txt doesn't exist in this directory".to_owned()]
+    );
+    let ids: std::collections::HashSet<String> =
+        appends(&events).into_iter().map(|(id, _, _)| id).collect();
+    assert_eq!(ids.len(), 1, "every append names the one message");
+}
+
+/// The append names the string inside the `oneof` member, for both kinds,
+/// and the consumer's own operation accepts it -- checked against the real
+/// descriptor because `agent_output` alone is the path a *replace* uses and
+/// `FieldMaskOperation::append` refuses it as a message field. A wrong path
+/// here would not error on the wire; the text would simply never grow.
+#[test]
+fn the_append_mask_names_the_string_field_of_each_kind() {
+    let mut translator = translator();
+    let mut events = translator.on_update(&SessionUpdate::AgentThoughtChunk(text_chunk("hm")));
+    events.extend(translator.on_update(&SessionUpdate::AgentThoughtChunk(text_chunk("m"))));
+    events.extend(translator.on_update(&SessionUpdate::AgentMessageChunk(text_chunk("ye"))));
+    events.extend(translator.on_update(&SessionUpdate::AgentMessageChunk(text_chunk("s"))));
+
+    let paths: Vec<Vec<String>> = appends(&events)
+        .into_iter()
+        .map(|(_, _, paths)| paths)
+        .collect();
+    assert_eq!(
+        paths,
+        vec![
+            vec!["agent_reasoning.reasoning".to_owned()],
+            vec!["agent_output.text".to_owned()]
+        ]
+    );
+    assert_eq!(
+        panel_text(&events),
+        vec!["hmm".to_owned(), "yes".to_owned()]
     );
 }
 
-/// A tool call mid-sentence must not be buried inside it, so it is a boundary.
+/// A chunk of whitespace does not open a paragraph on its own; the first
+/// visible character does, carrying the whitespace before it.
 #[test]
-fn a_tool_call_flushes_the_text_before_it() {
+fn a_run_that_opens_blank_waits_for_its_first_visible_character() {
     let mut translator = translator();
-    translator.on_update(&SessionUpdate::AgentMessageChunk(text_chunk("looking now")));
 
-    let events = translator.on_update(&SessionUpdate::ToolCall(
+    assert!(
+        translator
+            .on_update(&SessionUpdate::AgentMessageChunk(text_chunk("\n\n")))
+            .is_empty(),
+        "a blank chunk is not a message"
+    );
+    let events = translator.on_update(&SessionUpdate::AgentMessageChunk(text_chunk("Done")));
+
+    assert_eq!(output(&events), vec!["\n\nDone".to_owned()]);
+}
+
+/// A tool call mid-sentence must not be buried inside it, so it is a boundary:
+/// the text after it is a new message below the row, not an append above it.
+#[test]
+fn a_tool_call_ends_the_message_before_it() {
+    let mut translator = translator();
+    let mut events =
+        translator.on_update(&SessionUpdate::AgentMessageChunk(text_chunk("looking now")));
+
+    events.extend(translator.on_update(&SessionUpdate::ToolCall(
         ToolCall::new("call_1", "read").kind(ToolKind::Read),
-    ));
+    )));
+    events.extend(translator.on_update(&SessionUpdate::AgentMessageChunk(text_chunk("found it"))));
 
     assert_eq!(
         output(&events),
-        vec!["looking now".to_owned(), "Reading\u{2026}".to_owned()],
-        "the sentence, then the tool, in that order"
+        vec![
+            "looking now".to_owned(),
+            "Reading\u{2026}".to_owned(),
+            "found it".to_owned()
+        ],
+        "the sentence, then the tool, then the next sentence, in that order"
+    );
+    assert!(
+        appends(&events).is_empty(),
+        "nothing was appended across the row"
     );
 }
 
 /// Answer and reasoning are shown differently, so a run of one ends a run of the
 /// other rather than merging into it.
 #[test]
-fn switching_between_output_and_reasoning_flushes() {
+fn switching_between_output_and_reasoning_ends_the_message() {
     let mut translator = translator();
-    translator.on_update(&SessionUpdate::AgentThoughtChunk(text_chunk("hmm")));
+    let mut events = translator.on_update(&SessionUpdate::AgentThoughtChunk(text_chunk("hmm")));
 
-    let events = translator.on_update(&SessionUpdate::AgentMessageChunk(text_chunk("beta")));
+    events.extend(translator.on_update(&SessionUpdate::AgentMessageChunk(text_chunk("beta"))));
 
     assert!(matches!(
         bodies(&events).as_slice(),
-        [api::message::Message::AgentReasoning(_)]
+        [
+            api::message::Message::AgentReasoning(_),
+            api::message::Message::AgentOutput(_)
+        ]
     ));
-    assert_eq!(output(&translator.flush()), vec!["beta".to_owned()]);
+    assert!(appends(&events).is_empty());
+    assert!(translator.flush().is_empty());
 }
 
 /// Reasoning is rendered as reasoning, not folded into the answer — Warp shows
@@ -201,10 +354,9 @@ fn switching_between_output_and_reasoning_flushes() {
 fn a_thought_chunk_becomes_reasoning_rather_than_output() {
     let mut translator = translator();
 
-    translator.on_update(&SessionUpdate::AgentThoughtChunk(text_chunk(
+    let events = translator.on_update(&SessionUpdate::AgentThoughtChunk(text_chunk(
         "considering the options",
     )));
-    let events = translator.flush();
 
     assert!(matches!(
         bodies(&events).as_slice(),
@@ -403,16 +555,20 @@ fn a_turn_that_ends_leaves_no_row_running() {
         "call_2",
         ToolCallUpdateFields::new().status(ToolCallStatus::Completed),
     )));
-    translator.on_update(&SessionUpdate::AgentMessageChunk(text_chunk(
+    let tail = translator.on_update(&SessionUpdate::AgentMessageChunk(text_chunk(
         "tests are slow",
     )));
+    assert_eq!(
+        output(&tail),
+        vec!["tests are slow".to_owned()],
+        "the tail was on the panel when it arrived"
+    );
 
     let events = translator.end_of_turn();
 
-    assert_eq!(
-        output(&events),
-        vec!["tests are slow".to_owned()],
-        "the tail is flushed"
+    assert!(
+        output(&events).is_empty(),
+        "nothing was held back for the end of the turn"
     );
     let rewrites = updates(&events);
     assert_eq!(rewrites.len(), 1, "only the open row is rewritten");
@@ -864,8 +1020,7 @@ fn messages_are_stamped_and_uniquely_identified() {
     let mut translator = translator();
 
     let mut events = translator.open("ses_abc".to_owned());
-    translator.on_update(&SessionUpdate::AgentMessageChunk(text_chunk("beta")));
-    events.extend(translator.flush());
+    events.extend(translator.on_update(&SessionUpdate::AgentMessageChunk(text_chunk("beta"))));
 
     let ids: Vec<String> = events
         .iter()
@@ -947,9 +1102,9 @@ fn updates_after_the_replay_window_are_rendered_normally() {
     translator.on_update(&SessionUpdate::AgentMessageChunk(text_chunk("history")));
     translator.end_replay();
 
-    translator.on_update(&SessionUpdate::AgentMessageChunk(text_chunk("live")));
+    let events = translator.on_update(&SessionUpdate::AgentMessageChunk(text_chunk("live")));
 
-    assert_eq!(output(&translator.flush()), vec!["live".to_owned()]);
+    assert_eq!(output(&events), vec!["live".to_owned()]);
 }
 
 /// A replayed tool call does not become the one a permission request is lined
@@ -1244,8 +1399,7 @@ fn warps_note_is_tagged_and_the_agents_prose_is_not() {
         "Answered: yes, for this one call.",
         "Nothing after it is covered.",
     ));
-    translator.on_update(&SessionUpdate::AgentMessageChunk(text_chunk("Done.")));
-    let prose = translator.flush();
+    let prose = translator.on_update(&SessionUpdate::AgentMessageChunk(text_chunk("Done.")));
 
     let note = &raw_messages(std::slice::from_ref(&note))[0];
     assert!(

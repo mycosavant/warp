@@ -95,14 +95,44 @@ fn task_description(prompt: &str) -> String {
     }
 }
 
-/// Which kind of message buffered text is on its way to becoming.
+/// Which kind of message a run of text is on its way to becoming.
 ///
-/// Answer and reasoning are shown differently, so a run of one must be flushed
-/// before a run of the other starts rather than merged into it.
+/// Answer and reasoning are shown differently, so a run of one ends the
+/// message of the other rather than being appended into it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Pending {
     Output,
     Reasoning,
+}
+
+impl Pending {
+    /// The `FieldMask` path an append names: the string field inside the
+    /// `oneof` member, because `FieldMaskOperation::append` concatenates
+    /// strings and refuses anything else. `agent_output` alone -- the path
+    /// [`rewrite`] uses to *replace* a row -- is a message field and would be
+    /// refused. Pinned against the real descriptor in the tests.
+    ///
+    /// [`rewrite`]: Translator::rewrite
+    fn append_path(self) -> &'static str {
+        match self {
+            Pending::Output => "agent_output.text",
+            Pending::Reasoning => "agent_reasoning.reasoning",
+        }
+    }
+
+    fn body(self, text: String) -> api::message::Message {
+        match self {
+            Pending::Output => {
+                api::message::Message::AgentOutput(api::message::AgentOutput { text })
+            }
+            Pending::Reasoning => {
+                api::message::Message::AgentReasoning(api::message::AgentReasoning {
+                    reasoning: text,
+                    finished_duration: None,
+                })
+            }
+        }
+    }
 }
 
 /// Turns one ACP turn into one Warp response stream.
@@ -113,26 +143,31 @@ pub(super) struct Translator {
     prompt: String,
     next_message: u64,
     started_at: DateTime<Utc>,
-    /// Text seen since the last flush, and which kind of message it becomes.
+    /// The message the agent's text is streaming into: its kind and its id.
     ///
-    /// **Found by running it.** ACP's `agent_message_chunk` is a *token* stream,
-    /// not a paragraph stream: the first live turn through Warp's panel rendered
-    /// `"notes.txt doesn"`, `"'t exist in this"`, `" directory"` as separate
-    /// messages, because one chunk was becoming one message. Claude's path never
-    /// showed this — `stream-json` delivers whole content blocks — so nothing in
-    /// the fork had met it before.
+    /// **Found by running it, twice, and the two findings pulled opposite
+    /// ways.** ACP's `agent_message_chunk` is a *token* stream, not a paragraph
+    /// stream: the first live turn rendered `"notes.txt doesn"`, `"'t exist in
+    /// this"`, `" directory"` as three messages, because one chunk was becoming
+    /// one message. The first fix buffered text until a boundary -- a tool
+    /// call, a change of kind, the end of the turn -- which gave `local_agent`'s
+    /// granularity and was measured 2026-09-05 to cost the whole answer: a
+    /// pure-text turn has no boundary, so the panel showed nothing for the
+    /// fourteen seconds it streamed, and `agent cancel` at that point left an
+    /// exchange holding Warp's two notes and not one word of the agent's
+    /// (`.fork/docs/composer.md`, item 7).
     ///
-    /// Buffering to a natural boundary gives exactly the granularity
-    /// `local_agent` already produces. The alternative is
-    /// `AppendToMessageContent`, which the protocol has and which is built for
-    /// precisely this. Its `FieldMask` path is no longer unexplored -- [`rewrite`]
-    /// uses `UpdateTaskMessage` with a mask pinned against the proto descriptor,
-    /// and the calibration there found that masking the oneof's own name is a
-    /// silent no-op rather than an error. So the objection now is the narrower
-    /// one: appending per chunk would restore the granularity this buffer exists
-    /// to coarsen, not that the path is unknown.
-    ///
-    /// [`rewrite`]: Translator::rewrite
+    /// So the text is one message, appended in place as it arrives --
+    /// `AppendToMessageContent`, which the protocol has for exactly this and
+    /// which is how upstream's own agent streams. Nothing is held back that a
+    /// cancel could lose, and the first chunk is on the panel when it arrives.
+    /// The transcript writer reacts to status changes, not to appends, so the
+    /// per-chunk cost is one `UpdatedStreamingExchange`.
+    open: Option<(Pending, String)>,
+    /// Text held back only while it is blank, so a run that opens with a
+    /// newline does not put an empty paragraph on the panel. `Some` only while
+    /// [`Self::open`] is `None`; the first chunk with a visible character
+    /// promotes it to a message.
     pending: Option<(Pending, String)>,
     /// One row per tool call, by `toolCallId`, in the order announced.
     ///
@@ -262,6 +297,7 @@ impl Translator {
             prompt,
             next_message: 0,
             started_at,
+            open: None,
             pending: None,
             rows: Vec::new(),
             denied: HashSet::new(),
@@ -367,8 +403,9 @@ impl Translator {
         if self.replaying {
             return Vec::new();
         }
-        // Text accumulates; anything else is a boundary that flushes it first,
-        // so a tool call never lands in the middle of a sentence.
+        // Text streams into one message; anything else is a boundary that
+        // closes it first, so a tool call never lands in the middle of a
+        // sentence and the text after it starts a new one.
         let text = match update {
             SessionUpdate::AgentMessageChunk(chunk) => Some((Pending::Output, chunk_text(chunk))),
             SessionUpdate::AgentThoughtChunk(chunk) => {
@@ -380,17 +417,7 @@ impl Translator {
             if text.is_empty() {
                 return Vec::new();
             }
-            return match &mut self.pending {
-                Some((pending, buffer)) if *pending == kind => {
-                    buffer.push_str(&text);
-                    Vec::new()
-                }
-                _ => {
-                    let flushed = self.flush();
-                    self.pending = Some((kind, text));
-                    flushed
-                }
-            };
+            return self.stream_text(kind, text);
         }
 
         // **Before the display dispatch, and deliberately not inside it.** The
@@ -470,32 +497,75 @@ impl Translator {
         events
     }
 
-    /// Emits whatever text has accumulated, as one message.
+    /// Puts one chunk of the agent's text on the panel as it arrives.
     ///
-    /// Must be called before the turn ends, or the agent's last sentence — which
-    /// is usually its whole answer — is never shown. The driver in `mod.rs` does
-    /// that; `finished` deliberately does not, because a caller that forgets is
-    /// better caught by a test than by silence.
-    pub(super) fn flush(&mut self) -> Vec<api::ResponseEvent> {
-        let Some((kind, text)) = self.pending.take() else {
-            return Vec::new();
-        };
-        if text.trim().is_empty() {
-            return Vec::new();
+    /// A chunk of the kind being streamed is appended to that message. Any
+    /// other chunk ends it and starts the next, held back only until it has a
+    /// visible character.
+    fn stream_text(&mut self, kind: Pending, text: String) -> Vec<api::ResponseEvent> {
+        let mut events = Vec::new();
+        match &self.open {
+            Some((open, id)) if *open == kind => {
+                let id = id.clone();
+                events.push(self.append(&id, kind, text));
+                return events;
+            }
+            Some(_) => events.extend(self.flush()),
+            None => {}
         }
-        let body = match kind {
-            Pending::Output => {
-                api::message::Message::AgentOutput(api::message::AgentOutput { text })
+        match &mut self.pending {
+            Some((pending, buffer)) if *pending == kind => buffer.push_str(&text),
+            _ => {
+                events.extend(self.flush());
+                self.pending = Some((kind, text));
             }
-            Pending::Reasoning => {
-                api::message::Message::AgentReasoning(api::message::AgentReasoning {
-                    reasoning: text,
-                    finished_duration: None,
-                })
-            }
+        }
+        if self
+            .pending
+            .as_ref()
+            .is_some_and(|(_, buffer)| !buffer.trim().is_empty())
+        {
+            let (kind, buffer) = self.pending.take().expect("checked just above");
+            let message = self.message(kind.body(buffer));
+            let id = message.id.clone();
+            events.push(self.add(vec![message]));
+            self.open = Some((kind, id));
+        }
+        events
+    }
+
+    /// Ends the message being streamed, so the next text starts a new one.
+    ///
+    /// Emits nothing: every visible character has already been appended in
+    /// place, and what is still pending is blank by construction. The name is
+    /// kept from when this emitted the buffered tail, because the boundary it
+    /// marks is the same one and every caller still needs it -- a row after a
+    /// sentence, a note after a paragraph, the end of the turn.
+    pub(super) fn flush(&mut self) -> Vec<api::ResponseEvent> {
+        self.open = None;
+        self.pending = None;
+        Vec::new()
+    }
+
+    /// One more chunk of the message being streamed, appended in place.
+    fn append(&self, message_id: &str, kind: Pending, text: String) -> api::ResponseEvent {
+        let message = api::Message {
+            id: message_id.to_owned(),
+            task_id: self.task_id.clone(),
+            request_id: self.request_id.clone(),
+            timestamp: Some(self.timestamp()),
+            message: Some(kind.body(text)),
+            ..Default::default()
         };
-        let message = self.message(body);
-        vec![self.add(vec![message])]
+        actions(vec![api::client_action::Action::AppendToMessageContent(
+            api::client_action::AppendToMessageContent {
+                task_id: self.task_id.clone(),
+                message: Some(message),
+                mask: Some(prost_types::FieldMask {
+                    paths: vec![kind.append_path().to_owned()],
+                }),
+            },
+        )])
     }
 
     /// The row for a call the agent has just announced, appended.
@@ -1035,6 +1105,9 @@ impl Translator {
     /// still has no such type; the channel is the message's opaque payload,
     /// which the fork controls end to end. See `crate::ai::warp_note`.
     pub(super) fn note(&mut self, note: crate::ai::warp_note::Note) -> api::ResponseEvent {
+        // A note lands below the text streamed so far; the text after it must
+        // not be appended above it.
+        self.flush();
         let message = self.message(api::message::Message::AgentOutput(Default::default()));
         let message = note.into_message(message);
         self.add(vec![message])

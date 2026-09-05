@@ -569,3 +569,35 @@ fn format_for_copy_writes_a_warp_note_as_headline_blank_detail() {
         "The agent is waiting for permission: Write file\n\nAnswer with `warpctrl agent approve 1`.\nAnswered: yes, for this one call."
     );
 }
+
+/// A tool row still `Running` once the exchange has finished is written as
+/// interrupted (fork), the way the panel draws it: a cancelled turn drops its
+/// transport before anything rewrites the row, and a settled exchange must not
+/// read as a process someone is watching. While the exchange is open the row
+/// is copied as it stands.
+#[test]
+fn format_for_copy_demotes_a_running_row_only_once_the_exchange_has_settled() {
+    let output = AIAgentOutput {
+        messages: vec![AIAgentOutputMessage::tool_row(
+            MessageId::new("row-1".to_string()),
+            crate::ai::tool_row::ToolRowState::Running,
+            "Running python3 -c \"import time; time.sleep(90)\"".to_string(),
+            AIAgentText { sections: vec![] },
+        )],
+        ..Default::default()
+    };
+
+    assert_eq!(
+        output.format_for_copy_settled(None, false),
+        "Running python3 -c \"import time; time.sleep(90)\""
+    );
+    assert_eq!(
+        output.format_for_copy_settled(None, true),
+        "Interrupted: Running python3 -c \"import time; time.sleep(90)\""
+    );
+    assert_eq!(
+        output.format_for_copy(None),
+        "Running python3 -c \"import time; time.sleep(90)\"",
+        "the unsettled form is the plain one"
+    );
+}

@@ -295,6 +295,22 @@ pub fn acp_agent_command() -> Option<String> {
     (!command.is_empty()).then(|| command.to_owned())
 }
 
+/// Whether a fork transport answers the agent panel: an ACP agent is named, or
+/// the local agent is switched on.
+///
+/// The one fact the two share that upstream's panel does not: **the agent
+/// never runs a command in the pane.** Upstream's agent executes its commands
+/// as blocks in the pane's own shell, and its panel couples the two -- stopping
+/// the conversation interrupts the pane's foreground command, and a long-running
+/// command in the pane is "being monitored" and refuses a new conversation.
+/// Both fork transports run their tools in the agent's own process, so under
+/// either the pane's foreground command is the person's. Measured 2026-09-05:
+/// `agent cancel` on a streaming ACP turn sent Ctrl-C to a `sleep 300` the
+/// person had typed, and the pane showed `^C` (`.fork/docs/composer.md`, item 7).
+pub fn panel_agent_is_external() -> bool {
+    acp_agent_command().is_some() || local_agent_enabled()
+}
+
 /// The session mode to ask an ACP agent for, by the agent's own id for it:
 /// `WARP_FORK_ACP_MODE=default`.
 const ACP_MODE_ENV_VAR: &str = "WARP_FORK_ACP_MODE";

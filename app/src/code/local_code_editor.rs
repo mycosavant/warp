@@ -1378,7 +1378,9 @@ impl LocalCodeEditorView {
         if self.file_loaded(ctx) {
             self.editor.update(ctx, |editor, ctx| {
                 let version = editor.buffer_version(ctx);
-                log::info!("[scroll] pending scroll armed now: {position:?} at buffer version {version:?}");
+                log::info!(
+                    "[scroll] pending scroll armed now: {position:?} at buffer version {version:?}"
+                );
                 editor.set_pending_scroll(ScrollTrigger::new(position, version));
             });
         } else {

@@ -1312,7 +1312,11 @@ impl CodeEditorView {
                     log::info!(
                         "[scroll] viewport updated at buffer version {version:?}; trigger waits for {:?} ({})",
                         trigger.minimum_applicable_version,
-                        if trigger.minimum_applicable_version <= *version { "applying" } else { "not yet" }
+                        if trigger.minimum_applicable_version <= *version {
+                            "applying"
+                        } else {
+                            "not yet"
+                        }
                     );
                 }
                 if let Some(trigger) = self
