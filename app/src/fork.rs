@@ -911,6 +911,48 @@ fn quake_visor_from(value: Option<&str>) -> bool {
     )
 }
 
+/// Set to `0`, `off` or `false` to keep a WSL pane from attaching a remote
+/// server on its own. The default is on: the pane is a remote session and the
+/// product profile should treat it as one without being asked.
+const WSL_AUTO_CONNECT_ENV_VAR: &str = "WARP_FORK_WSL_AUTO_CONNECT";
+
+/// Whether a WSL pane attaches Warp's remote-development server to its own
+/// distribution when its shell bootstraps (`.fork/docs/wsl.md`, item 1).
+///
+/// **The gap under every other row of that page's table.** Everything T16
+/// routed through the server -- the file tree, the buffer, search, the git
+/// chip -- routes only after someone connects, and until 2026-09-05 nothing
+/// did unless a person found the palette entry or ran `warpctrl remote wsl
+/// connect`. A fresh pane got the 9p column, which is the column the
+/// maintainer's frame forbids, and the first product-profile session hit it
+/// within minutes: the diff panel blaming WSL for a repository walk that had
+/// not finished.
+///
+/// SSH sessions attach at `InitShell`, keyed on `IsSSHWrapperSession::Yes`,
+/// whose payload is a ControlMaster socket path a WSL session cannot have.
+/// This predicate gates the arm beside that one, in
+/// `ModelEventDispatcher::complete_bootstrapped_session`, which calls the same
+/// `start_wsl_remote_server` the palette and `warpctrl` share.
+///
+/// Unlike the SSH arm it never holds the shell's bootstrap back: the shell
+/// initialises as it always did and the connect runs beside it, so a distro
+/// without the staged daemon fails the connect in the log, `session inspect`
+/// says `local`, and the pane works not-routed exactly as before.
+///
+/// Consumed by `ModelEventDispatcher::complete_bootstrapped_session`.
+pub fn wsl_auto_connect_enabled() -> bool {
+    is_active() && wsl_auto_connect_from(std::env::var(WSL_AUTO_CONNECT_ENV_VAR).ok().as_deref())
+}
+
+/// Split from the environment so the decision can be asserted without setting
+/// a process-global variable from a test that runs beside others.
+fn wsl_auto_connect_from(value: Option<&str>) -> bool {
+    !matches!(
+        value.map(str::trim),
+        Some("0") | Some("off") | Some("false")
+    )
+}
+
 /// The owner written into Warp Drive objects created without an account.
 ///
 /// Deliberately a fixed constant rather than a per-install UUID. `UserWorkspaces

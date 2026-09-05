@@ -855,7 +855,10 @@ impl SessionInfo {
     }
 
     /// Returns the name of the WSL distribution, or `None` if this session is not a WSL session.
-    fn wsl_name(&self) -> Option<&str> {
+    ///
+    /// `pub(crate)` since 2026-09-05 so `ModelEventDispatcher` can decide, at
+    /// bootstrap, whether the session is one to attach a remote server to.
+    pub(crate) fn wsl_name(&self) -> Option<&str> {
         self.wsl_name
             .as_deref()
             .or(self

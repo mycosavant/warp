@@ -736,6 +736,26 @@ fn the_visor_opens_an_agent_unless_it_is_switched_off() {
     assert!(quake_visor_from(Some("no")));
 }
 
+/// A WSL pane connects its server unless told not to, and a typo is not a no.
+///
+/// Same parser shape as the visor, and the same test shape, for the same
+/// reason: the variable is process-wide and setting it here would race every
+/// test beside this one.
+#[test]
+fn a_wsl_pane_connects_its_server_unless_it_is_switched_off() {
+    assert!(wsl_auto_connect_from(None));
+    assert!(wsl_auto_connect_from(Some("")));
+    assert!(wsl_auto_connect_from(Some("1")));
+    assert!(wsl_auto_connect_from(Some("on")));
+
+    assert!(!wsl_auto_connect_from(Some("0")));
+    assert!(!wsl_auto_connect_from(Some("off")));
+    assert!(!wsl_auto_connect_from(Some("false")));
+    assert!(!wsl_auto_connect_from(Some("  off  ")));
+
+    assert!(wsl_auto_connect_from(Some("no")));
+}
+
 /// The frame log is off unless asked for, and asking badly still measures.
 ///
 /// Asserted against the parser rather than by setting the variable, for the

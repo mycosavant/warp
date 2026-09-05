@@ -14,17 +14,19 @@
 //! management subcommands so only interactive launches count. Typing `wsl`
 //! warpifies the session exactly as `ssh` does.
 //!
-//! What a warpified WSL session does *not* get is a remote server, and the
-//! reason is structural: the attach is keyed on `IsSSHWrapperSession::Yes`,
-//! whose payload is a **ControlMaster socket path**. A WSL session has no such
-//! socket and never will, which is the same fact that lets `WslTransport` use
-//! `ControlPath::None`. So the ambient path needs a WSL arm beside the SSH one
-//! rather than a new hook — and the session already knows its distribution
-//! (`Session::wsl_name()`).
+//! What a warpified WSL session did *not* get, until 2026-09-05, was a remote
+//! server, and the reason was structural: the attach is keyed on
+//! `IsSSHWrapperSession::Yes`, whose payload is a **ControlMaster socket
+//! path**. A WSL session has no such socket and never will, which is the same
+//! fact that lets `WslTransport` use `ControlPath::None`. The WSL arm now sits
+//! beside the SSH one in `ModelEventDispatcher::complete_bootstrapped_session`,
+//! keyed on `SessionInfo::wsl_name()` and gated by
+//! `fork::wsl_auto_connect_enabled`, so a fresh WSL pane connects on its own.
 //!
-//! These actions remain worth having either way: they make the connection
-//! explicit and repeatable, drivable by an agent, and testable from outside
-//! the GUI, which is how most of this fork's findings arrived. `list` is also
+//! These actions remain worth having: `connect` re-attaches after a failure
+//! or with `WARP_FORK_WSL_AUTO_CONNECT=off`, names a distribution other than
+//! the pane's own, and is drivable by an agent and testable from outside the
+//! GUI, which is how most of this fork's findings arrived. `list` is also
 //! what any picker needs, and answers "is this machine a candidate" before one
 //! is worth rendering.
 //!

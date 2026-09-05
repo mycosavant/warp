@@ -30,20 +30,19 @@
 //!
 //! # How this is reached
 //!
-//! Explicitly, for now: `warpctrl remote wsl connect`, or the command-palette
-//! entry that shares [`start_wsl_remote_server`] with it.
+//! Three ways, all through [`start_wsl_remote_server`]: ambiently, when a
+//! WSL session's shell bootstraps (`ModelEventDispatcher::
+//! complete_bootstrapped_session`, gated by `fork::wsl_auto_connect_enabled`,
+//! since 2026-09-05); explicitly, from `warpctrl remote wsl connect`; and from
+//! the command-palette entry.
 //!
-//! The *ambient* path is closer than it looks. `wsl` and `wsl.exe` are already
-//! warpify subshell commands on Windows (`WSL_SUBSHELL_REGEX`), so typing `wsl`
-//! warpifies the session the way `ssh` does. What it does not do is attach a
-//! remote server, because that attach is keyed on `IsSSHWrapperSession::Yes` —
-//! whose payload is a ControlMaster socket path, which a WSL session
-//! structurally cannot have. That is the same fact that lets this transport
-//! report [`ControlPath::None`].
-//!
-//! So finishing the ambient path means adding a WSL arm beside the SSH one,
-//! not inventing a hook: `Session::wsl_name()` already carries the
-//! distribution.
+//! The ambient arm sits beside the SSH one rather than inside it. SSH attaches
+//! at `InitShell`, keyed on `IsSSHWrapperSession::Yes`, whose payload is a
+//! ControlMaster socket path a WSL session structurally cannot have -- the
+//! same fact that lets this transport report [`ControlPath::None`]. The WSL
+//! arm keys on `SessionInfo::wsl_name()` instead, and it attaches *after* the
+//! shell is initialised rather than holding the bootstrap back, so a failed
+//! connect costs a log line and leaves the pane working not-routed.
 
 use std::fmt;
 use std::future::Future;

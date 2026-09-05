@@ -35,6 +35,41 @@ impl SshRemoteServerSupport {
     }
 }
 
+/// The WSL arm beside the SSH one (`.fork/docs/wsl.md`, item 1).
+///
+/// Which distribution, if any, a freshly bootstrapped session should attach a
+/// remote server to. `None` means leave it alone. Pure, so the decision can be
+/// asserted without a session, a manager or an environment variable.
+///
+/// - `support` and `feature_enabled` are the same two gates the SSH arm
+///   consults: a headless dispatcher has no manager to connect through, and
+///   `FeatureFlag::SshRemoteServer` gates both transports (I16).
+/// - `fork_enabled` is `fork::wsl_auto_connect_enabled()`, resolved by the
+///   caller so a test can pass either answer.
+/// - `wsl_name` is the session's own distribution. A WSL shell launched from
+///   the shell picker carries it in `launch_data`; a `wsl` typed into a
+///   Windows shell carries it from the bootstrap script. Either way it is
+///   what the palette action and `warpctrl remote wsl connect` would pick.
+/// - An SSH wrapper session is the SSH arm's, even when the parent pane is a
+///   WSL shell. `command_executor.rs` reaches for the *parent's* `wsl_name`
+///   in that case, which is the only reason to guard it here.
+fn wsl_auto_connect_target(
+    support: SshRemoteServerSupport,
+    feature_enabled: bool,
+    fork_enabled: bool,
+    wsl_name: Option<&str>,
+    is_ssh_wrapper_session: bool,
+) -> Option<String> {
+    if !matches!(support, SshRemoteServerSupport::Enabled)
+        || !feature_enabled
+        || !fork_enabled
+        || is_ssh_wrapper_session
+    {
+        return None;
+    }
+    wsl_name.filter(|name| !name.is_empty()).map(str::to_owned)
+}
+
 /// Model that dispatches events that have been emitted by the [`crate::terminal::TerminalModel`],
 /// allowing other models/views to subscribe to `TerminalModel` events like it would any other
 /// entity within the UI framework.
@@ -332,6 +367,13 @@ impl ModelEventDispatcher {
             session_info.shell.shell_type().name().to_owned(),
             session_info.shell.shell_path().clone(),
         );
+        let wsl_auto_connect = wsl_auto_connect_target(
+            self.ssh_remote_server_support,
+            FeatureFlag::SshRemoteServer.is_enabled(),
+            crate::fork::wsl_auto_connect_enabled(),
+            session_info.wsl_name(),
+            is_ssh_wrapper_session,
+        );
 
         // Send the SessionBootstrapped notification to the daemon BEFORE
         // initializing the session. `initialize_bootstrapped_session` emits
@@ -357,6 +399,23 @@ impl ModelEventDispatcher {
                 ctx,
             );
         });
+
+        // The WSL arm. After the session is registered, not before, because
+        // `Sessions` records the host on `SessionConnected` by looking the
+        // session up, and a connect that raced registration would land on
+        // nothing. Unlike the SSH arm this never stashes the bootstrap: the
+        // shell is already initialised above, and the connect runs beside it.
+        // `connect_session` spawns the whole pipeline onto the background
+        // executor, so this returns at once and a failure arrives later as
+        // `SessionConnectionFailed`, leaving the pane working not-routed.
+        // `SessionConnected` re-runs repository detection (T16), so whether
+        // the shell has already `cd`-ed when the server comes up is immaterial.
+        if let Some(distro) = wsl_auto_connect {
+            log::info!(
+                "WSL session {session_id:?} bootstrapped in {distro}; attaching a remote server"
+            );
+            crate::remote_server::wsl_transport::start_wsl_remote_server(session_id, distro, ctx);
+        }
     }
 
     /// Emits an event so `TerminalView` can render the remote server block.
