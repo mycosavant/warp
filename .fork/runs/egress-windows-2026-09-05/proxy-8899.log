@@ -1,0 +1,21 @@
+Proxy server listening at 127.0.0.1:8899
+127.0.0.1:56701: client connect
+127.0.0.1:56701: server connect example.com:443 (172.66.147.243:443)
+127.0.0.1:56701: GET https://example.com/
+    Host: example.com
+    User-Agent: curl/8.14.1
+    Accept: */*
+ << 200 OK 559b
+    Date: Sat, 05 Sep 2026 21:14:17 GMT
+    Content-Type: text/html
+    Transfer-Encoding: chunked
+    Connection: keep-alive
+    Server: cloudflare
+    last-modified: Wed, 02 Sep 2026 22:14:26 GMT
+    allow: GET, HEAD
+    Accept-Ranges: bytes
+    Age: 810
+    cf-cache-status: HIT
+    CF-RAY: a3683e22ee1debb5-YYZ
+127.0.0.1:56701: client disconnect
+127.0.0.1:56701: server disconnect example.com:443 (172.66.147.243:443)

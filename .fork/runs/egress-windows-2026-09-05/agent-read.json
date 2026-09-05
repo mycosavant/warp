@@ -1,0 +1,24 @@
+{
+  "action": "agent.read",
+  "ok": true,
+  "instance_id": "inst_b980bc38034f48299f3040c93d2ffee7",
+  "conversation": {
+    "conversation_id": "ba5e3fd2-ee29-454c-91ff-51e775cab547",
+    "title": "Read the first fifteen lines of README.md in the current dir…",
+    "status": "success",
+    "is_busy": false,
+    "pane_id": "Pane Pane Terminal (2469)",
+    "tab_id": "1961",
+    "session_mode": "auto"
+  },
+  "exchanges": [
+    {
+      "index": 0,
+      "input": "Read the first fifteen lines of README.md in the current directory with your file-reading tool and summarise them in one sentence.",
+      "output": "This session is in the agent's `auto` mode, which the agent describes as “Claude handles permission decisions”.\n\nWarp did not choose it and cannot tell what it permits — a mode is the agent's own idea, so only the agent's description above says anything about it. To ask for a different one, set `WARP_FORK_ACP_MODE` to its id before starting Warp. This agent offers: `default` (“Always ask before making changes”); `acceptEdits` (“Automatically accept all file edits”); `plan` (“Create a plan before making changes”); `auto` (“Claude handles permission decisions”); `bypassPermissions` (“Accepts all permissions”).\nReading the first fifteen lines of README.md now.\nRead README.md\n\n```\n1\t<a href=\"https://www.warp.dev\">\n2\t    <img width=\"1024\" alt=\"Warp Agentic Development Environment product preview\" src=\"https://github.com/user-attachments/assets/9976b2da-2edd-4604-a36c-8fd53719c6d4\" />\n3\t</a>\n4\t&nbsp;\n5\t<p align=\"center\">\n6\t  <a href=\"https://warp.dev/factories\"><img height=\"20\" alt=\"Built with Warp\" src=\"https://raw.githubusercontent.com/warpdotdev/brand-assets/main/Github/Built-With-Warp-Export@2x.png\" /></a>\n7\t</p>\n8\t\n9\t<p align=\"center\">\n10\t  <a href=\"https://www.warp.dev\">Website</a>\n11\t  ·\n12\t  <a href=\"https://www.warp.dev/code\">Code</a>\n13\t  ·\n14\t  <a href=\"https://www.warp.dev/agents\">Agents</a>\n15\t  ·\n```\nThe first fifteen lines are upstream's README header: a linked product preview image, a \"Built with Warp\" badge, and the start of a centered navigation row pointing at warp.dev's website, Code and Agents pages, with no prose about the fork at all.",
+      "is_complete": true
+    }
+  ],
+  "exchange_count": 1,
+  "included_tool_results": false
+}

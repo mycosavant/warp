@@ -1,0 +1,13 @@
+# WSL-side distinct remote endpoints during the run (poller's own pid 3599323 excluded).
+# The agent runs inside WSL as claude-agent-acp; its api.anthropic.com traffic is the control.
+# count_rows  proto  remote  process
+     29 ESTAB  0      0            10.2.0.2:46726 160.79.104.10:443 users:(("claude",pid=3638256,fd=10))           
+     27 ESTAB  0      0            10.2.0.2:46778 160.79.104.10:443 users:(("claude",pid=3638256,fd=15))           
+     27 ESTAB  0      0            10.2.0.2:46772 160.79.104.10:443 users:(("claude",pid=3638256,fd=57))           
+     27 ESTAB  0      0            10.2.0.2:46766 160.79.104.10:443 users:(("claude",pid=3638256,fd=56))           
+     27 ESTAB  0      0            10.2.0.2:46752 160.79.104.10:443 users:(("claude",pid=3638256,fd=55))           
+     27 ESTAB  0      0            10.2.0.2:46750 160.79.104.10:443 users:(("claude",pid=3638256,fd=53))           
+     27 ESTAB  0      0            10.2.0.2:46748 160.79.104.10:443 users:(("claude",pid=3638256,fd=51))           
+     27 ESTAB  0      0            10.2.0.2:46732 160.79.104.10:443 users:(("claude",pid=3638256,fd=16))           
+     25 ESTAB  0      0            10.2.0.2:46784 160.79.104.10:443 users:(("claude",pid=3638256,fd=17))           
+      2 ESTAB  3856   0            10.2.0.2:46732 160.79.104.10:443 users:(("claude",pid=3638256,fd=16))           

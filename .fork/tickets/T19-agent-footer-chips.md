@@ -114,15 +114,33 @@ closed rather than noted: a
 backstop whose coverage depends on where today's call sites point is a fact about
 today, and this one is structural rather than a forgotten call.
 
+**Caught live and measured 2026-09-05, and it settles the "documented refusal"
+half.** During the Windows egress run, `CloudObjects::Listener` — the Warp Drive
+cloud-sync GraphQL subscription over exactly this WebSocket path — retried every
+~30 s, each attempt logging *"missing authentication credentials"*. It **never
+reached a socket**: the 1716-sample poller with `SynSent` included recorded zero
+non-loopback `warp-oss` sockets. The reason is in the source, not inferred:
+`get_or_refresh_access_token`
+(`crates/warp_server_client/src/auth/session.rs:101`) bails with that string
+**before any dial** when `auth_state.credentials()` is `None`, which it always
+is in this accountless fork. So the login gate is a real *pre-socket*
+enforcement point today: no credentials, no request built, no WebSocket. The
+egress deny-list's blind spot is unreachable without an account.
+`.fork/runs/egress-windows-2026-09-05/`.
+
 ### Still open
 
-- [ ] **Third egress enforcement point, or a documented refusal.** Independent of
-      both chips and the piece most worth doing, because it is the fork's
-      strongest claim. Needs a decision on shape first: `crates/websocket` taking
-      an `http_client` dependency inverts the layering, so the likelier answer is
-      a check at socket construction plus a test pinning the consumer list — the
-      way `the_symbol_map_leaves_by_exactly_one_call_site_and_it_is_guarded`
-      pins a count rather than trusting a guard.
+- [ ] **Third egress enforcement point — still the durable fix, now with a
+      measured reason it is not urgent.** The check at socket construction in
+      `crates/websocket` plus a test pinning the consumer list is the right shape
+      (an `http_client` dependency would invert the layering — pin the way
+      `the_symbol_map_leaves_by_exactly_one_call_site_and_it_is_guarded` pins a
+      count rather than trusting a guard). What changed is the urgency: the
+      2026-09-05 measurement shows the WebSocket path is gated by the
+      missing-credentials check before it opens a socket, so the deny-list's blind
+      spot is unreachable while the fork stays accountless. Build the third point
+      to make "cannot happen" independent of "has no token"; until then the gate
+      is the enforcement and this is the documented refusal.
 - [ ] **May a paired device submit a prompt?** Authority question, not plumbing.
       Blocks any repoint of the `/remote-control` chip, because without it the
       chip would open a surface that cannot do what its label says.

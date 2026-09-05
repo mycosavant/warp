@@ -114,8 +114,21 @@ learning anything about you.
 **Still unverified: T2.5, audio.** No proxy capture during a real recording;
 that needs a microphone and someone to speak into it. Unchanged by this.
 
-**Platform: Linux only.** Windows is unmeasured, and `tcpdump` was unavailable
-here (it needs root), so packet-level capture was not part of this.
+**Platform: measured on both now (Windows added 2026-09-05).** The run above was
+Linux. The same measurement was repeated on the Windows release binary the
+maintainer lives in — `v0.fork.f6f59cfe8` — with two socket pollers
+(`Get-NetTCPConnection` on Windows, `ss` inside WSL) and the same decrypting
+proxy. Across 685 seconds and 1716 samples, **every `warp-oss.exe` socket was
+loopback or a bound listener, zero remote**; a `curl.exe` control proved the
+poller catches a real outbound connection. The panel agent runs inside WSL, so
+its `api.anthropic.com` traffic is the WSL poller's control, and `warp-oss`
+appears in neither capture as an outbound socket. Full account and the three
+findings it turned up — voice audio going to loopback only (T2.5, now measured),
+the cloud WebSocket gated pre-socket by the missing-credentials check (T19), and
+upstream's `9282` failing to bind on this run — are in
+`.fork/runs/egress-windows-2026-09-05/`. `tcpdump` still was not used (root), so
+packet-level capture is not part of either run; the socket-plus-proxy pair
+covers the same ground.
 
 ### The log-spam question, answered by counting
 

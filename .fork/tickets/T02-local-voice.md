@@ -47,12 +47,26 @@ regardless of provider. Voice currently leaves the machine either way.
       policy the description says audio is transcribed on this machine and
       links to whisper.cpp. The old text ("powered by Wispr Flow") would now be
       false, so the whole sentence changes, not just the URL.
-- [~] **T2.5** No audio egress — *argued and unit-tested, not proxy-verified.*
-      Under fork policy `ServerVoiceTranscriber` is never constructed
-      (`fork_policy_installs_a_local_transcriber`), and `LocalTranscriber`
-      contacts only the configured endpoint or spawns the configured binary.
-      The default endpoint is asserted to be loopback. What is **not** done is
-      a proxy capture during a real recording.
+- [x] **T2.5** No audio egress — **measured 2026-09-05, on Windows, body
+      captured.** Under fork policy `ServerVoiceTranscriber` is never
+      constructed (`fork_policy_installs_a_local_transcriber`), and
+      `LocalTranscriber` contacts only the configured endpoint or spawns the
+      configured binary. The default endpoint is asserted to be loopback. That
+      was the argued half; here is the measured one. The mic button in the agent
+      footer takes a posted `use_computer` click, which is the missing way to
+      *start a recording* from outside the GUI — the whole reason this sat open.
+      Driven twice against `127.0.0.1:8080`: with a dead endpoint the app failed
+      closed, naming only `http://127.0.0.1:8080/inference` and never falling
+      back to `api.warp.dev`; with a logging stub it sent
+      `POST /inference multipart/form-data body_bytes=151069` — 151 KB of audio,
+      to loopback and nowhere else — and the transcription rendered in the
+      composer. The socket poller confirmed the audio's only destination was
+      `127.0.0.1:8080`. `.fork/runs/egress-windows-2026-09-05/`. What is still
+      not proved is the *words* of a real recording, because the click captured
+      whatever WSLg's `RDPSource` held rather than speech — but egress is a
+      question about destinations, which silence answers as well as speech.
+
+      *Historic below: why this stayed blocked until the footer click was tried.*
 
       **Still blocked, and now for a precise reason rather than a vague one.**
       The general egress question was closed with a rig that would answer this

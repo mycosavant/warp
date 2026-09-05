@@ -1,0 +1,25 @@
+﻿# started 2026-09-05T21:16:44.272Z interval 200ms names warp-oss.exe,curl.exe
+# ts	pid	name	proto	local	remote	state	sample
+2026-09-05T21:17:04.279Z	44736	warp-oss.exe	tcp	127.0.0.1:56710	0.0.0.0:0	Listen	51
+2026-09-05T21:17:06.784Z	44844	warp-oss.exe	tcp	0.0.0.0:56711	0.0.0.0:0	Bound	56
+2026-09-05T21:17:06.798Z	44844	warp-oss.exe	tcp	127.0.0.1:56711	127.0.0.1:56710	Established	56
+2026-09-05T21:17:06.801Z	44736	warp-oss.exe	tcp	127.0.0.1:56710	127.0.0.1:56711	Established	56
+# heartbeat 2026-09-05T21:17:45.744Z sample 150 tcp_all 193 udp_all 34 watched_pids 10
+# heartbeat 2026-09-05T21:18:42.211Z sample 300 tcp_all 194 udp_all 34 watched_pids 10
+# heartbeat 2026-09-05T21:19:39.029Z sample 450 tcp_all 196 udp_all 36 watched_pids 21
+# heartbeat 2026-09-05T21:20:42.731Z sample 600 tcp_all 238 udp_all 34 watched_pids 32
+# heartbeat 2026-09-05T21:21:46.697Z sample 750 tcp_all 280 udp_all 34 watched_pids 39
+2026-09-05T21:22:03.411Z	34444	warp-oss.exe	tcp	0.0.0.0:63641	0.0.0.0:0	Bound	790
+2026-09-05T21:22:03.413Z	34444	warp-oss.exe	tcp	127.0.0.1:63641	127.0.0.1:56710	Established	790
+2026-09-05T21:22:03.415Z	44736	warp-oss.exe	tcp	127.0.0.1:56710	127.0.0.1:63641	Established	790
+# heartbeat 2026-09-05T21:22:47.148Z sample 900 tcp_all 259 udp_all 35 watched_pids 44
+2026-09-05T21:23:17.187Z	44512	curl.exe	tcp	0.0.0.0:63653	0.0.0.0:0	Bound	980
+2026-09-05T21:23:17.189Z	44512	curl.exe	tcp	10.2.0.2:63653	172.66.147.243:443	Established	980
+# heartbeat 2026-09-05T21:23:43.524Z sample 1050 tcp_all 225 udp_all 41 watched_pids 54
+# heartbeat 2026-09-05T21:24:41.989Z sample 1200 tcp_all 216 udp_all 40 watched_pids 55
+2026-09-05T21:25:23.458Z	44736	warp-oss.exe	tcp	0.0.0.0:63685	0.0.0.0:0	Bound	1307
+2026-09-05T21:25:23.460Z	44736	warp-oss.exe	tcp	127.0.0.1:63685	127.0.0.1:8080	Established	1307
+# heartbeat 2026-09-05T21:25:39.951Z sample 1350 tcp_all 214 udp_all 37 watched_pids 58
+# heartbeat 2026-09-05T21:26:39.201Z sample 1500 tcp_all 207 udp_all 44 watched_pids 58
+# heartbeat 2026-09-05T21:27:41.770Z sample 1650 tcp_all 208 udp_all 38 watched_pids 70
+# stopped 2026-09-05T21:28:09.613Z samples 1716 elapsed_s 685 distinct_tuples 11

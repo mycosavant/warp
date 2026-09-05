@@ -185,7 +185,7 @@
     </div>
   </article>
 
-  <article class="item" data-id="egress">
+  <article class="item" data-id="egress" data-default="done">
     <div class="rank">3</div>
     <div class="body">
       <div class="head">
@@ -193,14 +193,14 @@
         <button class="status" type="button" aria-label="cycle status">open</button>
       </div>
       <div class="meta"><span>Open questions &middot; "Platform: Linux only"</span><span>about half a day</span></div>
-      <p>"Nothing escapes" is measured on Linux, with two methods, and the open-questions section says in as many words that Windows is unmeasured. The fork's own rule is that a claim measured where the failure cannot occur is not measured. Windows is where the product lives. Run it against the merged binary so the result describes the build you run.</p>
+      <p>Done 2026-09-05, against the merged release binary <code>v0.fork.f6f59cfe8</code>. Two socket pollers (<code>Get-NetTCPConnection</code> on Windows, <code>ss</code> inside WSL) and a decrypting proxy, 685 seconds, 1716 samples. Every <code>warp-oss.exe</code> socket was loopback or a bound listener, zero remote; a <code>curl.exe</code> control proved the poller catches a real outbound connection, and the panel agent's <code>api.anthropic.com</code> traffic is the WSL child on the user's own key. Full account in <code>.fork/runs/egress-windows-2026-09-05/</code>.</p>
       <div class="gates">
-        <span class="k">Method</span>
+        <span class="k">Found</span>
         <ul>
-          <li>Poll <code>Get-NetTCPConnection -OwningProcess &lt;pid&gt;</code> through a launch, an agent turn, and a Drive edit. Expect two loopback listeners and zero outbound.</li>
-          <li>One turn through a decrypting proxy, because polling samples. The agent's own API traffic is expected and is not telemetry; record it as such.</li>
-          <li>T2.5: one real voice recording under the proxy. Still marked argued, not proxy-verified.</li>
-          <li>T19: the session-sharing relay is a WebSocket the deny-list cannot see. Login-gated and inert today; either add the third enforcement point or write down why the gate is enough.</li>
+          <li>Zero warp-oss outbound on Windows or in WSL. The proxy carried one request, the <code>curl</code> control; Warp made none.</li>
+          <li>T2.5 now measured: the mic button takes a posted click, so a recording was driven. The audio POST was multipart, 151 KB, to <code>127.0.0.1:8080</code> and nowhere else; a dead endpoint made it fail closed naming only loopback.</li>
+          <li>T19 written down: the cloud WebSocket (<code>CloudObjects::Listener</code>) retried live but never opened a socket, gated pre-dial by the missing-credentials check. The login gate is today's enforcement; the third point stays the durable fix.</li>
+          <li>Honest note: upstream's <code>9282</code> failed to bind this run (already in use), so one loopback listener, not two. Not a fork change and not an egress finding.</li>
         </ul>
       </div>
     </div>

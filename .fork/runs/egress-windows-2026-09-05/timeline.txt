@@ -1,0 +1,24 @@
+2026-09-05T21:16:54Z pollers started; proxy 127.0.0.1:8899 up since earlier; DNS cache cleared
+2026-09-05T21:17:05Z launch: warpdev.ps1 product profile, release exe, HTTPS_PROXY/HTTP_PROXY=127.0.0.1:8899 NO_PROXY=127.0.0.1,localhost
+2026-09-05T21:19:21Z up: pid 44736 (window), sibling 39396; warpctrl listener 127.0.0.1:56710; no 9282 listener seen yet
+2026-09-05T21:19:27Z workload: surfaces
+2026-09-05T21:19:52Z workload: settings open, theme list, setting list
+2026-09-05T21:19:56Z workload: tab create, pane split, input submit
+2026-09-05T21:20:23Z workload: pane split right
+2026-09-05T21:20:27Z workload: drive create folder, workflow, notebook; drive status
+2026-09-05T21:20:51Z workload: surface toggles (each twice), settings open + Escape, command palette + Escape
+2026-09-05T21:21:26Z workload: surfaces done
+2026-09-05T21:21:33Z workload: agent turn (product profile, claude-agent-acp in WSL, mode auto)
+2026-09-05T21:22:08Z workload: agent turn (product profile, claude-agent-acp in WSL, mode auto)
+2026-09-05T21:22:20Z agent turn ended: success None
+2026-09-05T21:23:19Z WSL poller restarted: attempt 1 dropped the process column on TCP lines (awk picked fields), so the agent's connections were filtered out before being written; attempt 2 keeps whole lines
+2026-09-05T21:23:21Z control: curl.exe on Windows, no proxy, rate-limited, to example.com:443
+2026-09-05T21:23:58Z workload: agent turn 2 (same conversation), WSL poller fixed
+2026-09-05T21:24:09Z agent turn 2 ended: success False
+2026-09-05T21:24:57Z workload: voice - click the mic button in the agent footer (posted click, window not foreground), then click again to stop
+2026-09-05T21:25:26Z voice: Listening... shown; clicking the mic again to stop and transcribe
+2026-09-05T21:27:38Z voice: dead reverse proxy replaced with a logging whisper stub on 127.0.0.1:8080 (returns {text}); recording once more so the POST body is captured
+2026-09-05T21:27:48Z voice attempt 2: mic click start
+2026-09-05T21:27:53Z voice attempt 2: mic click stop -> transcribe
+2026-09-05T21:28:13Z workload complete; stopping pollers
+2026-09-05T21:31:01Z teardown: probe drive objects trashed; closing Warp
