@@ -89,14 +89,14 @@ pub use init::{
 };
 use init::{INPUT_BOX_VISIBLE_KEY, TOGGLE_BLOCK_FILTER_KEYBINDING};
 use inline_banner::{
-    AliasExpansionBanner, AliasExpansionBannerAction, AnonymousUserAISignUpBannerState,
-    AnonymousUserLoginBannerAction, AwsBedrockLoginBannerAction, AwsBedrockLoginBannerState,
-    AwsCliNotInstalledBannerAction, AwsCliNotInstalledBannerState, ByoLlmAuthBannerSessionState,
-    OpenInWarpBannerState, VimModeBannerAction, render_alias_expansion_banner,
-    render_aws_bedrock_login_banner, render_aws_cli_not_installed_banner,
-    render_inline_notifications_discovery_banner, render_inline_notifications_error_banner,
-    render_inline_shared_session_ended_banner, render_inline_shared_session_started_banner,
-    render_open_in_warp_banner, render_shell_process_terminated_banner, render_vim_mode_banner,
+    AliasExpansionBanner, AliasExpansionBannerAction, AwsBedrockLoginBannerAction,
+    AwsBedrockLoginBannerState, AwsCliNotInstalledBannerAction, AwsCliNotInstalledBannerState,
+    ByoLlmAuthBannerSessionState, OpenInWarpBannerState, VimModeBannerAction,
+    render_alias_expansion_banner, render_aws_bedrock_login_banner,
+    render_aws_cli_not_installed_banner, render_inline_notifications_discovery_banner,
+    render_inline_notifications_error_banner, render_inline_shared_session_ended_banner,
+    render_inline_shared_session_started_banner, render_open_in_warp_banner,
+    render_shell_process_terminated_banner, render_vim_mode_banner,
 };
 pub use inline_banner::{NotificationsDiscoveryBannerAction, NotificationsErrorBannerAction};
 use instant::Instant;
@@ -123,8 +123,10 @@ use session_sharing_protocol::sharer::{
 use settings::{Setting, ToggleableSetting};
 use shared_session::cloud_conversation_continuation::CloudConversationContinuationUiState;
 pub(crate) use shared_session::cloud_conversation_continuation::{
-    AIQueryRouting, CompletedChildPresentation, ConversationAccess,
-    completed_child_conversation_access, completed_child_presentation, resolve_ai_query_routing,
+    AIQueryRouting, CloudRoutingIndicator, CompletedChildPresentation, ConversationAccess,
+    completed_child_conversation_access, completed_child_presentation,
+    is_retained_setup_failure_debug_editable_for_task, resolve_ai_query_routing,
+    resolve_ambient_agent_task_id,
 };
 use shared_session::{SharedSessionAdapter, Viewer};
 use ssh_file_upload::{FileUpload, FileUploadEvent};
@@ -132,6 +134,7 @@ use sum_tree::SeekBias;
 use use_agent_footer::UseAgentToolbar;
 use uuid::Uuid;
 use vec1::vec1;
+use warp_completer::meta::Span;
 use warp_core::r#async::debounce;
 use warp_core::channel::ChannelState;
 use warp_core::command::ExitCode;
@@ -245,6 +248,7 @@ use crate::ai::blocklist::codebase_index_speedbump_banner::{
 use crate::ai::blocklist::diff_storage::DiffStorageHelper;
 use crate::ai::blocklist::diff_types::FileDiff;
 use crate::ai::blocklist::inline_action::code_diff_view::CodeDiffView;
+use crate::ai::blocklist::local_agent_task_sync_model::LocalAgentTaskSyncModel;
 use crate::ai::blocklist::model::{
     AIBlockModel, AIBlockModelHelper, AIBlockModelImpl, AIBlockOutputStatus,
 };
@@ -417,7 +421,7 @@ use crate::terminal::input::inline_menu::InlineMenuPositioner;
 use crate::terminal::input::slash_commands::fork_button_action;
 use crate::terminal::input::{
     CommandExecutionSource, InputAction, InputEmptyStateChangeReason, InputState, MenuPositioning,
-    MenuPositioningProvider,
+    MenuPositioningProvider, ShellWidgetApplyMode,
 };
 use crate::terminal::keys::TerminalKeybindings;
 use crate::terminal::ligature_settings::{LigatureSettings, should_use_ligature_rendering};
@@ -716,6 +720,28 @@ pub const DEFAULT_ASK_AI_AUTOSUGGESTION_TEXT: &str = "What happened here?";
 
 const WARP_MD_PATH: &str = "WARP.md";
 
+/// `shell_plugins` tag reported by bootstrap when the shell's `^R` binding has been rebound away
+/// from its default reverse-history-search widget (e.g. by fzf or atuin). Must match the tag
+/// name used in `app/assets/bundled/bootstrap/zsh_body.sh`.
+const EXTERNAL_CTRL_R_HISTORY_PLUGIN_TAG: &str = "external_ctrl_r_history";
+
+/// `shell_plugins` tag reported by bootstrap when the shell's `^T` binding has been rebound away
+/// from its default line-editor binding to an external file-search widget (e.g. fzf). Independent
+/// of [`EXTERNAL_CTRL_R_HISTORY_PLUGIN_TAG`] -- a shell can have either, both, or neither, since
+/// each binding is detected and reported on its own. Must match the tag name used in
+/// `app/assets/bundled/bootstrap/zsh_body.sh`.
+const EXTERNAL_CTRL_T_FILE_PLUGIN_TAG: &str = "external_ctrl_t_file";
+
+/// Name of the bootstrap-installed shell function invoked to hand ctrl-r off to the shell's
+/// own external history widget. Must match the function name defined in
+/// `app/assets/bundled/bootstrap/zsh_body.sh`.
+const EXTERNAL_CTRL_R_HELPER_COMMAND: &str = "warp_run_external_ctrl_r_widget";
+
+/// Name of the bootstrap-installed shell function invoked to hand ctrl-t off to the shell's own
+/// external file-search widget. Must match the function name defined in
+/// `app/assets/bundled/bootstrap/zsh_body.sh`.
+const EXTERNAL_CTRL_T_HELPER_COMMAND: &str = "warp_run_external_ctrl_t_widget";
+
 pub const LONG_RUNNING_AGENT_REQUESTED_COMMAND_CONTEXT_KEY: &str = "LongRunningRequestedCommand";
 pub const LONG_RUNNING_AGENT_REQUESTED_COMMAND_USER_TOOK_OVER_CONTEXT_KEY: &str =
     "LongRunningRequestedUserTookOverCommand";
@@ -815,6 +841,7 @@ impl NotificationsTrigger {
             }
         }
     }
+
     /// Notifications have the following format
     /// - title: "'{start_of_command}...' {trigger_specific_details}"
     /// - body: "{additional_context} ...{end_of_output}"
@@ -1019,7 +1046,6 @@ pub enum InlineBannerType {
     VimMode,
     CodebaseIndexSpeedbump,
     AgentModeSetup,
-    AnonymousUserAISignUp,
     AwsBedrockLogin,
     AwsCliNotInstalled,
 }
@@ -1033,7 +1059,6 @@ impl InlineBannerType {
             Self::PromptSuggestions
             | Self::CodebaseIndexSpeedbump
             | Self::AgentModeSetup
-            | Self::AnonymousUserAISignUp
             | Self::AwsBedrockLogin
             | Self::AwsCliNotInstalled => true,
             // Terminal-context banners: hidden in agent view
@@ -1092,8 +1117,6 @@ struct InlineBannersState {
     codebase_index_speedbump_banner: Option<CodebaseIndexSpeedbumpBannerState>,
 
     agent_setup_speedbump_banner: Option<AgentModeSetupSpeedbumpBannerState>,
-
-    anonymous_user_ai_sign_up_banner: Option<AnonymousUserAISignUpBannerState>,
 
     aws_bedrock_login_banner: Option<AwsBedrockLoginBannerState>,
 
@@ -1414,6 +1437,9 @@ pub enum ContextMenuAction {
     CopyAIBlockQuery {
         ai_block_view_id: EntityId,
     },
+    CopyAIBlockTimestamp {
+        ai_block_view_id: EntityId,
+    },
     /// Copy the AI block output text
     CopyAIBlockOutput {
         ai_block_view_id: EntityId,
@@ -1514,6 +1540,7 @@ impl fmt::Debug for ContextMenuAction {
             StopSharing => f.write_str("StopSharing"),
             CopyAIDebuggingLink { .. } => f.write_str("CopyAIDebuggingLink"),
             CopyAIBlockQuery { .. } => f.write_str("CopyAIBlockPrompt"),
+            CopyAIBlockTimestamp { .. } => f.write_str("CopyAIBlockTimestamp"),
             CopyAIBlockOutput { .. } => f.write_str("CopyAIBlockOutput"),
             CopyAIBlock { .. } => f.write_str("CopyAIBlockBoth"),
             CopyAIBlockConversation { .. } => f.write_str("CopyAIBlockConversation"),
@@ -1812,8 +1839,6 @@ pub enum Event {
     OpenShareSessionDeniedModal,
     /// Used to focus and bring this session to the foreground.
     FocusSession,
-    /// Emitted when the onboarding init flow completes.
-    OnboardingInitCompleted,
     /// Emitted when the guided onboarding tutorial callout is completed or dismissed.
     OnboardingTutorialCompleted,
     SelectedBlocksChanged,
@@ -1926,7 +1951,7 @@ pub enum Event {
     TerminateFileUploadSession(FileUploadId),
     RunNativeShellCompletions {
         buffer_text: String,
-        results_tx: async_channel::Sender<Vec<ShellCompletion>>,
+        results_tx: async_channel::Sender<(Vec<ShellCompletion>, Option<Span>)>,
     },
     /// Emitted when the user clicks "install" in the SSH remote-server choice block.
     RemoteServerInstallRequested {
@@ -2915,6 +2940,7 @@ pub struct TerminalView {
 
     /// First-time cloud agent setup view (full-screen overlay for creating initial environment).
     first_time_cloud_agent_setup_view: ViewHandle<ambient_agent::FirstTimeCloudAgentSetupView>,
+    cloud_agent_team_required_view: ViewHandle<ambient_agent::CloudAgentTeamRequiredView>,
 
     /// Environment setup mode selector modal for /create-environment command.
     environment_setup_mode_selector: ViewHandle<EnvironmentSetupModeSelector>,
@@ -3004,6 +3030,17 @@ enum BlockMetadataUpdateSource {
     /// the CWD actually changed, and never run block-completion callbacks
     /// (the block hasn't completed).
     Osc7,
+}
+
+pub(crate) fn file_attach_allowed_for_shared_session(
+    shared_session_status: &SharedSessionStatus,
+    ambient_agent_view_model: Option<&ModelHandle<ambient_agent::AmbientAgentViewModel>>,
+    ctx: &AppContext,
+) -> bool {
+    let is_cloud_mode = FeatureFlag::CloudModeImageContext.is_enabled()
+        && ambient_agent_view_model.is_some_and(|model| model.as_ref(ctx).is_ambient_agent());
+    AgentToolbarItemKind::FileAttach
+        .available_to_session_viewer(shared_session_status, is_cloud_mode)
 }
 
 impl TerminalView {
@@ -3168,7 +3205,10 @@ impl TerminalView {
             ActiveSession::new(sessions.clone(), model_events_handle.clone(), ctx)
         });
         let ambient_agent_view_model = is_ambient_agent.then(|| {
-            ctx.add_model(|ctx| ambient_agent::AmbientAgentViewModel::new(terminal_view_id, ctx))
+            let terminal_view = terminal_view.clone();
+            ctx.add_model(|ctx| {
+                ambient_agent::AmbientAgentViewModel::new(terminal_view_id, terminal_view, ctx)
+            })
         });
 
         let ephemeral_message_model = ctx.add_model(|_| EphemeralMessageModel::new());
@@ -3511,6 +3551,7 @@ impl TerminalView {
                 &model_events_handle,
                 model.clone(),
                 terminal_view_id,
+                UserWorkspaces::team_context_resolver(terminal_view.clone()),
                 conversation_selection.clone(),
                 ctx,
             )
@@ -3701,6 +3742,7 @@ impl TerminalView {
         ctx.subscribe_to_model(&UserWorkspaces::handle(ctx), |me, _, event, ctx| {
             if matches!(event, UserWorkspacesEvent::TeamsChanged) {
                 me.update_focused_terminal_info(ctx);
+                ctx.notify();
             }
         });
 
@@ -4219,6 +4261,12 @@ impl TerminalView {
             me.handle_first_time_cloud_agent_setup_event(event, ctx);
         });
 
+        let cloud_agent_team_required_view =
+            ctx.add_typed_action_view(ambient_agent::CloudAgentTeamRequiredView::new);
+        ctx.subscribe_to_view(&cloud_agent_team_required_view, |me, _, event, ctx| {
+            me.handle_cloud_agent_team_required_view_event(event, ctx);
+        });
+
         let environment_setup_mode_selector =
             ctx.add_typed_action_view(EnvironmentSetupModeSelector::new);
 
@@ -4246,8 +4294,10 @@ impl TerminalView {
         }
 
         ctx.subscribe_to_model(&AISettings::handle(ctx), |me, _, ai_settings_event, ctx| {
+            let user_workspaces = UserWorkspaces::as_ref(ctx);
+            let scope = user_workspaces.team_context_for_view(ctx);
             if let AISettingsChangedEvent::AwsBedrockCredentialsEnabled { .. } = ai_settings_event
-                && !UserWorkspaces::as_ref(ctx).is_aws_bedrock_credentials_enabled(ctx)
+                && !user_workspaces.is_aws_bedrock_credentials_enabled(&scope, ctx)
             {
                 me.remove_aws_bedrock_login_banner(ctx);
             }
@@ -4473,6 +4523,7 @@ impl TerminalView {
             is_pending_aws_login: false,
             manual_pty_shutdown_requested: false,
             first_time_cloud_agent_setup_view,
+            cloud_agent_team_required_view,
             environment_setup_mode_selector,
             is_environment_setup_mode_selector_open: false,
             pane_stack: None,
@@ -4514,7 +4565,7 @@ impl TerminalView {
                         ctx.notify();
                     }
                     RemoteServerManagerEvent::SessionConnected { session_id, .. } => {
-                        me.model.lock().event_proxy.send_terminal_event(
+                        me.model.lock().event_proxy.send_app_event(
                             crate::terminal::event::Event::RemoteServerReady {
                                 session_id: *session_id,
                             },
@@ -4565,7 +4616,7 @@ impl TerminalView {
                         proxy_stderr,
                         is_cancelled,
                     } => {
-                        me.model.lock().event_proxy.send_terminal_event(
+                        me.model.lock().event_proxy.send_app_event(
                             crate::terminal::event::Event::RemoteServerFailed {
                                 session_id: *session_id,
                                 error: error.clone(),
@@ -4984,6 +5035,18 @@ impl TerminalView {
             self.agent_view_controller.update(ctx, |controller, ctx| {
                 controller.exit_agent_view(ctx);
             });
+        }
+    }
+
+    fn handle_cloud_agent_team_required_view_event(
+        &mut self,
+        event: &ambient_agent::CloudAgentTeamRequiredViewEvent,
+        ctx: &mut ViewContext<Self>,
+    ) {
+        match event {
+            ambient_agent::CloudAgentTeamRequiredViewEvent::OpenTeamsSettings => {
+                ctx.emit(Event::OpenSettings(SettingsSection::Teams));
+            }
         }
     }
 
@@ -8043,6 +8106,26 @@ impl TerminalView {
         self.ambient_agent_view_model.as_ref()
     }
 
+    fn is_in_agent_or_cli_attach_context(&self, app: &AppContext) -> bool {
+        let agent_view_state = self.agent_view_controller.as_ref(app).agent_view_state();
+        agent_view_state.is_fullscreen()
+            || agent_view_state.is_inline()
+            || CLIAgentSessionsModel::as_ref(app)
+                .session(self.view_id)
+                .is_some()
+    }
+
+    fn can_attach_file(&self, app: &AppContext) -> bool {
+        self.is_in_agent_or_cli_attach_context(app) && {
+            let status = self.model.lock().shared_session_status().clone();
+            file_attach_allowed_for_shared_session(
+                &status,
+                self.ambient_agent_view_model.as_ref(),
+                app,
+            )
+        }
+    }
+
     /// Ensures this pane has an [`ambient_agent::AmbientAgentViewModel`], creating and wiring
     /// it into the input if absent. Idempotent: returns the existing model when already
     /// present (the upfront cloud-mode construction path). Used by both the upfront and
@@ -8057,8 +8140,10 @@ impl TerminalView {
             return existing;
         }
         let terminal_view_id = self.view_id;
-        let model =
-            ctx.add_model(|ctx| ambient_agent::AmbientAgentViewModel::new(terminal_view_id, ctx));
+        let terminal_view = ctx.handle();
+        let model = ctx.add_model(|ctx| {
+            ambient_agent::AmbientAgentViewModel::new(terminal_view_id, terminal_view, ctx)
+        });
         self.wire_ambient_agent_view_model(model.clone(), ctx);
         // Notify observers (e.g. `PaneGroup::create_shared_session_viewer`) that the model
         // now exists so they can wire the viewer `TerminalManager` to its session events.
@@ -8125,10 +8210,7 @@ impl TerminalView {
         model: &TerminalModel,
         app: &AppContext,
     ) -> Option<AmbientAgentTaskId> {
-        self.ambient_agent_view_model
-            .as_ref()
-            .and_then(|model| model.as_ref(app).task_id())
-            .or_else(|| model.ambient_agent_task_id())
+        resolve_ambient_agent_task_id(self.ambient_agent_view_model.as_ref(), model, app)
     }
     pub fn ambient_agent_task_id_for_details_panel(
         &self,
@@ -8423,31 +8505,31 @@ impl TerminalView {
             .all(|block| block.restored_block_was_local().unwrap_or(true))
     }
 
-    // This logic is only needed if the user has disabled AI in remote sessions.
-    // It has potential performance implications if called on every focus change,
-    // so we limit it to only when the user disables AI in remote sessions.
+    /// Publishes this pane and its remote-block state to [`FocusedTerminalInfo`], which
+    /// `AISettings::is_ai_disabled_due_to_remote_session_org_policy` reads.
+    ///
+    /// What is published is a fact about the pane, independent of the remote-session AI
+    /// permission; that permission is resolved against this pane's team where the decision is
+    /// made, so it can be revoked without anything here having to be republished.
     fn update_focused_terminal_info(&mut self, ctx: &mut ViewContext<Self>) {
         if !ctx.is_self_or_child_focused() {
             return;
         }
 
-        let is_ai_allowed_in_remote_sessions =
-            UserWorkspaces::as_ref(ctx).is_ai_allowed_in_remote_sessions();
-
-        // Only update the FocusedTerminalInfo model if the user has disabled AI in remote sessions
-        // because it's a potentially expensive operation.
-        if !is_ai_allowed_in_remote_sessions {
-            let contains_remote_blocks = self.any_session_contains_remote_blocks;
-            let contains_restored_remote_blocks = self.any_session_contains_restored_remote_blocks;
-            let updated = FocusedTerminalInfo::handle(ctx).update(
-                ctx,
-                |model: &mut FocusedTerminalInfo, ctx| {
-                    model.update(contains_remote_blocks, contains_restored_remote_blocks, ctx)
-                },
-            );
-            if updated {
-                ctx.notify();
-            }
+        let terminal = self.view_handle.clone();
+        let contains_remote_blocks = self.any_session_contains_remote_blocks;
+        let contains_restored_remote_blocks = self.any_session_contains_restored_remote_blocks;
+        let updated =
+            FocusedTerminalInfo::handle(ctx).update(ctx, |model: &mut FocusedTerminalInfo, ctx| {
+                model.update(
+                    terminal,
+                    contains_remote_blocks,
+                    contains_restored_remote_blocks,
+                    ctx,
+                )
+            });
+        if updated {
+            ctx.notify();
         }
     }
 
@@ -9244,6 +9326,99 @@ impl TerminalView {
             && !model.is_read_only()
     }
 
+    /// If ctrl-r was pressed at an idle prompt on a session whose shell has rebound `^R` away
+    /// from its default reverse-history-search widget (reported via the
+    /// [`EXTERNAL_CTRL_R_HISTORY_PLUGIN_TAG`] shell plugin tag, e.g. by fzf or atuin), hands the
+    /// keypress off to that widget instead of opening Warp's own command search.
+    ///
+    /// Returns `true` if the handoff was triggered, in which case the caller should not open
+    /// Warp's command search.
+    pub fn maybe_trigger_external_ctrl_r_history_search(
+        &mut self,
+        ctx: &mut ViewContext<Self>,
+    ) -> bool {
+        if !FeatureFlag::ShellWidgetHandoff.is_enabled() || self.is_long_running() {
+            return false;
+        }
+        let Some(session_id) = self.active_block_session_id() else {
+            return false;
+        };
+        let has_external_ctrl_r_widget =
+            self.sessions
+                .as_ref(ctx)
+                .get(session_id)
+                .is_some_and(|session| {
+                    session
+                        .shell()
+                        .plugins()
+                        .contains(EXTERNAL_CTRL_R_HISTORY_PLUGIN_TAG)
+                });
+        if !has_external_ctrl_r_widget || self.model.lock().is_alt_screen_active() {
+            return false;
+        }
+
+        self.input.update(ctx, |input, ctx| {
+            input.trigger_external_shell_widget_handoff(
+                EXTERNAL_CTRL_R_HELPER_COMMAND,
+                ShellWidgetApplyMode::Replace,
+                false, /* capture_cursor */
+                ctx,
+            )
+        })
+    }
+
+    /// If ctrl-t was pressed at an idle prompt on a session whose shell has rebound `^T` to an
+    /// external file-search widget (reported via the [`EXTERNAL_CTRL_T_FILE_PLUGIN_TAG`] shell
+    /// plugin tag, e.g. by fzf), hands the keypress off to that widget. Mirrors
+    /// [`Self::maybe_trigger_external_ctrl_r_history_search`], but lands the selection either by
+    /// inserting it into the input editor at the cursor position or by replacing the whole
+    /// buffer, depending on the session's shell; see [`Input::trigger_external_shell_widget_handoff`]
+    /// and [`ShellWidgetApplyMode`].
+    ///
+    /// Returns `true` if the handoff was triggered, in which case the caller should not pass
+    /// ctrl-t through to the pty or handle it any other way.
+    pub fn maybe_trigger_external_ctrl_t_file_search(
+        &mut self,
+        ctx: &mut ViewContext<Self>,
+    ) -> bool {
+        if !FeatureFlag::ShellWidgetHandoff.is_enabled() || self.is_long_running() {
+            return false;
+        }
+        let Some(session_id) = self.active_block_session_id() else {
+            return false;
+        };
+        let Some(session) = self.sessions.as_ref(ctx).get(session_id) else {
+            return false;
+        };
+        if !session
+            .shell()
+            .plugins()
+            .contains(EXTERNAL_CTRL_T_FILE_PLUGIN_TAG)
+            || self.model.lock().is_alt_screen_active()
+        {
+            return false;
+        }
+        // fish invokes the user's real `fzf-file-widget` directly, which already performs its
+        // own token-aware replacement and so returns the whole new line; bash/zsh's helper
+        // instead searches independently of the draft and reports a plain path to splice in at
+        // the cursor. See `ShellWidgetApplyMode` and the fish/bash/zsh helper implementations.
+        let apply_mode = match session.shell().shell_type() {
+            ShellType::Fish => ShellWidgetApplyMode::Replace,
+            ShellType::Bash | ShellType::Zsh | ShellType::PowerShell => {
+                ShellWidgetApplyMode::Splice
+            }
+        };
+
+        self.input.update(ctx, |input, ctx| {
+            input.trigger_external_shell_widget_handoff(
+                EXTERNAL_CTRL_T_HELPER_COMMAND,
+                apply_mode,
+                true, /* capture_cursor */
+                ctx,
+            )
+        })
+    }
+
     /// Returns `true` when an interactive SSH command has been detected at
     /// preexec and the SSH block is still running (long-running). Used by
     /// the workspace to derive `PendingRemoteSession` without storing
@@ -9530,7 +9705,7 @@ impl TerminalView {
     /// Also calls logic to emit a sync event. Returns whether the bytes were
     /// actually forwarded to the PTY: `false` when the active block is under
     /// agent control, in which case nothing is written.
-    fn write_user_bytes_to_pty<B: Into<Cow<'static, [u8]>>>(
+    pub(crate) fn write_user_bytes_to_pty<B: Into<Cow<'static, [u8]>>>(
         &mut self,
         data: B,
         ctx: &mut ViewContext<Self>,
@@ -10159,6 +10334,11 @@ impl TerminalView {
         trigger: NotificationsTrigger,
         ctx: &mut ViewContext<Self>,
     ) {
+        // Desktop notifications discovery isn't meaningful on the web surface.
+        if cfg!(target_family = "wasm") {
+            return;
+        }
+
         // Don't show if the user has dismissed the banner in this session.
         if matches!(
             self.inline_banners_state.notifications_discovery_banner,
@@ -10279,7 +10459,12 @@ impl TerminalView {
         };
 
         // Return early if we've run out of AI usage.
-        if !AIRequestUsageModel::as_ref(ctx).has_any_ai_remaining(ctx) {
+        let has_any_ai = {
+            let user_workspaces = UserWorkspaces::as_ref(ctx);
+            let scope = user_workspaces.team_context_for_view(ctx);
+            AIRequestUsageModel::as_ref(ctx).has_any_ai_remaining(&scope, ctx)
+        };
+        if !has_any_ai {
             return false;
         }
 
@@ -10766,67 +10951,6 @@ impl TerminalView {
         // No-op when local filesystem is unavailable.
     }
 
-    fn anonymous_user_ai_sign_up_banner_action(
-        &mut self,
-        action: AnonymousUserLoginBannerAction,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        match action {
-            AnonymousUserLoginBannerAction::SignUp => {
-                ctx.emit(Event::SignupAnonymousUser {
-                    entrypoint: AnonymousUserSignupEntrypoint::LoginGatedFeature,
-                });
-                self.remove_anonymous_user_ai_sign_up_banner(ctx);
-            }
-            AnonymousUserLoginBannerAction::Close => {
-                self.remove_anonymous_user_ai_sign_up_banner(ctx);
-            }
-        }
-    }
-
-    fn insert_anonymous_user_ai_sign_up_banner(&mut self, ctx: &mut ViewContext<Self>) {
-        if *GeneralSettings::as_ref(ctx)
-            .anonymous_user_ai_sign_up_banner_shown
-            .value()
-        {
-            return;
-        }
-
-        let banner_id = self.inline_banners_state.next_banner_id();
-        let banner_state = AnonymousUserAISignUpBannerState::new(banner_id);
-
-        self.model
-            .lock()
-            .block_list_mut()
-            .append_inline_banner_with_custom_height(
-                InlineBannerItem::new(banner_id, InlineBannerType::AnonymousUserAISignUp),
-                3.0,
-            );
-
-        self.inline_banners_state.anonymous_user_ai_sign_up_banner = Some(banner_state);
-        GeneralSettings::handle(ctx).update(ctx, |settings, ctx| {
-            let _ = settings
-                .anonymous_user_ai_sign_up_banner_shown
-                .set_value(true, ctx);
-        });
-
-        ctx.notify();
-    }
-
-    fn remove_anonymous_user_ai_sign_up_banner(&mut self, ctx: &mut ViewContext<Self>) {
-        if let Some(banner_state) = self
-            .inline_banners_state
-            .anonymous_user_ai_sign_up_banner
-            .take()
-        {
-            self.model
-                .lock()
-                .block_list_mut()
-                .remove_inline_banner(banner_state.id);
-            ctx.notify();
-        }
-    }
-
     fn remove_aws_bedrock_login_banner(&mut self, ctx: &mut ViewContext<Self>) {
         if let Some(banner_state) = self.inline_banners_state.aws_bedrock_login_banner.take() {
             self.model
@@ -10910,13 +11034,15 @@ impl TerminalView {
         }
 
         // Check if AWS Bedrock is available in the workspace
-        if !UserWorkspaces::as_ref(ctx).is_aws_bedrock_credentials_enabled(ctx) {
+        let user_workspaces = UserWorkspaces::as_ref(ctx);
+        let scope = user_workspaces.team_context_for_view(ctx);
+        if !user_workspaces.is_aws_bedrock_credentials_enabled(&scope, ctx) {
             return;
         }
 
         // Check if the model supports AWS Bedrock routing
         let llm_prefs = LLMPreferences::as_ref(ctx);
-        let Some(llm_info) = llm_prefs.get_llm_info(model_id) else {
+        let Some(llm_info) = llm_prefs.get_llm_info(model_id, ctx) else {
             return;
         };
 
@@ -11357,19 +11483,20 @@ impl TerminalView {
             return true;
         }
 
-        // If there's a command present and this user is subject to the regex list policy from their
-        // organization, check the command against the regex list.
-
+        // If there's a command present, check it against the remote-session command patterns
+        // configured by the user's organization.
         let Some(command) = command else {
             return false;
         };
 
-        if UserWorkspaces::as_ref(app).is_ai_allowed_in_remote_sessions() {
-            // We don't check any regexes if the user is allowed to run AI in remote sessions.
+        let user_workspaces = UserWorkspaces::as_ref(app);
+        let scope = user_workspaces.team_context(&self.view_handle, app);
+        let remote_session_regex_list = user_workspaces.get_remote_session_regex_list(&scope);
+
+        // Almost nobody has org patterns at all, so there is nothing further to check.
+        if remote_session_regex_list.is_empty() {
             return false;
         }
-
-        let remote_session_regex_list = UserWorkspaces::as_ref(app).get_remote_session_regex_list();
 
         // First check if the command matches any of the regexes in the list.
         if remote_session_regex_list
@@ -13032,6 +13159,15 @@ impl TerminalView {
                     log::warn!("Got a FinishUpdate event with non-matching update id!");
                 }
             }
+            ModelEvent::ExternalShellWidgetSelection(data) => {
+                if FeatureFlag::ShellWidgetHandoff.is_enabled()
+                    && let Some(session_id) = data.session_id.map(SessionId::from)
+                {
+                    self.input.update(ctx, |input, _ctx| {
+                        input.set_external_shell_widget_selection(session_id, &data.buffer);
+                    });
+                }
+            }
             ModelEvent::SelectedTextChanged => {
                 ctx.emit(Event::SelectedTextChanged);
             }
@@ -13039,8 +13175,7 @@ impl TerminalView {
                 ctx.emit(Event::ShellSpawned(*shell_type));
                 ctx.notify();
             }
-            ModelEvent::CompletionsFinished(_data) => {}
-            ModelEvent::SendCompletionsPrompt => {}
+            ModelEvent::CompletionsFinished(..) => {}
             ModelEvent::ImageReceived {
                 image_id,
                 image_data,
@@ -13566,30 +13701,49 @@ impl TerminalView {
         }
     }
 
-    fn child_conversation_id_for_cli_status_updates(
+    /// Resolves the conversation this pane's CLI agent status updates should
+    /// be written to: the conversation whose `task_id` matches the ambient
+    /// task this pane's CLI-harness session is registered under (see
+    /// `LocalAgentTaskSyncModel::register_cli_session`). Prefers the pane's
+    /// active conversation; otherwise falls back to this terminal surface's
+    /// sole live conversation with a matching task_id, if unambiguous.
+    ///
+    /// Returns `None` when this pane has no registered ambient task — e.g. a
+    /// purely interactive CLI agent session with no orchestration/ambient
+    /// run behind it — since there is no `AIConversation` to bridge status
+    /// into in that case. The task_id match also guards against writing
+    /// into an unrelated conversation that happens to be live in the same
+    /// pane (e.g. an earlier native Agent Mode conversation).
+    ///
+    /// Not scoped to child (orchestration) conversations: nothing else in
+    /// the codebase keeps a CLI-harness conversation's `ConversationStatus`
+    /// in sync with the harness's own lifecycle hooks, so a root/standalone
+    /// CLI-harness conversation needs this bridge just as much as a child
+    /// one does (e.g. for orchestration event delivery, which reads
+    /// `ConversationStatus` directly).
+    fn conversation_id_for_cli_agent_status_updates(
         &self,
         ctx: &AppContext,
     ) -> Option<AIConversationId> {
-        if let Some(conversation_id) = BlocklistAIHistoryModel::as_ref(ctx)
+        let task_id =
+            LocalAgentTaskSyncModel::as_ref(ctx).task_id_for_terminal_view(self.view_id)?;
+        let matches_task = |conversation: &&AIConversation| conversation.task_id() == Some(task_id);
+
+        let history_model = BlocklistAIHistoryModel::as_ref(ctx);
+        if let Some(conversation_id) = history_model
             .active_conversation(self.view_id)
-            .and_then(|conversation| {
-                conversation
-                    .is_child_agent_conversation()
-                    .then_some(conversation.id())
-            })
+            .filter(matches_task)
+            .map(|conversation| conversation.id())
         {
             return Some(conversation_id);
         }
 
-        let mut child_conversation_ids = BlocklistAIHistoryModel::as_ref(ctx)
+        let mut conversation_ids = history_model
             .all_live_conversations_for_terminal_surface(self.view_id)
-            .filter(|conversation| conversation.is_child_agent_conversation())
+            .filter(matches_task)
             .map(|conversation| conversation.id());
-        let child_conversation_id = child_conversation_ids.next()?;
-        child_conversation_ids
-            .next()
-            .is_none()
-            .then_some(child_conversation_id)
+        let conversation_id = conversation_ids.next()?;
+        conversation_ids.next().is_none().then_some(conversation_id)
     }
 
     /// If the startup auto-open setting is enabled, auto-opens rich input for a
@@ -13681,7 +13835,7 @@ impl TerminalView {
             return;
         }
 
-        if let Some(conversation_id) = self.child_conversation_id_for_cli_status_updates(ctx) {
+        if let Some(conversation_id) = self.conversation_id_for_cli_agent_status_updates(ctx) {
             BlocklistAIHistoryModel::handle(ctx).update(ctx, |history_model, ctx| {
                 history_model.update_conversation_status(
                     self.view_id,
@@ -13807,12 +13961,6 @@ impl TerminalView {
 
         self.is_login_shell_bootstrapped = true;
         self.hide_slow_bootstrap_banner(ctx);
-
-        if self.auth_state.is_anonymous_or_logged_out()
-            && !FeatureFlag::OpenWarpNewSettingsModes.is_enabled()
-        {
-            self.insert_anonymous_user_ai_sign_up_banner(ctx);
-        }
 
         if self.should_display_vim_banner(&session, ctx) {
             self.insert_vim_mode_banner(ctx);
@@ -14357,7 +14505,6 @@ impl TerminalView {
                     #[cfg(feature = "local_fs")]
                     me.start_lsp_server_in_active_pwd(ctx);
                     me.redetermine_terminal_focus(ctx);
-                    ctx.emit(Event::OnboardingInitCompleted);
                 }
                 InitProjectModelEvent::GenerateProjectRules => {
                     me.ai_controller.update(ctx, |controller, ctx| {
@@ -21890,6 +22037,50 @@ impl TerminalView {
         true
     }
 
+    /// Submits a follow-up through the run follow-up service for the REMOTE-2661 retained
+    /// setup-failure debug route. Unlike [`Self::try_submit_pending_cloud_followup`], not gated
+    /// by `HandoffCloudCloud`: the server alone decides whether it bootstraps a debug
+    /// conversation or starts a new VM.
+    ///
+    /// Returns `false` when the follow-up couldn't be routed (no bound ambient view model, or
+    /// one bound to a different task); the caller then shows an error toast.
+    fn try_submit_setup_failure_debug_followup(
+        &mut self,
+        task_id: crate::ai::ambient_agents::AmbientAgentTaskId,
+        prompt: String,
+        ctx: &mut ViewContext<Self>,
+    ) -> bool {
+        if prompt.trim().is_empty() {
+            self.input.update(ctx, |input, ctx| {
+                input.reset_after_cloud_followup_submission(ctx);
+                input.set_input_mode_agent(true, ctx);
+            });
+            self.update_pane_configuration(ctx);
+            self.focus_input_box(ctx);
+            ctx.notify();
+            return true;
+        }
+
+        let Some(ambient_agent_view_model) = self.ambient_agent_view_model.clone() else {
+            return false;
+        };
+        if ambient_agent_view_model.as_ref(ctx).task_id() != Some(task_id) {
+            return false;
+        }
+
+        ambient_agent_view_model.update(ctx, |model, ctx| {
+            model.submit_setup_failure_debug_followup(prompt, ctx);
+        });
+
+        self.input.update(ctx, |input, ctx| {
+            input.reset_after_cloud_followup_submission(ctx);
+            input.set_input_mode_agent(true, ctx);
+        });
+        self.update_pane_configuration(ctx);
+        ctx.notify();
+        true
+    }
+
     fn handle_input_event(&mut self, event: &InputEvent, ctx: &mut ViewContext<Self>) {
         match event {
             InputEvent::Enter => self.clear_prompt_suggestions(ctx),
@@ -21956,6 +22147,14 @@ impl TerminalView {
                     return;
                 }
                 self.show_error_toast("Couldn't continue this cloud task.".to_string(), ctx);
+            }
+            InputEvent::SubmitSetupFailureDebugFollowup { task_id, prompt } => {
+                if !self.try_submit_setup_failure_debug_followup(*task_id, prompt.clone(), ctx) {
+                    self.show_error_toast(
+                        "Couldn't reach the retained session to debug it.".to_string(),
+                        ctx,
+                    );
+                }
             }
             InputEvent::CancelSharedSessionConversation {
                 server_conversation_token,
@@ -24573,10 +24772,6 @@ impl TerminalView {
             );
         }
 
-        if let Some(banner_state) = &self.inline_banners_state.anonymous_user_ai_sign_up_banner {
-            inline_banners.insert(banner_state.id, banner_state.render(appearance));
-        }
-
         if let Some(banner_state) = &self.inline_banners_state.aws_bedrock_login_banner {
             inline_banners.insert(
                 banner_state.id,
@@ -25479,6 +25674,18 @@ impl TerminalView {
                     {
                         ai_metadata.ai_block_handle.update(ctx, |block, ctx| {
                             block.handle_action(&AIBlockAction::CopyQuery, ctx);
+                        });
+                        break;
+                    }
+                }
+            }
+            CopyAIBlockTimestamp { ai_block_view_id } => {
+                for rich_content in self.rich_content_views.iter() {
+                    if let Some(ai_metadata) = rich_content.ai_block_metadata()
+                        && ai_metadata.ai_block_handle.id() == *ai_block_view_id
+                    {
+                        ai_metadata.ai_block_handle.update(ctx, |block, ctx| {
+                            block.handle_action(&AIBlockAction::CopyTimestamp, ctx);
                         });
                         break;
                     }
@@ -27106,6 +27313,7 @@ impl TypedActionView for TerminalView {
             | DeleteAttachment { .. }
             | OpenAttachmentLightbox { .. }
             | WriteCodebaseIndex
+            | AttachFile
             | ToggleAutoexecuteMode
             | ToggleQueueNextPrompt
             | ToggleTodoPopup
@@ -27124,7 +27332,6 @@ impl TypedActionView for TerminalView {
             | AddProjectAtCurrentDirectory
             | CodebaseIndexSpeedbumpBanner(_)
             | AgentModeSetupSpeedbumpBanner(_)
-            | AnonymousUserAISignUpBanner(_)
             | SetupCloudEnvironment(_)
             | SetupCloudEnvironmentAndStart(_)
             | TriggerEnvironmentSetupSelection(_)
@@ -27846,6 +28053,14 @@ impl TypedActionView for TerminalView {
             WriteCodebaseIndex => {
                 self.write_codebase_index(ctx);
             }
+            AttachFile => {
+                if !self.can_attach_file(ctx) {
+                    return;
+                }
+                self.input.update(ctx, |input, ctx| {
+                    input.attach_file(ctx);
+                });
+            }
             ToggleAutoexecuteMode => {
                 // Cloud (ambient) agent conversations run with fast-forward conceptually
                 // always on, so toggling it from the chip or keybinding is a no-op there.
@@ -27899,9 +28114,6 @@ impl TypedActionView for TerminalView {
             }
             AgentModeSetupSpeedbumpBanner(action) => {
                 self.agent_mode_setup_speedbump_banner_action(*action, ctx)
-            }
-            AnonymousUserAISignUpBanner(action) => {
-                self.anonymous_user_ai_sign_up_banner_action(*action, ctx);
             }
             ResumeConversation => {
                 // With Agent View, we want to resume the conversation the user is currently viewing,
@@ -28816,12 +29028,22 @@ impl View for TerminalView {
             stack.add_child(ChildView::new(sharer.inactivity_modal()).finish())
         }
 
-        // Render first-time cloud agent setup view when in Setup status
-        if self
+        let cloud_agents_require_team = UserWorkspaces::as_ref(app).cloud_agents_require_team();
+        let (is_in_setup, is_configuring) = self
             .ambient_agent_view_model
             .as_ref()
-            .is_some_and(|model| model.as_ref(app).is_in_setup())
-        {
+            .map(|model| {
+                let model = model.as_ref(app);
+                (model.is_in_setup(), model.is_configuring_ambient_agent())
+            })
+            .unwrap_or_default();
+        if ambient_agent::should_render_cloud_agent_team_required_view(
+            cloud_agents_require_team,
+            is_in_setup,
+            is_configuring,
+        ) {
+            stack.add_child(ChildView::new(&self.cloud_agent_team_required_view).finish());
+        } else if is_in_setup {
             stack.add_child(ChildView::new(&self.first_time_cloud_agent_setup_view).finish());
         }
 
@@ -28990,6 +29212,14 @@ impl View for TerminalView {
             } else if agent_view_state.is_inline() {
                 context.set.insert(flags::ACTIVE_INLINE_AGENT_VIEW);
             }
+        }
+
+        if file_attach_allowed_for_shared_session(
+            model_lock.shared_session_status(),
+            self.ambient_agent_view_model.as_ref(),
+            app,
+        ) {
+            context.set.insert(init::CAN_ATTACH_FILE_KEY);
         }
 
         if self.is_ambient_agent_session(app) && !self.is_nested_cloud_mode(app) {

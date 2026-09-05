@@ -36,6 +36,7 @@ use parking_lot::RwLock;
 use warpui::{ModelContext, SingletonEntity as _};
 
 use crate::server::server_api::TranscribeError;
+use crate::server::team_scope::RequestTeamScope;
 use crate::settings::{LocalVoiceBackend, LocalVoiceSettings};
 use crate::voice::transcriber::{Transcriber, VoiceTranscriber};
 
@@ -261,6 +262,9 @@ impl Transcriber for LocalTranscriber {
         &self,
         wav_base64: String,
         language: Option<String>,
+        // Upstream sends this to its transcription service to bill the right team.
+        // Nothing here leaves the machine, so there is no request to scope.
+        _team_scope: RequestTeamScope,
     ) -> Result<String, TranscribeError> {
         let config = self.config.read().clone();
         let wav = base64::engine::general_purpose::STANDARD

@@ -867,7 +867,7 @@ impl BlockList {
         self.selection = None;
         self.rich_content_selections.clear();
         self.event_proxy
-            .send_terminal_event(TerminalEvent::TextSelectionChanged);
+            .send_app_event(TerminalEvent::TextSelectionChanged);
     }
 
     /// Records that the given rich content (AI) block view currently has an
@@ -893,7 +893,7 @@ impl BlockList {
         }
         self.rich_content_selections = vec![view_id];
         self.event_proxy
-            .send_terminal_event(TerminalEvent::TextSelectionChanged);
+            .send_app_event(TerminalEvent::TextSelectionChanged);
     }
 
     /// Whether a rich content (AI) block currently owns the text selection.
@@ -918,7 +918,7 @@ impl BlockList {
         {
             self.rich_content_selections.remove(position);
             self.event_proxy
-                .send_terminal_event(TerminalEvent::TextSelectionChanged);
+                .send_app_event(TerminalEvent::TextSelectionChanged);
         }
     }
 
@@ -1259,7 +1259,7 @@ impl BlockList {
     fn set_selection(&mut self, value: BlockListSelection) {
         self.selection = Some(value);
         self.event_proxy
-            .send_terminal_event(TerminalEvent::TextSelectionChanged);
+            .send_app_event(TerminalEvent::TextSelectionChanged);
     }
 
     /// Return the list of corresponding rich content block view ids contained in the active

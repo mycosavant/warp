@@ -9,7 +9,7 @@ use futures::TryFutureExt;
 use inquire::{InquireError, Select};
 use warp_cli::agent::Harness;
 use warp_cli::environment::{EnvironmentCreateArgs, EnvironmentUpdateArgs};
-use warp_cli::scope::ObjectScope;
+use warp_cli::scope::{ObjectScope, TeamSelection};
 use warpui::r#async::FutureExt;
 use warpui::{AppContext, GetSingletonModelHandle, SingletonEntity as _, UpdateModel};
 
@@ -26,7 +26,9 @@ use crate::server::ids::{ServerId, SyncId};
 use crate::server::server_api::ServerApiProvider;
 use crate::server::server_api::ai::AIClient;
 use crate::workspaces::update_manager::TeamUpdateManager;
-use crate::workspaces::user_workspaces::team_workspace_settings::{CliTeamError, TeamScopeForCli};
+use crate::workspaces::user_workspaces::team_workspace_settings::{
+    NotATeamMemberError, TeamScopeForCli, TeamScopeForCliError,
+};
 use crate::workspaces::user_workspaces::{SoleTeamError, TeamScope as _, UserWorkspaces};
 
 /// How long to wait for workspace metadata to refresh.
@@ -36,16 +38,17 @@ pub fn validate_agent_mode_base_model_id(
     model_id: &str,
     ctx: &AppContext,
 ) -> anyhow::Result<LLMId> {
+    let team_uid = UserWorkspaces::as_ref(ctx).inherited_or_default_team_uid(None);
     let llm_prefs = LLMPreferences::as_ref(ctx);
     let valid_ids = llm_prefs
-        .get_base_llm_choices_for_agent_mode(ctx)
+        .get_base_llm_choices_for_agent_mode_for_team_uid(team_uid, ctx)
         .map(|info| info.id.clone())
         .collect::<Vec<_>>();
 
     classify_agent_mode_base_model_id(
         model_id,
         &valid_ids,
-        llm_prefs.agent_mode_models_unavailable(),
+        llm_prefs.agent_mode_models_unavailable_for_team_uid(team_uid),
     )
 }
 
@@ -132,32 +135,26 @@ fn describe_team_choices(team_uids: &[ServerId], ctx: &AppContext) -> String {
         .join("\n")
 }
 
-fn describe_cli_team_error(error: CliTeamError, ctx: &AppContext) -> anyhow::Error {
+fn describe_team_resolution_error(error: TeamScopeForCliError, ctx: &AppContext) -> anyhow::Error {
     match error {
-        CliTeamError::NoSoleTeam(error) => describe_sole_team_error(error, ctx),
-        CliTeamError::NotAMember { team_uid } => {
+        TeamScopeForCliError::InvalidTeamUid { team_uid, message } => {
+            anyhow::anyhow!("Invalid --team '{team_uid}': {message}")
+        }
+        TeamScopeForCliError::NoSoleTeam(error) => describe_sole_team_error(error, ctx),
+        TeamScopeForCliError::NotAMember(NotATeamMemberError { team_uid }) => {
             anyhow::anyhow!("You are not on team {team_uid}")
         }
     }
 }
 
-/// Parses the uid given as `--team=<UID>`, if one was.
-fn requested_team_uid(scope: &ObjectScope) -> anyhow::Result<Option<ServerId>> {
-    scope
-        .requested_team_uid()
-        .map(|uid| {
-            ServerId::try_from(uid).map_err(|err| anyhow::anyhow!("Invalid --team '{uid}': {err}"))
-        })
-        .transpose()
-}
-
-/// The team a CLI command's policy reads are scoped to, resolved from the same `--team` the
-/// object's owner is resolved from so the two cannot disagree.
-fn resolve_team_scope(scope: &ObjectScope, ctx: &AppContext) -> anyhow::Result<TeamScopeForCli> {
-    let requested = requested_team_uid(scope)?;
+/// The team a CLI command's policy reads are scoped to.
+fn resolve_team_scope(
+    team_selection: &TeamSelection,
+    ctx: &AppContext,
+) -> anyhow::Result<TeamScopeForCli> {
     UserWorkspaces::as_ref(ctx)
-        .team_scope_for_cli(requested)
-        .map_err(|err| describe_cli_team_error(err, ctx))
+        .team_scope_for_cli(team_selection)
+        .map_err(|err| describe_team_resolution_error(err, ctx))
 }
 
 /// [`validate_agent_mode_base_model_id`], also rejecting a model `scope`'s team does not let this
@@ -168,7 +165,7 @@ fn resolve_team_scope(scope: &ObjectScope, ctx: &AppContext) -> anyhow::Result<T
 /// multi-team user pass `--team` to name a model no team governs.
 pub fn validate_agent_mode_base_model_id_for_scope(
     model_id: &str,
-    scope: &ObjectScope,
+    team_selection: &TeamSelection,
     ctx: &AppContext,
 ) -> anyhow::Result<LLMId> {
     let llm_id = validate_agent_mode_base_model_id(model_id, ctx)?;
@@ -177,14 +174,16 @@ pub fn validate_agent_mode_base_model_id_for_scope(
         return Ok(llm_id);
     };
 
-    let team_scope = resolve_team_scope(scope, ctx)?;
+    let team_scope = resolve_team_scope(team_selection, ctx)?;
     if is_model_allowed_for_scope(prefs, llm, &team_scope, ctx) {
         return Ok(llm_id);
     }
+    let scope = team_scope.team_uid().map_or_else(
+        || "your personal scope".to_string(),
+        |team_uid| format!("team {team_uid}"),
+    );
     Err(anyhow::anyhow!(
-        "Model '{model_id}' is one of your own custom endpoints, which team {} does not allow its \
-         members to use.",
-        team_scope.team_uid().expect("a CLI scope names a team")
+        "Model '{model_id}' is one of your own custom endpoints, which {scope} does not allow."
     ))
 }
 
@@ -206,41 +205,21 @@ pub fn resolve_owner(scope: &ObjectScope, ctx: &AppContext) -> anyhow::Result<Ow
             user_uid: current_user_uid(ctx)?,
         });
     }
-
-    if scope.is_team() {
-        let team_uid = UserWorkspaces::as_ref(ctx)
-            .cli_team_uid(requested_team_uid(scope)?)
-            .map_err(|err| describe_cli_team_error(err, ctx))?;
-        return Ok(Owner::Team { team_uid });
-    }
-
-    match UserWorkspaces::as_ref(ctx).sole_team_uid() {
-        Ok(team_uid) => Ok(Owner::Team { team_uid }),
-        Err(SoleTeamError::NoTeam) => Ok(Owner::User {
+    match resolve_team_scope(&scope.team_selection, ctx)?.team_uid() {
+        Some(team_uid) => Ok(Owner::Team { team_uid }),
+        None => Ok(Owner::User {
             user_uid: current_user_uid(ctx)?,
         }),
-        Err(error @ SoleTeamError::MoreThanOneTeam { .. }) => {
-            Err(describe_sole_team_error(error, ctx))
-        }
     }
 }
 
 /// Checks `--team` against the caller's memberships, for commands that leave the owner for the
 /// server to resolve.
-///
-/// Those commands send only whether team ownership was asked for, so an unusable scope would
-/// otherwise surface as a rejected request after the run has been configured. Note that the
-/// uid a caller names cannot be forwarded, so a member of several teams is still refused by
-/// the server; checking here at least names the problem in the caller's own terms.
-pub fn validate_team_scope(scope: &ObjectScope, ctx: &AppContext) -> anyhow::Result<()> {
-    if !scope.is_team() {
+pub fn validate_team_scope(team_selection: &TeamSelection, ctx: &AppContext) -> anyhow::Result<()> {
+    if !team_selection.is_team() {
         return Ok(());
     }
-
-    UserWorkspaces::as_ref(ctx)
-        .cli_team_uid(requested_team_uid(scope)?)
-        .map(|_| ())
-        .map_err(|err| describe_cli_team_error(err, ctx))
+    resolve_team_scope(team_selection, ctx).map(|_| ())
 }
 
 /// Refresh workspace metadata before executing an operation.
