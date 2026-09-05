@@ -384,7 +384,10 @@ measurement loss and not a safety loss (T14.18). Pass `instrumented` when you
 have a question you can write in one sentence beforehand.
 
 The shell function is in `~/.bashrc`; the script is run from the Windows checkout
-(`C:\dev\warp\.fork\tools\warpdev.ps1`), so **sync that checkout first**.
+(`C:\dev\warp\.fork\tools\warpdev.ps1`), so **sync that checkout first**: from
+WSL, `git -C /mnt/c/dev/warp fetch /home/effatha/git/warp dev && git -C
+/mnt/c/dev/warp merge --ff-only FETCH_HEAD`; from PowerShell, `fetch origin dev`
+instead. Not `gh`, which is GitHub and carries only what has been pushed.
 The launcher tells you when you have not: it prints the commit the tree is on,
 warns when the binary predates the tree's last *source* commit (scoped to
 `app`, `crates`, `Cargo.toml`, `Cargo.lock`, so a docs commit does not cry

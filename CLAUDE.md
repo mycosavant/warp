@@ -1156,9 +1156,20 @@ The recorded remedy above fails here: `date -r` against "the newest file you
 touched" compares a binary in one tree to a source file in another, so it reports
 a stale binary every time and means nothing. **Check the commit, not the clock**
 — `git -C /mnt/c/dev/warp log --oneline -1` against your own HEAD, before every
-Windows run. To sync: `git -C /mnt/c/dev/warp fetch gh dev && git -C
-/mnt/c/dev/warp merge --ff-only FETCH_HEAD` (the `gh` remote is GitHub; `origin`
-is the WSL path and only works when the 9p share is up).
+Windows run. **To sync, the command depends on which side's `git` you are
+holding, and this line got it wrong until 2026-09-04 when both forms failed in
+one sitting.** The `gh` remote is GitHub and only carries what has been pushed,
+which needs a say-so, so it is usually behind and answers *"Already up to
+date"* against the wrong source. The `origin` remote is the UNC path
+`\\wsl.localhost\Ubuntu\…`, which Windows `git` resolves and WSL `git` cannot.
+So from WSL, fetch by the Linux path; from PowerShell, fetch `origin`:
+
+```bash
+git -C /mnt/c/dev/warp fetch /home/effatha/git/warp dev && git -C /mnt/c/dev/warp merge --ff-only FETCH_HEAD   # from WSL
+git -C C:\dev\warp fetch origin dev; git -C C:\dev\warp merge --ff-only FETCH_HEAD                          # from PowerShell
+```
+
+The launcher's own hint uses the PowerShell form because that is where it runs.
 
 `.fork/README.md` documents the clone and never says to update it, which is how
 a two-tree setup reads as one tree for months. Worth stating in general: a build

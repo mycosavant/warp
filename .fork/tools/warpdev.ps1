@@ -204,7 +204,10 @@ try {
     if ($winHead -and $wslHead -and $winHead -ne $wslHead) {
         $behind = (git -C $WslRepo rev-list --count "$winHead..dev" 2>$null)
         Write-Host "warpdev: Windows checkout is $behind commit(s) behind WSL dev" -ForegroundColor Yellow
-        Write-Host "  sync:    git -C $WinRepo fetch gh dev; git -C $WinRepo merge --ff-only FETCH_HEAD" -ForegroundColor DarkGray
+        # `origin` is the UNC path of the WSL repo and resolves from Windows git,
+        # which is where this runs. `gh` is GitHub and carries only what has been
+        # pushed, so it is usually behind; from WSL git use the Linux path instead.
+        Write-Host "  sync:    git -C $WinRepo fetch origin dev; git -C $WinRepo merge --ff-only FETCH_HEAD" -ForegroundColor DarkGray
         Write-Host "  rebuild: C:\dev\build.ps1 -Release   (a launch never syncs for you: tree newer than binary is the mismatch above)" -ForegroundColor DarkGray
     }
 } catch { }
