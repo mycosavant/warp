@@ -594,11 +594,12 @@ impl CodeView {
                 // A path inside a WSL distribution with a connected host is
                 // that host's remote buffer (`code::routed_lsp`), and opens
                 // through the daemon rather than over the redirector.
-                me.open_or_focus_existing(
-                    Some(crate::code::routed_lsp::location_for_lsp_path(path, ctx)),
-                    Some(line_col),
-                    ctx,
+                let location = crate::code::routed_lsp::location_for_lsp_path(path, ctx);
+                log::info!(
+                    "[routed-lsp] go to definition: {} -> {location:?}",
+                    path.display()
                 );
+                me.open_or_focus_existing(Some(location), Some(line_col), ctx);
                 if let Some(editor) = me.tab_at(me.active_tab_index()).map(|tab| &tab.editor_view) {
                     editor.update(ctx, |editor, ctx| {
                         editor.cursor_at(Point::new(line_1based as u32, *column as u32), ctx);

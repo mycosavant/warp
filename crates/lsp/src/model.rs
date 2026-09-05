@@ -554,7 +554,17 @@ impl LspServerModel {
                 .await?;
             Ok(result
                 .into_iter()
-                .filter_map(|location| DefinitionLocation::from_lsp(location, &mapper).ok())
+                .filter_map(
+                    |location| match DefinitionLocation::from_lsp(location, &mapper) {
+                        Ok(location) => Some(location),
+                        Err(e) => {
+                            // A dropped location is otherwise silent, and the
+                            // silence reads as "no definition".
+                            log::warn!("LSP definition location dropped: {e:#}");
+                            None
+                        }
+                    },
+                )
                 .collect())
         })
     }

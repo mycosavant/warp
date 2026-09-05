@@ -645,9 +645,18 @@ impl LocalCodeEditorView {
             move |me, definition_result, ctx| {
                 // Handle definition result - log errors and clear hover on failure
                 let definition_locations = match definition_result {
-                    Ok(locations) => locations,
+                    Ok(locations) => {
+                        log::info!(
+                            "[lsp] definition for hover: {} location(s), first={:?}",
+                            locations.len(),
+                            locations
+                                .first()
+                                .map(|l| l.target.path.display().to_string())
+                        );
+                        locations
+                    }
                     Err(e) => {
-                        log::debug!("Failed to get goto definition: {e}");
+                        log::info!("Failed to get goto definition: {e}");
                         return;
                     }
                 };
@@ -2181,7 +2190,7 @@ impl LocalCodeEditorView {
                         }
                     }
                     Err(e) => {
-                        log::debug!("Failed to get goto definition: {e}");
+                        log::info!("Failed to get goto definition: {e}");
                     }
                 }
             },
