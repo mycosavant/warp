@@ -329,11 +329,28 @@ impl ChannelState {
         CHANNEL_STATE.lock().channel
     }
 
+    /// The version this binary identifies as, or `None` for an unstamped build.
+    ///
+    /// Two sources, in order. `GIT_RELEASE_TAG` at compile time is release
+    /// CI's, and wins when present. A sidecar file beside the executable
+    /// ([`version_sidecar_path`]) is the fork's, for builds made by hand.
+    ///
+    /// The sidecar exists because compiling the tag in is expensive here:
+    /// `option_env!` makes this crate's fingerprint depend on the value, and
+    /// cargo rebuilds every dependent of a crate it rebuilds, with no check
+    /// that the output changed. Measured 2026-09-05: a changed tag invalidated
+    /// 55 crates in one `cargo check` of the app, so stamping the commit into
+    /// every build had turned every commit into a near-clean release build,
+    /// twenty minutes and a 41 GB peak on the machine the fork lives on. A
+    /// file read at startup identifies the build just as well and costs
+    /// nothing at compile time.
     #[cfg(feature = "test-util")]
     pub fn app_version() -> Option<&'static str> {
         let version = APP_VERSION.lock();
 
-        version.or_else(|| option_env!("GIT_RELEASE_TAG"))
+        version
+            .or_else(|| option_env!("GIT_RELEASE_TAG"))
+            .or_else(sidecar_version)
     }
 
     #[cfg(feature = "test-util")]
@@ -341,9 +358,10 @@ impl ChannelState {
         *APP_VERSION.lock() = version;
     }
 
+    /// See the `test-util` variant for the two sources and why there are two.
     #[cfg(not(feature = "test-util"))]
     pub fn app_version() -> Option<&'static str> {
-        option_env!("GIT_RELEASE_TAG")
+        option_env!("GIT_RELEASE_TAG").or_else(sidecar_version)
     }
 
     pub fn sentry_url() -> Cow<'static, str> {
@@ -419,6 +437,53 @@ fn derive_http_origin_from_ws_url(ws_url: &str) -> Option<String> {
         origin.push_str(&format!(":{port}"));
     }
     Some(origin)
+}
+
+/// The version sidecar the fork's build scripts write beside the binary:
+/// `warp-oss.version` next to `warp-oss` or `warp-oss.exe`. One line, the
+/// version string, nothing else.
+///
+/// Beside the *resolved* executable: `std::env::current_exe` follows
+/// symlinks, so the remote-server daemon launched through the
+/// `~/.warp-dev/remote-server/warp-oss` symlink reads the sidecar in
+/// `target/release/`, which is the one its build wrote.
+pub fn version_sidecar_path(exe: &std::path::Path) -> std::path::PathBuf {
+    exe.with_extension("version")
+}
+
+/// Reads the sidecar for `exe`, or `None` when there is none or it is not a
+/// version. Only the first line counts, trimmed; a blank or non-printable
+/// line is `None` rather than a version that would confuse the About page
+/// and the remote server's version log line.
+pub fn read_version_sidecar(exe: &std::path::Path) -> Option<String> {
+    let text = std::fs::read_to_string(version_sidecar_path(exe)).ok()?;
+    let first = text.lines().next()?.trim();
+    (!first.is_empty() && first.chars().all(|c| c.is_ascii_graphic())).then(|| first.to_owned())
+}
+
+/// The sidecar's answer, read once per process.
+///
+/// `'static` because [`ChannelState::app_version`] returns a borrowed string
+/// and callers hold it as one; the `OnceLock` owns the `String` for the life of
+/// the process. Cached rather than re-read so the About page, the discovery
+/// record and the remote-server handshake cannot disagree with each other if
+/// the file changes underneath a running binary.
+fn sidecar_version() -> Option<&'static str> {
+    #[cfg(target_family = "wasm")]
+    {
+        None
+    }
+    #[cfg(not(target_family = "wasm"))]
+    {
+        static SIDECAR: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
+        SIDECAR
+            .get_or_init(|| {
+                std::env::current_exe()
+                    .ok()
+                    .and_then(|exe| read_version_sidecar(&exe))
+            })
+            .as_deref()
+    }
 }
 
 #[cfg(all(test, not(feature = "test-util")))]

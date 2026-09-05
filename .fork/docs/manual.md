@@ -264,6 +264,15 @@ feature rather than a missing flag. `build.ps1` runs `--warpctrl instance list`
 afterwards and prints `warpctrl: present` or `MISSING` so you find out in the
 same minute rather than mid-test.
 
+`build.ps1` also writes `target\<profile>\warp-oss.version` after a successful
+build, holding `v0.fork.<sha>[-dirty]`; `app_version()` reads it at startup, so
+About, `--version` and the discovery record name the commit. It deliberately
+does **not** set `GIT_RELEASE_TAG`: compiled in, a changed tag invalidates 55
+crates and every commit becomes a near-clean release build (measured
+2026-09-05). A hand build without the sidecar reports `<unknown>`, which is
+correct. The tracked copy of the script is `.fork/tools/build.ps1`; the live one
+is `C:\dev\build.ps1`, and they are meant to be identical.
+
 ~8 GB of build artifacts. Verified: fork markers present in the binary, zero
 Sentry symbols, real `MainWindowHandle`, onboarding renders.
 

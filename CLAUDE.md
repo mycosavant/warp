@@ -342,7 +342,21 @@ fork replacing its binary from Warp's servers. `fork.rs` had no autoupdate
 predicate and `egress.rs` did not cover `warp.dev`. Now
 `FeatureFlag::Autoupdate` is in `FORCE_DISABLED` and `fork::autoupdate_allowed`
 guards `check_for_update`, so the two are decoupled and `.fork/tools/build.sh`
-and `build.ps1` both stamp `v0.fork.<sha>`.
+and `build.ps1` both name the build `v0.fork.<sha>`.
+
+**They name it in a sidecar file, not in the environment, since 2026-09-05,
+and the day in between cost twenty minutes per commit.** Stamping
+`GIT_RELEASE_TAG` compiles the tag into `warp_core` through `option_env!`, and
+cargo rebuilds every dependent of a crate it rebuilds with no check that the
+output changed. Measured: a changed tag invalidated **55 crates** in one
+`cargo check` of the app, so every commit had become a near-clean release
+build, with a 41 GB peak on the machine the fork lives on. `app_version()`
+now falls back to `<binary>.version` beside the resolved executable, written
+by both scripts after a successful build. Same About page, same `--version`,
+same discovery record, same remote-server handshake, zero compile cost. **Do
+not set `GIT_RELEASE_TAG` for a local build**; both scripts clear it in case
+the shell inherited one. The live Windows script is `C:\dev\build.ps1`, and
+`.fork/tools/build.ps1` is its tracked copy: change one, copy to the other.
 
 **The bigger one was underneath it, and it was live.**
 `generate_multi_agent_output` intercepts for the ACP and local agents *only when
