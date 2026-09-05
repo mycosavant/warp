@@ -285,15 +285,15 @@
         <h2>WSL parity: the pane is a remote session, and now it connects itself</h2>
         <button class="status" type="button" aria-label="cycle status">open</button>
       </div>
-      <div class="meta"><span>.fork/docs/wsl.md</span><span>friction #1, 2026-09-05</span><span>steps 1 and 2 built 2026-09-05</span></div>
-      <p>The first product-profile session hit it within minutes: the diff panel in a WSL pane on this repo says <em>Diffs don't currently work in WSL</em>. The text is a fallback that fires when no repository has been detected yet, and in a pane nobody has connected to the server, detection walks the repo from Windows over 9p. Measured later the same day, that walk takes 27 s on this repo and the panel works; what the first screenshot was showing is not established. The remote diff stack was built for SSH and, opened on a WSL host the same day, worked unchanged. Language servers for a routed buffer are absent by construction: the editor's LSP path takes local paths only and the protocol carries no LSP messages.</p>
+      <div class="meta"><span>.fork/docs/wsl.md</span><span>friction #1, 2026-09-05</span><span>all three steps built 2026-09-05</span></div>
+      <p>The first product-profile session hit it within minutes: the diff panel in a WSL pane on this repo says <em>Diffs don't currently work in WSL</em>. The text is a fallback that fires when no repository has been detected yet, and in a pane nobody has connected to the server, detection walks the repo from Windows over 9p. Measured later the same day, that walk takes 27 s on this repo and the panel works; what the first screenshot was showing is not established. The remote diff stack was built for SSH and, opened on a WSL host the same day, worked unchanged. Language servers were the last gap, and they closed the same night without touching the protocol: the distribution's own <code>rust-analyzer</code>, spawned through <code>wsl.exe</code>, serves the routed buffer, with paths spelled at one seam in <code>crates/lsp</code>. Measured end to end: footer, hover card, go-to-definition into another crate as a second routed tab.</p>
       <div class="facts">
         <table>
           <thead><tr><th>surface</th><th>routed</th><th>not routed</th></tr></thead>
           <tbody>
             <tr><td>tree, open file, search, git chip</td><td>inside the distribution, measured T16</td><td>9p</td></tr>
             <tr><td>diff panel</td><td>inside the distribution, measured 2026-09-05: changes appear within 8 s</td><td>9p; works on this repo too, 27 s to the full walk. The "never finishes" this row carried did not reproduce</td></tr>
-            <tr><td>editor language server</td><td>none, structurally</td><td>spawned on Windows, reads over 9p</td></tr>
+            <tr><td>editor language server</td><td>inside the distribution, measured 2026-09-05: hover, definition into <code>warp_util</code>, both through the daemon</td><td>the same server, same key; <code>WARP_FORK_WSL_LSP=0</code> puts the Windows-side one back</td></tr>
             <tr><td>connecting the server</td><td colspan="2"><strong>automatic when the shell bootstraps</strong>, since <code>ea61116e1</code>. Off under <code>WARP_FORK_WSL_AUTO_CONNECT=off</code> or <code>WARP_FORK_POLICY=0</code>; the palette action and <code>warpctrl remote wsl connect</code> remain for re-attaching.</td></tr>
           </tbody>
         </table>
@@ -304,7 +304,7 @@
           <ul>
             <li><strong>Built.</strong> The WSL arm beside the SSH one, in <code>ModelEventDispatcher::complete_bootstrapped_session</code>, keyed on the session's own distribution and gated by <code>fork::wsl_auto_connect_enabled</code>. It never holds the bootstrap back: a failed connect is a log line and a not-routed pane. Measurement on Windows: see <code>.fork/docs/wsl.md</code>, "Connecting, as built".</li>
             <li><strong>Built.</strong> Opened routed: nothing to fix. The fallback now comes from <code>session_filesystem</code>: a routed pane is a remote session with a server to the tree, search and the diff panel; an unrouted one says its files are read over 9p and how to attach a server (<code>099b26ea5</code>).</li>
-            <li>Language servers: measure <code>wsl.exe -d &lt;distro&gt; -- rust-analyzer</code> over stdio with path translation before designing a protocol proxy.</li>
+            <li><strong>Built.</strong> Measured first: the cheap shape answered a definition in 3.4 s from the Windows side against 25 s for the Windows binary over 9p, so it was built (<code>6d07c1e1a</code>) and three <code>file_path()</code> gates fixed on the live runs. Zed's protocol proxy stays unbuilt. See <code>.fork/docs/wsl.md</code>, "Language servers, as built".</li>
           </ul>
         </div>
         <div>

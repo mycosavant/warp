@@ -1,0 +1,14 @@
+2026-09-05T18:48:10Z [INFO] [remote_server::manager] Remote server connected: session=SessionId(5954224761974418167) host=3941ac72-66c3-481f-bac8-3d415e9ed620
+2026-09-05T18:48:10Z [INFO] [warp::code::routed_lsp] [routed-lsp] host HostId("3941ac72-66c3-481f-bac8-3d415e9ed620") is WSL distribution Ubuntu
+2026-09-05T18:48:10Z [INFO] [remote_server::manager] Remote server connected: session=SessionId(15524496650828379386) host=3941ac72-66c3-481f-bac8-3d415e9ed620
+2026-09-05T18:48:10Z [INFO] [warp::code::routed_lsp] [routed-lsp] host HostId("3941ac72-66c3-481f-bac8-3d415e9ed620") is WSL distribution Ubuntu
+2026-09-05T18:48:13Z [INFO] [lsp::manager] Registering LSP server for path: \\wsl$\ubuntu\home\effatha\git\warp
+2026-09-05T18:48:13Z [INFO] [lsp::config] LSP rust-analyzer starting with custom_binary_config: None
+2026-09-05T18:48:13Z [INFO] [lsp::transport] ProcessTransport: Spawned process with pid 18348
+2026-09-05T18:48:14Z [INFO] [lsp::service] LSP initialized successfully and will now run startup tasks
+2026-09-05T18:50:05Z [INFO] [warp::code::local_code_editor] [lsp] definition for hover: 1 location(s), first=Some("\\\\wsl$\\ubuntu\\home\\effatha\\git\\warp\\crates\\warp_util\\src\\lib.rs")
+2026-09-05T18:50:07Z [INFO] [warp::code::local_code_editor] [lsp] definition for hover: 1 location(s), first=Some("\\\\wsl$\\ubuntu\\home\\effatha\\.rustup\\toolchains\\1.92.0-x86_64-unknown-linux-gnu\\lib\\rustlib\\src\\rust\\library\\std\\src\\macros.rs")
+2026-09-05T18:50:07Z [INFO] [warp::code::local_code_editor] [lsp] definition for hover: 0 location(s), first=None
+2026-09-05T18:50:07Z [INFO] [warp::code::local_code_editor] [lsp] definition for hover: 0 location(s), first=None
+2026-09-05T18:50:08Z [INFO] [warp::code::local_code_editor] [lsp] definition for hover: 1 location(s), first=Some("\\\\wsl$\\ubuntu\\home\\effatha\\git\\warp\\app\\build.rs")
+2026-09-05T18:51:26Z [INFO] [warp::code::view] [routed-lsp] go to definition: \\wsl$\ubuntu\home\effatha\git\warp\crates\warp_util\src\path.rs -> Remote(RemotePath { host_id: HostId("3941ac72-66c3-481f-bac8-3d415e9ed620"), path: StandardizedPath(Unix(PathBuf { _encoding: "unix", inner: [47, 104, 111

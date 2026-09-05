@@ -559,7 +559,12 @@ shell bootstraps, so the tree, the buffer, search and the git chip route inside
 the distribution instead of over 9p. Set it off to get the manual behaviour
 back — palette action or `warpctrl remote wsl connect`. A failed connect is a
 log line and a not-routed pane; `warpctrl session inspect` says which you have.
-Built 2026-09-05, `.fork/docs/wsl.md`),
+Built 2026-09-05, `.fork/docs/wsl.md`), `WARP_FORK_WSL_LSP` (**defaults on**,
+same parser: a language server for a `\\wsl$\<distro>\...` workspace runs
+*inside* the distribution, spawned as `wsl.exe -d <distro> --shell-type login
+-- rust-analyzer`, and a routed buffer gets a path the LSP stack accepts. Set
+it off for upstream's Windows-side server over 9p. Built 2026-09-05, measured
+end to end the same night; `.fork/docs/wsl.md`, "Language servers, as built"),
 `WARP_FORK_FRAME_LOG` (`on`, or a threshold in ms — slow-frame accounting to
 the local log; **reach for this before theorising about why something feels
 slow**), `WARP_FORK_EVENT_LOG` (`on`, or a directory — one JSONL file per
@@ -1769,6 +1774,27 @@ exactly like an unrouted one to all three; they now ask
 `session_filesystem`, a routed pane is a remote session with a server, and the
 unrouted fallback names the 9p read instead of blaming WSL. `.fork/docs/wsl.md`
 has the three screenshots by name.
+
+**A routed buffer has a language server since 2026-09-05, and it is the
+distribution's own.** The shape is the smallest one that was still the idea:
+every key in Warp stays a Windows path, a workspace inside a distribution is
+the `\\wsl$\<distro>\...` spelling the fork already keys on, and
+`crates/lsp` spawns `wsl.exe -d <distro> --shell-type login -- <binary>` with
+that root as cwd and translates `\\wsl$\...` to `file:///...` and back at
+one seam (`UriMapper`). Measured before designed: a Windows process driving a
+distro-spawned `rust-analyzer` answered a definition in 3.4 s, the Windows
+binary over the redirector took 25 s on the same crate, and this repository
+answered from cold in 61 s. The open question the WSL page carried, whether a
+Linux server accepts a Windows client's URIs, was the wrong question: it
+accepts Linux ones, and what could not spell them was `url::Url::from_file_path`
+on Windows. **Three live runs found three `file_path()` gates that read
+"local" where they meant "has a server"** — the footer, the shutdown manager
+(it stopped the new server as unused ten seconds in) and the view — so if a
+routed buffer loses a feature the unrouted one has, grep for `file_path()`
+before anything else. Two facts from the runs that are not the fork's: the
+editor's cmd modifier is the Super key on winit builds, so go-to-definition
+on Windows is **Win+click** (the context menu has the same item), and the
+`--shell-type login` is what gives the server the user's profile PATH.
 
 **And connect before you `cd`, or rather: it no longer matters, which is the
 point.** Until 2026-09-02 a pane that navigated into a repository and *then* ran

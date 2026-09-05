@@ -1,6 +1,6 @@
 # WSL, as a remote server
 
-**As of 2026-09-05, evening, second pass.** This page is the current state of one surface.
+**As of 2026-09-05, night, third pass.** This page is the current state of one surface.
 It is rewritten in place when the state changes; the history is in `git log`
 and in the tickets it cites (T6, T16, T17, T18, T20.1). Where a row says
 *measured*, there is a date and a ticket; where it says *unmeasured* or *read*,
@@ -42,7 +42,7 @@ is what a pane gets when that connect failed, when
 | global search | **inside the distribution** (`ripgrep_search`) | 9p, ~9 s where `C:` takes 0.1 s | measured 2026-09-02, T16 phase 2 |
 | git branch and dirty chip | inside the distribution | through `wsl.exe` | measured, T6 and T16 |
 | diff panel | **inside the distribution** (`RemoteDiffStateModel` over `GetDiffState`). Opened on this repo: header names the distribution, a clean tree says "No open changes", two changes made outside the pane appeared with their hunks within 8 s | 9p, and on this repo it **works**: panel 3 s after the `cd`, the full index (6505 files) 27 s. The "never finishes" this row carried was not reproduced. The no-repository fallback, reached only in a directory that is not one, names the 9p read since `099b26ea5` | measured 2026-09-05, both columns, below |
-| **editor language servers** | **absent by construction.** A routed buffer is `Remote`, the editor's LSP path takes local paths only, and the protocol has no LSP messages | the server is spawned **on Windows** against a `\\wsl$` path: needs Windows-installed servers, reads the crate over 9p | read 2026-09-05, see below |
+| **editor language servers** | **inside the distribution** (`6d07c1e1a` and three fixes after it). The server is the distribution's own `rust-analyzer`, spawned through `wsl.exe`; a routed buffer opens with it, hover shows the real signature, go-to-definition into another crate opens a second routed buffer | **inside the distribution too**, same server, same key: the workspace is `\\wsl$\<distro>\...` either way, so the two panes share one server. `WARP_FORK_WSL_LSP=0` puts the Windows-side server back | measured 2026-09-05, below |
 | agent panel | the agent starts inside the distribution | same | measured 2026-09-02, T18 |
 | the agent's own LSP tool | inside the distribution, the agent's own server | same | measured 2026-09-02, T17 |
 | clipboard | Warp's, Windows-native. Select-and-copy never touches the distribution; OSC 52 from a program in the pane goes through Warp's handler | same | read 2026-09-05; **the failing gesture has not been named** |
@@ -135,26 +135,83 @@ Check first, before theorising: `warpctrl session inspect` on the pane. If it
 says `local`, the pane was never connected and what you are looking at is the
 9p column.
 
-## Why the editor has no language server in a routed pane
+## Language servers, as built
 
-`LocalCodeEditor::try_connect_lsp_server` starts from `self.file_path()`, which
-is `file_location().to_local_path()` (`app/src/code/local_code_editor.rs:945`,
-`:1890`). A routed buffer's location is `Remote`, so that is `None` and the
-function returns before asking the LSP manager anything. The same shape holds in
-`GlobalBufferModel`: `open_or_sync_document_with_lsp` takes a `&Path`, and the
-LSP-on-workspace-open path filters to `LocalOrRemotePath::Local`
-(`global_buffer_model.rs:1400`, `:1526`). A `Remote` buffer gets syntax
-highlighting from its extension (`local_code_editor.rs:1341`) and nothing else.
+**Measured before designed**, with a stdio LSP client driven from the Windows
+side (`.fork/runs/lsp-routed-2026-09-05/`, four probes and a live run). The
+cheap shape from the ranking below worked on its first run: a Windows process
+spawned `wsl.exe -d Ubuntu -- rust-analyzer` with a `\\wsl.localhost\...`
+working directory, sent `file:///home/...` URIs, and got a definition back in
+3.41 s, the same as the native Linux control. The Windows `rust-analyzer.exe`
+over the redirector took 25 s on the same three-symbol crate. On this
+repository the distro-spawned server answered from cold in 61 s.
 
-Under that, the remote-development protocol carries buffers, files, ripgrep,
-repo metadata, the codebase index and diff state. It has **no LSP messages** at
-all (every `message` in `remote_server.proto`, read 2026-09-05). This is the gap
-`CLAUDE.md` already names as the one place building something in Warp would not
-duplicate a working tool.
+So the open question this page carried, whether a Linux `rust-analyzer`
+accepts the URIs a Windows client sends, was the wrong question: it accepts
+Linux ones. What it cannot accept is what `crates/lsp` sends, because
+`url::Url::from_file_path` refuses a Linux path on Windows outright
+(`Path::is_absolute` is false without a drive or UNC prefix). The whole gap
+was path spelling, and the protocol never came into it.
 
-In a not-routed pane the buffer is `Local` at `\\wsl$\…`, so `crates/lsp` spawns
-the server on Windows. That needs a Windows `rust-analyzer`, and the server reads
-the crate over 9p. It works, at the cost the frame refuses to pay.
+**The shape.** Every key in Warp stays a Windows path. A workspace inside a
+distribution is `\\wsl$\<distro>\...`, the spelling
+`canonicalize_wsl_unc_path` folds every other one to and the one an unrouted
+pane already enables a server under, so a routed pane and an unrouted pane on
+the same repository share one server. What changed:
+
+- `crates/lsp`: `LspServerConfig::with_wsl_distro` makes the spawn
+  `wsl.exe -d <distro> --shell-type login -- <binary>` with the UNC root as
+  cwd (`wsl.exe` maps it to the Linux directory, measured), skips the
+  data-dir install (a Windows executable), and names the distribution in
+  the not-installed error. `UriMapper` is the one seam every URI goes
+  through: `Local` is upstream's pair of functions; `WslDistro` spells
+  `\\wsl$\ubuntu\home\x.rs` as `file:///home/x.rs` and folds every
+  `file:///...` the server answers with back to the canonical spelling.
+  `--shell-type login` is load-bearing: the default PATH had nothing under
+  `/home`.
+- `code::routed_lsp`: `WslHosts` records which distribution a host is, from
+  the `Sessions` subscription on `SessionConnected`, the one place the host
+  id and `wsl_distro_name()` are both in hand. `lsp_path_for` gives a routed
+  buffer its `\\wsl$` path; `location_for_lsp_path` turns a path the server
+  handed back into that host's remote buffer when a client for it is
+  connected; `repo_root_for_lsp_path` adds the remote root to the enablement
+  lookup, because the daemon registered the repository as remote.
+- The editor's LSP-facing reads of `file_path()` go through `lsp_path()`; the
+  buffer model runs the same document lifecycle for a routed buffer; the
+  footer, the find-references card and the shutdown manager's "is anyone
+  using this server" scan follow the LSP path too.
+
+**Measured live, Windows debug build `00ce16d01`, scratch profile, this
+repository, routed pane.** Opening `app/build.rs` from the tree drew the
+footer with *Enable rust-analyzer* (`lsp-routed-footer-enable.png`); enabling
+it registered a server for `\\wsl$\ubuntu\home\effatha\git\warp` and
+spawned pid 18348 on Windows, which was a `rust-analyzer` inside the
+distribution with cwd `/home/effatha/git/warp` and the `wsl.exe` relay as its
+parent; the server log shows the routed buffer's `didOpen` under the UNC
+path. Hovering `app_target_dir` drew the card with `pub fn
+app_target_dir(profile: &str) -> Result<...>` and its doc line
+(`lsp-routed-hover.png`). *Go to definition* from the context menu resolved
+to `crates/warp_util/src/path.rs`, which the view mapped to the host's remote
+buffer and opened as a second routed tab, through the daemon
+(`lsp-routed-goto-definition.png`). A definition into the toolchain's
+`std/src/macros.rs` mapped the same way, outside the workspace.
+
+Three fixes the live runs paid for, each a `file_path()` gate that read
+"local" where it meant "has a server": the editor's footer was only added
+for a `Local` location (`7100a8f94`); the shutdown manager stopped the
+freshly started server as unused ten seconds later because its scan asked
+each editor for `file_path()` (`5afc14d02`); and the definition path was
+silent about where it dropped, so it logs now (`00ce16d01`).
+
+**Two things this measured that are not the fork's.** The editor's cmd-click
+modifier is the Super key on winit builds (`cmd: state.super_key()`), so
+go-to-definition on Windows is Win+click, not Ctrl+click; the context menu
+has the same item. And the Windows-side comparison carried a confound: its
+`cargo metadata` failed on an argument its cargo did not know, so part of
+the 25 s is the Windows toolchain and not only 9p.
+
+Zed's shape, a daemon-owned server behind a new message family in
+`remote_server.proto`, was not built. Nothing here needed the protocol.
 
 ## Clipboard
 
@@ -288,23 +345,11 @@ into it; the release binary ignores the variable.
    was the fallback, and it turned out to be three sites reading one bool,
    not two.
 
-3. **Language servers for routed buffers.** Two shapes, and the cheaper one
-   should be measured before the expensive one is designed.
-
-   *Cheap:* spawn the server from Windows as
-   `wsl.exe -d <distro> -- rust-analyzer`. The transport is stdio, which is what
-   `LspServerModel` already speaks, and the server runs inside the distribution
-   against its own filesystem. What changes is paths: the client sends `file://`
-   URIs for a `Remote` buffer and gets Linux paths back. `native_path` does one
-   direction and `session.windows_path_converter()` the other. Unknown: whether
-   `crates/lsp`'s manager can be handed a `Remote` root at all; today every
-   entry point is a `&Path`.
-
-   *Zed's shape:* the server runs on the remote, the daemon owns it, and the
-   protocol proxies requests. A new message family in `remote_server.proto`, a
-   daemon-side spawn reusing `crates/lsp/src/command_builder.rs` on Linux, and
-   a client `LspServerModel` over the transport instead of stdio. Correct, and
-   the largest item on this page by an order of magnitude.
+3. **Language servers for routed buffers. Done 2026-09-05**, in the cheap
+   shape: the distribution's own server through `wsl.exe`, paths spelled at
+   one seam. The manager was never handed a `Remote` root; it was handed the
+   same `\\wsl$` root the unrouted pane uses. Zed's shape stays unbuilt.
+   Section above, and `.fork/runs/lsp-routed-2026-09-05/`.
 
 4. **Clipboard**, once the gesture is named.
 
@@ -320,7 +365,9 @@ into it; the release binary ignores the variable.
 | `warpctrl remote wsl connect` / `list` | `app/src/local_control/handlers/remote_wsl.rs` |
 | the panels' enablement, with the routed-WSL arm | `app/src/coding_panel_enablement_state.rs` (`from_session_env_with_wsl_routing`), computed in `app/src/workspace/view.rs` (grep `wsl_routed`) and `code_review_view::session_env` |
 | the diff panel's fallback and its remote stack | `code_review_view::render_no_repo_for_enablement`, `code_review/diff_state/{mod,remote}.rs`, `app/src/remote_server/diff_state_tracker.rs` |
-| the editor's LSP attach | `app/src/code/local_code_editor.rs:940`, `code/global_buffer_model.rs:1400` |
+| the editor's LSP attach | `app/src/code/local_code_editor.rs` (`lsp_path`, `try_connect_lsp_server`), `code/global_buffer_model.rs` (`sync_remote_buffer_with_lsp`) |
+| a routed buffer's LSP path, and the host-to-distribution record | `app/src/code/routed_lsp.rs` (`WslHosts`, `lsp_path_for`, `location_for_lsp_path`, `repo_root_for_lsp_path`), `app/src/fork.rs` (`wsl_lsp_in_distro_enabled`) |
+| the server inside the distribution, and the URI seam | `crates/lsp/src/config.rs` (`UriMapper`, `with_wsl_distro`), `crates/lsp/src/command_builder.rs` (`wsl_argv`) |
 | the protocol | `crates/remote_server/proto/remote_server.proto`, `diff_state.proto` |
 | OSC 52 | `crates/warp_terminal/src/model/grid/ansi_handler.rs:1166`, `app/src/terminal/view.rs:12071` |
 | the guard on new `session_type()` readers | `app/src/terminal/model/session/filesystem_tests.rs:367` |
@@ -338,6 +385,11 @@ into it; the release binary ignores the variable.
   A routed pane now reaches the `RemoteSession` arm instead, which blocks
   nothing. Reconciled by reading; T16's routed-search measurement stands.
 - The default of `terminal.osc52_clipboard_access`.
-- For the cheap LSP shape: whether a Linux `rust-analyzer` accepts the URIs a
-  Windows-side client sends, and what `crates/lsp` does with a root it cannot
-  `canonicalize`.
+- Go-to-definition into a routed buffer that was not yet open lands at line
+  1: the tab for `path.rs` opened at the top rather than at line 326. The
+  `cursor_at` runs before the daemon's content arrives. Not chased; the
+  local path may have the same race or may not.
+- The footer's *Install* button for a distribution root refuses with a
+  toast naming the distribution rather than installing there. Deliberate,
+  because what Warp downloads is a Windows executable; a server has to be
+  installed inside the distribution by hand.

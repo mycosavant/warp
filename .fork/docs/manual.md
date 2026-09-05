@@ -3966,6 +3966,8 @@ proof files pass between them as plain files. No SSH, no agent, no daemon.
 | `C:\dev\click.ps1` | Clicks inside a window, without touching the physical mouse. |
 | `C:\dev\keys.ps1`  | Posts keystrokes to one window, without taking focus. |
 | `C:\dev\drag.ps1`  | Press-move-release inside one window, same mechanism as `click.ps1`. Superseded by `use_computer drag --window-id`; kept because it needs no build. |
+| `C:\dev\ctrlclick.ps1` | `click.ps1` with a modifier held through `keybd_event` around the posted click. Written 2026-09-05 for go-to-definition; holds VK_LWIN, because the editor's cmd modifier is the Super key on winit builds. Posted key messages do not set the modifier state the windowing layer reads, which is why it is real input. |
+| `C:\dev\winclick_real.ps1` | A real Win+click: `SetCursorPos` + `mouse_event` with VK_LWIN held. Moves the real cursor, unlike everything above; the one shape that armed the editor's definition link. The context menu's *Go to definition* needs neither script. |
 | `C:\dev\rect.ps1`  | Where each window *is*. `EnumWindows`, so it sees every Warp window, not just the one Windows calls "main". |
 | `C:\dev\movewin.ps1` | Moves/resizes a window by handle, without activating it. Useful for putting a window somewhere predictable before driving it. |
 | `C:\dev\sweep.ps1` | Runs every `warpctrl` action and records what each one did. |

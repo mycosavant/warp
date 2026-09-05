@@ -51,3 +51,25 @@ rather than read:
   default PATH on this distribution had nothing under `/home`; the login one
   had three entries there. A server installed under `~/.cargo/bin` is
   invisible without it.
+
+## The live run
+
+Windows debug build, scratch profile `wslauto`, this repository in a routed
+pane, driven with `warpctrl`, `use_computer.exe` and two helper scripts
+written for it (`C:\dev\ctrlclick.ps1`, `C:\dev\winclick_real.ps1`).
+Three builds in a row, each one `file_path()` gate further:
+
+| build | what happened | log |
+|---|---|---|
+| `6d07c1e1a` | the routed buffer opened; no footer, so nothing to enable a server from. `construct_editor_for_location` added it only for a `Local` location | -- |
+| `7100a8f94` | footer drawn (`lsp-routed-footer-enable.png`); *Enable rust-analyzer* registered `\\wsl$\ubuntu\home\effatha\git\warp`, spawned the server, completed the initialize handshake, and `LanguageServerShutdownManager` stopped it ten seconds later as unused: its scan asked each editor for `file_path()` | -- |
+| `5afc14d02` | server spawned and kept: pid 40972 on Windows, a `rust-analyzer` inside the distribution with cwd `/home/effatha/git/warp` and the `wsl.exe` relay as parent; `didOpen` under the UNC path in the server log; hover card with the real signature (`lsp-routed-hover.png`) | `run5-rust-analyzer-server.log` |
+| `00ce16d01` | definitions logged: `warp_util` to `crates/warp_util/src/lib.rs`, `println!` to the toolchain's `std/src/macros.rs`; *Go to definition* from the context menu on `app_target_dir` mapped `crates/warp_util/src/path.rs` to the host's remote buffer and opened it as a second routed tab (`lsp-routed-goto-definition.png`) | `run5-00ce16d01-app.log` |
+
+Screenshots are in `C:\dev\shots\lsp-routed-*.png`.
+
+What took the longest was not the fork: the editor's cmd-click modifier is
+the Super key on winit builds, so a Ctrl+click is a plain click on Windows.
+Posted key messages do not set the modifier state the windowing layer reads,
+either, which is why the second helper uses real input. The context menu's
+*Go to definition* needs neither.

@@ -1,0 +1,34 @@
+2026-09-05 14:48:14.147 | [info] lsp-sync: didOpen from GlobalBufferModel file=\\wsl$\ubuntu\home\effatha\git\warp\app\build.rs version=4
+2026-09-05 14:48:14.147 | [debug] didOpen -> server: file=\\wsl$\ubuntu\home\effatha\git\warp\app\build.rs version=4
+2026-09-05 14:48:17.410 | [stderr] 2026-09-05T14:48:20.005389276-04:00  WARN cyclic deps: computer_use(Idx::<CrateBuilder>(74)) -> computer_use(Idx::<CrateBuilder>(74)), alternative path: computer_use(Idx::<CrateBuilder>(74))
+2026-09-05 14:48:17.410 | [stderr] 2026-09-05T14:48:20.005732929-04:00  WARN cyclic deps: sum_tree(Idx::<CrateBuilder>(131)) -> sum_tree(Idx::<CrateBuilder>(131)), alternative path: sum_tree(Idx::<CrateBuilder>(131))
+2026-09-05 14:48:17.411 | [stderr] 2026-09-05T14:48:20.005959538-04:00  WARN cyclic deps: warp_completer(Idx::<CrateBuilder>(142)) -> warp_completer(Idx::<CrateBuilder>(142)), alternative path: warp_completer(Idx::<CrateBuilder>(142))
+2026-09-05 14:48:17.411 | [stderr] 2026-09-05T14:48:20.006445557-04:00  WARN cyclic deps: warp_util(Idx::<CrateBuilder>(169)) -> warpui_core(Idx::<CrateBuilder>(196)), alternative path: warpui_core(Idx::<CrateBuilder>(196)) -> warp_util(Idx::<CrateBuilder>(169))
+2026-09-05 14:48:17.411 | [stderr] 2026-09-05T14:48:20.00650524-04:00  WARN cyclic deps: warpui(Idx::<CrateBuilder>(171)) -> warpui(Idx::<CrateBuilder>(171)), alternative path: warpui(Idx::<CrateBuilder>(171))
+2026-09-05 14:48:17.411 | [stderr] 2026-09-05T14:48:20.006562738-04:00  WARN cyclic deps: warpui_core(Idx::<CrateBuilder>(196)) -> warpui_core(Idx::<CrateBuilder>(196)), alternative path: warpui_core(Idx::<CrateBuilder>(196))
+2026-09-05 14:48:17.411 | [stderr] 2026-09-05T14:48:20.006576123-04:00  WARN cyclic deps: warpui_extras(Idx::<CrateBuilder>(200)) -> warpui_extras(Idx::<CrateBuilder>(200)), alternative path: warpui_extras(Idx::<CrateBuilder>(200))
+2026-09-05 14:48:18.612 | [stderr] 2026-09-05T14:48:21.107026681-04:00  WARN cyclic deps: computer_use(Idx::<CrateBuilder>(74)) -> computer_use(Idx::<CrateBuilder>(74)), alternative path: computer_use(Idx::<CrateBuilder>(74))
+2026-09-05 14:48:18.612 | [stderr] 2026-09-05T14:48:21.107370051-04:00  WARN cyclic deps: sum_tree(Idx::<CrateBuilder>(131)) -> sum_tree(Idx::<CrateBuilder>(131)), alternative path: sum_tree(Idx::<CrateBuilder>(131))
+2026-09-05 14:48:18.612 | [stderr] 2026-09-05T14:48:21.107690545-04:00  WARN cyclic deps: warp_completer(Idx::<CrateBuilder>(142)) -> warp_completer(Idx::<CrateBuilder>(142)), alternative path: warp_completer(Idx::<CrateBuilder>(142))
+2026-09-05 14:48:18.613 | [stderr] 2026-09-05T14:48:21.108066457-04:00  WARN cyclic deps: warp_util(Idx::<CrateBuilder>(169)) -> warpui_core(Idx::<CrateBuilder>(196)), alternative path: warpui_core(Idx::<CrateBuilder>(196)) -> warp_util(Idx::<CrateBuilder>(169))
+2026-09-05 14:48:18.613 | [stderr] 2026-09-05T14:48:21.108115982-04:00  WARN cyclic deps: warpui(Idx::<CrateBuilder>(171)) -> warpui(Idx::<CrateBuilder>(171)), alternative path: warpui(Idx::<CrateBuilder>(171))
+2026-09-05 14:48:18.613 | [stderr] 2026-09-05T14:48:21.108174527-04:00  WARN cyclic deps: warpui_core(Idx::<CrateBuilder>(196)) -> warpui_core(Idx::<CrateBuilder>(196)), alternative path: warpui_core(Idx::<CrateBuilder>(196))
+2026-09-05 14:48:18.613 | [stderr] 2026-09-05T14:48:21.108188388-04:00  WARN cyclic deps: warpui_extras(Idx::<CrateBuilder>(200)) -> warpui_extras(Idx::<CrateBuilder>(200)), alternative path: warpui_extras(Idx::<CrateBuilder>(200))
+2026-09-05 14:48:30.322 | [debug] publishDiagnostics <- server: ACCEPTED file=\\wsl$\ubuntu\home\effatha\git\warp\crates\http_client\src\egress.rs version=None diag_count=1
+2026-09-05 14:48:57.136 | [debug] publishDiagnostics <- server: ACCEPTED file=\\wsl$\ubuntu\home\effatha\git\warp\app\src\ai\blocklist\orchestration_event_streamer.rs version=None diag_count=4
+2026-09-05 14:49:31.523 | [debug] publishDiagnostics <- server: ACCEPTED file=\\wsl$\ubuntu\home\effatha\git\warp\app\build.rs version=Some(4) diag_count=0
+2026-09-05 14:49:31.524 | [debug] render: OK file=\\wsl$\ubuntu\home\effatha\git\warp\app\build.rs render_version=4 diag_version=4 diag_count=0 age_ms=0
+2026-09-05 14:49:37.446 | [stderr] 2026-09-05T14:49:42.172230277-04:00  WARN overly long loop turn took 3.541418255s (event handling took 3.541406084s): PrimeCaches(End { cancelled: false })
+2026-09-05 14:50:05.869 | [info] lsp-sync: gotoDefinition -> server file=\\wsl$\ubuntu\home\effatha\git\warp\app\build.rs buffer_version=4 position=17:12
+2026-09-05 14:50:07.155 | [info] lsp-sync: gotoDefinition -> server file=\\wsl$\ubuntu\home\effatha\git\warp\app\build.rs buffer_version=4 position=32:12
+2026-09-05 14:50:07.194 | [info] lsp-sync: gotoDefinition -> server file=\\wsl$\ubuntu\home\effatha\git\warp\app\build.rs buffer_version=4 position=40:12
+2026-09-05 14:50:07.571 | [info] lsp-sync: gotoDefinition -> server file=\\wsl$\ubuntu\home\effatha\git\warp\app\build.rs buffer_version=4 position=39:5
+2026-09-05 14:50:07.587 | [info] lsp-sync: gotoDefinition -> server file=\\wsl$\ubuntu\home\effatha\git\warp\app\build.rs buffer_version=4 position=39:0
+2026-09-05 14:51:26.620 | [info] lsp-sync: didOpen from GlobalBufferModel file=\\wsl$\ubuntu\home\effatha\git\warp\crates\warp_util\src\path.rs version=11
+2026-09-05 14:51:26.621 | [debug] didOpen -> server: file=\\wsl$\ubuntu\home\effatha\git\warp\crates\warp_util\src\path.rs version=11
+2026-09-05 14:51:26.632 | [debug] publishDiagnostics <- server: ACCEPTED file=\\wsl$\ubuntu\home\effatha\git\warp\crates\warp_util\src\path.rs version=Some(11) diag_count=0
+2026-09-05 14:51:26.632 | [debug] render: OK file=\\wsl$\ubuntu\home\effatha\git\warp\crates\warp_util\src\path.rs render_version=11 diag_version=11 diag_count=0 age_ms=0
+2026-09-05 14:51:27.182 | [debug] publishDiagnostics <- server: ACCEPTED file=\\wsl$\ubuntu\home\effatha\git\warp\app\build.rs version=Some(4) diag_count=3
+2026-09-05 14:51:27.183 | [debug] render: OK file=\\wsl$\ubuntu\home\effatha\git\warp\app\build.rs render_version=4 diag_version=4 diag_count=3 age_ms=0
+2026-09-05 14:51:27.183 | [debug] publishDiagnostics <- server: ACCEPTED file=\\wsl$\ubuntu\home\effatha\git\warp\crates\warp_util\src\path.rs version=Some(11) diag_count=6
+2026-09-05 14:51:27.183 | [debug] render: OK file=\\wsl$\ubuntu\home\effatha\git\warp\crates\warp_util\src\path.rs render_version=11 diag_version=11 diag_count=6 age_ms=0
