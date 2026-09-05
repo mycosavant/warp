@@ -4113,3 +4113,59 @@ no longer exists. Warp also spawns a crash-recovery sibling that re-binds
 killed process leaves the port held and the next launch fails to bind. This is
 also the most likely cause of the `.recovery` log-file mystery recorded under
 T2.
+
+## Watching upstream drift, without merging it
+
+`.fork/tools/drift-check.sh` reports how far behind upstream this fork is and
+what a merge would hit today. It never merges, and it cannot be made to: there
+is no flag for it. That is deliberate rather than cautious — every merge this
+fork has done needed a judgment at the conflict that no count contains. The
+2026-09-04 merge is the example: one conflict was decided by noticing that a
+removed import was dead in the *merged* body, another by keeping upstream's
+`pub` and the fork's doc comment out of the same three lines, and the break that
+mattered (`RequestTeamScope` threaded through a trait the fork implements) was
+in no conflict at all.
+
+```bash
+.fork/tools/drift-check.sh              # fetches upstream, then reports
+.fork/tools/drift-check.sh --no-fetch   # report against the refs already on disk
+```
+
+Weekly, from your own crontab (`crontab -e`) — 9am Mondays:
+
+```cron
+0 9 * * 1 /home/effatha/git/warp/.fork/tools/drift-check.sh >> $HOME/.local/state/warp-fork/drift.log 2>&1
+```
+
+`cron` runs here under systemd, so this fires whenever WSL is up. When WSL is
+down at the appointed hour the run is simply missed, and the report says so on
+its own: every line carries its change *since the date of the last run*, so a
+skipped week reads as "since 2026-08-28" rather than silently looking weekly.
+
+### Reading it
+
+Four numbers, and only one of them predicts what a merge will cost.
+
+| line | what it means |
+|---|---|
+| `unmerged` | upstream commits since the merge base, and the age of the oldest. The age is the number that argues for going now. |
+| `fork ahead` | how far `dev` has moved. **This does not predict merge cost** and is printed mainly so nobody uses it as if it did — the fork can add three hundred files upstream never touches and still merge clean. |
+| `overlap` | files *both* sides changed. This is the one. It was 39 at the 2026-08-24 merge and 64 eleven days later. |
+| `conflicts` | what `git merge` would actually stop on, from `git merge-tree --write-tree`, which reports a merge without performing one — no index written, no working tree touched. |
+
+`crash-ish` is a fifth line and is **a floor, not a count**. Calibrated against
+the 94-commit backlog on 2026-09-04: reading the subjects by hand found sixteen
+stability fixes, the grep finds six. The ten it misses are phrased as their fix
+rather than their symptom — *"Guard reversed glyph bounds"*, *"Don't start MAA
+from buffered child event after teardown begins"*, *"Recover the renderer after
+Windows RDP device loss"*. No pattern reaches those. Read any non-zero number as
+"go read the log".
+
+The first version of that grep reported five, because `hang` matched inside
+*"**Chang**e owner of vertical tabs"*. It was caught by calibrating the script
+against a known answer instead of watching it produce a plausible one — the same
+habit this fork applies to a new instrument everywhere else. Both directions
+were run: against the pre-merge tip it reproduced 94 / 386 / 64 / 6 and named
+the exact six conflicting files, and against the merged tree it reported zero.
+A `grep -EicP` bug that silently emptied the count was found the same way, by a
+number that came back blank where a known 6 was expected.
