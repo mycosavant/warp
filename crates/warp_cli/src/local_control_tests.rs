@@ -1098,6 +1098,10 @@ fn parsed_action_kind(command: &ControlCommand) -> Option<ActionKind> {
             AgentCommand::Approvals(_) => Some(ActionKind::AgentApprovals),
             AgentCommand::Approve(_) => Some(ActionKind::AgentApprove),
             AgentCommand::Deny(_) => Some(ActionKind::AgentDeny),
+            // Not an action: `trace` reads two files and asks nothing of an
+            // instance, so there is nothing in the catalog for it to be, the
+            // same reason `graph` is a loop over verbs rather than a verb.
+            AgentCommand::Trace(_) => None,
         },
         ControlCommand::Slash(command) => match command {
             SlashCommand::List(_) => Some(ActionKind::SlashList),

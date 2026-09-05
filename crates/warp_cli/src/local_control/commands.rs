@@ -946,6 +946,7 @@ pub(super) fn run_agent_command(
             },
             output_format,
         ),
+        AgentCommand::Trace(args) => crate::local_control::trace::run(args, output_format),
         AgentCommand::Spawn(args) => run_action_with_params(
             args.target,
             ActionKind::AgentSpawn,

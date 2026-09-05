@@ -37,7 +37,7 @@ kind named:
 | line `type` | what it carries |
 |---|---|
 | `user`, `assistant` | `uuid`, `parentUuid` (the conversation is a tree, not a list), `timestamp`, `sessionId`, `cwd`, `gitBranch`, `version`; `message.content` is an array of blocks: `text`, `thinking`, `tool_use` (`id` = `toolu_…`, `name`, `input`), `tool_result` (`tool_use_id`, `is_error`, `content`). `assistant` lines carry `message.usage`. `user` lines carrying a `tool_result` also carry `toolUseResult` with the structured outcome (`stdout`, `stderr`, …). |
-| `system` / `compact_boundary` | **the compaction**, with `compactMetadata`; the line before it is a `user` line with `isCompactSummary: true` holding the summary the agent continued from. 49 across this project's sessions. |
+| `system` / `compact_boundary` | **the compaction**, with `compactMetadata`; the line *after* it is a `user` line with `isCompactSummary: true` holding the summary the agent continued from (this row said "before" until 2026-09-05; the fixture in `trace_tests.rs` is the correction). 49 across this project's sessions. |
 | `system` / `turn_duration`, `stop_hook_summary`, `away_summary`, `local_command` | turn timing and the hooks that ran. |
 | `permission-mode` | `permissionMode`, written whenever it changes; the user's sessions here are wall-to-wall `auto`. |
 | `attachment`, `queue-operation`, `last-prompt`, `mode`, `bridge-session`, `atis-latch`, `file-history-snapshot` | bookkeeping. Opaque to the viewer; rendered as nothing. |
@@ -199,6 +199,30 @@ the ACP shim already gave opposite answers to one question in a week. The rules:
   to read before writing it in Rust.
 - `session::filesystem::native_path` for the Windows read.
 
+## As built: `warpctrl agent trace`
+
+`.fork/docs/manual.md`, "One trace of a conversation". Rows carry `from`
+(`warp` | `harness`) beside `who`, because the person's prompt is in both files
+and the viewer shows that rather than deduplicating it. `harness_lines_skipped`
+in the header counts the bookkeeping kinds rendered as nothing. `usage` is the
+last harness row. Every output format is JSON until phase 2.
+
+**The two files are stamped by two clocks, and "order by timestamp" above was
+written as if they shared one.** Found on the first live trace of the phase 0
+run: Warp's `tool_start` for the Read call is stamped 22:42:55.955 and the
+harness's `tool_use` for the same `toolu_` id 22:43:01.279, about five seconds
+later, and the same for the Bash call. That is not latency, since the agent
+writes its line before it tells Warp about the call; it is the Windows clock
+against the distribution's, the same skew the cancel run's README recorded
+between the app log and the WSL shell. So a plain merge puts every Warp row
+before every harness row, including Warp's `stop` before the agent's first
+word. The header now carries `joined_calls` and `clock_offset_ms`, the median
+of harness-minus-Warp over the calls both files hold. **Disclosed, not
+applied**: shifting one file's clock by a median is a guess dressed as a
+correction, and the `call_id` join is the one ordering that is actually true.
+Phase 2's renderer should draw a call as one row from both files and let the
+clocks disagree around it.
+
 ## Phases
 
 0. **Done 2026-09-05.** `linked_session_id` written on the `local_agent` path
@@ -211,8 +235,16 @@ the ACP shim already gave opposite answers to one question in a week. The rules:
    exercised. Slug rule measured: `[^A-Za-z0-9]` → `-`, case kept, so it is
    lossy and is computed from the `cwd` on Warp's lines, never inverted.
    `.fork/runs/viewer-phase0-2026-09-05/`.
-1. **`agent trace`, JSON lines.** The merge, the join, the four authors. Pinned
-   against one real fixture per harness version.
+1. **Done 2026-09-05.** `warpctrl agent trace <conversation>`,
+   `crates/warp_cli/src/local_control/trace.rs`: the merge, the join, the four
+   authors, a header row naming both files and every harness `version` seen.
+   Not a catalog action, so the count is unchanged and nothing is gated or
+   paired. Pinned against the phase 0 files, copied unedited to
+   `.fork/viewer/fixtures/` (`claude-code-2.1.257.jsonl`,
+   `warp-events-acp-2026-09-05.jsonl`), plus synthetic lines in the real
+   shapes for a compaction, a denial, a failed result and an unparseable line.
+   Ten tests. The Windows read takes `--harness-dir` rather than `native_path`,
+   because the verb has no session to ask; the caller owns reachability.
 2. **`--pretty` and `--html`.** The static page is the deliverable the frame
    asked for.
 3. **Only if a friction log asks:** opencode's database, and a live view.

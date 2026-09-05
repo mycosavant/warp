@@ -81,11 +81,20 @@ undated in the source and say so in their filename. Later decisions live in
 | `runs/run-2026-09-02/` | run 2: 44 approvals in 50 minutes, terminated |
 | `runs/run-selfhost-2026-09-01/` | the self-hosting weekend |
 | `runs/classifier/` | the permission-classifier eval set, probes and their README |
+| `runs/viewer-phase0-2026-09-05/` | the viewer's phase 0: the join between Warp's log and the agent's session file, measured live under `auto` |
+
+## viewer/ — fixtures the trace is pinned against
+
+`viewer/fixtures/` holds one real session file per harness version seen
+(`claude-code-2.1.257.jsonl`) and the Warp event log it joins to, copied
+unedited from the run that produced them. `crates/warp_cli/src/local_control/trace_tests.rs`
+parses them; when Claude Code changes its file shape, the new version's file
+goes here and the failing test is the calibration.
 
 ## tools/ — scripts
 
 `build.sh`, `warpdev.ps1` (the Windows launcher; product by default,
-`-Instrumented` for the rig), `drift-check.sh`, `memsample.sh`, three
+`-Instrumented` for the rig, `-EventLog` for the product plus the log), `drift-check.sh`, `memsample.sh`, three
 measurement scripts, and `reorg-2026-09-05.py`, which produced this layout and
 is kept as its record. `launch.sh` beside this file is the Linux daily driver.
 

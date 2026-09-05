@@ -17,6 +17,7 @@ mod graph;
 mod mcp;
 mod output;
 mod selectors;
+mod trace;
 use std::ffi::OsString;
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -836,6 +837,16 @@ pub enum AgentCommand {
     /// was just dispatched, without the transcript leading up to it.
     Read(AgentReadArgs),
 
+    /// One trace of a conversation: the agent's own session file joined with
+    /// Warp's event log, ordered by time, every row labelled by who wrote it.
+    ///
+    /// Reads two files and needs no running Warp. Not a catalog action: nothing
+    /// is asked of an instance, so nothing is gated or paired. The harness's
+    /// file is the record; Warp's log adds what it alone knows (what it
+    /// decided, which surface answered). Output is JSON, one row per line, with
+    /// a header row first. `.fork/docs/observability.md`.
+    Trace(AgentTraceArgs),
+
     /// Spawn a child agent in a hidden pane.
     ///
     /// The background handoff: the child is parented to a conversation,
@@ -942,6 +953,31 @@ pub struct AgentReadArgs {
 
     #[command(flatten)]
     pub target: TargetArgs,
+}
+
+#[derive(Args, Debug, Clone)]
+pub struct AgentTraceArgs {
+    /// Warp's conversation id, from `warpctrl agent list` or the panel.
+    pub conversation: String,
+
+    /// Where Warp's event log lives. Default: what `WARP_FORK_EVENT_LOG` names,
+    /// or the state directory's `fork/events` when it is `on` or unset.
+    #[arg(long = "events-dir", value_name = "DIR")]
+    pub events_dir: Option<PathBuf>,
+
+    /// Warp's event log for the conversation, as a file. Outranks --events-dir.
+    #[arg(long = "events-file", value_name = "FILE")]
+    pub events_file: Option<PathBuf>,
+
+    /// The harness's `projects` directory. Default: `~/.claude/projects` for
+    /// this process's home. On Windows the agent ran inside WSL, so name the
+    /// distribution's: `\\wsl.localhost\Ubuntu\home\<user>\.claude\projects`.
+    #[arg(long = "harness-dir", value_name = "DIR")]
+    pub harness_dir: Option<PathBuf>,
+
+    /// The harness's session file itself. Outranks --harness-dir and the slug.
+    #[arg(long = "harness-file", value_name = "FILE")]
+    pub harness_file: Option<PathBuf>,
 }
 
 /// `warpctrl graph …` — run several agents in a declared order.

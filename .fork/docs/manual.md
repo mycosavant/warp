@@ -1468,6 +1468,48 @@ plan**, so each prompt must contain everything that node needs. The failure
 mode is invisible otherwise — the run completes, and every answer is
 confidently context-free.
 
+### One trace of a conversation: `warpctrl agent trace`
+
+The viewer's first phase (`.fork/docs/observability.md`, board item 6). It
+reads two files and needs no running Warp: the event log Warp wrote for a
+conversation (`WARP_FORK_EVENT_LOG` must have been on when it ran) and the
+session file the agent itself keeps under `~/.claude/projects/<slug>/`, found
+through the `linked_session_id` and `cwd` on Warp's lines. It merges the two
+in time order, labels every row by who wrote it, and prints JSON, one row per
+line after a header row.
+
+```bash
+warpctrl agent trace ebacd6e3-445c-41db-8edd-5b6f5b781b8c                  # both files from their defaults
+warpctrl agent trace <id> --events-file .fork/runs/viewer-phase0-2026-09-05/events.jsonl
+warpctrl agent trace <id> --harness-dir '\\wsl.localhost\Ubuntu\home\effatha\.claude\projects'
+warpctrl agent trace <id> --output-format json                              # one array instead of lines
+```
+
+Rows are `{"ts", "who", "from", "kind", "call_id"?, "text"?, "error"?, "raw"}`.
+`who` is `person`, `agent`, `warp` or `harness`; `from` says which file the row
+came from, and a prompt appears from both on purpose. A tool call is a
+`tool_start` from Warp and a `tool_use` from the harness under the same
+`toolu_…` id, and only the second carries the input: on the ACP path Warp logs
+the kind and nothing else. A compaction is a `system/compact_boundary` row
+followed by the `compact_summary` the agent continued from, with everything
+before it still in the trace. The last harness row is `usage`, the assistant's
+token counts summed. Bookkeeping kinds (`attachment`, `last-prompt`, …) are
+counted in the header and not rendered; a line that does not parse is an
+`unparsed` row, never a failure. The header's `clock_offset_ms` is the
+harness's clock minus Warp's over the calls both files hold: on Windows the
+two are stamped by different machines and the skew was five seconds on the
+first trace, so read a call by its `call_id` and treat the time order across
+files as approximate.
+
+**On Windows, the harness file is inside the distribution the agent ran in,
+and this verb has no session to ask for the native spelling.** Pass
+`--harness-dir` with the `\\wsl.localhost\…` path, or run the verb from WSL
+with `--events-dir /mnt/c/Users/<you>/AppData/Local/warp/WarpOss/data/fork/events`.
+Run from WSL is the easier direction: the harness file is local there.
+
+`--pretty` text and `--html` are phase 2 and not built; every output format is
+JSON today.
+
 ### Putting a third-party agent in the agent panel: `WARP_FORK_ACP_COMMAND`
 
 Name an agent and it answers Warp's own conversation model — no account, no

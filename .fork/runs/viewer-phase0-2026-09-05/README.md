@@ -42,6 +42,14 @@ inverted. The viewer computes it from the `cwd` Warp's log already carries,
 as `[^A-Za-z0-9]` → `-`, and looks for `<linked_session_id>.jsonl` there.
 Non-ASCII letters were not tried.
 
+**Phase 1, later the same day.** `trace.jsonl` is `warpctrl agent trace`
+run against `events.jsonl`, with the harness file found through the default
+`~/.claude/projects` and the slug computed from the `cwd` on Warp's lines:
+one header row and 17 rows. It is where the clock skew was noticed: Warp's
+`tool_start` and the harness's `tool_use` for the same call are stamped
+about five seconds apart, harness later, on both calls. The header reports
+it as `clock_offset_ms`. Read the rows by `call_id`, not by position.
+
 Not measured here: the `local_agent` path live. Its join key was written by
 the same commit and is pinned by unit tests; the product profile runs the
 ACP agent, so this run exercises the ACP half.
