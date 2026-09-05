@@ -66,6 +66,8 @@ Three builds in a row, each one `file_path()` gate further:
 | `5afc14d02` | server spawned and kept: pid 40972 on Windows, a `rust-analyzer` inside the distribution with cwd `/home/effatha/git/warp` and the `wsl.exe` relay as parent; `didOpen` under the UNC path in the server log; hover card with the real signature (`lsp-routed-hover.png`) | `run5-rust-analyzer-server.log` |
 | `00ce16d01` | definitions logged: `warp_util` to `crates/warp_util/src/lib.rs`, `println!` to the toolchain's `std/src/macros.rs`; *Go to definition* from the context menu on `app_target_dir` mapped `crates/warp_util/src/path.rs` to the host's remote buffer and opened it as a second routed tab (`lsp-routed-goto-definition.png`) | `run5-00ce16d01-app.log` |
 
+| `03dd3c639` | the line-jump defect the page's open list carried, chased with three `[scroll]` log lines: *Go to definition* on `app_target_dir` opened `path.rs` at line 327 and on `ASSETS_DIR` opened `assets.rs` at line 3, both fresh routed tabs, cursor on the symbol. The log shows the position parked until `BufferLoaded`, armed at the loaded version, applied on the first layout at it. Not reproduced (`lsp-routed-scroll-goto.png`, `lsp-routed-scroll-goto2.png`) | `run6-03dd3c639-app.log` |
+
 Screenshots are in `C:\dev\shots\lsp-routed-*.png`.
 
 What took the longest was not the fork: the editor's cmd-click modifier is

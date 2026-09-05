@@ -385,10 +385,18 @@ into it; the release binary ignores the variable.
   A routed pane now reaches the `RemoteSession` arm instead, which blocks
   nothing. Reconciled by reading; T16's routed-search measurement stands.
 - The default of `terminal.osc52_clipboard_access`.
-- Go-to-definition into a routed buffer that was not yet open lands at line
-  1: the tab for `path.rs` opened at the top rather than at line 326. The
-  `cursor_at` runs before the daemon's content arrives. Not chased; the
-  local path may have the same race or may not.
+- Go-to-definition into a routed buffer that was not yet open was seen
+  landing at line 1 on `00ce16d01`: the tab for `path.rs` opened at the top
+  rather than at line 327. **Not reproduced 2026-09-05 on `03dd3c639`,
+  twice**: `path.rs` opened at line 327 and `assets.rs` at line 3, each a
+  fresh tab through the daemon, cursor on the symbol. The scroll path now
+  says what it did (`[scroll]` lines in the app log): the position is parked
+  until `BufferLoaded`, armed at the loaded buffer version, and applied on
+  the first layout at or past that version; both runs show exactly that
+  sequence, and the `cursor_at` that runs before the content arrives is
+  overridden by it. What the first screenshot was showing is not
+  established. If it recurs, those three lines are the chase.
+  `.fork/runs/lsp-routed-2026-09-05/run6-03dd3c639-app.log`.
 - The footer's *Install* button for a distribution root refuses with a
   toast naming the distribution rather than installing there. Deliberate,
   because what Warp downloads is a Windows executable; a server has to be
