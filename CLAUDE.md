@@ -1277,6 +1277,30 @@ run. Until it is, treat the cap as unresolved rather than lifted, and treat
 "am I building on both sides at once?" as the question that matters more than
 either number.
 
+**Sampled again on the post-merge release build (2026-09-04, every 10 s across
+7m15s), and it confirms the mechanism while still not being the test.** Peak
+15.1 GB in one `rustc`, on the `warp` crate; `MemAvailable` never fell below
+**22.0 GB** of 39.2; swap moved 245 MB, which is nothing. The shape is the
+finding: **the app crate compiled alone for 35 of the 42 samples**, roughly six
+of the seven minutes. The `-j 8` phase at the front was eight genuinely small
+crates, the largest 1.3 GB.
+
+So *"`-j 8` is safe not because eight jobs fit but because seven of the eight
+are small"* now has numbers under it, and a sharper version: for most of a build
+of this shape **`-j` is not doing anything at all**, because there is only one
+job to cap. The cap earns its keep in the parallel front half, which is exactly
+the half this run made no demands of.
+
+**It is still not the clean-build test, for the same reason as last time.** The
+`target/release` directory was warm, so this measured the tail of the graph, not
+many large crates at once. Two instrument notes worth copying. The crate count
+was almost published as *"2 crates compiled"* — an artifact of piping the build
+through `tail -30` and then grepping the truncated log, which is the
+measuring-the-wrong-quantity error one layer down, in the *capture* rather than
+the command. And the sampler recorded the **maximum** single `rustc` RSS when
+the quantity that kills the VM is the **sum**; `MemAvailable` is what actually
+answered the question, and it was in the sampler by luck rather than design.
+
 **The specific hazard to keep in view is not the VM's size, it is the host's.**
 Windows-side tests and builds draw on the same 64 GB, so an uncapped WSL build
 concurrent with a Windows build is the exact scenario that took the guest down —
