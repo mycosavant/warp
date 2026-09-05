@@ -1,4 +1,4 @@
-//! What mode a session is in, said out loud (`.fork/TASKS.md`, T14.18).
+//! What mode a session is in, said out loud (`.fork/tickets/`, T14.18).
 //!
 //! # The hole this fills
 //!

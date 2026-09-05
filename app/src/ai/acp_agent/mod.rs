@@ -1,4 +1,4 @@
-//! Any agent that is not Claude, in Oz's seat (`.fork/TASKS.md`, T14.5).
+//! Any agent that is not Claude, in Oz's seat (`.fork/tickets/`, T14.5).
 //!
 //! # What this is a sibling of
 //!
@@ -99,7 +99,7 @@
 //! So the user's own agent policy applies or does not apply depending on a
 //! directory Warp chose. Nothing here can fix that — it is how project-scoped
 //! configuration works — but nothing here may imply otherwise either, which is
-//! the T14.3 rule. See `.fork/TASKS.md` T14.6.
+//! the T14.3 rule. See `.fork/tickets/` T14.6.
 
 pub(crate) mod liveness;
 pub(crate) mod mode;
@@ -1199,7 +1199,7 @@ fn approvable(
 /// id, the title and the locations do. Measured on a four-step turn with
 /// three asks, Warp's words outweighed the agent's 9.4 : 1 and the agent's
 /// narration was pushed off the screen by this note and the card
-/// (`.fork/COMPOSER.md`). So `first_ask` says the mechanics; a later ask says
+/// (`.fork/docs/composer.md`). So `first_ask` says the mechanics; a later ask says
 /// only what is particular to it. **No permission changes**: the same id and
 /// the same commands answer the same request either way.
 fn asking_note(

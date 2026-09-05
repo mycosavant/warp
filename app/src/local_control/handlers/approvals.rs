@@ -1,5 +1,5 @@
 //! `agent.approvals` and `agent.approve` — answering the thing that is actually
-//! blocked (`.fork/TASKS.md`, T11.5).
+//! blocked (`.fork/tickets/`, T11.5).
 //!
 //! # The population `agent.list` cannot see
 //!
@@ -127,7 +127,7 @@ const DENY_BYTES: &[u8] = b"\x1b";
 /// (`TR-EVENTS-B`) — so a digest binds to whatever this pane is currently
 /// asking rather than to one call. And the card reads `acts on: not stated by
 /// the agent`, because the payload carried no `cwd` even though `build_payload`
-/// extracts one. See `.fork/TASKS.md` T14.20.
+/// extracts one. See `.fork/tickets/` T14.20.
 const ALLOW_VERIFIED_AGENTS: &[CLIAgent] = &[CLIAgent::Claude];
 
 /// The two values of [`PendingApproval::source`], written once so the server and

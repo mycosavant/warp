@@ -2179,7 +2179,7 @@ pub(crate) fn initialize_app(
         // must never be pushed. `SyncQueue::enqueue` refuses them while logged out,
         // but this path seeds the queue directly at startup and would otherwise be
         // the way they leak the first time an account is added. See
-        // `fork::is_local_drive_owner` and `.fork/TASKS.md` T4.2.
+        // `fork::is_local_drive_owner` and `.fork/tickets/` T4.2.
         .filter(|object| !fork::is_local_drive_owner(&object.permissions().owner))
         .cloned()
         .collect::<Vec<_>>();
@@ -2263,7 +2263,7 @@ pub(crate) fn initialize_app(
     // loads metadata.
     ctx.add_singleton_model(|_| RestoredAgentConversations::new());
     // Fork-local: per-surface tool allowlists for spawned child agents
-    // (`.fork/TASKS.md`, T6.6).
+    // (`.fork/tickets/`, T6.6).
     ctx.add_singleton_model(|_| ChildAgentToolPolicy::new());
     ctx.add_singleton_model(|_| CLIAgentSessionsModel::new());
     // ActiveAgentViewsModel is used to track active agent conversations and notify listeners when they change.

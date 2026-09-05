@@ -285,7 +285,7 @@ pub fn log_out(app: &mut AppContext) {
     // item. The tradeoff is deliberate and in the other direction from upstream's:
     // a previous account's objects now survive logout on this machine. That is the
     // right call for a single-user personal fork and the wrong one for a shared
-    // machine. See `.fork/TASKS.md` T4.2.
+    // machine. See `.fork/tickets/` T4.2.
     if crate::fork::local_drive_enabled() {
         log::info!("Local-first Warp Drive: keeping the local store across logout");
     } else {

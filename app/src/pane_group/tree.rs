@@ -27,7 +27,7 @@ pub(in crate::pane_group) const DEFAULT_FLEX_VALUE: f32 = 1.0;
 pub(in crate::pane_group) const DEFAULT_FLEX_SIZE: PaneFlex = PaneFlex(DEFAULT_FLEX_VALUE);
 
 /// Draws the half of `pane` that a dragged pane will take, when `pane` is the
-/// pane a drop is currently hovering (`.fork/TASKS.md` T8.2).
+/// pane a drop is currently hovering (`.fork/tickets/` T8.2).
 ///
 /// Fractions, not measured pixels. A `Flex` with two equal `Expanded` children
 /// lands exactly on the split the drop will produce, and needs no element

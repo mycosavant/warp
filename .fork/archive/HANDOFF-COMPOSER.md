@@ -5,7 +5,7 @@
 Making this fork's agent composer top-of-class. It is currently failing that, and
 the failure is measured rather than felt.
 
-**Read `.fork/COMPOSER.md` first — it is the ticket.** Everything below is
+**Read `.fork/docs/composer.md` first — it is the ticket.** Everything below is
 context for working on it, not a substitute for it.
 
 ## Read these, in this order
@@ -14,11 +14,11 @@ context for working on it, not a substitute for it.
    part that matters most for this task is the opening section on *running* the
    thing rather than reading it, and the repeated finding that this codebase's
    commonest defect is a doc that outlived its code.
-2. **`.fork/COMPOSER.md`** — the ticket. Measurement, architectural root, all
+2. **`.fork/docs/composer.md`** — the ticket. Measurement, architectural root, all
    three transports, constraints.
 3. **`.fork/GOAL.md`** — the standing horizon. It outranks board ordering while
    it exists, and it **freezes permission posture**, which bounds this work.
-4. **`.fork/TASKS.md`**, section `## T20` — the run that produced the
+4. **`.fork/tickets/`**, section `## T20` — the run that produced the
    measurement. Read T20.4's as-built entry; it records the wrong answer being
    given first and why.
 
@@ -35,7 +35,7 @@ renderer literally cannot tell them apart.
 
 ## Start here, in this order
 
-1. **Study the reference apps and write the comparison into `.fork/COMPOSER.md`.**
+1. **Study the reference apps and write the comparison into `.fork/docs/composer.md`.**
    T3 Code, Cursor, VS Code + the GitHub Copilot chat extension, opencode v2
    desktop (its animations specifically). **None of this has been done.** Do not
    skip it and start moving pixels; the maintainer named these deliberately.
@@ -155,7 +155,7 @@ not reopen:
 > it makes no sense that arbitrary execution commands would be allowed but I'm
 > having to "approve once" for each file read, cat, grep, find, etc.
 
-That incoherence is real and is recorded in `.fork/IDEAS.md` under I18. **It is
+That incoherence is real and is recorded in `.fork/tickets/` under I18. **It is
 not this ticket.** Do not solve it here.
 
 ## One correction to carry forward

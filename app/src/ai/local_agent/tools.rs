@@ -1,4 +1,4 @@
-//! Warp's tool vocabulary in Claude Code's terms (`.fork/TASKS.md`, T6.6).
+//! Warp's tool vocabulary in Claude Code's terms (`.fork/tickets/`, T6.6).
 //!
 //! # Why this has to exist
 //!

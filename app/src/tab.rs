@@ -676,7 +676,7 @@ impl TabData {
     }
 
     /// "Move into active tab" — the menu route to the split a pane drag makes
-    /// (`.fork/TASKS.md` T8.2, `IDEAS.md` I3).
+    /// (`.fork/tickets/` T8.2, `.fork/tickets/` I3).
     ///
     /// Four flat entries rather than a submenu: a submenu here needs the
     /// sidecar machinery "Move to group" uses, and four short labels cost less
@@ -2427,7 +2427,7 @@ impl UiComponent for TabComponent<'_> {
             // so dragging fires `DragTab`; the workspace's `on_tab_drag`
             // handles cross-group reassignment.
             // Fork: accept pane drop targets so a tab dragged over a pane
-            // carries which pane it is over (`.fork/TASKS.md` T8.2). Purely
+            // carries which pane it is over (`.fork/tickets/` T8.2). Purely
             // additive — upstream sets no accepted-target callback at all, so
             // the `data` argument below was unconditionally `None` and the
             // tab-bar path resolves its drop from cursor geometry instead.

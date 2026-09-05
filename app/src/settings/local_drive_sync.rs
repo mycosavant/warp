@@ -11,7 +11,7 @@
 //! Coming from settings, the destination is somewhere the user chose once,
 //! deliberately, and `drive.sync.export` has no say in it.
 //!
-//! See `drive::local_sync` for the consumer and `.fork/TASKS.md` T4.4.
+//! See `drive::local_sync` for the consumer and `.fork/tickets/` T4.4.
 
 use settings::macros::define_settings_group;
 use settings::{SupportedPlatforms, SyncToCloud};

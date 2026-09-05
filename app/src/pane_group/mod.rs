@@ -328,7 +328,7 @@ pub enum PaneGroupAction {
     /// Make the active pane this group's main pane, or clear the designation
     /// if it already is. See [`PaneGroup::main_pane`].
     ToggleMainPane,
-    /// Drop everything a drag had built up but not committed (`.fork/TASKS.md`
+    /// Drop everything a drag had built up but not committed (`.fork/tickets/`
     /// T8.2). Dispatched after the drag itself has already been stopped, from
     /// wherever the cancel key was seen.
     CancelDrag,
@@ -910,8 +910,8 @@ pub enum PaneDragDropLocation {
     Other,
 }
 
-/// Where a dragged pane will land if it is released now (`.fork/TASKS.md`
-/// T8.2, `IDEAS.md` I3).
+/// Where a dragged pane will land if it is released now (`.fork/tickets/`
+/// T8.2, `.fork/tickets/` I3).
 ///
 /// This exists because upstream had no *preview* distinct from the *result*:
 /// the move was committed on every drag event, so the layout reflowed live
@@ -945,7 +945,7 @@ pub struct PaneGroup {
     ///
     /// **Why a named pane rather than the focused one.** Following focus makes
     /// the file tree thrash every time you glance at a split, which is the
-    /// reason "follow the focused pane" was rejected in `.fork/TASKS.md` T8.5.
+    /// reason "follow the focused pane" was rejected in `.fork/tickets/` T8.5.
     /// A pane you designated is stable by construction.
     ///
     /// **Dangling ids are harmless.** This is never cleaned up on pane removal
@@ -967,7 +967,7 @@ pub struct PaneGroup {
     share_block_modal: ViewHandle<ShareBlockModal>,
     dragged_border: Option<DraggedBorder>,
     /// Where a pane drag currently in flight would land, or `None` when no
-    /// drag is hovering a pane in this group (`.fork/TASKS.md` T8.2).
+    /// drag is hovering a pane in this group (`.fork/tickets/` T8.2).
     ///
     /// Purely presentational — it is drawn and then either committed or
     /// discarded, and nothing outside `render` and the drag handlers reads it.
@@ -4736,7 +4736,7 @@ impl PaneGroup {
     /// The pane tracked for a child agent conversation in this group, if there
     /// is one.
     ///
-    /// Exposed for `warpctrl agent reveal` (`.fork/TASKS.md`, T6.6), which has
+    /// Exposed for `warpctrl agent reveal` (`.fork/tickets/`, T6.6), which has
     /// to answer "would revealing this do anything" *before* emitting the
     /// event that reveals it: the reveal path reports failure by logging a
     /// warning, so a caller over a socket would otherwise be told a reveal
@@ -4749,7 +4749,7 @@ impl PaneGroup {
     }
 
     /// Spawns a child agent in a hidden pane, for `warpctrl agent spawn`
-    /// (`.fork/TASKS.md`, T6.6).
+    /// (`.fork/tickets/`, T6.6).
     ///
     /// The background target the user asked for, and the one that could not be
     /// composed out of T6.5: `pane.split` or `tab.create` followed by
@@ -4921,7 +4921,7 @@ impl PaneGroup {
             return false;
         };
         // Fork-local: the surface is going, so its tool allowlist should go
-        // with it (`.fork/TASKS.md`, T6.6). Entity ids come from a counter and
+        // with it (`.fork/tickets/`, T6.6). Entity ids come from a counter and
         // are never reused, so a stale entry could not govern a later surface
         // — but a policy that outlives what it applies to is the kind of state
         // that eventually gets read by something that did not expect it.

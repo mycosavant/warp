@@ -1,5 +1,5 @@
 //! `pane.main.get`, `pane.main.set` and `pane.main.clear` — designating the
-//! pane a tab's ambient surfaces follow (`.fork/TASKS.md` T8.5, `IDEAS.md`
+//! pane a tab's ambient surfaces follow (`.fork/tickets/` T8.5, `.fork/tickets/`
 //! I13 + I6).
 //!
 //! # What "main" means today

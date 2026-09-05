@@ -1228,7 +1228,7 @@ pub struct AgentConversationData {
     #[serde(default, skip_serializing_if = "is_false")]
     pub pinned: bool,
     /// Fork: whether the user has settled this thread — dealt with, kept, and
-    /// moved to the bottom of the inbox rather than deleted (`.fork/TASKS.md`
+    /// moved to the bottom of the inbox rather than deleted (`.fork/tickets/`
     /// T8.3). Deliberately shaped exactly like `pinned` above: this column is
     /// a serialized-JSON blob, so `#[serde(default)]` reads rows written before
     /// the field existed and `skip_serializing_if` keeps it out of the rows

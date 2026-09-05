@@ -1,4 +1,4 @@
-//! Which model the agent says a person may pick (`.fork/TASKS.md`, T14.14).
+//! Which model the agent says a person may pick (`.fork/tickets/`, T14.14).
 //!
 //! # The hole this fills
 //!

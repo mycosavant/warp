@@ -3,7 +3,7 @@
 //! Everything here is the *scheduler*: which nodes may start, what prompt they
 //! start with, and which plans should never have been started at all. The
 //! spawning itself is one `agent.spawn` per node and is verified by running it
-//! (`.fork/TASKS.md`, "T7.1 — as built").
+//! (`.fork/tickets/`, "T7.1 — as built").
 
 use super::*;
 
@@ -493,7 +493,7 @@ fn the_schema_documents_both_kinds_of_edge() {
 }
 
 // ---------------------------------------------------------------------------
-// The run record and the sealed-plan guard (`.fork/TASKS.md`, T13.1).
+// The run record and the sealed-plan guard (`.fork/tickets/`, T13.1).
 //
 // These are Tusk's `test_supersede_chain.py` cases under the fork's shape:
 // rewrite-on-edit, can't-retire-cleared, can't-retire-sealed. What is missing
@@ -922,7 +922,7 @@ fn the_schema_documents_the_record_and_the_guard() {
 }
 
 // ---------------------------------------------------------------------------
-// Acceptance assertions (`.fork/TASKS.md`, T13.2).
+// Acceptance assertions (`.fork/tickets/`, T13.2).
 //
 // The ones that run a command are `#[cfg(unix)]`: `sh -c` is the shell on every
 // machine this fork is developed on, and pinning `cmd /C` spellings on a
@@ -1346,7 +1346,7 @@ fn the_schema_documents_assertions() {
 }
 
 // ---------------------------------------------------------------------------
-// The review fence (`.fork/TASKS.md`, T13.3 — `ZB-REVIEW`).
+// The review fence (`.fork/tickets/`, T13.3 — `ZB-REVIEW`).
 //
 // There is no reviewer to test, because a review is an ordinary `agent.spawn`
 // and its independence is a property of that primitive rather than of anything

@@ -6,7 +6,7 @@
 //! prose. The renderer could not tell them apart, so it could not style them,
 //! collapse them, or count them, and measured during a turn with three asks
 //! Warp's words outweighed the agent's **9.4 : 1** while the agent's narration
-//! never reached the screen (`.fork/COMPOSER.md`). The `[Warp]` marker did not
+//! never reached the screen (`.fork/docs/composer.md`). The `[Warp]` marker did not
 //! help: it is text chrome for `transcript::strip_chrome`, not a channel.
 //!
 //! **The carrier is a field, not a new proto variant.** `api::Message` comes

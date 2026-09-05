@@ -1225,7 +1225,7 @@ fn absorbed_descendant_is_unregistered_from_lazy_loaded_paths() {
 // Both flatten to a single item, the root's own header, so the panel used
 // to draw them identically. Over WSL's 9p redirector the first index of a
 // repository takes minutes, and for all of them the file explorer looked
-// broken rather than busy. See `.fork/TASKS.md`, T6.1.
+// broken rather than busy. See `.fork/tickets/`, T6.1.
 
 #[test]
 fn a_root_that_is_still_indexing_reads_as_loading_not_as_empty() {

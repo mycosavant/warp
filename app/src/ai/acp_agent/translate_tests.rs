@@ -1233,7 +1233,7 @@ fn raw_messages(events: &[api::ResponseEvent]) -> Vec<api::Message> {
 /// **Warp's voice is tagged and the agent's is not, on this transport.** The
 /// panel tells them apart by `server_message_data` alone
 /// (`crate::ai::warp_note`), so a note that went out untagged would be drawn
-/// as the agent's prose -- the 9.4 : 1 dilution `.fork/COMPOSER.md` measured --
+/// as the agent's prose -- the 9.4 : 1 dilution `.fork/docs/composer.md` measured --
 /// and agent prose that went out tagged would be filed as Warp's and hidden
 /// behind a chevron. Both halves are asserted.
 #[test]

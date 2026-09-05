@@ -1,5 +1,5 @@
 //! `agent.*` and `slash.*` — the half of `warpctrl` that lets an agent drive an
-//! agent (`.fork/TASKS.md`, T6.5).
+//! agent (`.fork/tickets/`, T6.5).
 //!
 //! Before this, `warpctrl` could open every surface and type into exactly one of
 //! them. `input.submit` puts its text in the terminal input and *runs* it, so a

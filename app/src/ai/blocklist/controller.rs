@@ -398,7 +398,7 @@ impl RequestInput {
             request_start_ts: Local::now(),
             // Fork-local: a child agent spawned with a tool allowlist carries
             // it on every turn, not just the one that set it
-            // (`.fork/TASKS.md`, T6.6). Keyed by surface for the same reason
+            // (`.fork/tickets/`, T6.6). Keyed by surface for the same reason
             // the model override above is — a child agent has a surface to
             // itself.
             //

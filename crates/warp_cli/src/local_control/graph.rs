@@ -1,4 +1,4 @@
-//! A run-scale task graph, and the loop that runs it (`.fork/TASKS.md`, T7.1).
+//! A run-scale task graph, and the loop that runs it (`.fork/tickets/`, T7.1).
 //!
 //! # Why this is a file and a loop rather than a feature of Warp
 //!
@@ -88,10 +88,10 @@ pub(super) struct Node {
     pub allow_tools: Option<Vec<String>>,
     #[serde(default)]
     pub needs: Vec<Need>,
-    /// What must hold once this node has finished (`.fork/TASKS.md`, T13.2).
+    /// What must hold once this node has finished (`.fork/tickets/`, T13.2).
     #[serde(default, rename = "assert")]
     pub assertions: Vec<Assertion>,
-    /// This node checks the work rather than doing it (`.fork/TASKS.md`, T13.3).
+    /// This node checks the work rather than doing it (`.fork/tickets/`, T13.3).
     ///
     /// Not a different kind of node — a review is one `agent.spawn` like every
     /// other, and the whole of `ZB-REVIEW`'s independence comes free because a
@@ -327,7 +327,7 @@ pub(super) fn validate(plan: &Plan) -> Result<(), ControlError> {
     Ok(())
 }
 
-/// The whole of `ZB-REVIEW` that needed building (`.fork/TASKS.md`, T13.3).
+/// The whole of `ZB-REVIEW` that needed building (`.fork/tickets/`, T13.3).
 ///
 /// # Why there is no reviewer to build
 ///
@@ -482,7 +482,7 @@ fn find_cycle(plan: &Plan) -> Option<Vec<String>> {
 }
 
 // ---------------------------------------------------------------------------
-// Acceptance assertions (`.fork/TASKS.md`, T13.2 — `ZB-CONTRACT`).
+// Acceptance assertions (`.fork/tickets/`, T13.2 — `ZB-CONTRACT`).
 //
 // A node's turn ending `success` means the agent stopped without erroring. It
 // does not mean the work happened. These run after that, in the directory
@@ -639,7 +639,7 @@ fn drain(pipe: Option<&mut impl std::io::Read>) -> String {
 }
 
 // ---------------------------------------------------------------------------
-// The run record, and the guard over it (`.fork/TASKS.md`, T13.1 — `ZB-PLAN`).
+// The run record, and the guard over it (`.fork/tickets/`, T13.1 — `ZB-PLAN`).
 //
 // The plan says what should happen. The record says what did. Keeping the
 // second is what makes `--resume` possible, and `--resume` is what makes the
@@ -1028,7 +1028,7 @@ pub(super) fn newly_blocked(
 /// with a hole in it is a second thing to get right, and an agent reading
 /// "Migrate those files" followed by a labelled list does not need one.
 /// `workspace` is where `graph run` was invoked, and it is appended **only to a
-/// review node**. Found by running one (`.fork/TASKS.md`, T13.3): `agent.spawn`
+/// review node**. Found by running one (`.fork/tickets/`, T13.3): `agent.spawn`
 /// takes no working directory, so a spawned child starts in the *pane's* cwd,
 /// which has nothing to do with the directory the plan is being run from. The
 /// first live review dutifully read the wrong tree and said so — *"There is no

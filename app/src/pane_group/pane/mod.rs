@@ -897,7 +897,7 @@ pub enum PaneConfigurationEvent {
     /// affects what `render_header_content()` returns.
     HeaderContentChanged,
     /// A drag was cancelled, and every view that dressed itself up for it should
-    /// undress (`.fork/TASKS.md` T9.4).
+    /// undress (`.fork/tickets/` T9.4).
     ///
     /// This travels on the pane's configuration model rather than as an action
     /// because `PaneGroup` — which is where the cancel arrives — has no handle

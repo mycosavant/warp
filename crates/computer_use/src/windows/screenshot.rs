@@ -106,7 +106,7 @@ const PW_RENDERFULLCONTENT: u32 = 2;
 /// refuses `SetForegroundWindow` from a background process — the foreground lock.
 ///
 /// The recipe is not new to this fork: `shot.ps1` has done exactly this for months, and
-/// `.fork/README.md` records that it has been lost to a cleared session twice. This is that
+/// `.fork/docs/manual.md` records that it has been lost to a cleared session twice. This is that
 /// recipe, in the crate, so it stops being folklore.
 pub fn take_window(
     window_id: u32,

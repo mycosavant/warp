@@ -1,4 +1,4 @@
-//! Whether a turn is still saying anything (`.fork/TASKS.md`, T14.10).
+//! Whether a turn is still saying anything (`.fork/tickets/`, T14.10).
 //!
 //! # The gap this fills, and the one it deliberately does not
 //!

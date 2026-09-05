@@ -503,7 +503,7 @@ pub fn render_warping_indicator<V: View>(
     };
 
     // Fork: a turn's elapsed time beside the working label, so a long turn has
-    // a shape (`.fork/COMPOSER.md` item 4). `AIAgentExchange::time_since_start`
+    // a shape (`.fork/docs/composer.md` item 4). `AIAgentExchange::time_since_start`
     // existed upstream with no caller; this is its first. Kept out of the
     // shimmering text for the reason the summarization timer gives above, and
     // not shown over a label that already carries a timer or a countdown.

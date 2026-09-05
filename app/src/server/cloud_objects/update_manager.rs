@@ -231,7 +231,7 @@ impl UpdateManager {
         // Upstream only ever sets this condition after a *successful server fetch*,
         // which needs an account. Without one, the 24 call sites that await it — the
         // Warp Drive spinner, `warp mcp list`, execution profiles, environments —
-        // wait forever over a store that is fully populated. See `.fork/TASKS.md`
+        // wait forever over a store that is fully populated. See `.fork/tickets/`
         // T4.1. A real account still takes the upstream path: `AuthManager` calls
         // `reset_initial_load` on login, so the condition re-arms and the server
         // fetch resolves it.

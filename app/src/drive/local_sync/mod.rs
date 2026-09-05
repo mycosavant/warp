@@ -63,7 +63,7 @@
 //! absence is only read *within the workflows the tree describes*: an alias
 //! pointing anywhere else is left completely alone.
 //!
-//! See `.fork/TASKS.md` T4.4 for the full scope.
+//! See `.fork/tickets/` T4.4 for the full scope.
 
 pub mod apply;
 pub mod format;

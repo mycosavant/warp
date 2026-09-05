@@ -255,7 +255,7 @@ const LOCAL_AGENT_ENV_VAR: &str = "WARP_FORK_LOCAL_AGENT";
 /// entire seam: one async fn, `RequestParams` in and a stream of
 /// `ResponseEvent` out. Everything the agent surface does hangs off it, and
 /// nothing above it knows whether the events came off an SSE socket or a pipe.
-/// See `ai::local_agent` for why that is true and `.fork/TASKS.md` T5 for how
+/// See `ai::local_agent` for why that is true and `.fork/tickets/` T5 for how
 /// it was established.
 pub fn local_agent_enabled() -> bool {
     is_active()
@@ -852,7 +852,7 @@ pub(crate) fn tab_pane_drop_target_accepted_while(cross_window_drag_active: bool
 /// no cancel key and a key that silently does something else are one problem.
 ///
 /// Fixing it needed a fact that had to be measured rather than assumed.
-/// `.fork/TASKS.md` named `workspace/view.rs`'s `pane_group::Event::Escape` arm
+/// `.fork/tickets/` T8 named `workspace/view.rs`'s `pane_group::Event::Escape` arm
 /// as the seam, on the reasoning that a branch there could consume the event.
 /// It cannot, twice over: the agent-view pop happens in `TerminalView` *before*
 /// that event is emitted, and keystrokes are matched along the responder chain
@@ -937,7 +937,7 @@ const LOCAL_DRIVE_UID: &str = "local";
 /// they wait forever — Warp Drive spins indefinitely over a store that is fully
 /// populated and writable, and `warp mcp list` never returns.
 ///
-/// See `.fork/TASKS.md` T4.1 for the full map.
+/// See `.fork/tickets/` T4.1 for the full map.
 pub fn local_drive_enabled() -> bool {
     is_active()
 }

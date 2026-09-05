@@ -943,7 +943,7 @@ was the agent's own account of itself.
 
 **Measured against the corpus rather than the run it was seen in**, which is
 the correction `57f0e866a` asked for: of the 52 asks in
-`.fork/classifier/eval-set.jsonl`, **36 carry a `command` and 15 a
+`.fork/runs/classifier/eval-set.jsonl`, **36 carry a `command` and 15 a
 `content`** — so on **51 of 52** the operative fact was one click away. The
 single exception is a `read`. That is a claim about what the payloads
 contain, which is what that corpus is sound for; it says nothing about how
@@ -1114,7 +1114,7 @@ Code's own rows read after an interrupt.
   refusal Warp never saw.
 - **Run 2 asked nothing either**, for `stat -c %s CLAUDE.md`, which is in no
   allow list. This entry said for an hour that the fork's docs do not name
-  that path; they do — `.fork/classifier/README.md`'s calibration table has
+  that path; they do — `.fork/runs/classifier/README.md`'s calibration table has
   *"a built-in read-only set exists"*, probed with `git remote -v` two days
   earlier, and `stat` is the same class. The T20 session found the line. Its
   caveat, recorded here so it is not rediscovered: the user's own

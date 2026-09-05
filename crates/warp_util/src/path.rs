@@ -551,7 +551,7 @@ const WSL_UNC_HOSTS: &[&str] = &["wsl$", "wsl.localhost"];
 /// `wsl$` rather than `wsl.localhost` because it is the form Warp already emits
 /// ([`convert_wsl_to_windows_host_path`]) and the form the rest of this module documents, so
 /// choosing it leaves every existing spelling in the tree already canonical. Both name the same
-/// provider and both resolve; that is measured, not assumed (`.fork/TASKS.md`, T6.2).
+/// provider and both resolve; that is measured, not assumed (`.fork/tickets/`, T6.2).
 const CANONICAL_WSL_UNC_HOST: &str = "wsl$";
 
 /// Returns true if the given UNC host component names the WSL filesystem provider rather than a
@@ -606,7 +606,7 @@ pub fn parse_wsl_unc_path(path: &Path) -> Option<WslUncPath> {
 /// directory, and for a WSL directory it does not. `dunce::canonicalize` — Warp's normal-form
 /// function, in [`StandardizedPath::from_local_canonicalized`] and in `normalize_cwd` — resolves
 /// to whatever `GetFinalPathNameByHandleW` returns, and for the WSL redirector that is the input
-/// spelling with `\\?\UNC\` bolted on front. Measured on this fork (`.fork/TASKS.md`, T6.2), one
+/// spelling with `\\?\UNC\` bolted on front. Measured on this fork (`.fork/tickets/`, T6.2), one
 /// directory, seven spellings, seven distinct "canonical" strings:
 ///
 /// ```text
@@ -653,7 +653,7 @@ pub fn canonicalize_wsl_unc_path(path: &Path) -> Option<PathBuf> {
 ///
 /// This is [`canonicalize_wsl_unc_path`] over a string, and it is the same function on purpose:
 /// a directory that is keyed one way and displayed another is how three spellings of one
-/// directory ended up on screen at once (`.fork/TASKS.md`, T6.1(c)).
+/// directory ended up on screen at once (`.fork/tickets/`, T6.1(c)).
 ///
 /// The form that most needs to go is the verbatim `\\?\UNC\...` one, which is not a path anybody
 /// typed — it is what `dunce::canonicalize` hands back for a UNC path, leaked. It is also not a

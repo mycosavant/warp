@@ -83,7 +83,7 @@ pub enum Event<A: ActionPayload, B: ActionPayload> {
     },
     /// Where this drag would land if it were released now, or `None` when it
     /// would do nothing — either it is over the dead zone at a pane's centre,
-    /// or it has left the pane group entirely (`.fork/TASKS.md` T8.2).
+    /// or it has left the pane group entirely (`.fork/tickets/` T8.2).
     ///
     /// Distinct from `MovePaneWithinPaneGroup`, which used to be emitted here
     /// and now fires only on release. The split is the whole point: this one
@@ -165,7 +165,7 @@ pub struct PaneHeader<P: BackingView> {
     is_visible_in_pane_group: bool, // If this pane header is being dragged along the tab bar, then it is not visible in the pane group
     toolbelt_feature_popup: ViewHandle<FeaturePopup>,
     /// Where the drag this header is driving would land if released now
-    /// (`.fork/TASKS.md` T8.2).
+    /// (`.fork/tickets/` T8.2).
     ///
     /// The header owns it because it is the only thing that sees both halves:
     /// the drag events carry a position and a target, and only the *drop*
@@ -377,7 +377,7 @@ impl<P: BackingView> PaneHeader<P> {
         ctx.emit(Event::DropPreviewChanged(preview));
     }
 
-    /// Forgets everything this drag had arranged on the header (`.fork/TASKS.md` T9.4).
+    /// Forgets everything this drag had arranged on the header (`.fork/tickets/` T9.4).
     ///
     /// Deliberately assigns `drop_preview` instead of calling
     /// [`Self::set_drop_preview`]: that emits `DropPreviewChanged`, and the
@@ -1013,7 +1013,7 @@ impl<P: BackingView> TypedActionView for PaneHeader<P> {
             }
             PaneHeaderAction::PaneHeaderDragStarted => {
                 // Start from nothing. A drag normally clears its own preview on
-                // drop, but a cancelled one (`.fork/TASKS.md` T8.2) never gets
+                // drop, but a cancelled one (`.fork/tickets/` T8.2) never gets
                 // a drop — and `set_drop_preview` is silent when the value has
                 // not changed, so a leftover from last time would swallow the
                 // first identical preview of this drag and the overlay would

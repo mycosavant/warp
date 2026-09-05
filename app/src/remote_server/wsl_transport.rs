@@ -1,4 +1,4 @@
-//! WSL implementation of [`RemoteTransport`] (`.fork/IDEAS.md`, I16).
+//! WSL implementation of [`RemoteTransport`] (`.fork/tickets/`, I16).
 //!
 //! # Why this is small
 //!

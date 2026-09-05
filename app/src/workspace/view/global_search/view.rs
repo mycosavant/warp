@@ -345,7 +345,7 @@ enum GlobalSearchBlocker {
 /// WSL session in `~/...` searches correctly too, just slowly: measured on this
 /// fork, the same query over `C:\dev\warp` and over the same tree reached
 /// through `\\wsl.localhost\...` returned the same 40 matches in 0.12 s and
-/// 9.5 s (`.fork/TASKS.md`, T6.3). Results stream in batches, so slow and
+/// 9.5 s (`.fork/tickets/`, T6.3). Results stream in batches, so slow and
 /// correct beats a wall.
 fn blocker(
     enablement: CodingPanelEnablementState,
@@ -2435,7 +2435,7 @@ mod view_tests {
         // same ones the project explorer indexes, so a session being WSL was
         // never a reason to refuse. Measured: identical matches over
         // `C:\dev\warp` and over the same tree via `\\wsl.localhost\...`.
-        // See `.fork/TASKS.md`, T6.3.
+        // See `.fork/tickets/`, T6.3.
         assert_eq!(
             blocker(CodingPanelEnablementState::UnsupportedSession, HAS_ROOTS),
             None

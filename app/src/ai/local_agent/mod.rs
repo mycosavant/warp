@@ -17,7 +17,7 @@
 //! that; it only knows the stream.
 //!
 //! So this module implements that one function differently. The 70-method
-//! `AIClient` trait is not on this path at all — see `.fork/TASKS.md` T5.1.
+//! `AIClient` trait is not on this path at all — see `.fork/tickets/` T5.1.
 //!
 //! # The protocol is a mutation log, not a token stream
 //!
@@ -280,7 +280,7 @@ struct Spawn {
 /// A WSL session's working directory is a Linux path — `/home/you/project` —
 /// while Warp on Windows is a Windows process, so `current_dir` on it fails
 /// outright: `ERROR_DIRECTORY`, surfaced as "The directory name is invalid".
-/// That was this module's own bug, found by running it (`.fork/TASKS.md` T6.1).
+/// That was this module's own bug, found by running it (`.fork/tickets/` T6.1).
 ///
 /// Converting the path to its `\\wsl$\<distro>\...` UNC form would start the
 /// process but move the cost: Claude would then read every file through the 9p

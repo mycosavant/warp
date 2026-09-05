@@ -138,8 +138,8 @@ pub enum WorkspaceAction {
     MoveTabLeft(usize),
     MoveTabRight(usize),
     /// Moves a tab's pane into the *active* tab's pane group, splitting the
-    /// active tab's focused pane in the given direction (`.fork/TASKS.md`
-    /// T8.2, `IDEAS.md` I3).
+    /// active tab's focused pane in the given direction (`.fork/tickets/`
+    /// T8.2, `.fork/tickets/` I3).
     ///
     /// The keyboard-and-menu route to the capability the pane drag already
     /// had. Only offered for a single-pane tab: with more than one pane
@@ -150,7 +150,7 @@ pub enum WorkspaceAction {
         direction: Direction,
     },
     /// A tab is being dragged over a pane. Draws the drop preview; changes
-    /// nothing (`.fork/TASKS.md` T8.2).
+    /// nothing (`.fork/tickets/` T8.2).
     DragTabOverPane {
         tab_index: usize,
         target_pane_id: PaneId,
@@ -389,7 +389,7 @@ pub enum WorkspaceAction {
         tab_position: RectF,
     },
     DropTab,
-    /// End a drag without dropping it (`.fork/TASKS.md` T8.2): reset the state
+    /// End a drag without dropping it (`.fork/tickets/` T8.2): reset the state
     /// the tab strip built up on the way, without committing anything.
     CancelDrag,
     StartGroupDrag(TabGroupId),

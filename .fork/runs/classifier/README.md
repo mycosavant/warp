@@ -59,7 +59,7 @@ measured with a probe rather than guessed:
 
 With those three rules in, **E0 reproduces the log on 59 of 59 calls.** So the
 matcher is trustworthy for what follows, and the first finding is already on
-the table: **the cwd-containment rule `CLASSIFIER.md` proposed is Claude Code's,
+the table: **the cwd-containment rule `.fork/docs/classifier.md` proposed is Claude Code's,
 and it is already running.** Claude Code's documentation names the same rules —
 compound commands are matched per segment across `&&`, `||`, `;`, `|`, `|&`,
 `&` and newlines, and *"paths outside that scope … still prompt"* — which was
@@ -80,13 +80,13 @@ Two axes: where the call acts, and the strongest thing it does.
 | project | build — `cargo test`, prefixed `CARGO_BUILD_JOBS=8` | 7 |
 | project | net — `git fetch` / `git ls-remote` to GitHub | 2 |
 
-**28 host, 16 project.** `CLASSIFIER.md`'s original 30/9/7 overlapped (it sums
+**28 host, 16 project.** `.fork/docs/classifier.md`'s original 30/9/7 overlapped (it sums
 to 46); this is counted from the full inputs and the rows are disjoint.
 
 Three of the 44 are artefacts of the run rather than of the agent: two edits
 went `unanswered` because the person pressed ctrl+c meaning *copy* and the
 panel read it as *cancel*, and each was then asked again. That is a composer
-finding (`.fork/COMPOSER.md`), and it is two of the 44.
+finding (`.fork/docs/composer.md`), and it is two of the 44.
 
 ## What the person decided — and why the column says nothing
 
@@ -97,7 +97,7 @@ finding (`.fork/COMPOSER.md`), and it is two of the 44.
 | denied | 1 — the last ask, the person ending the run |
 
 Every real decision was yes. **The first version of this file read that as the
-rubber-stamp `CLASSIFIER.md` describes, measured. That was the wrong
+rubber-stamp `.fork/docs/classifier.md` describes, measured. That was the wrong
 mechanism under a correct observation**, the shape `CLAUDE.md` warns about most.
 Measured by the maintainer's other session against the same run (`57f0e866a`,
 `2c914dc98`): the approval card rendered `raw_input.to_string()` — the agent's
@@ -233,15 +233,15 @@ and the rule numbers above are numbers about this afternoon.
 - **"How is it calibrated?"** — Not against this run's decisions, which were
   made blind. Against hand labels, or against decisions from a run where the
   person could see.
-- **The posture argument in `CLASSIFIER.md` stands unchanged** and is the
+- **The posture argument in `.fork/docs/classifier.md` stands unchanged** and is the
   maintainer's. What this corpus adds is that a widened `default` costs two
   lines, and that the asks it does not remove were asks about another machine.
 
 ## Re-running
 
 ```
-python3 .fork/classifier/build_eval_set.py            # rebuild and print the tables
-python3 .fork/classifier/probes/summarise.py probe-*.ndjson > probes/probes.json
+python3 .fork/runs/classifier/build_eval_set.py            # rebuild and print the tables
+python3 .fork/runs/classifier/probes/summarise.py probe-*.ndjson > probes/probes.json
 ```
 
 The builder defaults to the Windows event directory and this machine's Claude

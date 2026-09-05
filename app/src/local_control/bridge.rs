@@ -192,7 +192,7 @@ impl LocalControlBridge {
                 &request.target,
                 ctx,
             ),
-            // Fork-local: the agent and slash surfaces (`.fork/TASKS.md` T6.5).
+            // Fork-local: the agent and slash surfaces (`.fork/tickets/` T6.5).
             ActionKind::AgentList => agent::agent_list(&self.instance_id, ctx),
             ActionKind::AgentPrompt => agent::agent_prompt(
                 &self.instance_id,
@@ -222,7 +222,7 @@ impl LocalControlBridge {
                 ctx,
             ),
             // Fork-local: the CLI agents in panes, which `agent.list` has never
-            // been able to see (`.fork/TASKS.md` T11.5).
+            // been able to see (`.fork/tickets/` T11.5).
             ActionKind::AgentApprovals => approvals::agent_approvals(&self.instance_id, ctx),
             ActionKind::AgentApprove => approvals::agent_answer(
                 &self.instance_id,
@@ -236,13 +236,13 @@ impl LocalControlBridge {
                 &request.action.params,
                 ctx,
             ),
-            // Fork-local: the read surface (`.fork/TASKS.md` T11.2). Answers
+            // Fork-local: the read surface (`.fork/tickets/` T11.2). Answers
             // *where* the stream is; the stream itself is a GET route, because
             // SSE is not a request/response shape and this envelope is.
             ActionKind::EventsSubscribe => {
                 events::events_subscribe(self.control_origin.as_deref(), &grant)
             }
-            // Fork-local: the wide bind's front door (`.fork/TASKS.md` T11.4).
+            // Fork-local: the wide bind's front door (`.fork/tickets/` T11.4).
             // Answers with a code to *show*; redeeming it is a route, because a
             // device that has not paired yet cannot invoke an action.
             ActionKind::ControlPair => pairing::control_pair(self.pairing.as_ref()),

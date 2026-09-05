@@ -320,7 +320,7 @@ pub enum TerminalAction {
     SelectAIAttachedBlock(BlockIndex),
     DragAndDropFiles(Vec<String>),
     /// Attaches Warp's remote-development server to this pane's WSL
-    /// distribution (`.fork/IDEAS.md`, I16).
+    /// distribution (`.fork/tickets/`, I16).
     ///
     /// Takes no argument on purpose: the distribution is the one the pane's
     /// shell is already in, which is the only one that makes sense for a

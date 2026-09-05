@@ -1,5 +1,5 @@
 //! Permission requests an ACP agent is waiting on, and the way to answer them
-//! (`.fork/TASKS.md`, T14.6).
+//! (`.fork/tickets/`, T14.6).
 //!
 //! # Why this exists at all
 //!

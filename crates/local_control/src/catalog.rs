@@ -371,7 +371,7 @@ define_action_catalog! {
     // of them — the terminal — so an agent could start a shell command and
     // nothing else. `input.submit` runs its text as a *command*: sending
     // `/agent do the thing` that way reaches `bash`, not the agent
-    // (`.fork/TASKS.md`, T6.5). These are the missing half.
+    // (`.fork/tickets/`, T6.5). These are the missing half.
     agent {
         AgentList => { name: "agent.list", status: Implemented, target: Instance, params: None, result: AgentConversationList },
         AgentPrompt => { name: "agent.prompt", status: Implemented, target: Agent, params: AgentPrompt, result: AgentConversation },
@@ -431,7 +431,7 @@ define_action_catalog! {
         EventsSubscribe => { name: "events.subscribe", status: Implemented, target: Events, params: None, result: EventStream },
     }
 
-    // Fork-local (`.fork/TASKS.md`, T11.4). Everything else in this catalog is
+    // Fork-local (`.fork/tickets/`, T11.4). Everything else in this catalog is
     // reached by a client that already proved it is the same OS account, via a
     // 0600 socket and a kernel peer-UID check. `control.pair` is how something
     // that *cannot* pass that check — a phone on the LAN — is let in, and it is
@@ -448,7 +448,7 @@ define_action_catalog! {
         ControlPair => { name: "control.pair", status: Implemented, target: Instance, params: None, result: Pairing },
     }
 
-    // Fork-local (`.fork/IDEAS.md`, I16). Warp's remote-development stack has
+    // Fork-local (`.fork/tickets/`, I16). Warp's remote-development stack has
     // one transport, SSH, reached only when warpify notices a submitted `ssh`
     // command. `WslTransport` is the second, and a WSL connection has no
     // equivalent ambient trigger — Zed's is an explicit "Add WSL Distro" menu

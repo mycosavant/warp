@@ -2551,7 +2551,7 @@ fn render_tab_group_internal(
         // out of this panel and released over a pane is resolved by cursor
         // geometry alone — it lands outside the tab bar, so the cross-window
         // path detaches it into a new window instead of splitting the pane.
-        // Observed by driving the gesture, 2026-08-23 (`.fork/TASKS.md` T9.1).
+        // Observed by driving the gesture, 2026-08-23 (`.fork/tickets/` T9.1).
         let pointer = tab.draggable_state.clone();
         let draggable = Draggable::new(tab.draggable_state.clone(), group_element)
             .with_accepted_by_drop_target_fn(|drop_target_data, app| {

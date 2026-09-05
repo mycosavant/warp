@@ -1209,7 +1209,7 @@ fn register_input_mode_bindings(app: &mut AppContext) {
         // Warp's second remote transport has no ambient trigger the way an
         // `ssh` command is one, so until there is a distro picker this is the
         // only way to reach it from the UI. Users can bind a key if they want
-        // one. (`.fork/IDEAS.md`, I16.)
+        // one. (`.fork/tickets/`, I16.)
         EditableBinding::new(
             "terminal:connect_wsl_remote_server",
             "Connect Warp Remote Server to this pane's WSL distribution",

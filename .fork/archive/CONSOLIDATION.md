@@ -154,7 +154,7 @@ Read `FAQ.md` §Licensing directly; four things are load-bearing.
    AGPL is for. The license prevents fully-proprietary relaunches; open
    derivatives are welcome."*
 2. **Obligations attach on distribution or network use, not private use.**
-   `.fork/README.md` already states this correctly.
+   `.fork/docs/manual.md` already states this correctly.
 3. **There is a CLA**, scoped to *"redistribute contributions under this
    project's licenses and to address future licensing and compliance needs."*
    That last clause is a relicensing grant.
@@ -300,7 +300,7 @@ move:
 the authority split, and the PWA. Remote access to your own session is genuinely
 differentiated and Warp may have no equivalent. Determine this by reading, not by
 assuming — and note the fork already opened Warp's remote-development server
-(`.fork/README.md`, "Warp's remote server, in a WSL distribution"), which may or
+(`.fork/docs/manual.md`, "Warp's remote server, in a WSL distribution"), which may or
 may not cover the same need. **These are different things** — one is
 remote *development*, the other is remote *observation of a running session*.
 

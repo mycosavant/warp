@@ -1,4 +1,4 @@
-//! What Warp actually knows about who consented (`.fork/TASKS.md`, T14.3).
+//! What Warp actually knows about who consented (`.fork/tickets/`, T14.3).
 //!
 //! # The ticket said Warp is blind. It is not, and running it is what showed that
 //!

@@ -428,7 +428,7 @@ impl SyncQueue {
         // `should_dequeue` is only set after a successful server fetch — but the item
         // would survive in the queue, and adding an account later would start
         // dequeueing and push objects owned by a `user_uid` the server has never
-        // heard of. See `fork::local_drive_owner` and `.fork/TASKS.md` T4.2.
+        // heard of. See `fork::local_drive_owner` and `.fork/tickets/` T4.2.
         if crate::fork::local_drive_is_authoritative(ctx) {
             return queue_id;
         }

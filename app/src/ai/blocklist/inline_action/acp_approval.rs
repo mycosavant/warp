@@ -1,4 +1,4 @@
-//! The panel's answer to an ACP permission request (`.fork/TASKS.md`, T14.16).
+//! The panel's answer to an ACP permission request (`.fork/tickets/`, T14.16).
 //!
 //! # Why this exists
 //!
@@ -60,7 +60,7 @@
 //! on this machine, and saying no can only ever make less happen. A misclick on
 //! *No* costs the agent a retry; a misclick on *Yes* costs whatever it asked for.
 //!
-//! # Layered, since 2026-09-03 (`.fork/COMPOSER.md` item 6)
+//! # Layered, since 2026-09-03 (`.fork/docs/composer.md` item 6)
 //!
 //! The card was four labelled lines of disclosure and then the buttons, and the
 //! buttons were the smallest thing on it. Measured with an ask parked, Warp's
@@ -77,7 +77,7 @@
 //! of the line.** Everything else on the closed card is the agent's own account
 //! of what it is about to do; the call is the only line a person can check that
 //! account against. Measured over the 52-ask corpus in
-//! `.fork/classifier/eval-set.jsonl`: 36 asks carry a `command` and 15 a
+//! `.fork/runs/classifier/eval-set.jsonl`: 36 asks carry a `command` and 15 a
 //! written file's `content`, so on 51 of 52 the operative fact would have been
 //! one click away. It also falsified the paragraph above it, which justifies
 //! offering a yes at all on the grounds that this surface *shows* the verbatim
@@ -510,7 +510,7 @@ pub(crate) fn layered(parked: &ParkedRequest) -> Layers {
             //
             // Unless the headline already *is* that line, verbatim -- then a
             // second copy of it is noise, not disclosure. Which line that is
-            // depends on the agent's version, not on Warp (`.fork/COMPOSER.md`,
+            // depends on the agent's version, not on Warp (`.fork/docs/composer.md`,
             // *the ask's title is a fact about the version*): `claude-agent-acp`
             // 0.70.0 titles a shell ask with the command, 0.73.0 with the
             // description, and measured at 0.73.0 the title equalled the

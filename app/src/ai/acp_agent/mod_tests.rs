@@ -1,7 +1,7 @@
 //! The half of the ACP path that can be decided without an agent.
 //!
 //! The exchange itself is verified by running it against a real agent — the
-//! fork's standard, and the reason `warpctrl acp probe` exists (`.fork/TASKS.md`
+//! fork's standard, and the reason `warpctrl acp probe` exists (`.fork/tickets/`
 //! T14.5).
 
 use agent_client_protocol::schema::v1::{ToolCallUpdate, ToolCallUpdateFields, ToolKind};

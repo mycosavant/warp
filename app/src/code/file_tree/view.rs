@@ -1643,7 +1643,7 @@ impl FileTreeView {
     /// tell them apart, and it used to draw both as a named root with nothing
     /// under it. That is invisible when reading is instant and a bug report
     /// when it is not: over WSL's 9p redirector the first index of a
-    /// repository takes minutes (`.fork/TASKS.md`, T6.1), and for all of them
+    /// repository takes minutes (`.fork/tickets/`, T6.1), and for all of them
     /// the file explorer looked broken rather than busy.
     ///
     /// `FileTreeEntry::new_for_directory` hardcodes `loaded: true`, which is

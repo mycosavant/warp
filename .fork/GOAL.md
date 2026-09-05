@@ -2,7 +2,7 @@
 
 **Set 2026-09-04, replacing the horizon set 2026-09-01** (*"the consent path,
 seen on the wire"*). Delete this file when it is met or abandoned. It is a
-horizon, not doctrine. **Read it first; it outranks `TASKS.md`'s ordering while
+horizon, not doctrine. **Read it first; it outranks the tickets' ordering while
 it stands.**
 
 ---
@@ -23,7 +23,7 @@ launcher now starts the agent in its own shipped permission mode, where Warp is
 not asked and the instruments are off, because that is the build a person lives
 in. And Claude Code's own session file already records every compaction as a
 `compact_boundary` line with the summary beside it, so the cadence is on disk
-for anyone who wants it (`.fork/VIEWER.md`).
+for anyone who wants it (`.fork/docs/observability.md`).
 
 The maintainer's words, 2026-09-04: going round in circles over nuts and bolts
 around the permission gates on the ACP path. Set aside. Permission posture stays
@@ -39,7 +39,7 @@ Met when all three hold:
 - **Seven working days**, not necessarily consecutive, launched through
   `warpdev.ps1`'s product profile (the default; `-Instrumented` is the rig and
   does not count toward this).
-- **A friction log**, `.fork/run-live-2026-09/friction.md`, with one dated line
+- **A friction log**, `.fork/runs/run-live-2026-09/friction.md`, with one dated line
   per thing that stopped a turn or annoyed enough to notice. An empty day is a
   line saying so.
 - **The board landed or dropped**: each of the five items below done, or
@@ -55,9 +55,9 @@ Carried as a designed page, with status chips:
 | 1 | Merge upstream (T10) | **done**, `b175101a2`; drift check in `.fork/tools/drift-check.sh`, cron line not yet installed |
 | 2 | Windows launcher: product by default, rig behind `-Instrumented` | **done**, this commit |
 | 3 | Measure egress on Windows, against the merged binary | open |
-| 4 | Composer cancel path (`COMPOSER.md` item 7, the `^C` at the prompt, the missing `stop`) | open |
+| 4 | Composer cancel path (`.fork/docs/composer.md` item 7, the `^C` at the prompt, the missing `stop`) | open |
 | 5 | Hide the two cloud chips in the agent footer (T19) | open |
-| 6 | The viewer: one trace from the harness's record and Warp's (`VIEWER.md`) | specified, unbuilt |
+| 6 | The viewer: one trace from the harness's record and Warp's (`.fork/docs/observability.md`) | specified, unbuilt |
 
 ## What changes about frictions
 
@@ -75,12 +75,12 @@ outranks a new idea with none.
   count is.
 - **Counting a day the panel was not used.** A day launched through the product
   profile with no agent turn in it is not a working day for this purpose.
-- **Building item 6 before phase 0.** `VIEWER.md` names one defect and one
+- **Building item 6 before phase 0.** `.fork/docs/observability.md` names one defect and one
   measurement that come before any rendering.
 
 ## Not this horizon, and why
 
-- **Permission-path measurements, I18, `CLASSIFIER.md`.** Set aside by the
+- **Permission-path measurements, I18, `.fork/docs/classifier.md`.** Set aside by the
   maintainer. Posture frozen.
 - **T14.14's model picker and I22's OpenRouter provider.** Under ACP the agent
   owns model and provider; a second picker in Warp duplicates it.

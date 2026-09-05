@@ -59,7 +59,7 @@ pub enum PaneViewEvent {
         direction: Direction,
     },
     /// Forwarded straight through from the header — see
-    /// `header::Event::DropPreviewChanged` (`.fork/TASKS.md` T8.2).
+    /// `header::Event::DropPreviewChanged` (`.fork/tickets/` T8.2).
     DropPreviewChanged(Option<PaneDropPreview>),
     DroppedOnTabBar {
         origin: ActionOrigin,
@@ -281,7 +281,7 @@ impl<P: BackingView> PaneView<P> {
                 // setting the flag on every drop-preview change, to keep the
                 // pane dimmed for the whole drag rather than only at the moment
                 // it committed; before that a cancel had almost nothing to undo.
-                // Reported after manual testing, 2026-08-23 (`.fork/TASKS.md`
+                // Reported after manual testing, 2026-08-23 (`.fork/tickets/`
                 // T9.4).
                 self.is_being_dragged = false;
                 self.header
@@ -402,7 +402,7 @@ pub struct PaneDropTargetData {
 
 impl PaneDropTargetData {
     /// The pane this drop target covers. Read by the tab drag, which is a
-    /// second drag source for the same targets (`.fork/TASKS.md` T8.2).
+    /// second drag source for the same targets (`.fork/tickets/` T8.2).
     pub fn id(&self) -> PaneId {
         self.id
     }

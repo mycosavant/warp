@@ -699,7 +699,7 @@ impl UserWorkspaces {
     // Returns the [`Owner`] for the user's personal drive. If the user is not authenticated, this
     // returns `None` — except under fork policy, where it falls back to the account-free local
     // drive owner so that Warp Drive stays writable without an account (see `fork::
-    // local_drive_owner` and `.fork/TASKS.md` T4.2). A real account always wins.
+    // local_drive_owner` and `.fork/tickets/` T4.2). A real account always wins.
     pub fn personal_drive(&self, ctx: &AppContext) -> Option<Owner> {
         AuthStateProvider::as_ref(ctx)
             .get()

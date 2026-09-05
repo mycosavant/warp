@@ -277,7 +277,7 @@ fn record_history_event(
     // first turn's start marker: `AIConversation::new` sets the status to
     // `InProgress`, so the first request's status write is `InProgress →
     // InProgress` and produces no `prompt_submit` at all. Measured, not
-    // assumed — see the note in `.fork/TASKS.md`.
+    // assumed — see the note in `.fork/tickets/` T14.
     let query = matches!(
         event_name,
         "session_start" | "prompt_submit" | "stop" | "stop_failure"

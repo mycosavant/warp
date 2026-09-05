@@ -27,7 +27,7 @@ the project is built on, and it is stated here because it keeps paying:
   gave the wrong display backend (the launch recipe matters), and remembered
   guidance gave the wrong formatting rule (see below).
 
-When something here has only been read, say so. `.fork/IDEAS.md` marks its
+When something here has only been read, say so. `.fork/tickets/I00-idea-board.md` marks its
 unverified claims at the top of the file; keep that habit.
 
 **And a scope written from one reading is a scope you will pay to correct.**
@@ -141,14 +141,14 @@ the error was one step upstream of it, in a value assumed rather than computed.
 an ancestor of `B` the merge-base is `A` itself and the three-dot form silently
 degrades to a plain two-dot diff — no warning, no protection. Compute bases
 (`$(git merge-base upstream/master dev)`); never paste them. Full account in
-`.fork/CONSOLIDATION.md` §1.1.
+`.fork/archive/CONSOLIDATION.md` §1.1.
 
 **GUI gestures are runnable now, so "needs a person" needs an argument.**
 `use_computer drag` (T9.1) performs press-move-release against one window and
 photographs the frame *before* the release, which is the only moment a drop
 preview or a drag ghost exists. It works on Windows too, without taking the
 user's cursor, as long as you pass `--pid`/`--window-id` and the window is
-foreground (T9.2). Recipe under "Driving a gesture" in `.fork/README.md`. It
+foreground (T9.2). Recipe under "Driving a gesture" in `.fork/docs/manual.md`. It
 found a real bug on each of its first two runs. What still needs a person is
 anything about how something *feels* — latency, smoothness — because no
 capture answers that.
@@ -181,7 +181,7 @@ anything.
 | T7 | agent fan-out for a run-scale graph | nothing; the verbs existed, only the *plan* was missing |
 | I15 | screenshots, input, recording, window enumeration | `DOGFOOD_FLAGS` + a non-default cargo feature |
 | I16 | the whole remote-development server | `RELEASE_FLAGS` behind `cfg!(feature = "release_bundle")` — a *packaging* gate, so it is off in every build you make yourself |
-| CLASSIFIER | a cwd-containment rule over an agent's permission requests | **Claude Code's own engine** — an allowed verb on a path outside the cwd already asks, and `cd` out of it already asks. Measured 2026-09-03 before being found in its docs; `.fork/classifier/` |
+| CLASSIFIER | a cwd-containment rule over an agent's permission requests | **Claude Code's own engine** — an allowed verb on a path outside the cwd already asks, and `cd` out of it already asks. Measured 2026-09-03 before being found in its docs; `.fork/runs/classifier/` |
 
 Gates come in pairs. `crates/warp_features/src/lib.rs` holds `DOGFOOD_FLAGS`
 (runtime); `app/Cargo.toml`'s `default` list holds the compile-time half.
@@ -1166,7 +1166,7 @@ never read — and the key goes **inside `prefs`**, because a flat
 `{"HasCompletedOnboarding":"true"}` is silently discarded. Launch once first if
 the file does not exist, then merge the key into what Warp wrote; it has real
 content. This recipe has cost three sessions a restart while being correctly
-recorded in `.fork/TASKS.md` each time, which is why it is here.
+recorded in `.fork/tickets/` T15 each time, which is why it is here.
 
 **Read back a state-changing step before measuring what follows it.** The
 merge-base trap has a second form and it bit on 2026-08-29: a driver script
@@ -1222,7 +1222,7 @@ git -C C:\dev\warp fetch origin dev; git -C C:\dev\warp merge --ff-only FETCH_HE
 
 The launcher's own hint uses the PowerShell form because that is where it runs.
 
-`.fork/README.md` documents the clone and never says to update it, which is how
+`.fork/docs/manual.md` documents the clone and never says to update it, which is how
 a two-tree setup reads as one tree for months. Worth stating in general: a build
 that reports success and changes nothing is indistinguishable from a build that
 had nothing to do, and only one of those means your code ran.
@@ -1404,7 +1404,7 @@ file told the agent to type the prefix. The rule form that survives it is
 `Bash(CARGO_BUILD_JOBS=8 cargo:*)`, measured 0 requests in this repo, and the
 docs are silent on it; the other remedy is `jobs = 8` under `[build]` in a
 cargo config, which retires the prefix and this instruction with it. Neither is
-a Warp change. Account in `.fork/classifier/README.md`.
+a Warp change. Account in `.fork/runs/classifier/README.md`.
 
 **Never share `CARGO_TARGET_DIR` between two checkouts of this workspace.**
 Measured 2026-08-24: running a baseline in a `git worktree` with the main tree's
@@ -1674,7 +1674,7 @@ which on a working desktop is unreadable. `CopyFromScreen` cannot substitute
 (it only sees what is displayed), raising the window first cannot substitute
 (the foreground lock refuses it from a background process), and the `2` flag is
 not optional (GPU-composited windows capture blank without it). Full reasoning
-under "The scripts" in `.fork/README.md` — **this recipe has been lost to a
+under "The scripts" in `.fork/docs/manual.md` — **this recipe has been lost to a
 cleared session twice.**
 
 **Running on WSLg:** `env -u WAYLAND_DISPLAY LIBGL_ALWAYS_SOFTWARE=1
@@ -1735,63 +1735,40 @@ instrument and it is silent about a whole class of state.
 
 ## Where to read
 
-Five files in `.fork/`, in the order a cold start wants them.
+`.fork/README.md` is the map: one line per file. The shape, laid out
+2026-09-05 after the maintainer said the old single-file board served agents
+and not them:
 
-- **`GOAL.md`** — **read this first if it exists.** A dated, deliberately
+- **`.fork/GOAL.md`** — **read this first if it exists.** A dated, deliberately
   temporary horizon: what the fork is being driven toward right now and what
-  "done" means as a *run*. It outranks the board's ordering while it stands, and
-  it is meant to be deleted when met or abandoned. Absent means there is no
-  standing horizon and `TASKS.md` is the plan.
-- **`COMPOSER.md`** — the agent surface, filed 2026-09-03 as its own file
-  because it is not a defect and not small. Measured: during a turn with
-  approvals, Warp's own chrome outweighed the agent's words **9.4 : 1**, and the
-  agent's narration never reached the screen. **Warp now has its own message
-  kind** (`ai::warp_note`, a tagged `AgentOutput` mapped at `convert_from`) and
-  the asking note says its mechanics once per conversation; re-measured the same
-  day, the record is 5.6 : 1 and what is drawn is 2.5 : 1. **And a tool call
-  is one row that changes state** (`ai::tool_row`, rewritten in place through
-  `UpdateTaskMessage` — the field-mask path this file's ACP notes say was
-  declined twice is settled and pinned), because the label it replaced was the
-  agent's *placeholder* title and the real one never showed. The approval
-  card is layered (decision and buttons, disclosure behind *details*), a turn
-  shows its elapsed time, and the context ring is fed from `usage_update`;
-  every step of the handoff is measured in that file. The four reference
-  apps are studied in that file. Read it before touching anything the panel
-  draws.
-- **`CLASSIFIER.md`** — a local permission classifier, filed 2026-09-03. The
-  fork's standing line is that a model deciding permissions is not consent; that
-  sentence does two jobs and only one survives, because the objection T14.18
-  actually measured was that **Warp was not in the loop**, not that a model
-  decided. Read it before repeating the line.
-- **`VIEWER.md`** — the observability target, filed 2026-09-04 as a spec and
-  unbuilt. The maintainer's frame: the harness already keeps its transcript on
-  disk, so Warp parses that and adds only what it alone knows (its decisions,
-  who answered, live state). Names one defect that comes first:
-  `local_agent` writes `linked_session_id: None`, so the join key is missing on
-  that path. Read it before adding any new capture to the event log.
-- **`README.md`** — the operating manual: how to build and run on each platform,
-  the full `warpctrl` surface, Warp Drive, WSL integration, and the gotchas that
-  cost hours. Reach for it whenever you need to *use* something rather than
-  change it. Large; navigate by heading.
-- **`IDEAS.md`** — the idea board in front of the task board. Fifteen entries,
-  each with what already exists underneath it and an argument for or against
-  building it. Read before scoping any new feature, because roughly half of them
-  turned out to be already built.
-- **`TASKS.md`** — the board, T1–T8, plus an "as built" record for each item
-  saying what was actually found. **Mostly historic**: read a section when you
-  are touching that area, and treat the "as built" and "Decisions on record"
-  parts as live. T8 is the current phase.
-- **`SPEC.md`** — the original de-telemetry/de-account reasoning, Phases 0–4.
-  Superseded as a plan by `TASKS.md` from Phase 5 on, but its survey findings —
-  the request-path trace and the kill-switch seam analysis — are still the best
-  explanation of *why* the fork is shaped this way.
+  "done" means as a *run*. It outranks every ticket's ordering while it stands,
+  and it is meant to be deleted when met or abandoned. Absent means there is no
+  standing horizon and `.fork/tickets/` is the plan.
+- **`.fork/docs/`** — one page per surface, current truth, dated *as of*. Read
+  the page before touching the surface: `wsl.md` before anything about a WSL
+  pane, `composer.md` before anything the panel draws, `observability.md`
+  before adding any capture to the event log, `classifier.md` before repeating
+  the line that a model deciding permissions is not consent. `manual.md` is the
+  operating manual, still whole; reach for it to *use* something rather than
+  change it.
+- **`.fork/tickets/`** — the work, one file per ticket (`T01`–`T20`) and one per
+  idea (`I00`–`I22`), split out of the old `TASKS.md` and `IDEAS.md` with no
+  sentence changed. **Mostly historic**: read the one you are about to touch,
+  and treat its "as built" parts as live. A citation of `.fork/tickets/`
+  followed by a ticket number means the file starting with that number.
+- **`.fork/decisions/`** — one paragraph per binding decision, dated.
+- **`.fork/runs/`** — event logs, transcripts and friction logs; never edited
+  after the run, except the live friction log under `GOAL.md`.
+- **`.fork/archive/`** — `SPEC.md`, `CONSOLIDATION.md`, the handoffs. Finished;
+  kept because the reasoning in them is not written anywhere else.
 
 `git log` is a real source here, not an afterthought: commit bodies carry the
 reasoning, including retractions.
 
 ## Commits
 
-`fork: <lowercase subject> (Txx)`, where `Txx` is the task from `TASKS.md`. The
-body explains *what was found*, not what was typed — including when it
-contradicts something previously recorded. Corrections belong in the commit that
-makes them, and in the doc that was wrong.
+`fork: <lowercase subject> (Txx)`, where `Txx` is the ticket in `.fork/tickets/`
+(or a surface name such as `WSL`, `COMPOSER`, `VIEWER` when the work belongs to a
+page rather than a ticket). The body explains *what was found*, not what was
+typed — including when it contradicts something previously recorded.
+Corrections belong in the commit that makes them, and in the doc that was wrong.

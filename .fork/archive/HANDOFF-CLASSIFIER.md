@@ -7,7 +7,7 @@
 Deciding whether this fork should run a **local** permission classifier, and if
 so, building the thing that makes that decision answerable with data.
 
-**Read `.fork/CLASSIFIER.md` first — it is the ticket.** Everything below is
+**Read `.fork/docs/classifier.md` first — it is the ticket.** Everything below is
 working context.
 
 **The first deliverable is an evaluation set, not a model.** If you find yourself
@@ -16,14 +16,14 @@ step that cannot be skipped.
 
 ## Read these, in this order
 
-1. **`.fork/CLASSIFIER.md`** — the ticket. The posture argument, what already
+1. **`.fork/docs/classifier.md`** — the ticket. The posture argument, what already
    exists, the asymmetry the design must have, and the falsifier.
 2. **`CLAUDE.md`** — the fork's method. Long; navigate by heading. The sections
    that bear directly on this: *"Method: run it"*, *"Look for the gate first"*,
    and everything about `WARP_FORK_EVENT_LOG`.
 3. **`.fork/GOAL.md`** — the standing horizon, and it **freezes permission
    posture**. Read the boundary section below before you build anything.
-4. **`.fork/IDEAS.md`**, the `I18` entry — the adjacent ticket. Route 3 there is
+4. **`.fork/tickets/`**, the `I18` entry — the adjacent ticket. Route 3 there is
    close enough to this that they should be scoped together, and they are
    different objects.
 

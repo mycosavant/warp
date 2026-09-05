@@ -230,7 +230,7 @@ pub(super) struct Translator {
     ///
     /// `usage_update` arrives several times a turn (measured: eight in a
     /// two-call turn) and was read for nothing until 2026-09-03
-    /// (`.fork/COMPOSER.md` item 4). Only the last one matters, and it is
+    /// (`.fork/docs/composer.md` item 4). Only the last one matters, and it is
     /// spent on the `StreamFinished`, because that is where Warp's own
     /// context ring already reads from -- `Conversation::context_window_usage`
     /// feeds `icon_for_context_window_usage` in the input footer, and nothing
@@ -1030,7 +1030,7 @@ impl Translator {
     /// *"it is `AgentOutput` because there is no 'the client says' message type
     /// on this protocol, so the text itself has to carry the attribution"* --
     /// and that was the architectural root of the composer's 9.4 : 1
-    /// dilution (`.fork/COMPOSER.md`): the renderer could not tell Warp's
+    /// dilution (`.fork/docs/composer.md`): the renderer could not tell Warp's
     /// words from the agent's because they were the same kind. The protocol
     /// still has no such type; the channel is the message's opaque payload,
     /// which the fork controls end to end. See `crate::ai::warp_note`.

@@ -1,6 +1,6 @@
 //! `window.visor.toggle` and `window.visor.status` — the dedicated hotkey
-//! window, and whether it opens as an agent (`.fork/TASKS.md` T8.1,
-//! `IDEAS.md` I8).
+//! window, and whether it opens as an agent (`.fork/tickets/` T8.1,
+//! `.fork/tickets/` I8).
 //!
 //! # Why the control plane owns a hotkey
 //!
@@ -8,7 +8,7 @@
 //! That makes it the one feature in the app a headless check cannot exercise,
 //! and on this fork's primary Linux target it cannot be exercised at all —
 //! synthetic keystrokes reach no X11 client under WSLg, XTEST and XSendEvent
-//! both (`.fork/TASKS.md`, "it is not Warp, and X11 is exhausted"). So the
+//! both (`.fork/tickets/` T8, "it is not Warp, and X11 is exhausted"). So the
 //! visor either gets a second entry point or it ships unverified.
 //!
 //! The second entry point is also the better one for an agent. A shortcut is

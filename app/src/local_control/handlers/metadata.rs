@@ -393,7 +393,7 @@ pub(crate) fn window_list(
     // The hotkey window is an ordinary entry in this list and looks like any
     // other, which makes "close the window I opened" a guess. Naming it here
     // means a script never has to join against `window.visor.status` just to
-    // avoid closing the wrong one (`.fork/TASKS.md` T8.1).
+    // avoid closing the wrong one (`.fork/tickets/` T8.1).
     let hotkey_window = crate::root_view::quake_mode_window_id();
     let mut windows = Vec::new();
     for entry in select_window_entries(target, false, ActionKind::WindowList, ctx)? {

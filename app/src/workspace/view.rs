@@ -14230,7 +14230,7 @@ impl Workspace {
     }
 
     /// Whether the tab at `index` can be folded into the active tab as a split
-    /// (`.fork/TASKS.md` T8.2).
+    /// (`.fork/tickets/` T8.2).
     ///
     /// Two gates, and both are about the operation having exactly one meaning:
     /// a tab cannot merge into itself, and a tab holding more than one pane has

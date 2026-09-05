@@ -18,7 +18,7 @@ that shows both.
 
 ## The measurement that decides the shape
 
-Run 2's classifier work did this without naming it (`.fork/classifier/README.md`).
+Run 2's classifier work did this without naming it (`.fork/runs/classifier/README.md`).
 Warp's event log had truncated 14 of 44 commands at its 320-character preview.
 Claude Code's own session file held the full input for all 59 calls, and the two
 joined on the `toolu_…` id Warp already writes as `call_id`. **59 of 59
@@ -50,7 +50,7 @@ this file. And **the file is written before the hook fires** (TR-EVENTS-B,
 
 ### Warp: `WARP_FORK_EVENT_LOG`, one JSONL per conversation
 
-Nine event kinds, read from `.fork/run-2026-09-01/events/`: `session_start`,
+Nine event kinds, read from `.fork/runs/run-2026-09-01/events/`: `session_start`,
 `session_mode`, `session_model`, `prompt_submit`, `tool_start`, `tool_complete`,
 `permission_request`, `permission_replied`, `stop`. Every line carries `ts`,
 `seq`, `agent`, `source`, `session_id` (Warp's conversation id), `cwd`,
@@ -184,7 +184,7 @@ the ACP shim already gave opposite answers to one question in a week. The rules:
 - `app/src/ai/transcript.rs` writes the fork's own Markdown record. The viewer
   does not read it; the harness's file is richer and the transcript's job is
   the agent's, not the person's.
-- `.fork/classifier/build_eval_set.py` already performs the join in Python for
+- `.fork/runs/classifier/build_eval_set.py` already performs the join in Python for
   one run. It is the working prototype of phase 1's logic, and the first thing
   to read before writing it in Rust.
 - `session::filesystem::native_path` for the Windows read.

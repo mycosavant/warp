@@ -3,7 +3,7 @@
 //! Everything here is about the *shape* of the exchange — where the session
 //! runs, and what a transcript line looks like. The exchange itself is one
 //! `initialize`/`session/new`/`session/prompt` against a real process, and is
-//! verified by running it (`.fork/TASKS.md`, "T14.1 — as built").
+//! verified by running it (`.fork/tickets/`, "T14.1 — as built").
 
 use local_control::protocol::ErrorCode;
 

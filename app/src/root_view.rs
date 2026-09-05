@@ -1350,7 +1350,7 @@ pub fn quake_mode_window_is_open() -> bool {
 /// [`quake_mode_window_is_open`] flattens `Hidden` and "never created" into the
 /// same `false`, which is right for its callers and wrong for a caller that
 /// wants to know whether the next toggle will build a window or reveal one.
-/// `warpctrl window.visor.status` reports this (`.fork/TASKS.md` T8.1).
+/// `warpctrl window.visor.status` reports this (`.fork/tickets/` T8.1).
 pub fn quake_mode_window_state() -> Option<WindowState> {
     let quake_mode_state = QUAKE_STATE.lock();
 
@@ -1554,7 +1554,7 @@ fn toggle_quake_mode_window(global_resource_handles: &GlobalResourceHandles, ctx
 }
 
 /// Whether a hotkey window created *now* would open in agent view — the
-/// "visor" (`.fork/TASKS.md` T8.1).
+/// "visor" (`.fork/tickets/` T8.1).
 ///
 /// The effective answer, not fork policy. Two things outrank the policy in
 /// opposite directions, and reporting the policy alone would be wrong about

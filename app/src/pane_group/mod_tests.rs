@@ -767,7 +767,7 @@ fn test_pane_focus_on_close() {
 }
 
 /// Regression test: a designated main pane must stop being main the moment it
-/// is closed (`.fork/TASKS.md` T8.5).
+/// is closed (`.fork/tickets/` T8.5).
 ///
 /// `main_pane` is never cleared at the ten `pane_contents.remove` sites; it is
 /// validated on read instead. The first version of that validation checked
@@ -3664,7 +3664,7 @@ fn test_close_pane_clears_transitively_shared_child_entry_on_non_undo_branch() {
 /// The failure this pins is the one a person hit: press Escape mid-drag and the
 /// pane goes blank and stays blank. Nothing is broken underneath — the contents
 /// are still there, under an opaque `surface_2` overlay that `is_being_dragged`
-/// paints and that only a *drop* used to take off. `.fork/TASKS.md` T9.4.
+/// paints and that only a *drop* used to take off. `.fork/tickets/` T9.4.
 ///
 /// The drag is driven through `PaneDragDropLocation::Other`, the one branch that
 /// sets the flag without needing a laid-out tab bar or a real drop target
@@ -4215,7 +4215,7 @@ fn test_a_drop_preview_is_cleared_when_the_drag_ends() {
     });
 }
 
-/// Cancelling a drag leaves nothing behind (`.fork/TASKS.md` T8.2).
+/// Cancelling a drag leaves nothing behind (`.fork/tickets/` T8.2).
 ///
 /// Distinct from the `PaneDragEnded` path above: that one runs on a *drop* with
 /// no preview to commit, and this one runs when the gesture is abandoned
@@ -4260,7 +4260,7 @@ fn test_cancelling_a_drag_clears_the_preview_and_restores_a_hidden_pane() {
 }
 
 /// A designated main pane is what an unqualified `warpctrl` action addresses
-/// (`.fork/TASKS.md` T8.5, second consumer).
+/// (`.fork/tickets/` T8.5, second consumer).
 ///
 /// The point of the designation is that it does not move when focus does, so
 /// the test deliberately puts them on different panes — with focus on the pane

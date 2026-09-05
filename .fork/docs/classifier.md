@@ -5,7 +5,7 @@ posture question with an implementation behind it, and both halves need arguing
 before either is built.
 
 **Status: measured 2026-09-03; the first verdict was "no model" and it was
-retracted the same evening.** The evaluation set is built (`.fork/classifier/`),
+retracted the same evening.** The evaluation set is built (`.fork/runs/classifier/`),
 the rule was tried and its result stands. The model half is open again, for the
 reasons in the section directly below; the rest of the file is the argument as
 it stood before the measurement, and the posture half of it is still the
@@ -15,7 +15,7 @@ maintainer's to settle.
 
 ## Measured 2026-09-03 — a rule handles a third; the verdict on the rest was withdrawn
 
-Full account in `.fork/classifier/README.md`; the corpus, the labels, the rule
+Full account in `.fork/runs/classifier/README.md`; the corpus, the labels, the rule
 and eighteen probes are beside it.
 
 **What stands:**
@@ -84,7 +84,7 @@ Measured, on the same run:
   call.
 - And separately, Warp's own chrome outweighed the agent's words **9.4 : 1**
   during turns with approvals, so the narration explaining *why* each call was
-  being made never reached the screen (`.fork/COMPOSER.md`).
+  being made never reached the screen (`.fork/docs/composer.md`).
 
 A stream of yeses from a person shown a JSON dump, an empty "acts on", and none
 of the agent's reasoning is **not** evidence that those calls were safe. It is
@@ -257,7 +257,7 @@ the feature has reproduced `auto` with extra steps.
    been disclosure: say what happened, in whose words, with what authority.
    Minimum: every auto-answer logged with `answered_by: classifier` and its
    reason, and a per-turn note in the panel. Note that this collides with
-   `.fork/COMPOSER.md` — Warp's chrome already outweighs the agent 9.4:1, so
+   `.fork/docs/composer.md` — Warp's chrome already outweighs the agent 9.4:1, so
    *more* disclosure text is not free.
 
 ---

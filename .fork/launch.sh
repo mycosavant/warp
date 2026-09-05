@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The daily driver. Everything under `.fork/run-*/` is a measurement rig; this
+# The daily driver. Everything under `.fork/runs/` is a measurement rig; this
 # is the one for getting work done.
 #
 # The difference between them is a single variable, and it is the reason a

@@ -1,4 +1,4 @@
-//! Choosing an option on an ACP `session/request_permission` (`.fork/TASKS.md`,
+//! Choosing an option on an ACP `session/request_permission` (`.fork/tickets/`,
 //! T14.2).
 //!
 //! # The bug this module exists because of
@@ -291,7 +291,7 @@
 //! the same breath: the agent's own config also decides whether what it asks
 //! can be answered from here.
 //!
-//! ## This amends a constraint written in `TASKS.md`, rather than rereading it
+//! ## This amends a constraint written in `.fork/tickets/` T14, rather than rereading it
 //!
 //! T14.4's constraint list says **"gate on the method, never on
 //! `tool_call.kind`"**, as an absolute. There is no method to gate on — every one

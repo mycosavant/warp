@@ -4283,7 +4283,7 @@ fn render_collapsible_debug_output(
 ///
 /// **Dimmer than the agent, on purpose.** Measured 2026-09-03, during a turn
 /// with three asks Warp's words outweighed the agent's 9.4 : 1 and the
-/// agent's narration never reached the screen (`.fork/COMPOSER.md`). The
+/// agent's narration never reached the screen (`.fork/docs/composer.md`). The
 /// headline keeps the sentence a person needs visible; everything that
 /// justifies it is one click away, and it starts collapsed
 /// (`block.rs` registers the state beside `DebugOutput`'s).

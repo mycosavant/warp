@@ -1,4 +1,4 @@
-//! What a child agent is allowed to do (`.fork/TASKS.md`, T6.6).
+//! What a child agent is allowed to do (`.fork/tickets/`, T6.6).
 //!
 //! A lead agent that hands work to a child should be able to say what the
 //! child may reach for: a self-contained prompt delegated to a reviewer needs

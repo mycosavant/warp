@@ -1,5 +1,5 @@
 //! `remote.wsl.list` and `remote.wsl.connect` — reaching a WSL distribution
-//! with Warp's remote-development server (`.fork/IDEAS.md`, I16).
+//! with Warp's remote-development server (`.fork/tickets/`, I16).
 //!
 //! # Why these actions exist before any UI
 //!
