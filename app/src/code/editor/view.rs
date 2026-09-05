@@ -1308,6 +1308,13 @@ impl CodeEditorView {
                 ctx.emit(CodeEditorEvent::UnifiedDiffComputed);
             }
             CodeEditorModelEvent::ViewportUpdated(version) => {
+                if let Some(trigger) = &self.pending_scroll {
+                    log::info!(
+                        "[scroll] viewport updated at buffer version {version:?}; trigger waits for {:?} ({})",
+                        trigger.minimum_applicable_version,
+                        if trigger.minimum_applicable_version <= *version { "applying" } else { "not yet" }
+                    );
+                }
                 if let Some(trigger) = self
                     .pending_scroll
                     .take_if(|trigger| trigger.minimum_applicable_version <= *version)

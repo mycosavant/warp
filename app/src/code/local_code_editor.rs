@@ -1378,9 +1378,11 @@ impl LocalCodeEditorView {
         if self.file_loaded(ctx) {
             self.editor.update(ctx, |editor, ctx| {
                 let version = editor.buffer_version(ctx);
+                log::info!("[scroll] pending scroll armed now: {position:?} at buffer version {version:?}");
                 editor.set_pending_scroll(ScrollTrigger::new(position, version));
             });
         } else {
+            log::info!("[scroll] pending scroll deferred until load: {position:?}");
             self.pending_scroll_on_load = Some(position);
         }
     }
@@ -1393,6 +1395,7 @@ impl LocalCodeEditorView {
         if let Some(position) = self.pending_scroll_on_load.take() {
             self.editor.update(ctx, |editor, ctx| {
                 let version = editor.buffer_version(ctx);
+                log::info!("[scroll] pending scroll armed on load: {position:?} at buffer version {version:?}");
                 editor.set_pending_scroll(ScrollTrigger::new(position, version));
             });
         }

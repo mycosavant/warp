@@ -23,7 +23,7 @@ impl ScrollWheelBehavior {
 }
 
 #[cfg_attr(target_family = "wasm", allow(dead_code))]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum ScrollPosition {
     LineAndColumn(LineAndColumnArg),
     FocusedDiffHunk,
