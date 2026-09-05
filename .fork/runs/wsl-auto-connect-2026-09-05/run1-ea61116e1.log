@@ -1,0 +1,20 @@
+89:2026-09-05T15:39:31Z [INFO] [warp::terminal::model::session] Shell is bootstrapped with session_id SessionId(5444020844095028547)
+90:2026-09-05T15:39:31Z [INFO] [warp::terminal::model_events] WSL session SessionId(5444020844095028547) bootstrapped in Ubuntu; attaching a remote server
+91:2026-09-05T15:39:31Z [INFO] [warp::remote_server::wsl_transport] Connecting remote server to WSL distro Ubuntu for session SessionId(5444020844095028547)
+92:2026-09-05T15:39:31Z [INFO] [remote_server::manager] Starting remote server connection: session=SessionId(5444020844095028547)
+97:2026-09-05T15:39:32Z [INFO] [remote_server::client] [remote_server] 11:39:34.939 [INFO] Proxy: removing old socket file server.sock
+98:2026-09-05T15:39:32Z [INFO] [remote_server::client] [remote_server] 11:39:34.940 [INFO] Proxy: removing old PID file server.pid
+99:2026-09-05T15:39:32Z [INFO] [remote_server::client] [remote_server] 11:39:34.940 [INFO] Proxy: no daemon running, will start one
+112:2026-09-05T15:39:34Z [INFO] [remote_server::client] [remote_server] 11:39:36.768 [INFO] Proxy: daemon socket ready after 1.826770122s
+113:2026-09-05T15:39:34Z [INFO] [remote_server::client] [remote_server] 11:39:36.768 [INFO] Proxy: connecting to daemon socket at /home/effatha/.warp-dev/remote-server/d9b8ac72/server-bd6b5408.sock
+114:2026-09-05T15:39:34Z [INFO] [remote_server::client] [remote_server] 11:39:36.768 [INFO] Proxy: connected, bridging stdio
+115:2026-09-05T15:39:34Z [INFO] [remote_server::client] [Remote codebase indexing] Client received codebase index statuses push: status_count=0
+116:2026-09-05T15:39:34Z [WARN] [remote_server::manager] Remote server version mismatch, removing stale binary: session=SessionId(5444020844095028547) client=Some("v0.fork.ea61116e1") server="v0.fork.14a9a5384"
+117:2026-09-05T15:39:34Z [INFO] [warp::remote_server::wsl_transport] Removing stale remote server binary in WSL distro Ubuntu: rm -f ~/.warp-dev/remote-server/warp-oss
+118:2026-09-05T15:39:34Z [WARN] [remote_server::manager] Remote server connection failed: session=SessionId(5444020844095028547) error=remote server version mismatch (client: Some("v0.fork.ea61116e1"), server: "v0.fork.14a9a5384"); reconnect to reinstall
+119:2026-09-05T15:39:34Z [INFO] [remote_server::client] [remote_server] 11:39:36.908 [INFO] Proxy: stdin->socket copy ended (57 bytes); shutting down socket to unblock peer
+120:2026-09-05T15:39:34Z [INFO] [remote_server::client] [remote_server] 11:39:36.908 [INFO] Proxy: socket->stdout copy ended (8921 bytes); shutting down socket to unblock peer
+121:2026-09-05T15:39:34Z [INFO] [remote_server::client] [remote_server] 11:39:36.908 [INFO] Proxy: bridge closed, exiting
+122:2026-09-05T15:39:34Z [INFO] [remote_server::client] Reader task: server disconnected (EOF)
+123:2026-09-05T15:39:34Z [INFO] [remote_server::manager] Remote server process exited (async): session=SessionId(5444020844095028547) code=Some(0) signal_killed=false
+124:2026-09-05T15:39:34Z [WARN] [warp::terminal::model_events] Remote server setup failed for session SessionId(5444020844095028547), falling back to ControlMaster: remote server version mismatch (client: Some("v0.fork.ea61116e1"), server: "v0.fork.14a9a5384"); reconnect to reinstall

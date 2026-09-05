@@ -8,7 +8,7 @@ Launched through `warpdev.ps1`'s product profile unless a line says otherwise.
 
 | date | # | what | stopped work? | where it went |
 |---|---|---|---|---|
-| 2026-09-05 | 1 | Opened the diff panel in a WSL pane on this repo: *"Cannot detect diffs for this folder. Diffs don't currently work in WSL."* | yes | `.fork/docs/wsl.md`; board item 7 |
+| 2026-09-05 | 1 | Opened the diff panel in a WSL pane on this repo: *"Cannot detect diffs for this folder. Diffs don't currently work in WSL."* | yes | `.fork/docs/wsl.md`; board item 7. Step 1 (connect automatically) built the same day, `ea61116e1` + `1a42ecdb8`; the diff panel itself is still unmeasured routed |
 
 ## Notes
 

@@ -526,6 +526,13 @@ telemetry switch on purpose, and needed because `WARP_FORK_POLICY=0` cannot
 reach `http_client`: without it, the documented way to A/B a suspected fork
 regression would fail at the socket with no clue why), `WARP_FORK_QUAKE_VISOR` (the one that
 defaults **on** — set it off to get upstream's terminal in the hotkey window),
+`WARP_FORK_WSL_AUTO_CONNECT` (**also defaults on**, same parser: a WSL pane
+attaches Warp's remote-development server to its own distribution when its
+shell bootstraps, so the tree, the buffer, search and the git chip route inside
+the distribution instead of over 9p. Set it off to get the manual behaviour
+back — palette action or `warpctrl remote wsl connect`. A failed connect is a
+log line and a not-routed pane; `warpctrl session inspect` says which you have.
+Built 2026-09-05, `.fork/docs/wsl.md`),
 `WARP_FORK_FRAME_LOG` (`on`, or a threshold in ms — slow-frame accounting to
 the local log; **reach for this before theorising about why something feels
 slow**), `WARP_FORK_EVENT_LOG` (`on`, or a directory — one JSONL file per
@@ -1704,7 +1711,13 @@ launch, so read it rather than remember it; Warp is the child sized like a windo
 (`1246x802+1089+596`), among Weston's own 1x1 and 10x10 stubs.
 
 **A WSL pane's files are not where the session says they are, and `warpctrl
-session inspect` is now the way to ask.** It reports `filesystem` as
+session inspect` is now the way to ask.** Since 2026-09-05 a WSL pane attaches
+its server itself when the shell bootstraps (`WARP_FORK_WSL_AUTO_CONNECT`,
+`.fork/docs/wsl.md`), so `local` on a fresh pane means the connect *failed*
+and the log has a `Remote server connection failed` line saying why. The first
+run of that connect deleted the hand-staged daemon symlink through upstream's
+version-mismatch repair, which is the kind of thing this file exists to
+record: a remedy built for a channel with a CDN ran on one without. It reports `filesystem` as
 `{"where": "local"}`, `{"where": "host", "host_id": …}` or
 `{"where": "unreachable"}`. Reach for it before theorising about why a tree is
 slow or a file tool is missing: a WSL session keeps `SessionType::Local` even

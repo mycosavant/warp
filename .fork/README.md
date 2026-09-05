@@ -8,6 +8,10 @@ the map of `.fork/`, one line per thing, laid out on 2026-09-05.
 **Read `GOAL.md` first if it exists.** It is the standing horizon and it
 outranks everything else here while it stands.
 
+**`board.html` is the ranked board the horizon points at**: static,
+self-contained, status chips remembered per browser. Open it, do not publish
+it; the maintainer asks for a cloud copy when one is wanted.
+
 ## docs/ — one page per surface, current truth
 
 Each opens with *as of <date>* and a state table, then how to use the thing,

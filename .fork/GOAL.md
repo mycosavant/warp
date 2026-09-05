@@ -47,8 +47,12 @@ Met when all three hold:
 
 ## The board
 
-Carried as a designed page, with status chips:
-<https://claude.ai/code/artifact/4dae4336-8d7d-448f-b3d0-69ae93f570ca>
+Carried as a designed page, with status chips: **`.fork/board.html`**, a
+self-contained static file (open it in any browser). Local-first since
+2026-09-05 by the maintainer's rule: no third-party fonts, scripts or APIs, and
+a claude.ai copy only when asked for. The copy published 2026-09-04 at
+<https://claude.ai/code/artifact/4dae4336-8d7d-448f-b3d0-69ae93f570ca> is the
+same board as of that date and is not updated.
 
 | | item | state 2026-09-04 |
 |---|---|---|
@@ -58,6 +62,7 @@ Carried as a designed page, with status chips:
 | 4 | Composer cancel path (`.fork/docs/composer.md` item 7, the `^C` at the prompt, the missing `stop`) | open |
 | 5 | Hide the two cloud chips in the agent footer (T19) | open |
 | 6 | The viewer: one trace from the harness's record and Warp's (`.fork/docs/observability.md`) | specified, unbuilt |
+| 7 | WSL parity: connect automatically, then diffs, then language servers (`.fork/docs/wsl.md`) | step 1 built 2026-09-05, `ea61116e1`; diffs and LSP open |
 
 ## What changes about frictions
 

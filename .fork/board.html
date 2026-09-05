@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Five to Ship</title>
+<!--
+  Local-first, self-contained. No external fonts, scripts or fetches: the
+  maintainer's rule from 2026-09-05 is that plans stay static HTML on disk
+  unless a cloud copy is asked for. Open this file in any browser. Status
+  chips are remembered in that browser's localStorage only.
+-->
+<style>
+  :root {
+    --paper: #f6f5f1; --paper-2: #edebe4; --ink: #1c1f24; --ink-2: #4a4f58; --ink-3: #7a7f88;
+    --rule: #d9d6cd; --accent: #0f6e6a; --accent-ink: #0a4f4c; --accent-wash: #dcecea;
+    --done: #3f7d3a; --done-wash: #dfeadb; --active: #a86a12; --active-wash: #f3e6cf;
+    --park: #8a8f98; --code-bg: #ecebe5;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif;
+    --cond: "Arial Narrow", "Roboto Condensed", "Segoe UI", system-ui, sans-serif;
+    --mono: ui-monospace, "Cascadia Mono", Consolas, "SF Mono", Menlo, "DejaVu Sans Mono", monospace;
+    color-scheme: light dark;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #17191d; --paper-2: #1f2227; --ink: #e8e6df; --ink-2: #b4b2aa; --ink-3: #7f7e78;
+      --rule: #33373e; --accent: #5fb8b2; --accent-ink: #8fd4cf; --accent-wash: #173634;
+      --done: #86c07a; --done-wash: #1f3320; --active: #d9a052; --active-wash: #3a2c14;
+      --park: #767b84; --code-bg: #20232a;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--paper); color: var(--ink); font-family: var(--sans); font-size: 16px; line-height: 1.55; margin: 0; }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 48px 24px 96px; }
+  header { display: grid; gap: 14px; margin-bottom: 40px; }
+  .eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); display: flex; gap: 16px; flex-wrap: wrap; }
+  h1 { font-family: var(--serif); font-weight: 600; font-size: 42px; line-height: 1.05; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+  .lede { font-size: 18px; color: var(--ink-2); margin: 0; max-width: 62ch; }
+  .decision { border-left: 3px solid var(--accent); background: var(--accent-wash); padding: 16px 20px; margin: 0 0 40px; display: grid; gap: 8px; }
+  .decision .k { font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent-ink); }
+  .decision p { margin: 0; max-width: 66ch; }
+  .seq { margin: 0 0 48px; }
+  .seq h2 { margin-bottom: 12px; }
+  .seq ol { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; }
+  .seq li { border-top: 2px solid var(--rule); padding-top: 8px; font-family: var(--cond); font-weight: 500; font-size: 15px; line-height: 1.25; }
+  .seq li small { display: block; font-family: var(--mono); font-size: 11px; color: var(--ink-3); margin-bottom: 4px; }
+  @media (max-width: 620px) { .seq ol { grid-template-columns: repeat(3, 1fr); } }
+  h2 { font-family: var(--serif); font-weight: 600; font-size: 22px; margin: 0 0 8px; line-height: 1.2; text-wrap: balance; }
+  .item { border-top: 1px solid var(--rule); padding: 28px 0 32px; display: grid; grid-template-columns: 56px 1fr; gap: 0 20px; }
+  .rank { font-family: var(--cond); font-weight: 600; font-size: 40px; line-height: 1; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+  .item.done .rank { color: var(--done); }
+  .item.active .rank { color: var(--active); }
+  .body { display: grid; gap: 14px; min-width: 0; }
+  .head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  .head h2 { margin: 0; }
+  .meta { font-family: var(--mono); font-size: 12px; color: var(--ink-3); display: flex; gap: 14px; flex-wrap: wrap; }
+  .body p { margin: 0; max-width: 66ch; }
+  .status { font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; border: 1px solid var(--rule); border-radius: 999px; padding: 3px 10px; background: var(--paper-2); color: var(--ink-2); cursor: pointer; user-select: none; white-space: nowrap; }
+  .status:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .item.active .status { background: var(--active-wash); color: var(--active); border-color: transparent; }
+  .item.done .status { background: var(--done-wash); color: var(--done); border-color: transparent; }
+  .item.done h2 { text-decoration: line-through; text-decoration-color: var(--ink-3); text-decoration-thickness: 1px; }
+  .facts { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: 6px 12px 6px 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  th { font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); font-weight: 500; }
+  td.n, th.n { text-align: right; padding-right: 0; }
+  .gates { display: grid; gap: 6px; }
+  .gates .k { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); }
+  .gates ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; }
+  .gates li { font-size: 14px; color: var(--ink-2); padding-left: 14px; position: relative; }
+  .gates li::before { content: "\00b7"; position: absolute; left: 2px; color: var(--accent); }
+  code { font-family: var(--mono); font-size: 0.88em; background: var(--code-bg); padding: 1px 5px; border-radius: 3px; }
+  pre { font-family: var(--mono); font-size: 13px; line-height: 1.5; background: var(--code-bg); padding: 12px 14px; border-radius: 4px; overflow-x: auto; margin: 0; }
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media (max-width: 620px) { .split { grid-template-columns: 1fr; } }
+  .split h3 { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); margin: 0 0 6px; font-weight: 500; }
+  .split ul { margin: 0; padding: 0 0 0 16px; font-size: 14px; color: var(--ink-2); }
+  .split li { margin-bottom: 4px; }
+  .parked { border-top: 1px solid var(--rule); padding: 28px 0 0; }
+  .parked ul { margin: 12px 0 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+  .parked li { display: grid; grid-template-columns: 200px 1fr; gap: 16px; font-size: 14px; }
+  .parked li b { font-weight: 500; color: var(--park); font-family: var(--cond); font-size: 15px; }
+  .parked li span { color: var(--ink-2); }
+  @media (max-width: 620px) { .parked li { grid-template-columns: 1fr; gap: 2px; } }
+  footer { margin-top: 48px; font-family: var(--mono); font-size: 12px; color: var(--ink-3); border-top: 1px solid var(--rule); padding-top: 16px; }
+  footer p { margin: 0 0 6px; max-width: 70ch; }
+  @media (prefers-reduced-motion: no-preference) { .status { transition: background-color 120ms ease, color 120ms ease; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">
+      <span>warp fork &middot; dev</span>
+      <span>set 2026-09-04 &middot; updated 2026-09-05</span>
+      <span>carry until complete</span>
+    </div>
+    <h1>Five to Ship</h1>
+    <p class="lede">The product is the Windows build with WSL panes and <code>claude-agent-acp</code> in the panel, used daily. Everything on this board is ranked by how much it moves that, and nothing on it is a measurement of the permission path.</p>
+  </header>
+
+  <section class="decision">
+    <span class="k">The decision this replaces</span>
+    <p><strong>Retire the horizon in <code>GOAL.md</code>.</strong> It asked for an eight-hour session in <code>default</code> mode. Run 2 answered it: 44 asks in 50 minutes, terminated. The Linux launcher written 2026-09-04 then made the product decision the horizon never did, leaving the agent in <code>auto</code> with the instruments off. In that configuration Warp is blind to permissions by design, so the remaining unknown is not a product question. The new horizon is one sentence: live in the Windows build for a week, and the friction log is the backlog.</p>
+  </section>
+
+  <section class="seq">
+    <h2>Sequence</h2>
+    <ol>
+      <li><small>day 1</small>Merge upstream, alone. Rebuild both sides.</li>
+      <li><small>day 1</small>Flip the Windows launcher. Write the new horizon.</li>
+      <li><small>day 2</small>Measure egress on Windows, against the merged binary.</li>
+      <li><small>day 3&ndash;4</small>Composer cancel path, test before fix.</li>
+      <li><small>day 4</small>Hide the two cloud chips.</li>
+      <li><small>then</small>The viewer, phase 0 first.</li>
+      <li><small>day 1 of living</small>WSL parity: connect automatically, then diffs, then LSP.</li>
+    </ol>
+  </section>
+
+  <article class="item" data-id="merge" data-default="done">
+    <div class="rank">1</div>
+    <div class="body">
+      <div class="head">
+        <h2>Merge upstream</h2>
+        <button class="status" type="button" aria-label="cycle status">open</button>
+      </div>
+      <div class="meta"><span>T10</span><span>owner: Opus 5</span><span>last merge 2026-08-24</span></div>
+      <p>The only item that gets more expensive every day it waits, and it is already eleven days late. The overlap has grown from 39 files to 64 and is concentrated in <code>app/src/ai/blocklist/</code>, exactly where this week's composer work landed. Sixteen of the incoming subjects are crash or panic fixes: the wide-char cell crash, the em_width glyph panic, the empty streamed agent document update, the winit X11 panic pin. Those are daily-driver stability for free.</p>
+      <div class="facts">
+        <table>
+          <tr><th></th><th class="n">2026-08-24 merge</th><th class="n">today</th></tr>
+          <tr><td>upstream commits since merge-base</td><td class="n">110</td><td class="n">94</td></tr>
+          <tr><td>fork files diverged</td><td class="n">204</td><td class="n">334</td></tr>
+          <tr><td>files touched by both sides</td><td class="n">39</td><td class="n">64</td></tr>
+          <tr><td>of which conflicting</td><td class="n">4</td><td class="n">~6 (dry run)</td></tr>
+        </table>
+      </div>
+      <div class="gates">
+        <span class="k">Gates, in order</span>
+        <ul>
+          <li>Compute the base: <code>git merge-base upstream/master dev</code>. Never paste one.</li>
+          <li>The conflicts are the safe half. The danger is files git merges cleanly that do not compile: <code>cargo check --workspace --all-targets</code>, not the binary build. Last time it caught three.</li>
+          <li><code>cargo test -p local_control</code> and <code>cargo test -p warp --lib local_control</code> for the two catalog pins; <code>grep -rn "fn catalog_has_exactly"</code> for the current number.</li>
+          <li><code>cargo test -p warp --lib local_sync</code> for the byte-stability tests a cargo feature once silently broke.</li>
+          <li><code>cargo test -p warp_cli</code>, the third crate that has been left red before.</li>
+          <li>Diff test-failure membership against a stashed baseline, not counts.</li>
+          <li>Sync the Windows checkout by commit, not by clock: <code>git -C /mnt/c/dev/warp fetch /home/effatha/git/warp dev &amp;&amp; git -C /mnt/c/dev/warp merge --ff-only FETCH_HEAD</code>.</li>
+          <li>Build at <code>CARGO_BUILD_JOBS=8</code>, and not on both sides of the VM at once.</li>
+        </ul>
+      </div>
+      <p><strong>Landed 2026-09-04 as <code>b175101a2</code></strong>, by Opus 5. Six conflicts, both binaries built serially at <code>-j 8</code>, both green with only the four pre-existing warnings, both trees on the same commit. The sixteen crash fixes are merged and <em>unexercised</em>: neither binary has been run as a GUI yet. The drift check exists at <code>.fork/tools/drift-check.sh</code>; its cron line is written up in the README and not yet installed.</p>
+      <p>The drift check reports and never merges. <code>git merge-tree --write-tree</code> against a fresh fetch gives the conflict count without touching the tree; the overlap count is two lines of <code>comm</code>. A merge needs judgment every time it has been done, so the automation stops at the report.</p>
+    </div>
+  </article>
+
+  <article class="item" data-id="launcher" data-default="done">
+    <div class="rank">2</div>
+    <div class="body">
+      <div class="head">
+        <h2>Make the Windows launcher the product, not the rig</h2>
+        <button class="status" type="button" aria-label="cycle status">open</button>
+      </div>
+      <div class="meta"><span>.fork/tools/warpdev.ps1</span><span>no app surface</span></div>
+      <p>The machine you work on launches through <code>warpdev.ps1</code>, and that script still sets <code>WARP_FORK_ACP_MODE=default</code>, both instruments on, and points at <code>target\debug\warp-oss.exe</code>. It is the measurement rig. The Linux launcher made the opposite choice the same day. Flip the defaults and the build you use stops being the build you measure.</p>
+      <div class="split">
+        <div>
+          <h3>As built, 2026-09-04</h3>
+          <ul>
+            <li>Three profiles, per launch, nothing persisted: <code>ggwarpdev</code> is the product, <code>instrumented</code> is the rig, <code>stock</code> is upstream.</li>
+            <li>Release preferred, debug the fallback, and it says which.</li>
+            <li>Warns when the binary predates the last <em>source</em> commit, and how far behind WSL <code>dev</code> the tree is. Never syncs for you: that would leave the tree newer than the binary.</li>
+            <li>T20.3's refusal kept. Old <code>-On/-Off/-Launch</code> still accepted.</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Same day</h3>
+          <ul>
+            <li><code>GOAL.md</code> rewritten: live in the Windows build for a working week; the friction log is the backlog.</li>
+            <li>Launched for real on 2026-09-05: the running product instance is <code>v0.fork.14a9a5384</code>, from <code>target\release</code>.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </article>
+
+  <article class="item" data-id="egress">
+    <div class="rank">3</div>
+    <div class="body">
+      <div class="head">
+        <h2>Measure the thesis where you use it</h2>
+        <button class="status" type="button" aria-label="cycle status">open</button>
+      </div>
+      <div class="meta"><span>Open questions &middot; "Platform: Linux only"</span><span>about half a day</span></div>
+      <p>"Nothing escapes" is measured on Linux, with two methods, and the open-questions section says in as many words that Windows is unmeasured. The fork's own rule is that a claim measured where the failure cannot occur is not measured. Windows is where the product lives. Run it against the merged binary so the result describes the build you run.</p>
+      <div class="gates">
+        <span class="k">Method</span>
+        <ul>
+          <li>Poll <code>Get-NetTCPConnection -OwningProcess &lt;pid&gt;</code> through a launch, an agent turn, and a Drive edit. Expect two loopback listeners and zero outbound.</li>
+          <li>One turn through a decrypting proxy, because polling samples. The agent's own API traffic is expected and is not telemetry; record it as such.</li>
+          <li>T2.5: one real voice recording under the proxy. Still marked argued, not proxy-verified.</li>
+          <li>T19: the session-sharing relay is a WebSocket the deny-list cannot see. Login-gated and inert today; either add the third enforcement point or write down why the gate is enough.</li>
+        </ul>
+      </div>
+    </div>
+  </article>
+
+  <article class="item" data-id="composer">
+    <div class="rank">4</div>
+    <div class="body">
+      <div class="head">
+        <h2>Composer: the cancel path, not the polish</h2>
+        <button class="status" type="button" aria-label="cycle status">open</button>
+      </div>
+      <div class="meta"><span>.fork/docs/composer.md item 7</span><span>test first, needs a fake streaming agent</span></div>
+      <p>Steps 2 through 4c shipped this week and were the most visible product progress on the board. What remains splits cleanly into defects and polish, and only the defects are ranked. Cancel is a daily gesture.</p>
+      <div class="split">
+        <div>
+          <h3>Defects</h3>
+          <ul>
+            <li>A cancelled turn drops its last unflushed sentence; <code>take_until</code> drops the driver future and nothing flushes <code>pending</code>. Read, not run, twice.</li>
+            <li>The same cancel leaves a tool row the renderer demotes and the transport never closes.</li>
+            <li>A <code>^C</code> appeared at the pane's prompt after <code>agent cancel</code>. If cancel reaches the user's shell it can kill a foreground command. Rule it in or out in a morning.</li>
+            <li>No <code>stop</code> event after the cancelled turn.</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Polish, waits for the friction log</h3>
+          <ul>
+            <li>"Ran N commands" fold once a turn shows enough rows.</li>
+            <li>Shorter transcript announcement and mode headline.</li>
+            <li>Status row shrink weights.</li>
+            <li>Diff view behind an edit row.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </article>
+
+  <article class="item" data-id="chips">
+    <div class="rank">5</div>
+    <div class="body">
+      <div class="head">
+        <h2>Hide the two dead cloud chips</h2>
+        <button class="status" type="button" aria-label="cycle status">open</button>
+      </div>
+      <div class="meta"><span>T19</span><span>agent_input_footer/mod.rs:2050</span><span>read-only as recorded</span></div>
+      <p>The agent footer shows <code>/remote-control</code> and "Hand off to cloud", one tooltipped "Log in". T19 established that the first is a relay over a closed protocol that needs a real account, and the second has nothing local to point at. A no-account product with two login buttons in its footer contradicts itself on screen. Two fork predicates at the footer's gate. T19 was never run against a live instance, so re-run its one empirical check before editing.</p>
+    </div>
+  </article>
+
+  <article class="item" data-id="viewer">
+    <div class="rank">6</div>
+    <div class="body">
+      <div class="head">
+        <h2>The viewer: one trace from the record the agent already keeps</h2>
+        <button class="status" type="button" aria-label="cycle status">open</button>
+      </div>
+      <div class="meta"><span>.fork/docs/observability.md</span><span>specified 2026-09-04, unbuilt</span></div>
+      <p>The observability target, reframed. The harness's own session file is the record: for run 2 it held the full input for all 59 calls where Warp's log truncated 14, and the two joined on the tool-call id Warp already writes. Warp adds only what no harness file has: what it decided, which surface answered, why a request was refused, and live state. The viewer merges the two on that id, orders by time, labels every line by author, and never writes. Compaction is a boundary row, so a session can always be viewed without being compacted, which was I21's whole ask.</p>
+      <div class="split">
+        <div>
+          <h3>Phase 0, before any rendering</h3>
+          <ul>
+            <li><code>local_agent</code> writes <code>linked_session_id: None</code>. The join key exists there and is not written. Fix first.</li>
+            <li>Confirm on a live product-profile session that the join holds under <code>auto</code>, where Warp is never asked.</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Then</h3>
+          <ul>
+            <li><code>warpctrl agent trace &lt;conversation&gt;</code>: JSON lines, then <code>--pretty</code>, then <code>--html</code> as a static file. The UI is a file.</li>
+            <li>No console route: a transcript on a paired phone is a posture question, and posture is frozen.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </article>
+
+  <article class="item" data-id="wsl" data-default="active">
+    <div class="rank">7</div>
+    <div class="body">
+      <div class="head">
+        <h2>WSL parity: the pane is a remote session, and now it connects itself</h2>
+        <button class="status" type="button" aria-label="cycle status">open</button>
+      </div>
+      <div class="meta"><span>.fork/docs/wsl.md</span><span>friction #1, 2026-09-05</span><span>step 1 built 2026-09-05</span></div>
+      <p>The first product-profile session hit it within minutes: the diff panel in a WSL pane on this repo says <em>Diffs don't currently work in WSL</em>. The text is a fallback that fires when no repository has been detected yet, and in a pane nobody has connected to the server, detection walks the repo from Windows over 9p at about 20 ms per entry and never finishes. The remote diff stack exists and was built for SSH; it has never been opened on a WSL host. Language servers for a routed buffer are absent by construction: the editor's LSP path takes local paths only and the protocol carries no LSP messages.</p>
+      <div class="facts">
+        <table>
+          <thead><tr><th>surface</th><th>routed</th><th>not routed</th></tr></thead>
+          <tbody>
+            <tr><td>tree, open file, search, git chip</td><td>inside the distribution, measured T16</td><td>9p</td></tr>
+            <tr><td>diff panel</td><td>unmeasured</td><td>9p; never finishes on this repo</td></tr>
+            <tr><td>editor language server</td><td>none, structurally</td><td>spawned on Windows, reads over 9p</td></tr>
+            <tr><td>connecting the server</td><td colspan="2"><strong>automatic when the shell bootstraps</strong>, since <code>ea61116e1</code>. Off under <code>WARP_FORK_WSL_AUTO_CONNECT=off</code> or <code>WARP_FORK_POLICY=0</code>; the palette action and <code>warpctrl remote wsl connect</code> remain for re-attaching.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="split">
+        <div>
+          <h3>In order</h3>
+          <ul>
+            <li><strong>Built.</strong> The WSL arm beside the SSH one, in <code>ModelEventDispatcher::complete_bootstrapped_session</code>, keyed on the session's own distribution and gated by <code>fork::wsl_auto_connect_enabled</code>. It never holds the bootstrap back: a failed connect is a log line and a not-routed pane. Measurement on Windows: see <code>.fork/docs/wsl.md</code>, "Connecting, as built".</li>
+            <li>Open the diff panel routed; fix what is found; make the fallback name the true cause via <code>session_filesystem</code>.</li>
+            <li>Language servers: measure <code>wsl.exe -d &lt;distro&gt; -- rust-analyzer</code> over stdio with path translation before designing a protocol proxy.</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Needs a word from you</h3>
+          <ul>
+            <li>Clipboard: which gesture failed, copied from where to where. Select-and-copy is Warp's and never touches the distribution; OSC 52 goes through Warp's handler; <code>wl-copy</code> and <code>clip.exe</code> never pass through Warp.</li>
+            <li>Whether that pane was routed. <code>warpctrl session inspect</code> answers it. Moot for new panes once the build with <code>ea61116e1</code> is the one you launch.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </article>
+
+  <section class="parked">
+    <h2>Parked, by name</h2>
+    <ul>
+      <li><b>I18 persistent grant</b><span>Run 2's own log says 30 of 44 asks were the agent driving the Windows host from WSL, which the agent's config already handles. 7 of 44 were the case the grant addresses.</span></li>
+      <li><b>CLASSIFIER.md</b><span>An input to a posture decision, and posture is set aside.</span></li>
+      <li><b>T14.14 model picker</b><span>Under ACP the agent owns model choice. A second picker in Warp duplicates it.</span></li>
+      <li><b>I22 OpenRouter provider</b><span>Same reason. The provider lives in the agent now.</span></li>
+      <li><b>I1 inbox and settled</b><span>No friction log has asked for it.</span></li>
+      <li><b>T7 plan runner</b><span>Built. Waits for a plan you actually want run.</span></li>
+      <li><b>GOAL.md unknown 4</b><span>Compaction cadence under ordinary work. Unmeasurable where the product runs, and the agent's own session file already holds what compaction drops.</span></li>
+    </ul>
+  </section>
+
+  <section class="parked">
+    <h2>Decisions on record</h2>
+    <ul>
+      <li><b>ACP stays</b><span>Asked 2026-09-04 whether ACP was the right call once its permission half is idle by default. Yes: it is the only versioned interface a non-Claude agent offers, and the thesis names local models, which no Claude-only path reaches. <code>local_agent</code> stays beside it as the path with no <code>npx</code> in front. What stops is measuring ACP's permission half.</span></li>
+      <li><b>GOAL.md rewritten</b><span>The measurement horizon is retired, not failed; run 2 answered it. The new one is a working week in the product profile with a friction log.</span></li>
+      <li><b>Plans stay local</b><span>Said 2026-09-05: HTML plans are local-first, self-contained, no third-party fonts, scripts or APIs. This file is the board now; the claude.ai copy of 2026-09-04 is not updated unless asked for.</span></li>
+    </ul>
+  </section>
+
+  <footer>
+    <p>Status chips cycle open &rarr; active &rarr; done and are remembered in this browser only.</p>
+    <p>Item 7 added 2026-09-05 from the first friction-log line; its first step landed the same day. Figures in item 1 measured 2026-09-04 against <code>upstream/master</code> at 5a6ded1e8 and <code>dev</code> at 07b56708a. Re-run before trusting them a week from now.</p>
+  </footer>
+</div>
+
+<script>
+(function () {
+  var states = ['open', 'active', 'done'];
+  var key = 'five-to-ship-status';
+  var saved = {};
+  try { saved = JSON.parse(localStorage.getItem(key) || '{}') || {}; } catch (e) { saved = {}; }
+  var items = document.querySelectorAll('.item');
+  items.forEach(function (item) {
+    var id = item.getAttribute('data-id');
+    var btn = item.querySelector('.status');
+    var apply = function (s) {
+      item.classList.remove('active', 'done');
+      if (s !== 'open') item.classList.add(s);
+      btn.textContent = s;
+    };
+    var dflt = item.getAttribute('data-default') || 'open';
+    apply(states.indexOf(saved[id]) >= 0 ? saved[id] : dflt);
+    btn.addEventListener('click', function () {
+      var next = states[(states.indexOf(btn.textContent) + 1) % states.length];
+      apply(next);
+      saved[id] = next;
+      try { localStorage.setItem(key, JSON.stringify(saved)); } catch (e) {}
+    });
+  });
+})();
+</script>
+</body>
+</html>
