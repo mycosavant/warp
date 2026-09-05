@@ -360,40 +360,48 @@ real document symbols. Two gotchas, both of which cost an hour:
   inventing five symbols after its server failed to attach, which is worse than
   having no tool.
 
-### Launching it instrumented — `ggwarpdev`
+### Launching it — `ggwarpdev`
 
-The four `WARP_FORK_*` variables turn a launch into a *measured* one. Setting
-them at User or Machine scope is the obvious way and the wrong one: a variable
-set in October is still set in December, and `WARP_FORK_ACP_COMMAND` silently
-replaces the agent transport for every session after it — a corrupted
-measurement that looks like a working day.
-
-`.fork/tools/warpdev.ps1` holds the toggle. **Nothing is ever written to the
-Windows environment**; the variables are set inside the launcher process only and
-die with it. What persists is one word in `~/.warpdev`, and every run prints it.
+`.fork/tools/warpdev.ps1` launches the Windows build in one of three profiles,
+chosen per launch and never persisted. **Nothing is ever written to the Windows
+environment**; the variables are set inside the launcher process and die with
+it. The old `~/.warpdev` state file is no longer read.
 
 ```bash
-ggwarpdev            # report; enable if off, offer to disable if on
-ggwarpdev launch     # launch Warp applying the current state
-ggwarpdev on | off   # set explicitly
-ggwarpdev status     # report only
+ggwarpdev                 # PRODUCT: the fork's agent, its own shipped permission mode, no instruments
+ggwarpdev instrumented    # THE RIG: product + WARP_FORK_ACP_MODE=default, event log, transcript
+ggwarpdev stock           # UPSTREAM: all four WARP_FORK_* variables cleared, for A/B-ing a regression
+ggwarpdev status          # print what a launch would set, and the tree state, without launching
 ```
 
+Until 2026-09-04 the script had two states and neither was the build you would
+live in: "on" was the rig, "off" was stock upstream with no fork agent at all.
+Run 2 was fifty minutes in the rig and ended on the ask count; that was the
+instrument working. The product profile leaves `claude-agent-acp` in `auto`,
+where Claude Code's own classifier answers the easy asks on this machine, on
+your subscription. Warp is not asked and records nothing, which is a
+measurement loss and not a safety loss (T14.18). Pass `instrumented` when you
+have a question you can write in one sentence beforehand.
+
 The shell function is in `~/.bashrc`; the script is run from the Windows checkout
-(`C:\dev\warp\.fork\tools\warpdev.ps1`), so **sync that checkout first** —
-it is a separate clone and nothing updates it.
+(`C:\dev\warp\.fork\tools\warpdev.ps1`), so **sync that checkout first**.
+The launcher tells you when you have not: it prints the commit the tree is on,
+warns when the binary predates the tree's last *source* commit (scoped to
+`app`, `crates`, `Cargo.toml`, `Cargo.lock`, so a docs commit does not cry
+stale), and warns how many commits behind the WSL `dev` the Windows tree is.
+It never syncs for you, because syncing the tree at launch without rebuilding
+would create exactly the tree-newer-than-binary mismatch the check exists to
+catch. Release is preferred and debug is the fallback; it says which.
 
 **The limitation, stated rather than discovered:** this governs launches made
 through the script. A Warp started from Explorer, a shortcut, or a bare
-`warp-oss.exe` inherits none of it and is not instrumented however the toggle
-reads. `status` says what a launch *would* do; it cannot say what a running
-instance was launched with. To check a live one, look for the event-log
-directory rather than trusting the toggle.
+`warp-oss.exe` gets none of it, not even the fork agent. `status` says what a
+launch *would* do; it cannot say what a running instance was launched with. To
+check a live one, look for the event-log directory.
 
-Two behaviours worth knowing: it prints the commit the Windows checkout is
-sitting on before launching, because that tree is the one that gets built and
-nothing syncs it; and it polls `instance list` for up to 45 s afterwards, so a
-launch that fails silently is reported instead of assumed.
+It refuses to launch on top of a running Warp (T20.3; `-Force` in the param
+block for a person who reads the script), and polls `instance list` for up to
+45 s afterwards so a launch that fails silently is reported instead of assumed.
 
 ### Reproducing any of this — three traps
 

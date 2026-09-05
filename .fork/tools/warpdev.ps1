@@ -1,136 +1,215 @@
 <#
 .SYNOPSIS
-  Launch the Windows fork build with its instruments on, without ever leaving
-  them on.
+  Launch the Windows fork build. The default is the product; the instruments
+  are a switch you pass for one launch.
 
 .DESCRIPTION
-  The fork's four environment variables turn a Warp launch into a *measured*
-  one. Setting them at User or Machine scope would be the obvious way to do it
-  and is the wrong one: a variable set in October is still set in December, and
-  `WARP_FORK_ACP_COMMAND` silently replaces the agent transport for every
-  session after it. That is a corrupted measurement that looks like a working
-  day.
+  Until 2026-09-04 this script had two states, "on" and "off", and neither was
+  the build you would live in. "On" was the measurement rig: the agent forced
+  into its `default` permission mode so every ask could be counted, plus the
+  event log and the transcript. "Off" was stock upstream, with no fork agent at
+  all, so the panel answered from Warp's account-gated cloud path. The daily
+  driver, the fork's agent in its own shipped mode with nothing recording, had
+  no spelling here at all. Run 2 was fifty minutes in the rig and was ended by
+  the ask count; that count was the instrument working, not the product.
 
-  So nothing here is ever persisted to the environment. The variables are set
-  with `$env:` inside this process only, which means they reach the Warp it
-  starts and die with this script. What *is* persisted is a single word in a
-  state file, and every run of this script prints it.
+  Three profiles now, chosen per launch and never persisted:
+
+    (default)       PRODUCT. `WARP_FORK_ACP_COMMAND` names the agent, started
+                    inside the WSL distribution so a pane's Unix cwd resolves.
+                    Nothing else is set: the agent runs in its own shipped
+                    permission mode (`auto` for claude-agent-acp, where Claude
+                    Code's classifier answers the easy asks on this machine, on
+                    your subscription). No event log, no transcript. This is
+                    thesis-compliant: nothing about where data goes or whose
+                    credential pays is changed by it. What it costs is Warp's
+                    visibility into permissions, and that is a measurement
+                    loss, not a safety loss (T14.18).
+
+    -Instrumented   THE RIG. Product plus `WARP_FORK_ACP_MODE=default`,
+                    `WARP_FORK_EVENT_LOG=on`, `WARP_FORK_TRANSCRIPT=on`. The
+                    agent asks about everything not on your allow list, and
+                    every ask and answer is written down. Use it when you want
+                    Warp in the loop and are prepared to answer for it.
+
+    -Stock          UPSTREAM. All four variables cleared. For A/B-ing a
+                    suspected fork regression. Plan the shutdown first: with
+                    `WARP_FORK_POLICY` untouched this still publishes a
+                    discovery record, but the agent panel is upstream's.
+
+  Nothing is ever written to the Windows environment. The variables are set
+  with `$env:` inside this process only, reach the Warp it starts, and die with
+  this script. The old `~/.warpdev` state file is no longer read: a persisted
+  "instrumented" is exactly the corrupted-measurement-that-looks-like-a-working-
+  day this header has always warned about, and with a product default there is
+  nothing left for a state file to remember.
 
   The limitation, stated rather than discovered: this governs launches made
   through this script. A Warp started from Explorer, a shortcut, or a bare
-  `warp-oss.exe` inherits none of it and is not instrumented, however this
-  toggle is set. `-Status` will tell you what a launch *would* do; it cannot
-  tell you what a running instance was launched with.
+  `warp-oss.exe` inherits none of it: no fork agent, no instruments.
+  `-Status` says what a launch *would* do; it cannot say what a running instance
+  was launched with. For a live one, look for the event-log directory.
+
+.PARAMETER Exe
+  The binary to launch. Unset, the release build is preferred and the debug
+  build is the fallback; the choice is printed.
+
+.PARAMETER WslRepo
+  The WSL checkout this Windows checkout is a clone of, as a UNC path. Used only
+  to report how far behind `C:\dev\warp` is. Nothing here syncs it: syncing the
+  tree at launch without rebuilding would leave the source newer than the binary
+  in the same checkout, which is the mismatch the commit check exists to catch.
 
 .EXAMPLE
-  warpdev.ps1              # report state; enable if off, offer to disable if on
+  warpdev.ps1                 # launch the product
 .EXAMPLE
-  warpdev.ps1 -Launch      # launch Warp applying the current state
+  warpdev.ps1 -Instrumented   # launch the rig, for one session
 .EXAMPLE
-  warpdev.ps1 -On -Launch  # enable and launch in one go
+  warpdev.ps1 -Status         # print what a launch would set, and the tree state
 #>
 [CmdletBinding()]
 param(
-    [switch]$On,
-    [switch]$Off,
+    [switch]$Instrumented,
+    [switch]$Stock,
     [switch]$Status,
-    [switch]$Launch,
     [switch]$Force,
-    [string]$Exe = 'C:\dev\warp\target\debug\warp-oss.exe'
+    [string]$Exe,
+    [string]$WslRepo = '\\wsl.localhost\Ubuntu\home\effatha\git\warp',
+    # Accepted so a shell alias written against the old script keeps working.
+    # `-On` was the rig and maps to `-Instrumented`; `-Off` was stock upstream
+    # and maps to `-Stock`; `-Launch` was the only way to launch and is now the
+    # default, so it is a no-op.
+    [switch]$Launch,
+    [switch]$On,
+    [switch]$Off
 )
 
 $ErrorActionPreference = 'Stop'
+$WinRepo = 'C:\dev\warp'
 
-# Beside the user's profile rather than in the repo: a repo file would be
-# untracked noise in `git status` on every run, and this is a fact about this
-# machine, not about the fork.
-$StateFile = Join-Path $HOME '.warpdev'
+if ($On)  { Write-Host "warpdev: -On is now -Instrumented" -ForegroundColor DarkGray; $Instrumented = $true }
+if ($Off) { Write-Host "warpdev: -Off is now -Stock" -ForegroundColor DarkGray; $Stock = $true }
+if ($Instrumented -and $Stock) {
+    Write-Host "warpdev: -Instrumented and -Stock exclude each other." -ForegroundColor Red
+    exit 2
+}
 
-# The instruments, and why each is here. Kept as data so `-Status` can print
-# exactly what a launch would set — the variable, the value, and the reason.
-$Instruments = @(
+$OldStateFile = Join-Path $HOME '.warpdev'
+if (Test-Path $OldStateFile) {
+    Write-Host "warpdev: ~/.warpdev is no longer read (profiles are per launch); delete it when convenient." -ForegroundColor DarkGray
+}
+
+# What each profile sets. Kept as data so `-Status` prints exactly what a launch
+# would do: the variable, the value, and the reason.
+$Product = @(
     @{ Name = 'WARP_FORK_ACP_COMMAND'
        # **Started inside the distribution, and on this platform that is not
        # optional (found 2026-09-03 while verifying T20.1).** A WSL pane's cwd
        # is a Unix path, Warp passes it verbatim in `session/new`, and the agent
-       # is spawned by the *Windows* Warp -- so the unwrapped `npx` form this
-       # entry used refuses the session outright with "`cwd` does not exist on
-       # the machine running the agent". `CLAUDE.md` records the failure and the
-       # remedy; this file was still handing out the form that fails, which is
-       # the one thing a launcher must not do.
+       # is spawned by the *Windows* Warp, so the unwrapped `npx` form refuses
+       # the session outright with "`cwd` does not exist on the machine running
+       # the agent". Pinned, because `npx -y` with no version resolves to
+       # whatever is newest and two installs once sat side by side for a week
+       # giving opposite answers to the same question.
        Value = 'wsl.exe -d Ubuntu -- npx -y @agentclientprotocol/claude-agent-acp@0.73.0'
-       Why = 'the agent panel answers from this agent instead of upstream, started inside WSL so a pane cwd resolves' }
+       Why = 'the agent panel answers from this agent, started inside WSL so a pane cwd resolves' }
+)
+$Instruments = @(
     @{ Name = 'WARP_FORK_ACP_MODE'
        Value = 'default'
        Why = 'makes the agent ask; without it its own classifier answers and Warp is never in the loop' }
     @{ Name = 'WARP_FORK_EVENT_LOG'
        Value = 'on'
-       Why = 'one JSONL per conversation - tool calls, permission asks, what was decided' }
+       Why = 'one JSONL per conversation: tool calls, permission asks, what was decided' }
     @{ Name = 'WARP_FORK_TRANSCRIPT'
        Value = 'on'
-       Why = 'the conversation on disk, owner-only, under the pane directory' }
+       Why = 'the conversation on disk under the pane directory, for grepping back what compaction dropped' }
 )
+$AllVars = @($Product + $Instruments | ForEach-Object { $_.Name })
 
-function Get-State {
-    if (Test-Path $StateFile) {
-        $raw = (Get-Content $StateFile -Raw).Trim().ToLower()
-        # Anything unrecognised reads as off. A state file that has been edited
-        # by hand into something meaningless must not silently mean "measured".
-        return ($raw -eq 'on')
+if ($Stock) {
+    $ProfileName = 'STOCK (upstream; no fork agent)'
+    $ToSet = @()
+} elseif ($Instrumented) {
+    $ProfileName = 'INSTRUMENTED (the rig)'
+    $ToSet = @($Product + $Instruments)
+} else {
+    $ProfileName = 'PRODUCT'
+    $ToSet = @($Product)
+}
+
+function Show-Plan {
+    Write-Host "warpdev: profile $ProfileName" -ForegroundColor Green
+    foreach ($i in $ToSet) {
+        Write-Host ("  {0,-24} = {1}" -f $i.Name, $i.Value) -ForegroundColor DarkGray
+        Write-Host ("  {0,-24}   {1}" -f '', $i.Why) -ForegroundColor DarkGray
     }
-    return $false
-}
-
-function Set-State([bool]$Enabled) {
-    Set-Content -Path $StateFile -Value $(if ($Enabled) { 'on' } else { 'off' }) -NoNewline
-}
-
-function Show-State([bool]$Enabled) {
-    if ($Enabled) {
-        Write-Host "warpdev: ON  - a launch from this script is instrumented" -ForegroundColor Green
-        foreach ($i in $Instruments) {
-            Write-Host ("  {0,-24} = {1}" -f $i.Name, $i.Value) -ForegroundColor DarkGray
-        }
-    } else {
-        Write-Host "warpdev: OFF - a launch from this script is stock upstream behaviour" -ForegroundColor Yellow
+    $setNames = @($ToSet | ForEach-Object { $_.Name })
+    $cleared = @($AllVars | Where-Object { $setNames -notcontains $_ })
+    if ($cleared.Count -gt 0) {
+        Write-Host ("  cleared: {0}" -f ($cleared -join ', ')) -ForegroundColor DarkGray
     }
-    Write-Host "  state file: $StateFile" -ForegroundColor DarkGray
-    Write-Host "  note: a Warp started any other way is NOT instrumented, either way." -ForegroundColor DarkGray
+    Write-Host "  note: a Warp started any other way gets none of this." -ForegroundColor DarkGray
 }
 
-$enabled = Get-State
-
-if ($On)  { $enabled = $true;  Set-State $true;  Show-State $enabled }
-elseif ($Off) { $enabled = $false; Set-State $false; Show-State $enabled }
-elseif ($Status) { Show-State $enabled }
-elseif (-not $Launch) {
-    # The bare form: report, then do the thing that is not already true.
-    Show-State $enabled
-    if ($enabled) {
-        $answer = Read-Host "`nDisable instrumentation? [y/N]"
-        if ($answer -match '^(y|yes)$') { Set-State $false; $enabled = $false; Write-Host ""; Show-State $enabled }
-        else { Write-Host "left on." -ForegroundColor DarkGray }
-    } else {
-        Set-State $true; $enabled = $true; Write-Host ""; Show-State $enabled
-    }
+# Resolve the binary: release if it exists, else debug, and say which.
+if (-not $Exe) {
+    $release = Join-Path $WinRepo 'target\release\warp-oss.exe'
+    $debug   = Join-Path $WinRepo 'target\debug\warp-oss.exe'
+    if (Test-Path $release) { $Exe = $release }
+    elseif (Test-Path $debug) { $Exe = $debug; Write-Host "warpdev: no release build; using debug" -ForegroundColor Yellow }
+    else { $Exe = $release }
 }
 
-if (-not $Launch) { return }
+Show-Plan
 
 if (-not (Test-Path $Exe)) {
     Write-Host "warpdev: no binary at $Exe" -ForegroundColor Red
-    Write-Host "  build it with C:\dev\build.ps1, and check that checkout is current:" -ForegroundColor DarkGray
-    Write-Host "  git -C C:\dev\warp log --oneline -1" -ForegroundColor DarkGray
+    Write-Host "  build it with C:\dev\build.ps1 -Release, and check that checkout is current:" -ForegroundColor DarkGray
+    Write-Host "  git -C $WinRepo log --oneline -1" -ForegroundColor DarkGray
     exit 1
 }
+Write-Host "warpdev: binary $Exe" -ForegroundColor DarkGray
 
-# The commit check, because the Windows build is a second checkout that nothing
-# syncs. A build there reports success and changes nothing when it is behind,
-# which is indistinguishable from a build that had nothing to do.
+# Tree checks, all warnings. The Windows build is a second checkout that
+# nothing syncs, and a build there reports success and changes nothing when it
+# is behind, which is indistinguishable from a build that had nothing to do.
+# So: which commit is the tree on, is the binary older than that commit, and
+# how far behind the WSL `dev` is the tree.
+#
+# The binary-vs-commit comparison is honest *inside one checkout*. Comparing a
+# binary here to a source file in the WSL tree is not (CLAUDE.md, 2026-09-02),
+# which is why the WSL side is compared by commit only.
 try {
-    $head = (git -C 'C:\dev\warp' log --oneline -1 2>$null)
-    if ($head) { Write-Host "warpdev: building tree at $head" -ForegroundColor DarkGray }
+    $head = (git -C $WinRepo log --oneline -1 2>$null)
+    if ($head) { Write-Host "warpdev: tree at $head" -ForegroundColor DarkGray }
+    # Scoped to source paths, so a docs-only commit does not cry stale on every
+    # launch. The first cut compared against HEAD unscoped and parsed the epoch
+    # with `[datetime]'1970-01-01Z'`, which never fired; verified against the
+    # 2026-09-04 binary (built 21:58, last source commit 21:13, docs commit
+    # 22:08) that this form says "not stale" and the unscoped one would have
+    # said "stale".
+    $srcEpoch = [int64](git -C $WinRepo log -1 --format=%ct -- app crates Cargo.toml Cargo.lock 2>$null)
+    if ($srcEpoch) {
+        $epoch0 = [datetime]::new(1970, 1, 1, 0, 0, 0, [System.DateTimeKind]::Utc)
+        $binEpoch = [int64][math]::Floor(((Get-Item $Exe).LastWriteTimeUtc - $epoch0).TotalSeconds)
+        if ($srcEpoch -gt $binEpoch) {
+            Write-Host "warpdev: the binary predates the tree's last source commit; rebuild with C:\dev\build.ps1 -Release" -ForegroundColor Yellow
+        }
+    }
 } catch { }
+try {
+    $winHead = (git -C $WinRepo rev-parse HEAD 2>$null)
+    $wslHead = (git -C $WslRepo rev-parse dev 2>$null)
+    if ($winHead -and $wslHead -and $winHead -ne $wslHead) {
+        $behind = (git -C $WslRepo rev-list --count "$winHead..dev" 2>$null)
+        Write-Host "warpdev: Windows checkout is $behind commit(s) behind WSL dev" -ForegroundColor Yellow
+        Write-Host "  sync:    git -C $WinRepo fetch gh dev; git -C $WinRepo merge --ff-only FETCH_HEAD" -ForegroundColor DarkGray
+        Write-Host "  rebuild: C:\dev\build.ps1 -Release   (a launch never syncs for you: tree newer than binary is the mismatch above)" -ForegroundColor DarkGray
+    }
+} catch { }
+
+if ($Status) { exit 0 }
 
 # **Refuse to launch on top of a Warp that is already up (T20.3).** Measured in
 # run 2: an agent answered an approval to "launch the Windows Warp build" while
@@ -199,14 +278,12 @@ if ($live.Count -gt 0) {
     Write-Host "  Expect ambiguous_instance from warpctrl calls without --instance." -ForegroundColor DarkGray
 }
 
-if ($enabled) {
-    foreach ($i in $Instruments) { Set-Item -Path "env:$($i.Name)" -Value $i.Value }
-    Write-Host "warpdev: launching INSTRUMENTED" -ForegroundColor Green
-} else {
-    # Cleared rather than assumed absent: this process may have inherited them.
-    foreach ($i in $Instruments) { Remove-Item -Path "env:$($i.Name)" -ErrorAction SilentlyContinue }
-    Write-Host "warpdev: launching plain (no instruments)" -ForegroundColor Yellow
-}
+# Cleared rather than assumed absent: this process may have inherited them, and
+# an inherited `WARP_FORK_ACP_MODE=default` would turn a product launch into the
+# rig without anything printed saying so.
+foreach ($name in $AllVars) { Remove-Item -Path "env:$name" -ErrorAction SilentlyContinue }
+foreach ($i in $ToSet) { Set-Item -Path "env:$($i.Name)" -Value $i.Value }
+Write-Host "warpdev: launching $ProfileName" -ForegroundColor Green
 
 # `-NoNewWindow` is load-bearing and not cosmetic. `warp-oss.exe` is a
 # console-subsystem binary; without this it gets its own console, `stdout` is a
