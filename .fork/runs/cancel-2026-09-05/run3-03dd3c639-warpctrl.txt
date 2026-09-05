@@ -1,0 +1,62 @@
+{
+  "action": "agent.prompt",
+  "ok": true,
+  "instance_id": "inst_05a8d13e74024183878fa1f2db6b357e",
+  "conversation_id": "74c788a5-a566-448a-95e0-0fbd1be8bbcb",
+  "created": true
+}
+CID=74c788a5-a566-448a-95e0-0fbd1be8bbcb
+{"action":"input.submit","ok":true,"instance_id":"inst_05a8d13e74024183878fa1f2db6b357e","executed":true,"queued":false}3577550 sleep 300
+"status":"success"
+"status":"in_progress"
+20:16:30.110308990
+{"action":"agent.cancel","ok":true,"instance_id":"inst_05a8d13e74024183878fa1f2db6b357e","conversation_id":"74c788a5-a566-448a-95e0-0fbd1be8bbcb","was_running":true,"status":"in_progress"}--- after cancel:
+{
+  "action": "agent.list",
+  "ok": true,
+  "instance_id": "inst_05a8d13e74024183878fa1f2db6b357e",
+  "conversations": [
+    {
+      "conversation_id": "446ad7e6-dc57-4f79-a565-f5059000297b",
+      "title": "Write the numbers one to eighty in English words, one per li…",
+      "status": "success",
+      "is_busy": false,
+      "pane_id": "Pane Pane Terminal (2618)",
+      "tab_id": "2228",
+      "session_mode": "default"
+    },
+    {
+      "conversation_id": "74c788a5-a566-448a-95e0-0fbd1be8bbcb",
+      "title": "Write the numbers one to five hundred in English words, one…",
+      "status": "cancelled",
+      "is_busy": false,
+      "pane_id": "Pane Pane Terminal (2618)",
+      "tab_id": "2228",
+      "session_mode": "default"
+    }
+  ]
+}
+{
+  "action": "agent.read",
+  "ok": true,
+  "instance_id": "inst_05a8d13e74024183878fa1f2db6b357e",
+  "conversation": {
+    "conversation_id": "74c788a5-a566-448a-95e0-0fbd1be8bbcb",
+    "title": "Write the numbers one to five hundred in English words, one…",
+    "status": "cancelled",
+    "is_busy": false,
+    "pane_id": "Pane Pane Terminal (2618)",
+    "tab_id": "2228",
+    "session_mode": "default"
+  },
+  "exchanges": [
+    {
+      "index": 0,
+      "input": "Write the numbers one to five hundred in English words, one per line, with no tools and no commentary.",
+      "output": "`WARP_FORK_ACP_MODE` asked for the agent's `default` mode, which the agent describes as “Always ask before making changes”, and the agent accepted, so that is the mode this session is running under.\n\nThis turn began with the session in the agent's `auto` mode, which the agent describes as “Claude handles permission decisions”.\n[Warp] Warp is keeping a transcript of this conversation at /home/effatha/git/warp/.warp/transcripts/74c788a5-a566-448a-95e0-0fbd1be8bbcb.md and telling the agent it can search it. Nothing else is added to your prompts. Unset `WARP_FORK_TRANSCRIPT` to stop.",
+      "is_complete": true
+    }
+  ],
+  "exchange_count": 1,
+  "included_tool_results": false
+}

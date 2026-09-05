@@ -1,0 +1,449 @@
+2026-09-05T20:36:49Z [INFO] [warp] Using DXC for DirectX shader compilation
+2026-09-05T20:36:50Z [INFO] [warp_server_auth::auth_state] Unable to read user from secure storage: SecureStorageError(NotFound)
+2026-09-05T20:36:50Z [WARN] [warp::persistence::sqlite] SQLite error 283 (A WAL mode database file was recovered): recovered 228 frames from WAL file C:\Users\onemind\AppData\Local\warp\WarpOss-wslauto\data\warp.sqlite-wal
+2026-09-05T20:36:50Z [INFO] [warp::persistence::sqlite] Connecting to SQLite database
+2026-09-05T20:36:50Z [INFO] [warp::autoupdate::windows] No autoupdate logs found
+2026-09-05T20:36:50Z [INFO] [warp] Starting warp with channel state ChannelState { channel: Oss, additional_features: {DebugMode, RuntimeFeatureFlags}, config: ChannelConfig { app_id: AppId { qualifier: "dev", organization: "warp", application_name: "WarpOss" }, logfile_name: "warp-oss.log", server_config: WarpServerConfig { server_root_url: "https://app.warp.dev", rtc_server_url: "wss://rtc.app.warp.dev/graphql/v2", session_sharing_server_url: Some("wss://sessions.app.warp.dev"), firebase_auth_api_key: "AIzaSyBdy3O3S9hrdayLJxJ7mriBR4qgUaUygAs", iap_config: None }, oz_config: OzConfig { oz_root_url: "https://oz.warp.dev", workload_audience_url: None }, telemetry_config: None, autoupdate_config: None, crash_reporting_config: None, mcp_static_config: None } } and version Some("v0.fork.2ff77def8")
+2026-09-05T20:36:50Z [INFO] [warp::server::telemetry] Not sending telemetry event because telemetry is disabled.
+2026-09-05T20:36:50Z [INFO] [warpui_core::fonts] Computing available system fonts
+2026-09-05T20:36:50Z [INFO] [warp::app_services] Initializing app services
+2026-09-05T20:36:50Z [INFO] [warp::server::cloud_objects::update_manager] Local-first Warp Drive: treating the SQLite store as the initial load
+2026-09-05T20:36:50Z [INFO] [warp::ai::mcp::templatable_manager::native] Converting 0 legacy MCP servers into templatable MCP servers
+2026-09-05T20:36:50Z [INFO] [warp::server::cloud_objects::listener] Attempting to start websocket connection in CloudObjects::Listener
+2026-09-05T20:36:50Z [INFO] [warp::ai::execution_profiles::profiles] Initialized execution profile model with state: Unsynced, file_backed_profiles: true
+2026-09-05T20:36:50Z [ERROR] [http_server] Failed to bind local HTTP server on 127.0.0.1:9282: Only one usage of each socket address (protocol/network address/port) is normally permitted. (os error 10048)
+2026-09-05T20:36:50Z [INFO] [warp::local_control] local-control server started at http://127.0.0.1:56570/v1/control
+2026-09-05T20:36:50Z [INFO] [warp::server::telemetry] Not sending telemetry event because telemetry is disabled.
+2026-09-05T20:36:50Z [INFO] [warpui_core::core::app] dispatching global action for root_view:open_from_restored
+2026-09-05T20:36:50Z [INFO] [warp::server::telemetry] Not sending telemetry event because telemetry is disabled.
+2026-09-05T20:36:50Z [INFO] [warpui_core::fonts] Computing available system fonts
+2026-09-05T20:36:50Z [INFO] [warp::server::telemetry] Not sending telemetry event because telemetry is disabled.
+2026-09-05T20:36:50Z [INFO] [warp::terminal::local_tty::terminal_manager] Creating terminal model with 0 restored blocks
+2026-09-05T20:36:50Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-05T20:36:50Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-05T20:36:50Z [INFO] [warp::terminal::local_tty::terminal_manager] Creating terminal model with 11 restored blocks
+2026-09-05T20:36:50Z [INFO] [warp::terminal::model::block] Block finished with new state DoneWithExecution
+2026-09-05T20:36:50Z [INFO] [warp::terminal::model::block] Block finished with new state DoneWithExecution
+2026-09-05T20:36:50Z [INFO] [warp::terminal::model::block] Block finished with new state DoneWithExecution
+2026-09-05T20:36:50Z [INFO] [warp::terminal::model::block] Block finished with new state DoneWithExecution
+2026-09-05T20:36:50Z [INFO] [warp::terminal::model::block] Block finished with new state DoneWithExecution
+2026-09-05T20:36:50Z [INFO] [warp::terminal::model::block] Block finished with new state DoneWithExecution
+2026-09-05T20:36:50Z [INFO] [warp::terminal::model::block] Block finished with new state DoneWithExecution
+2026-09-05T20:36:50Z [INFO] [warp::terminal::model::block] Block finished with new state DoneWithExecution
+2026-09-05T20:36:50Z [INFO] [warp::terminal::model::block] Block finished with new state DoneWithExecution
+2026-09-05T20:36:50Z [INFO] [warp::terminal::model::block] Block finished with new state DoneWithExecution
+2026-09-05T20:36:50Z [INFO] [warp::terminal::model::block] Block finished with new state DoneWithExecution
+2026-09-05T20:36:50Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-05T20:36:50Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-05T20:36:50Z [INFO] [warp::terminal::view::load_ai_conversation] Restoring 2 conversations on view creation: [AIConversationId(446ad7e6-dc57-4f79-a565-f5059000297b), AIConversationId(74c788a5-a566-448a-95e0-0fbd1be8bbcb)]
+2026-09-05T20:36:50Z [INFO] [warp::terminal::view::load_ai_conversation] Successfully restored 2 AI blocks on view creation for conversations: [AIConversationId(446ad7e6-dc57-4f79-a565-f5059000297b), AIConversationId(74c788a5-a566-448a-95e0-0fbd1be8bbcb)]
+2026-09-05T20:36:50Z [INFO] [warp::terminal::view::load_ai_conversation] Restoring agent view for conversation: 74c788a5-a566-448a-95e0-0fbd1be8bbcb
+2026-09-05T20:36:50Z [INFO] [warpui_core::core::app] dispatching typed action: warp::pane_group::PaneGroupAction::HandleFocusChange
+2026-09-05T20:36:50Z [WARN] [warpui_core::core::app] Action HandleFocusChange was dispatched, but no view handled it
+2026-09-05T20:36:50Z [INFO] [warp::event_log] fork event log: writing to C:\Users\onemind\AppData\Local\warp\WarpOss-wslauto\data\fork\events
+2026-09-05T20:36:50Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-05T20:36:50Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-05T20:36:50Z [INFO] [warpui_core::core::app] dispatching typed action: warp::pane_group::PaneGroupAction::HandleFocusChange
+2026-09-05T20:36:50Z [WARN] [warpui_core::core::app] Action HandleFocusChange was dispatched, but no view handled it
+2026-09-05T20:36:50Z [INFO] [warpui_core::core::app] dispatching typed action: warp::pane_group::PaneGroupAction::HandleFocusChange
+2026-09-05T20:36:50Z [WARN] [warpui_core::core::app] Action HandleFocusChange was dispatched, but no view handled it
+2026-09-05T20:36:50Z [WARN] [warp::terminal::view] Tried to update block filter query without active_filter_editor_block_index set
+2026-09-05T20:36:50Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-05T20:36:50Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-05T20:36:50Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-05T20:36:50Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-05T20:36:50Z [WARN] [warp::terminal::view] Tried to update block filter query without active_filter_editor_block_index set
+2026-09-05T20:36:50Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-05T20:36:50Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-05T20:36:50Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-05T20:36:50Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-05T20:36:50Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-05T20:36:50Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-05T20:36:50Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-05T20:36:50Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-05T20:36:50Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-05T20:36:50Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-05T20:36:50Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-05T20:36:50Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-05T20:36:50Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-05T20:36:50Z [INFO] [warp::antivirus::windows] Detected antivirus / EDR software "Microsoft Defender Antivirus"
+2026-09-05T20:36:50Z [INFO] [warp::ai::mcp::file_based_manager] Initial global file-based MCP scan complete: 0 auto-started server(s) to await before the first turn
+2026-09-05T20:36:50Z [WARN] [warp::server::cloud_objects::listener] CloudObjects::Listener: websocket connection failed to connect or finished with an error; trying again: missing authentication credentials
+2026-09-05T20:36:50Z [INFO] [warpui::windowing::winit::window] Window launched partially offsceen. Moving the window up by 0 pixels
+2026-09-05T20:36:50Z [INFO] [warpui::rendering::wgpu::resources] Enabled wgpu backends: Backends(NOOP | VULKAN | GL | METAL | DX12 | BROWSER_WEBGPU)
+2026-09-05T20:36:50Z [INFO] [warpui::rendering::wgpu::resources] Available wgpu adapters (in priority order):
+2026-09-05T20:36:50Z [WARN] [warpui::rendering::wgpu::resources] Deprioritizing non DX12 Nvidia adapter due to version > 572 (unsupported). Newer NVIDIA drivers can crash if multiple windows are created if the `Vulkan / OpenGL Present MethodNVIDIA setting is set to `Auto` or `Prefer layered on DXGI Swapchain`.
+2026-09-05T20:36:50Z [INFO] [warpui::rendering::wgpu::resources] DiscreteGpu: NVIDIA GeForce RTX 5070
+	Backend: Dx12
+	Driver: 32.0.15.9186
+	Can present: true
+	Supported texture format: Some(Bgra8UnormSrgb)
+	Supported alpha mode: [Auto, Inherit, Opaque, PostMultiplied, PreMultiplied]
+2026-09-05T20:36:50Z [INFO] [warpui::rendering::wgpu::resources] Other: NVIDIA GeForce RTX 5070/PCIe/SSE2
+	Backend: Gl
+	Driver: Unknown (4.6.0 NVIDIA 591.86)
+	Can present: true
+	Supported texture format: Some(Rgba8UnormSrgb)
+	Supported alpha mode: [Opaque]
+2026-09-05T20:36:50Z [INFO] [warpui::rendering::wgpu::resources] Cpu: Microsoft Basic Render Driver
+	Backend: Dx12
+	Driver: 10.0.26100.4768
+	Can present: true
+	Supported texture format: Some(Bgra8UnormSrgb)
+	Supported alpha mode: [Auto, Inherit, Opaque, PostMultiplied, PreMultiplied]
+2026-09-05T20:36:50Z [INFO] [warpui::rendering::wgpu::resources] DiscreteGpu: NVIDIA GeForce RTX 5070
+	Backend: Vulkan
+	Driver: NVIDIA (591.86)
+	Can present: true
+	Supported texture format: Some(Bgra8UnormSrgb)
+	Supported alpha mode: [Opaque]
+2026-09-05T20:36:50Z [INFO] [warpui::rendering::wgpu::resources] Verifying adapter "NVIDIA GeForce RTX 5070" is valid...
+2026-09-05T20:36:50Z [INFO] [warpui::rendering::wgpu::resources] Using Dx12 DiscreteGpu (NVIDIA GeForce RTX 5070) for rendering new window.
+2026-09-05T20:36:50Z [INFO] [warpui_core::platform::app] window resized
+2026-09-05T20:36:50Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-05T20:36:50Z [INFO] [warpui_core::platform::app] window resized
+2026-09-05T20:36:50Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-05T20:36:50Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-05T20:36:50Z [INFO] [warpui_core::platform::app] window resized
+2026-09-05T20:36:50Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-05T20:36:50Z [INFO] [warp_terminal::local_tty::windows] Starting WSL shell process: "Ubuntu"
+2026-09-05T20:36:50Z [INFO] [warpui_core::core::app] dispatching typed action: warp::pane_group::PaneGroupAction::HandleFocusChange
+2026-09-05T20:36:50Z [WARN] [warpui_core::core::app] Action HandleFocusChange was dispatched, but no view handled it
+2026-09-05T20:36:50Z [INFO] [warpui_core::core::app] dispatching typed action: warp::pane_group::PaneGroupAction::HandleFocusChange
+2026-09-05T20:36:50Z [WARN] [warpui_core::core::app] Action HandleFocusChange was dispatched, but no view handled it
+2026-09-05T20:36:50Z [INFO] [warpui_core::core::app] dispatching typed action: warp::pane_group::PaneGroupAction::HandleFocusChange
+2026-09-05T20:36:50Z [WARN] [warpui_core::core::app] Action HandleFocusChange was dispatched, but no view handled it
+2026-09-05T20:36:50Z [INFO] [warpui_core::core::app] dispatching typed action: warp::pane_group::PaneGroupAction::HandleFocusChange
+2026-09-05T20:36:50Z [WARN] [warpui_core::core::app] Action HandleFocusChange was dispatched, but no view handled it
+2026-09-05T20:36:50Z [INFO] [warpui_core::core::app] dispatching typed action: warp::pane_group::PaneGroupAction::HandleFocusChange
+2026-09-05T20:36:50Z [WARN] [warpui_core::core::app] Action HandleFocusChange was dispatched, but no view handled it
+2026-09-05T20:36:50Z [INFO] [warpui_core::core::app] dispatching typed action: warp::pane_group::PaneGroupAction::HandleFocusChange
+2026-09-05T20:36:50Z [WARN] [warpui_core::core::app] Action HandleFocusChange was dispatched, but no view handled it
+2026-09-05T20:36:50Z [INFO] [warpui_core::core::app] dispatching typed action: warp::pane_group::PaneGroupAction::HandleFocusChange
+2026-09-05T20:36:50Z [WARN] [warpui_core::core::app] Action HandleFocusChange was dispatched, but no view handled it
+2026-09-05T20:36:50Z [INFO] [warpui_core::core::app] dispatching typed action: warp::pane_group::PaneGroupAction::HandleFocusChange
+2026-09-05T20:36:50Z [WARN] [warpui_core::core::app] Action HandleFocusChange was dispatched, but no view handled it
+2026-09-05T20:36:50Z [INFO] [warpui_core::core::app] dispatching typed action: warp::pane_group::PaneGroupAction::HandleFocusChange
+2026-09-05T20:36:50Z [WARN] [warpui_core::core::app] Action HandleFocusChange was dispatched, but no view handled it
+2026-09-05T20:36:50Z [INFO] [warpui_core::core::app] dispatching typed action: warp::pane_group::PaneGroupAction::HandleFocusChange
+2026-09-05T20:36:50Z [WARN] [warpui_core::core::app] Action HandleFocusChange was dispatched, but no view handled it
+2026-09-05T20:36:50Z [INFO] [warpui_core::core::app] dispatching typed action: warp::pane_group::PaneGroupAction::HandleFocusChange
+2026-09-05T20:36:50Z [WARN] [warpui_core::core::app] Action HandleFocusChange was dispatched, but no view handled it
+2026-09-05T20:36:50Z [INFO] [warp_terminal::local_tty::windows] Starting WSL shell process: "Ubuntu"
+2026-09-05T20:36:50Z [INFO] [warpui_core::platform::app] active window changed: Some(WindowId(0))
+2026-09-05T20:36:50Z [INFO] [warpui_core::core::app] dispatching global action for root_view:update_quake_mode_state
+2026-09-05T20:36:50Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-05T20:36:50Z [WARN] [warp::terminal::share_block_modal] Tried to render share modal without a model
+2026-09-05T20:36:50Z [WARN] [warp::workspace::native_modal] No alert dialog was set for the native modal
+2026-09-05T20:36:50Z [WARN] [warp::terminal::share_block_modal] Tried to render share modal without a model
+2026-09-05T20:36:50Z [WARN] [warp::ai::blocklist::suggested_agent_mode_workflow_modal] SuggestedAgentModeWorkflowModal has not been initialized
+2026-09-05T20:36:50Z [INFO] [warp_terminal::model::ansi] Received InitShell hook
+2026-09-05T20:36:50Z [INFO] [warp_terminal::model::ansi] Received InitShell hook
+2026-09-05T20:36:51Z [INFO] [warp_terminal::model::ansi] Received CommandFinished hook
+2026-09-05T20:36:51Z [INFO] [warp::terminal::model::terminal_model] Tried to exit the alternate screen, but it was already inactive
+2026-09-05T20:36:51Z [INFO] [warp::terminal::model::block] Block finished with new state DoneWithExecution
+2026-09-05T20:36:51Z [INFO] [warp::terminal::model::blocks] Incrementing stage from WarpInput to ScriptExecution
+2026-09-05T20:36:51Z [INFO] [warp_terminal::model::ansi] Received CommandFinished hook
+2026-09-05T20:36:51Z [INFO] [warp::terminal::model::terminal_model] Tried to exit the alternate screen, but it was already inactive
+2026-09-05T20:36:51Z [INFO] [warp::terminal::model::block] Block finished with new state DoneWithExecution
+2026-09-05T20:36:51Z [INFO] [warp::terminal::model::blocks] Incrementing stage from WarpInput to ScriptExecution
+2026-09-05T20:36:51Z [INFO] [warp_terminal::model::ansi] Received Precmd hook
+2026-09-05T20:36:51Z [INFO] [warp_terminal::model::ansi] Received Precmd hook
+2026-09-05T20:36:51Z [INFO] [warpui_core::core::app] dispatching typed action: warp::pane_group::PaneGroupAction::HandleFocusChange
+2026-09-05T20:36:52Z [INFO] [warp_terminal::model::ansi] Received Bootstrapped hook
+2026-09-05T20:36:52Z [INFO] [warp::terminal::model::early_output] Configured typeahead mode as ShellReported
+2026-09-05T20:36:52Z [INFO] [warp_terminal::model::ansi] Received Bootstrapped hook
+2026-09-05T20:36:52Z [INFO] [warp::terminal::model::early_output] Configured typeahead mode as ShellReported
+2026-09-05T20:36:52Z [INFO] [warp_terminal::model::ansi] Received CommandFinished hook
+2026-09-05T20:36:52Z [INFO] [warp::terminal::model::terminal_model] Tried to exit the alternate screen, but it was already inactive
+2026-09-05T20:36:52Z [INFO] [warp::terminal::model::block] Block finished with new state DoneWithExecution
+2026-09-05T20:36:52Z [INFO] [warp_terminal::model::ansi] Received CommandFinished hook
+2026-09-05T20:36:52Z [INFO] [warp::terminal::model::terminal_model] Tried to exit the alternate screen, but it was already inactive
+2026-09-05T20:36:52Z [INFO] [warp::terminal::model::blocks] Incrementing stage from Bootstrapped to PostBootstrapPrecmd
+2026-09-05T20:36:52Z [INFO] [warp::terminal::model::block] Block finished with new state DoneWithExecution
+2026-09-05T20:36:52Z [INFO] [warp::terminal::model::blocks] Incrementing stage from Bootstrapped to PostBootstrapPrecmd
+2026-09-05T20:36:52Z [INFO] [warp_terminal::model::ansi] Received Precmd hook
+2026-09-05T20:36:52Z [INFO] [warp_terminal::model::ansi] Received Precmd hook
+2026-09-05T20:36:54Z [INFO] [warp::terminal::model::session::command_executor] creating a local executor!
+2026-09-05T20:36:54Z [INFO] [warp::terminal::model::session] Parsed shell version string: Some([Number(5), Number(2), Number(21), Number(1), Text("release")])
+2026-09-05T20:36:54Z [INFO] [warp::terminal::model::session] Shell is bootstrapped with session_id SessionId(1801505192329802913)
+2026-09-05T20:36:54Z [INFO] [warp::terminal::model_events] WSL session SessionId(1801505192329802913) bootstrapped in Ubuntu; attaching a remote server
+2026-09-05T20:36:54Z [INFO] [warp::remote_server::wsl_transport] Connecting remote server to WSL distro Ubuntu for session SessionId(1801505192329802913)
+2026-09-05T20:36:54Z [INFO] [remote_server::manager] Starting remote server connection: session=SessionId(1801505192329802913)
+2026-09-05T20:36:54Z [INFO] [warp::terminal::model::session] Loading history from file \\wsl$\ubuntu\home\effatha\.bash_history for shell bash
+2026-09-05T20:36:54Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-05T20:36:54Z [WARN] [warp::terminal::view] Expected to have session for session ID SessionId(16398906655951973510), but doesn't exist
+2026-09-05T20:36:54Z [INFO] [warpui_core::core::app] dispatching typed action: warp::pane_group::PaneGroupAction::HandleFocusChange
+2026-09-05T20:36:54Z [INFO] [warp::terminal::model::session::command_executor] creating a local executor!
+2026-09-05T20:36:54Z [INFO] [warp::terminal::model::session] Parsed shell version string: Some([Number(5), Number(2), Number(21), Number(1), Text("release")])
+2026-09-05T20:36:54Z [INFO] [warp::terminal::model::session] Shell is bootstrapped with session_id SessionId(16398906655951973510)
+2026-09-05T20:36:54Z [INFO] [warp::terminal::model_events] WSL session SessionId(16398906655951973510) bootstrapped in Ubuntu; attaching a remote server
+2026-09-05T20:36:54Z [INFO] [warp::remote_server::wsl_transport] Connecting remote server to WSL distro Ubuntu for session SessionId(16398906655951973510)
+2026-09-05T20:36:54Z [INFO] [remote_server::manager] Starting remote server connection: session=SessionId(16398906655951973510)
+2026-09-05T20:36:54Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-05T20:36:54Z [INFO] [remote_server::client] [remote_server] 16:36:57.029 [0m[34m[INFO][0m [0m[0mProxy: reusing existing daemon
+2026-09-05T20:36:54Z [INFO] [remote_server::client] [remote_server] 16:36:57.029 [0m[34m[INFO][0m [0m[0mProxy: connecting to daemon socket at /home/effatha/.warp-dev/remote-server/d9b8ac72/server-78e7b621.sock
+2026-09-05T20:36:54Z [INFO] [remote_server::client] [remote_server] 16:36:57.029 [0m[34m[INFO][0m [0m[0mProxy: connected, bridging stdio
+2026-09-05T20:36:54Z [INFO] [remote_server::client] [Remote codebase indexing] Client received codebase index statuses push: status_count=0
+2026-09-05T20:36:54Z [WARN] [remote_server::manager] Remote server version differs from the client: session=SessionId(1801505192329802913) client=Some("v0.fork.2ff77def8") server="v0.fork.c56fc22de"
+2026-09-05T20:36:54Z [INFO] [remote_server::manager] [Remote codebase indexing] Remote server initialize handshake complete: session=SessionId(1801505192329802913) host=9f8d3020-6afa-45ea-b4c8-8b8c4bc6446f server_version="v0.fork.c56fc22de"
+2026-09-05T20:36:54Z [INFO] [repo_metadata::local_model] Upgrading pending lazy-loaded path to fully indexed directory: \\wsl$\ubuntu\home\effatha\git\warp
+2026-09-05T20:36:54Z [INFO] [warp::code_review::code_review_view] Code Review Panel: Setting state to loading after receiving 'loading' message.
+2026-09-05T20:36:54Z [INFO] [remote_server::client] [remote_server] 16:36:57.199 [0m[34m[INFO][0m [0m[0mProxy: reusing existing daemon
+2026-09-05T20:36:54Z [INFO] [remote_server::client] [remote_server] 16:36:57.199 [0m[34m[INFO][0m [0m[0mProxy: connecting to daemon socket at /home/effatha/.warp-dev/remote-server/d9b8ac72/server-78e7b621.sock
+2026-09-05T20:36:54Z [INFO] [remote_server::client] [remote_server] 16:36:57.199 [0m[34m[INFO][0m [0m[0mProxy: connected, bridging stdio
+2026-09-05T20:36:54Z [INFO] [remote_server::client] [Remote codebase indexing] Client received codebase index statuses push: status_count=0
+2026-09-05T20:36:54Z [WARN] [remote_server::manager] Remote server version differs from the client: session=SessionId(16398906655951973510) client=Some("v0.fork.2ff77def8") server="v0.fork.c56fc22de"
+2026-09-05T20:36:54Z [INFO] [remote_server::manager] [Remote codebase indexing] Remote server initialize handshake complete: session=SessionId(16398906655951973510) host=9f8d3020-6afa-45ea-b4c8-8b8c4bc6446f server_version="v0.fork.c56fc22de"
+2026-09-05T20:36:54Z [INFO] [remote_server::manager] Remote server connected: session=SessionId(1801505192329802913) host=9f8d3020-6afa-45ea-b4c8-8b8c4bc6446f
+2026-09-05T20:36:54Z [INFO] [warp::code::routed_lsp] [routed-lsp] host HostId("9f8d3020-6afa-45ea-b4c8-8b8c4bc6446f") is WSL distribution Ubuntu
+2026-09-05T20:36:54Z [INFO] [remote_server::manager] Remote server connected: session=SessionId(16398906655951973510) host=9f8d3020-6afa-45ea-b4c8-8b8c4bc6446f
+2026-09-05T20:36:54Z [INFO] [warp::code::routed_lsp] [routed-lsp] host HostId("9f8d3020-6afa-45ea-b4c8-8b8c4bc6446f") is WSL distribution Ubuntu
+2026-09-05T20:36:54Z [INFO] [warp_terminal::model::ansi] Received InputBuffer hook
+2026-09-05T20:36:54Z [INFO] [warp_terminal::model::ansi] Received InputBuffer hook
+2026-09-05T20:36:54Z [INFO] [warp::terminal::model_events] Remote server ready for session SessionId(1801505192329802913)
+2026-09-05T20:36:54Z [INFO] [warp::terminal::model_events] Remote server ready for session SessionId(16398906655951973510)
+2026-09-05T20:36:54Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=361, falling back to host listing
+2026-09-05T20:36:54Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-05T20:36:54Z [INFO] [warp::code_review::code_review_view] Code Review Panel: Setting state to loading after receiving 'loading' message.
+2026-09-05T20:36:54Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-05T20:36:54Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=442, falling back to host listing
+2026-09-05T20:36:54Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-05T20:36:54Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=422, falling back to host listing
+2026-09-05T20:36:54Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-05T20:36:54Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=460, falling back to host listing
+2026-09-05T20:36:54Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-05T20:36:54Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=489, falling back to host listing
+2026-09-05T20:36:54Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-05T20:36:55Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=387, falling back to host listing
+2026-09-05T20:36:55Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-05T20:36:55Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=415, falling back to host listing
+2026-09-05T20:36:55Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-05T20:36:55Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=458, falling back to host listing
+2026-09-05T20:36:55Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-05T20:36:55Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=202, falling back to host listing
+2026-09-05T20:36:55Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-05T20:36:55Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=226, falling back to host listing
+2026-09-05T20:36:55Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-05T20:36:55Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=258, falling back to host listing
+2026-09-05T20:36:55Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-05T20:36:56Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=217, falling back to host listing
+2026-09-05T20:36:56Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-05T20:36:56Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=257, falling back to host listing
+2026-09-05T20:36:56Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-05T20:36:56Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=331, falling back to host listing
+2026-09-05T20:36:56Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-05T20:36:56Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=236, falling back to host listing
+2026-09-05T20:36:56Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-05T20:36:56Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=269, falling back to host listing
+2026-09-05T20:36:56Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-05T20:36:56Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=371, falling back to host listing
+2026-09-05T20:36:56Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-05T20:37:19Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-05T20:37:19Z [INFO] [warpui_core::core::app] dispatching typed action: warp::pane_group::PaneGroupAction::HandleFocusChange
+2026-09-05T20:37:19Z [INFO] [warpui_core::core::app] dispatching typed action: warp::pane_group::PaneGroupAction::HandleFocusChange
+2026-09-05T20:37:22Z [INFO] [repo_metadata::local_model] Successfully indexed repository: \\wsl$\ubuntu\home\effatha\git\warp with 6520 files
+2026-09-05T20:37:23Z [INFO] [warp::server::cloud_objects::listener] Attempting to start websocket connection in CloudObjects::Listener
+2026-09-05T20:37:23Z [WARN] [warp::server::cloud_objects::listener] CloudObjects::Listener: websocket connection failed to connect or finished with an error; trying again: missing authentication credentials
+2026-09-05T20:37:24Z [INFO] [warpui_core::core::app] dispatching typed action: warp::pane_group::PaneGroupAction::HandleFocusChange
+2026-09-05T20:37:25Z [INFO] [warp_terminal::model::ansi] Received Preexec hook
+2026-09-05T20:37:25Z [INFO] [warpui_core::core::app] dispatching typed action: warp::pane_group::PaneGroupAction::HandleFocusChange
+2026-09-05T20:37:36Z [INFO] [warp::ai::blocklist::controller::pending_response_streams] Canceling active stream for conversation_id=AIConversationId(57f9fb8c-0106-4dbb-86c6-82cb1a1c99ae), reason=manual cancellation, backtrace=
+   0: std::backtrace_rs::backtrace::win64::trace
+             at /rustc/ded5c06cf21d2b93bffd5d884aa6e96934ee4234/library\std\src\..\..\backtrace\src\backtrace\win64.rs:85
+   1: std::backtrace_rs::backtrace::trace_unsynchronized
+             at /rustc/ded5c06cf21d2b93bffd5d884aa6e96934ee4234/library\std\src\..\..\backtrace\src\backtrace\mod.rs:66
+   2: std::backtrace::Backtrace::create
+             at /rustc/ded5c06cf21d2b93bffd5d884aa6e96934ee4234/library\std\src\backtrace.rs:331
+   3: std::backtrace::Backtrace::force_capture
+             at /rustc/ded5c06cf21d2b93bffd5d884aa6e96934ee4234/library\std\src\backtrace.rs:312
+   4: warp::ai::blocklist::controller::pending_response_streams::PendingResponseStreams::try_cancel_streams_for_conversation
+             at .\app\src\ai\blocklist\controller\pending_response_streams.rs:128
+   5: warp::ai::blocklist::controller::BlocklistAIController::cancel_conversation_progress
+             at .\app\src\ai\blocklist\controller.rs:2878
+   6: warp::terminal::view::impl$15::stop_local_agent_conversation::closure$0
+             at .\app\src\terminal\view.rs:8870
+   7: warpui_core::core::app::impl$16::update_model<warp::ai::blocklist::controller::BlocklistAIController,warp::terminal::view::impl$15::stop_local_agent_conversation::closure_env$0,tuple$<> >
+             at .\crates\warpui_core\src\core\app.rs:4694
+   8: warpui_core::core::view::context::impl$7::update_model<warp::terminal::view::TerminalView,warp::ai::blocklist::controller::BlocklistAIController,warp::terminal::view::impl$15::stop_local_agent_conversation::closure_env$0,tuple$<> >
+             at .\crates\warpui_core\src\core\view\context.rs:903
+   9: warpui_core::core::model::handle::ModelHandle::update<warp::ai::blocklist::controller::BlocklistAIController,warpui_core::core::view::context::ViewContext<warp::terminal::view::TerminalView>,warp::terminal::view::impl$15::stop_local_agent_conversation::clo
+             at .\crates\warpui_core\src\core\model\handle.rs:60
+  10: warp::terminal::view::TerminalView::stop_local_agent_conversation
+             at .\app\src\terminal\view.rs:8869
+  11: warp::pane_group::pane::terminal_pane::stop_local_agent_conversation::closure$1
+             at .\app\src\pane_group\pane\terminal_pane.rs:705
+  12: warpui_core::core::app::impl$17::try_update_view<warp::terminal::view::TerminalView,warp::pane_group::pane::terminal_pane::stop_local_agent_conversation::closure_env$1,tuple$<> >
+             at .\crates\warpui_core\src\core\app.rs:4725
+  13: warpui_core::core::app::impl$17::update_view<warp::terminal::view::TerminalView,warp::pane_group::pane::terminal_pane::stop_local_agent_conversation::closure_env$1,tuple$<> >
+             at .\crates\warpui_core\src\core\app.rs:4706
+  14: warpui_core::core::view::context::impl$9::update_view<warp::pane_group::PaneGroup,warp::terminal::view::TerminalView,warp::pane_group::pane::terminal_pane::stop_local_agent_conversation::closure_env$1,tuple$<> >
+             at .\crates\warpui_core\src\core\view\context.rs:923
+  15: warpui_core::core::view::handle::ViewHandle::update<warp::terminal::view::TerminalView,warpui_core::core::view::context::ViewContext<warp::pane_group::PaneGroup>,warp::pane_group::pane::terminal_pane::stop_local_agent_conversation::closure_env$1,tuple$<> >
+             at .\crates\warpui_core\src\core\view\handle.rs:75
+  16: warp::pane_group::pane::terminal_pane::stop_local_agent_conversation
+             at .\app\src\pane_group\pane\terminal_pane.rs:704
+  17: warp::pane_group::pane::terminal_pane::stop_agent_conversation
+             at .\app\src\pane_group\pane\terminal_pane.rs:744
+  18: warp::pane_group::pane::terminal_pane::handle_terminal_view_event
+             at .\app\src\pane_group\pane\terminal_pane.rs:1497
+  19: warp::pane_group::pane::terminal_pane::attach_terminal_view::closure$0
+             at .\app\src\pane_group\pane\terminal_pane.rs:874
+  20: warpui_core::core::view::context::impl$1::subscribe_to_view::closure$0<warp::pane_group::PaneGroup,warp::terminal::view::TerminalView,warp::pane_group::pane::terminal_pane::attach_terminal_view::closure_env$0>
+             at .\crates\warpui_core\src\core\view\context.rs:222
+  21: alloc::boxed::impl$30::call_mut<tuple$<ref_mut$<dyn$<core::any::Any> >,ref$<dyn$<core::any::Any> >,ref_mut$<warpui_core::core::app::AppContext>,warpui_core::core::window::WindowId,warpui_core::core::entity::EntityId>,dyn$<core::ops::function::FnMut<tuple$<
+             at C:\Users\onemind\.rustup\toolchains\1.92.0-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\alloc\src\boxed.rs:2012
+  22: warpui_core::core::app::AppContext::emit_event
+             at .\crates\warpui_core\src\core\app.rs:3988
+  23: warpui_core::core::app::AppContext::flush_effects
+             at .\crates\warpui_core\src\core\app.rs:3471
+  24: warpui_core::core::app::AppContext::relay_task_output
+             at .\crates\warpui_core\src\core\app.rs:4468
+  25: warpui_core::core::app::impl$14::spawn_stream_local::async_block$1<async_channel::Receiver<alloc::boxed::Box<dyn$<core::ops::function::FnOnce<tuple$<ref_mut$<warp::local_control::bridge::LocalControlBridge>,ref_mut$<warpui_core::core::model::context::Model
+             at .\crates\warpui_core\src\core\app.rs:4267
+  26: core::future::future::impl$1::poll<alloc::boxed::Box<dyn$<core::future::future::Future<assoc$<Output,tuple$<> > > >,alloc::alloc::Global> >
+             at C:\Users\onemind\.rustup\toolchains\1.92.0-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\core\src\future\future.rs:133
+  27: tracing::instrument::impl$2::poll<core::pin::Pin<alloc::boxed::Box<dyn$<core::future::future::Future<assoc$<Output,tuple$<> > > >,alloc::alloc::Global> > >
+             at C:\Users\onemind\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\tracing-0.1.44\src\instrument.rs:321
+  28: async_task::runnable::impl$6::spawn_local::impl$1::poll<tracing::instrument::Instrumented<core::pin::Pin<alloc::boxed::Box<dyn$<core::future::future::Future<assoc$<Output,tuple$<> > > >,alloc::alloc::Global> > > >
+             at C:\Users\onemind\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\async-task-4.7.1\src\runnable.rs:455
+  29: async_task::raw::RawTask::run<async_task::runnable::impl$6::spawn_local::Checked<tracing::instrument::Instrumented<core::pin::Pin<alloc::boxed::Box<dyn$<core::future::future::Future<assoc$<Output,tuple$<> > > >,alloc::alloc::Global> > > >,tuple$<>,warpui_c
+             at C:\Users\onemind\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\async-task-4.7.1\src\raw.rs:557
+  30: async_task::runnable::Runnable::run<tuple$<> >
+             at C:\Users\onemind\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\async-task-4.7.1\src\runnable.rs:781
+  31: warpui::windowing::winit::event_loop::EventLoop::handle_event
+             at .\crates\warpui\src\windowing\winit\event_loop\mod.rs:636
+  32: warpui::windowing::winit::app::impl$0::run::closure$0<warpui::platform::app::impl$1::run::closure_env$2<warp::run_internal::closure_env$1> >
+             at .\crates\warpui\src\windowing\winit\app.rs:227
+  33: winit::platform_impl::windows::event_loop::impl$3::run_on_demand::closure$0<enum2$<warpui::windowing::winit::app::CustomEvent>,warpui::windowing::winit::app::impl$0::run::closure_env$0<warpui::platform::app::impl$1::run::closure_env$2<warp::run_internal::c
+             at C:\Users\onemind\.cargo\git\checkouts\winit-6b6d13ea8b42c599\14db95a\src\platform_impl\windows\event_loop.rs:264
+  34: alloc::boxed::impl$30::call_mut<tuple$<enum2$<winit::event::Event<winit::platform_impl::windows::event_loop::UserEventPlaceholder> > >,dyn$<core::ops::function::FnMut<tuple$<enum2$<winit::event::Event<winit::platform_impl::windows::event_loop::UserEventPla
+             at C:\Users\onemind\.rustup\toolchains\1.92.0-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\alloc\src\boxed.rs:2012
+  35: winit::platform_impl::windows::event_loop::runner::impl$3::call_event_handler::closure$0<winit::platform_impl::windows::event_loop::UserEventPlaceholder>
+             at C:\Users\onemind\.cargo\git\checkouts\winit-6b6d13ea8b42c599\14db95a\src\platform_impl\windows\event_loop\runner.rs:236
+  36: core::panic::unwind_safe::impl$25::call_once<tuple$<>,winit::platform_impl::windows::event_loop::runner::impl$3::call_event_handler::closure_env$0<winit::platform_impl::windows::event_loop::UserEventPlaceholder> >
+             at C:\Users\onemind\.rustup\toolchains\1.92.0-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\core\src\panic\unwind_safe.rs:274
+  37: std::panicking::catch_unwind::do_call<core::panic::unwind_safe::AssertUnwindSafe<winit::platform_impl::windows::event_loop::runner::impl$3::call_event_handler::closure_env$0<winit::platform_impl::windows::event_loop::UserEventPlaceholder> >,tuple$<> >
+             at C:\Users\onemind\.rustup\toolchains\1.92.0-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\panicking.rs:590
+  38: core::iter::traits::iterator::Iterator::take<core::str::iter::Chars>
+  39: std::panicking::catch_unwind
+             at C:\Users\onemind\.rustup\toolchains\1.92.0-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\panicking.rs:553
+  40: std::panic::catch_unwind<core::panic::unwind_safe::AssertUnwindSafe<winit::platform_impl::windows::event_loop::runner::impl$3::call_event_handler::closure_env$0<winit::platform_impl::windows::event_loop::UserEventPlaceholder> >,tuple$<> >
+             at C:\Users\onemind\.rustup\toolchains\1.92.0-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\panic.rs:359
+  41: winit::platform_impl::windows::event_loop::runner::EventLoopRunner::catch_unwind<winit::platform_impl::windows::event_loop::UserEventPlaceholder,tuple$<>,winit::platform_impl::windows::event_loop::runner::impl$3::call_event_handler::closure_env$0<winit::pl
+             at C:\Users\onemind\.cargo\git\checkouts\winit-6b6d13ea8b42c599\14db95a\src\platform_impl\windows\event_loop\runner.rs:173
+  42: winit::platform_impl::windows::event_loop::runner::EventLoopRunner::call_event_handler<winit::platform_impl::windows::event_loop::UserEventPlaceholder>
+             at C:\Users\onemind\.cargo\git\checkouts\winit-6b6d13ea8b42c599\14db95a\src\platform_impl\windows\event_loop\runner.rs:230
+  43: winit::platform_impl::windows::event_loop::runner::EventLoopRunner::send_event<winit::platform_impl::windows::event_loop::UserEventPlaceholder>
+             at C:\Users\onemind\.cargo\git\checkouts\winit-6b6d13ea8b42c599\14db95a\src\platform_impl\windows\event_loop\runner.rs:220
+  44: winit::platform_impl::windows::event_loop::ThreadMsgTargetData::send_event
+             at C:\Users\onemind\.cargo\git\checkouts\winit-6b6d13ea8b42c599\14db95a\src\platform_impl\windows\event_loop.rs:143
+  45: winit::platform_impl::windows::event_loop::thread_event_target_callback::closure$0
+             at C:\Users\onemind\.cargo\git\checkouts\winit-6b6d13ea8b42c599\14db95a\src\platform_impl\windows\event_loop.rs:2546
+  46: core::ops::function::FnOnce::call_once<winit::platform_impl::windows::event_loop::thread_event_target_callback::closure_env$0,tuple$<> >
+             at C:\Users\onemind\.rustup\toolchains\1.92.0-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\core\src\ops\function.rs:250
+  47: core::panic::unwind_safe::impl$25::call_once<isize,winit::platform_impl::windows::event_loop::thread_event_target_callback::closure_env$0>
+             at C:\Users\onemind\.rustup\toolchains\1.92.0-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\core\src\panic\unwind_safe.rs:274
+  48: std::panicking::catch_unwind::do_call<core::panic::unwind_safe::AssertUnwindSafe<winit::platform_impl::windows::event_loop::thread_event_target_callback::closure_env$0>,isize>
+             at C:\Users\onemind\.rustup\toolchains\1.92.0-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\panicking.rs:590
+  49: core::iter::traits::iterator::Iterator::take<core::str::iter::Chars>
+  50: std::panicking::catch_unwind
+             at C:\Users\onemind\.rustup\toolchains\1.92.0-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\panicking.rs:553
+  51: std::panic::catch_unwind<core::panic::unwind_safe::AssertUnwindSafe<winit::platform_impl::windows::event_loop::thread_event_target_callback::closure_env$0>,isize>
+             at C:\Users\onemind\.rustup\toolchains\1.92.0-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\panic.rs:359
+  52: winit::platform_impl::windows::event_loop::runner::EventLoopRunner::catch_unwind<winit::platform_impl::windows::event_loop::UserEventPlaceholder,isize,winit::platform_impl::windows::event_loop::thread_event_target_callback::closure_env$0>
+             at C:\Users\onemind\.cargo\git\checkouts\winit-6b6d13ea8b42c599\14db95a\src\platform_impl\windows\event_loop\runner.rs:173
+  53: winit::platform_impl::windows::event_loop::thread_event_target_callback
+             at C:\Users\onemind\.cargo\git\checkouts\winit-6b6d13ea8b42c599\14db95a\src\platform_impl\windows\event_loop.rs:2557
+  54: CallWindowProcW
+  55: IsWindowUnicode
+  56: Z20DispatchMessageWHookPK6tagMSG
+  57: winit::platform_impl::windows::event_loop::EventLoop::dispatch_peeked_messages<enum2$<warpui::windowing::winit::app::CustomEvent> >
+             at C:\Users\onemind\.cargo\git\checkouts\winit-6b6d13ea8b42c599\14db95a\src\platform_impl\windows\event_loop.rs:419
+  58: winit::platform_impl::windows::event_loop::EventLoop::run_on_demand<enum2$<warpui::windowing::winit::app::CustomEvent>,warpui::windowing::winit::app::impl$0::run::closure_env$0<warpui::platform::app::impl$1::run::closure_env$2<warp::run_internal::closure_e
+             at C:\Users\onemind\.cargo\git\checkouts\winit-6b6d13ea8b42c599\14db95a\src\platform_impl\windows\event_loop.rs:277
+  59: winit::platform_impl::windows::event_loop::EventLoop::run<enum2$<warpui::windowing::winit::app::CustomEvent>,warpui::windowing::winit::app::impl$0::run::closure_env$0<warpui::platform::app::impl$1::run::closure_env$2<warp::run_internal::closure_env$1> > >
+             at C:\Users\onemind\.cargo\git\checkouts\winit-6b6d13ea8b42c599\14db95a\src\platform_impl\windows\event_loop.rs:233
+  60: winit::event_loop::EventLoop::run<enum2$<warpui::windowing::winit::app::CustomEvent>,warpui::windowing::winit::app::impl$0::run::closure_env$0<warpui::platform::app::impl$1::run::closure_env$2<warp::run_internal::closure_env$1> > >
+             at C:\Users\onemind\.cargo\git\checkouts\winit-6b6d13ea8b42c599\14db95a\src\event_loop.rs:231
+  61: warpui::windowing::winit::app::App::run<warpui::platform::app::impl$1::run::closure_env$2<warp::run_internal::closure_env$1> >
+             at .\crates\warpui\src\windowing\winit\app.rs:226
+  62: warpui::platform::app::AppBackend::run<warpui::platform::app::impl$1::run::closure_env$2<warp::run_internal::closure_env$1> >
+             at .\crates\warpui\src\platform\app.rs:25
+  63: warpui::platform::app::AppBuilder::run<warp::run_internal::closure_env$1>
+             at .\crates\warpui\src\platform\app.rs:142
+  64: warp::run_internal
+             at .\app\src\lib.rs:1307
+  65: warp::run
+             at .\app\src\lib.rs:842
+  66: warp_oss::main
+             at .\app\src\bin\oss.rs:29
+  67: core::ops::function::FnOnce::call_once<enum2$<core::result::Result<tuple$<>,anyhow::Error> > (*)(),tuple$<> >
+             at C:\Users\onemind\.rustup\toolchains\1.92.0-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\core\src\ops\function.rs:250
+  68: core::hint::black_box
+             at C:\Users\onemind\.rustup\toolchains\1.92.0-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\core\src\hint.rs:472
+  69: std::sys::backtrace::__rust_begin_short_backtrace<enum2$<core::result::Result<tuple$<>,anyhow::Error> > (*)(),enum2$<core::result::Result<tuple$<>,anyhow::Error> > >
+             at C:\Users\onemind\.rustup\toolchains\1.92.0-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sys\backtrace.rs:158
+  70: std::rt::lang_start::closure$0<enum2$<core::result::Result<tuple$<>,anyhow::Error> > >
+             at C:\Users\onemind\.rustup\toolchains\1.92.0-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\rt.rs:206
+  71: std::rt::lang_start_internal::closure$0
+             at /rustc/ded5c06cf21d2b93bffd5d884aa6e96934ee4234/library\std\src\rt.rs:175
+  72: std::panicking::catch_unwind::do_call
+             at /rustc/ded5c06cf21d2b93bffd5d884aa6e96934ee4234/library\std\src\panicking.rs:590
+  73: std::panicking::catch_unwind
+             at /rustc/ded5c06cf21d2b93bffd5d884aa6e96934ee4234/library\std\src\panicking.rs:553
+  74: std::panic::catch_unwind
+             at /rustc/ded5c06cf21d2b93bffd5d884aa6e96934ee4234/library\std\src\panic.rs:359
+  75: std::rt::lang_start_internal
+             at /rustc/ded5c06cf21d2b93bffd5d884aa6e96934ee4234/library\std\src\rt.rs:171
+  76: std::rt::lang_start<enum2$<core::result::Result<tuple$<>,anyhow::Error> > >
+             at C:\Users\onemind\.rustup\toolchains\1.92.0-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\rt.rs:205
+  77: main
+  78: invoke_main
+             at D:\a\_work\1\s\src\vctools\crt\vcstartup\src\startup\exe_common.inl:78
+  79: __scrt_common_main_seh
+             at D:\a\_work\1\s\src\vctools\crt\vcstartup\src\startup\exe_common.inl:288
+  80: BaseThreadInitThunk
+  81: RtlUserThreadStart
+
+2026-09-05T20:37:37Z [INFO] [warpui_core::core::app] dispatching typed action: warp::pane_group::PaneGroupAction::HandleFocusChange
+2026-09-05T20:37:54Z [INFO] [warp::server::cloud_objects::listener] Attempting to start websocket connection in CloudObjects::Listener
+2026-09-05T20:37:54Z [WARN] [warp::server::cloud_objects::listener] CloudObjects::Listener: websocket connection failed to connect or finished with an error; trying again: missing authentication credentials
+2026-09-05T20:38:14Z [INFO] [warpui_core::platform::app] active window changed: None
+2026-09-05T20:38:14Z [INFO] [warpui_core::core::app] dispatching global action for root_view:update_quake_mode_state
+2026-09-05T20:38:14Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-05T20:38:19Z [INFO] [warpui_core::core::app] dispatching typed action: warp::workspace::action::WorkspaceAction::SetTabShortcutModifierKey { key_code: AltLeft, pressed: true }
+2026-09-05T20:38:19Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-05T20:38:19Z [INFO] [warpui_core::platform::app] active window changed: Some(WindowId(0))
+2026-09-05T20:38:19Z [INFO] [warpui_core::core::app] dispatching global action for root_view:update_quake_mode_state
+2026-09-05T20:38:19Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-05T20:38:19Z [INFO] [warpui_core::core::app] dispatching action for "root_view:maybe_stop_active_voice_input"
+2026-09-05T20:38:19Z [INFO] [warpui_core::core::app] dispatching typed action: warp::workspace::action::WorkspaceAction::SetTabShortcutModifierKey { key_code: AltLeft, pressed: false }
+2026-09-05T20:38:19Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-05T20:38:20Z [INFO] [warp_terminal::model::ansi] Received CommandFinished hook
+2026-09-05T20:38:20Z [INFO] [warp::terminal::model::terminal_model] Tried to exit the alternate screen, but it was already inactive
+2026-09-05T20:38:20Z [INFO] [warp::terminal::model::block] Block finished with new state DoneWithExecution
+2026-09-05T20:38:20Z [INFO] [warpui_core::core::app] dispatching typed action: warp::pane_group::PaneGroupAction::HandleFocusChange
+2026-09-05T20:38:20Z [INFO] [warp_terminal::model::ansi] Received Precmd hook
+2026-09-05T20:38:20Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-05T20:38:20Z [ERROR] [errors::report_error] Failed to fetch prompt suggestions: No AI endpoint is configured. Add an API key or a Custom Inference endpoint under Settings > Warp Agent, or point `agents.local_ai.endpoint` at a local server.
+2026-09-05T20:38:20Z [ERROR] [warp::ai::predict::next_command_model] Failed to generate Next Command suggestion: No AI endpoint is configured. Add an API key or a Custom Inference endpoint under Settings > Warp Agent, or point `agents.local_ai.endpoint` at a local server.
+2026-09-05T20:38:20Z [INFO] [warp_terminal::model::ansi] Received InputBuffer hook
+2026-09-05T20:38:21Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=184, falling back to host listing
+2026-09-05T20:38:21Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-05T20:38:21Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=216, falling back to host listing
+2026-09-05T20:38:21Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-05T20:38:21Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=243, falling back to host listing
+2026-09-05T20:38:21Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-05T20:38:21Z [INFO] [warp] No windows left, terminating app
+2026-09-05T20:38:21Z [INFO] [warpui_core::platform::app] application will terminate
+2026-09-05T20:38:21Z [INFO] [warp::persistence::sqlite] Shutting down SQLite writer thread
+2026-09-05T20:38:21Z [INFO] [warp::persistence] Shut down SQLite writer in 548.7µs
+2026-09-05T20:38:21Z [INFO] [warp::server::telemetry] Not writing queued events to disk because telemetry is disabled.
+2026-09-05T20:38:21Z [INFO] [warp::server::telemetry::collector] Successfully wrote telemetry events to disk
+2026-09-05T20:38:21Z [INFO] [lsp::manager] Terminating all LSP servers for 0 workspaces
+2026-09-05T20:38:21Z [INFO] [warp::terminal::model::terminal_model] Tried to exit the alternate screen, but it was already inactive
+2026-09-05T20:38:21Z [INFO] [warp::terminal::model::block] Block finished with new state DoneWithNoExecution
+2026-09-05T20:38:21Z [INFO] [warp::terminal::model::terminal_model] Tried to exit the alternate screen, but it was already inactive
+2026-09-05T20:38:21Z [INFO] [warp::terminal::model::block] Block finished with new state DoneWithNoExecution
+2026-09-05T20:38:21Z [INFO] [warp::app_services] Tearing down app services...

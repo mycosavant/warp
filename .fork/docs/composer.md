@@ -142,7 +142,7 @@ Four labelled lines of disclosure, then `Yes, once` / `No`. The disclosure is
 good and should not be deleted. It should be *layered* — the decision visible,
 the reasoning available.
 
-### 7. A cancelled turn plausibly loses its last sentence
+### 7. A cancelled turn plausibly loses its last sentence ✅ **measured 2026-09-05: it lost the whole answer. Built; see *Item 7, measured and built***
 
 `translate.rs` buffers text and flushes on the next non-text update, on turn end,
 or on the failure path. `mod.rs`'s `take_until` drops the driver future on
@@ -151,6 +151,12 @@ cancellation and nothing flushes `pending` there. **Read, not run** — re-read
 `mod.rs:809`, inside the future `take_until` drops. Worth a test before it is
 worth a fix, and the test needs a fake agent that streams text and is then
 cancelled, which is more than a unit test on the translator.
+
+**What running it found (2026-09-05)**: the reading was right and too small. A
+text-only answer has no boundary until the turn ends, so the panel showed
+*nothing* of the agent's for the fourteen seconds a turn streamed, and a
+cancel then lost all of it, not its last sentence. The buffer is gone; text
+streams into one message by `AppendToMessageContent`.
 
 ---
 
@@ -1144,7 +1150,9 @@ Code's own rows read after an interrupt.
   `^C` at the prompt after the cancel, and the conversation's event log has no
   line after the second turn's `tool_start` — no `stop`, nothing saying the
   turn ended. Neither is this ticket's; both are recorded so the next reader
-  does not measure them as new.
+  does not measure them as new. **Both chased 2026-09-05**, below: the `^C`
+  was real and reached the person's foreground command; the missing stop line
+  did not reproduce.
 - Zero relevant errors in the app log across the three runs. The runs were
   driven from a script the harness killed twice for memory pressure (a 7.8 GB
   `rustc` from another session was compiling alongside); the third run's
@@ -1165,3 +1173,68 @@ Both are headline-only because the announcement must stay a single line for
 the mode. Neither repeats, so neither moved the number; both are candidates for
 a shorter headline with the sentence behind the chevron, once the transcript
 decides by kind rather than by marker.
+
+### Item 7, measured and built — the cancel path (`2ff77def8`)
+
+**Board item 4. Measured 2026-09-05 on the Windows debug build before
+anything was designed**, with a streaming ACP turn in the panel and `sleep
+300` typed into the pane behind it; recipe and both runs' logs in
+`.fork/runs/cancel-2026-09-05/`. Four things were on the board as defects.
+Three were real and one was not, and the real ones were not the size the
+board said.
+
+| | before, `03dd3c639` | after, `2ff77def8` |
+|---|---|---|
+| the person's `sleep 300` after `agent cancel` | **killed**; `^C` at the prompt | alive; pane untouched |
+| the panel 14–16 s into a text-only turn | the prompt and Warp's two notes; **nothing of the agent's** | streaming, past "one hundred ninety" |
+| `agent read` after the cancel | 586 characters, the two notes | 215 lines, to "two hundred twelve" |
+| event log after the cancel | `stop_failure`, `error_type: cancelled` | same |
+
+**The `^C` was the person's command dying.** `stop_local_agent_conversation`
+writes Ctrl-C to the pty when the cancelled conversation is the *visible* one
+and the active block counts as running, and `is_active_and_long_running` is
+true of any command past 50 ms. Upstream's agent runs its commands as blocks
+in the pane, so for upstream that coupling is the feature: stop the agent,
+stop what it was running. Neither fork transport ever runs a command in the
+pane, so under either the pane's foreground command is the person's, and the
+cancel was killing it. `fork::panel_agent_is_external` names that fact, and
+the interrupt is now gated on the active block *belonging to* the
+conversation — which on those transports is never. Ruled in, then out, by the
+same `pgrep`.
+
+**The buffered sentence was the whole answer.** Item 7 above was read as
+losing a tail. Run 3 showed the panel empty of the agent's text fourteen
+seconds into a turn, because the translator held text until a boundary and a
+text-only answer has none until it ends. So every text-only turn was a spinner
+followed by a paragraph, and a cancel mid-way kept nothing. The buffer is
+replaced by streaming: the first chunk with a visible character is a message,
+every later chunk is an `AppendToMessageContent` to it — the operation
+upstream's own agent streams with — with the mask naming the string field
+inside the oneof member (`agent_output.text`, `agent_reasoning.reasoning`;
+`agent_output` alone is a message field and `append` refuses it). Pinned
+against the real descriptor in `translate_tests.rs`, alongside a test that
+applies the appends through the consumer's own operation. Nothing is held
+back that a cancel could lose, and the transcript writer reacts to status
+changes rather than appends, so the per-chunk cost is one
+`UpdatedStreamingExchange`.
+
+**The missing stop line did not reproduce.** Both runs wrote `stop_failure`
+with `error_type: cancelled` from the in-process writer at the moment of the
+cancel. The 2026-09-03 observation was of a turn with a tool call running;
+not re-measured in that shape.
+
+**The row the transport never closes is closed in the read-back.** A row
+left `Running` by a dropped transport is drawn as interrupted by the panel
+and was returned as running by `agent read`. `format_output_for_copy` now
+demotes it the same way once the exchange has finished, so the panel, the
+read-back and the copy agree. Nothing can rewrite the row on the wire after
+`take_until` drops the driver, and the consumer drops post-cancel updates
+anyway; the read-back is the honest place.
+
+**Not changed, and it stopped a run**: `can_start_new_conversation` refuses a
+new conversation while a long-running command is in the pane —
+*"the agent is monitoring a long-running command; it cannot take a new
+conversation until that finishes"* — which under a fork transport it is not.
+Same coupling, other direction. Left for the friction log: a person who types
+a long command and then asks the panel something will hit it.
+

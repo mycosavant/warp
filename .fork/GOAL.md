@@ -59,10 +59,10 @@ same board as of that date and is not updated.
 | 1 | Merge upstream (T10) | **done**, `b175101a2`; drift check in `.fork/tools/drift-check.sh`, cron line not yet installed |
 | 2 | Windows launcher: product by default, rig behind `-Instrumented` | **done**, this commit |
 | 3 | Measure egress on Windows, against the merged binary | open |
-| 4 | Composer cancel path (`.fork/docs/composer.md` item 7, the `^C` at the prompt, the missing `stop`) | open |
+| 4 | Composer cancel path (`.fork/docs/composer.md` item 7, the `^C` at the prompt, the missing `stop`) | **done** 2026-09-05, `2ff77def8`; the `^C` was the person's command dying, and the buffered sentence was the whole answer |
 | 5 | Hide the two cloud chips in the agent footer (T19) | open |
 | 6 | The viewer: one trace from the harness's record and Warp's (`.fork/docs/observability.md`) | specified, unbuilt |
-| 7 | WSL parity: connect automatically, then diffs, then language servers (`.fork/docs/wsl.md`) | step 1 built 2026-09-05, `ea61116e1`; diffs and LSP open |
+| 7 | WSL parity: connect automatically, then diffs, then language servers (`.fork/docs/wsl.md`) | **done** 2026-09-05: `ea61116e1`, `099b26ea5`, `6d07c1e1a`–`f6f59cfe8` |
 
 ## What changes about frictions
 

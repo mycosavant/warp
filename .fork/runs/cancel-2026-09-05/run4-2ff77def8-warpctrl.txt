@@ -1,0 +1,71 @@
+{
+  "action": "agent.prompt",
+  "ok": true,
+  "instance_id": "inst_9a22e3a26fd948dab20e6f2e663c03ee",
+  "conversation_id": "57f9fb8c-0106-4dbb-86c6-82cb1a1c99ae",
+  "created": true
+}
+CID=57f9fb8c-0106-4dbb-86c6-82cb1a1c99ae
+{"action":"input.submit","ok":true,"instance_id":"inst_9a22e3a26fd948dab20e6f2e663c03ee","executed":true,"queued":false}3594933 sleep 300
+"status":"success"
+"status":"success"
+"status":"in_progress"
+20:37:38.270606920
+{"action":"agent.cancel","ok":true,"instance_id":"inst_9a22e3a26fd948dab20e6f2e663c03ee","conversation_id":"57f9fb8c-0106-4dbb-86c6-82cb1a1c99ae","was_running":true,"status":"in_progress"}--- after cancel:
+3594933 sleep 300
+{
+  "action": "agent.list",
+  "ok": true,
+  "instance_id": "inst_9a22e3a26fd948dab20e6f2e663c03ee",
+  "conversations": [
+    {
+      "conversation_id": "446ad7e6-dc57-4f79-a565-f5059000297b",
+      "title": "Write the numbers one to eighty in English words, one per li…",
+      "status": "success",
+      "is_busy": false,
+      "pane_id": "Pane Pane Terminal (2646)",
+      "tab_id": "2240"
+    },
+    {
+      "conversation_id": "74c788a5-a566-448a-95e0-0fbd1be8bbcb",
+      "title": "Write the numbers one to five hundred in English words, one…",
+      "status": "success",
+      "is_busy": false,
+      "pane_id": "Pane Pane Terminal (2646)",
+      "tab_id": "2240"
+    },
+    {
+      "conversation_id": "57f9fb8c-0106-4dbb-86c6-82cb1a1c99ae",
+      "title": "Write the numbers one to five hundred in English words, one…",
+      "status": "cancelled",
+      "is_busy": false,
+      "pane_id": "Pane Pane Terminal (2646)",
+      "tab_id": "2240",
+      "session_mode": "default"
+    }
+  ]
+}
+{
+  "action": "agent.read",
+  "ok": true,
+  "instance_id": "inst_9a22e3a26fd948dab20e6f2e663c03ee",
+  "conversation": {
+    "conversation_id": "57f9fb8c-0106-4dbb-86c6-82cb1a1c99ae",
+    "title": "Write the numbers one to five hundred in English words, one…",
+    "status": "cancelled",
+    "is_busy": false,
+    "pane_id": "Pane Pane Terminal (2646)",
+    "tab_id": "2240",
+    "session_mode": "default"
+  },
+  "exchanges": [
+    {
+      "index": 0,
+      "input": "Write the numbers one to five hundred in English words, one per line, with no tools and no commentary.",
+      "output": "`WARP_FORK_ACP_MODE` asked for the agent's `default` mode, which the agent describes as “Always ask before making changes”, and the agent accepted, so that is the mode this session is running under.\n\nThis turn began with the session in the agent's `auto` mode, which the agent describes as “Claude handles permission decisions”.\n[Warp] Warp is keeping a transcript of this conversation at /home/effatha/git/warp/.warp/transcripts/57f9fb8c-0106-4dbb-86c6-82cb1a1c99ae.md and telling the agent it can search it. Nothing else is added to your prompts. Unset `WARP_FORK_TRANSCRIPT` to stop.\none\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine\nten\neleven\ntwelve\nthirteen\nfourteen\nfifteen\nsixteen\nseventeen\neighteen\nnineteen\ntwenty\ntwenty-one\ntwenty-two\ntwenty-three\ntwenty-four\ntwenty-five\ntwenty-six\ntwenty-seven\ntwenty-eight\ntwenty-nine\nthirty\nthirty-one\nthirty-two\nthirty-three\nthirty-four\nthirty-five\nthirty-six\nthirty-seven\nthirty-eight\nthirty-nine\nforty\nforty-one\nforty-two\nforty-three\nforty-four\nforty-five\nforty-six\nforty-seven\nforty-eight\nforty-nine\nfifty\nfifty-one\nfifty-two\nfifty-three\nfifty-four\nfifty-five\nfifty-six\nfifty-seven\nfifty-eight\nfifty-nine\nsixty\nsixty-one\nsixty-two\nsixty-three\nsixty-four\nsixty-five\nsixty-six\nsixty-seven\nsixty-eight\nsixty-nine\nseventy\nseventy-one\nseventy-two\nseventy-three\nseventy-four\nseventy-five\nseventy-six\nseventy-seven\nseventy-eight\nseventy-nine\neighty\neighty-one\neighty-two\neighty-three\neighty-four\neighty-five\neighty-six\neighty-seven\neighty-eight\neighty-nine\nninety\nninety-one\nninety-two\nninety-three\nninety-four\nninety-five\nninety-six\nninety-seven\nninety-eight\nninety-nine\none hundred\none hundred one\none hundred two\none hundred three\none hundred four\none hundred five\none hundred six\none hundred seven\none hundred eight\none hundred nine\none hundred ten\none hundred eleven\none hundred twelve\none hundred thirteen\none hundred fourteen\none hundred fifteen\none hundred sixteen\none hundred seventeen\none hundred eighteen\none hundred nineteen\none hundred twenty\none hundred twenty-one\none hundred twenty-two\none hundred twenty-three\none hundred twenty-four\none hundred twenty-five\none hundred twenty-six\none hundred twenty-seven\none hundred twenty-eight\none hundred twenty-nine\none hundred thirty\none hundred thirty-one\none hundred thirty-two\none hundred thirty-three\none hundred thirty-four\none hundred thirty-five\none hundred thirty-six\none hundred thirty-seven\none hundred thirty-eight\none hundred thirty-nine\none hundred forty\none hundred forty-one\none hundred forty-two\none hundred forty-three\none hundred forty-four\none hundred forty-five\none hundred forty-six\none hundred forty-seven\none hundred forty-eight\none hundred forty-nine\none hundred fifty\none hundred fifty-one\none hundred fifty-two\none hundred fifty-three\none hundred fifty-four\none hundred fifty-five\none hundred fifty-six\none hundred fifty-seven\none hundred fifty-eight\none hundred fifty-nine\none hundred sixty\none hundred sixty-one\none hundred sixty-two\none hundred sixty-three\none hundred sixty-four\none hundred sixty-five\none hundred sixty-six\none hundred sixty-seven\none hundred sixty-eight\none hundred sixty-nine\none hundred seventy\none hundred seventy-one\none hundred seventy-two\none hundred seventy-three\none hundred seventy-four\none hundred seventy-five\none hundred seventy-six\none hundred seventy-seven\none hundred seventy-eight\none hundred seventy-nine\none hundred eighty\none hundred eighty-one\none hundred eighty-two\none hundred eighty-three\none hundred eighty-four\none hundred eighty-five\none hundred eighty-six\none hundred eighty-seven\none hundred eighty-eight\none hundred eighty-nine\none hundred ninety\none hundred ninety-one\none hundred ninety-two\none hundred ninety-three\none hundred ninety-four\none hundred ninety-five\none hundred ninety-six\none hundred ninety-seven\none hundred ninety-eight\none hundred ninety-nine\ntwo hundred\ntwo hundred one\ntwo hundred two\ntwo hundred three\ntwo hundred four\ntwo hundred five\ntwo hundred six\ntwo hundred seven\ntwo hundred eight\ntwo hundred nine\ntwo hundred ten\ntwo hundred eleven\ntwo hundred twelve",
+      "is_complete": true
+    }
+  ],
+  "exchange_count": 1,
+  "included_tool_results": false
+}

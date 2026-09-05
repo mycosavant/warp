@@ -769,6 +769,20 @@ takes away the sanctioned way to stop, which is the one thing `kill` was already
 ruled out for. `agent list` now reports `quiet_for_seconds` and `last_activity`
 for a turn Warp is driving, which is how you tell there is one to cancel.
 
+**`agent cancel` killed the person's foreground command until 2026-09-05, and
+the panel showed nothing of a text-only answer until it ended.** Both measured
+on the Windows build with a streaming turn and a `sleep 300` typed into the
+pane behind it (`.fork/runs/cancel-2026-09-05/`). Upstream stops the pane's
+running block whenever the *visible* conversation is stopped, because its agent
+runs commands there; the fork's agents never do, so `fork::panel_agent_is_external`
+now gates that interrupt on the block belonging to the conversation. And the
+ACP translator's text buffer, added so token chunks would not each become a
+message, held a text-only answer whole until the turn ended -- a cancel kept
+nothing. Text now streams into one message by `AppendToMessageContent`. The
+same coupling still refuses a new conversation while a long-running command is
+in the pane (*"the agent is monitoring a long-running command"*); recorded, not
+changed. `.fork/docs/composer.md`, "Item 7, measured and built".
+
 **A GUI Warp binds two loopback ports, and only one of them is this fork's.**
 Measured 2026-08-24 with `ss -ltnp` against a running instance:
 

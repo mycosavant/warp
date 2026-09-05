@@ -206,23 +206,23 @@
     </div>
   </article>
 
-  <article class="item" data-id="composer">
+  <article class="item" data-id="composer" data-default="done">
     <div class="rank">4</div>
     <div class="body">
       <div class="head">
         <h2>Composer: the cancel path, not the polish</h2>
         <button class="status" type="button" aria-label="cycle status">open</button>
       </div>
-      <div class="meta"><span>.fork/docs/composer.md item 7</span><span>test first, needs a fake streaming agent</span></div>
-      <p>Steps 2 through 4c shipped this week and were the most visible product progress on the board. What remains splits cleanly into defects and polish, and only the defects are ranked. Cancel is a daily gesture.</p>
+      <div class="meta"><span>.fork/docs/composer.md, "Item 7, measured and built"</span><span>measured, then built 2026-09-05, <code>2ff77def8</code></span></div>
+      <p>Steps 2 through 4c shipped this week and were the most visible product progress on the board. What remained split cleanly into defects and polish, and only the defects were ranked. Cancel is a daily gesture. Measured before designing, with a streaming turn in the panel and a <code>sleep 300</code> typed into the pane behind it; the four defects came out three real and one not, and the real ones were not the size the board said.</p>
       <div class="split">
         <div>
-          <h3>Defects</h3>
+          <h3>Defects, as measured</h3>
           <ul>
-            <li>A cancelled turn drops its last unflushed sentence; <code>take_until</code> drops the driver future and nothing flushes <code>pending</code>. Read, not run, twice.</li>
-            <li>The same cancel leaves a tool row the renderer demotes and the transport never closes.</li>
-            <li>A <code>^C</code> appeared at the pane's prompt after <code>agent cancel</code>. If cancel reaches the user's shell it can kill a foreground command. Rule it in or out in a morning.</li>
-            <li>No <code>stop</code> event after the cancelled turn.</li>
+            <li><strong>Ruled in, then out.</strong> <code>agent cancel</code> killed the person's <code>sleep 300</code> and left <code>^C</code> at the prompt: upstream interrupts the pane whenever the visible conversation is stopped, because its agent runs commands there. Neither fork transport does, so the interrupt is gated on the block belonging to the conversation. Same <code>pgrep</code>, sleep alive.</li>
+            <li><strong>Worse than written.</strong> Not the last sentence: a text-only turn showed nothing for its whole length and a cancel kept nothing. Text now streams into one message by append, from its first word.</li>
+            <li>The row the transport never closes reads as interrupted in <code>agent read</code> once the exchange has finished, as the panel already drew it.</li>
+            <li>The stop line did not reproduce: <code>stop_failure cancelled</code> is written on both builds.</li>
           </ul>
         </div>
         <div>
