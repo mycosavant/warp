@@ -131,3 +131,25 @@ fn a_subagents_tool_names_the_call_that_spawned_it() {
         "the spawning call itself has no parent"
     );
 }
+
+/// Viewer phase 0. The join key to Claude's own session file is absent only
+/// before the stream has named the session, and is whatever it named last: a
+/// `--resume` that missed relinks to the session Claude actually ran.
+#[test]
+fn the_join_key_is_written_once_the_stream_has_named_the_session() {
+    let mut context = TurnContext::new("warp-conv".to_owned(), None);
+    assert_eq!(context.linked_session_id, None);
+
+    context.link("43ce5cd9-e7ff-4b39-afc4-6e828a726e3b");
+    assert_eq!(
+        context.linked_session_id.as_deref(),
+        Some("43ce5cd9-e7ff-4b39-afc4-6e828a726e3b")
+    );
+
+    context.link("fresh-0000");
+    assert_eq!(context.linked_session_id.as_deref(), Some("fresh-0000"));
+    assert_eq!(
+        context.session_id, "warp-conv",
+        "Warp's own id is untouched"
+    );
+}

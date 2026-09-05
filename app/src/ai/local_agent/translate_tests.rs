@@ -920,3 +920,62 @@ fn warps_announcement_is_tagged_and_nothing_else_is() {
         "the agent's words must never be tagged as Warp's: {prose:?}"
     );
 }
+
+// Viewer phase 0: the session id the event log joins on.
+
+/// `init` is the first line Claude writes, and the caller links the log before
+/// draining tool events, so the first tool event of a turn already has the key.
+#[test]
+fn the_session_is_unknown_until_claude_names_it_and_known_before_any_tool() {
+    let mut translator = translator();
+    assert_eq!(translator.session_id(), None);
+
+    translator.on_line(INIT);
+    assert_eq!(
+        translator.session_id(),
+        Some("43ce5cd9-e7ff-4b39-afc4-6e828a726e3b")
+    );
+
+    translator.on_line(&assistant(
+        r#"{"type":"tool_use","id":"toolu_1","name":"Read","input":{"file_path":"x"}}"#,
+    ));
+    assert_eq!(translator.take_tool_events().len(), 1);
+    assert_eq!(
+        translator.session_id(),
+        Some("43ce5cd9-e7ff-4b39-afc4-6e828a726e3b"),
+        "a tool line does not lose the session"
+    );
+}
+
+/// The same rule the conversation token follows: if `--resume` misses, Claude
+/// starts a fresh session and says so, and the key must name the session
+/// Claude actually ran, not the one Warp asked for.
+#[test]
+fn a_resume_that_missed_follows_the_session_claude_actually_ran() {
+    let mut translator = translator();
+    translator.on_line(INIT);
+    translator.on_line(
+        r#"{"type":"system","subtype":"init","cwd":"/tmp","session_id":"fresh-0000","model":"claude-haiku-4-5"}"#,
+    );
+
+    assert_eq!(translator.session_id(), Some("fresh-0000"));
+}
+
+/// A compaction is refused by the caller unless it has a session to resume, so
+/// the key is known before the stream opens, and the compaction's own `init`
+/// (which is not relayed) confirms rather than sets it.
+#[test]
+fn a_compaction_knows_its_session_before_the_stream_opens() {
+    let mut compactor = compactor();
+    assert_eq!(
+        compactor.session_id(),
+        Some("30461b56-4238-4d93-9acd-443eae43e5a1")
+    );
+
+    compactor.on_line(COMPACTING);
+    compactor.on_line(COMPACT_INIT);
+    assert_eq!(
+        compactor.session_id(),
+        Some("30461b56-4238-4d93-9acd-443eae43e5a1")
+    );
+}

@@ -379,6 +379,7 @@ it. The old `~/.warpdev` state file is no longer read.
 ```bash
 ggwarpdev                 # PRODUCT: the fork's agent, its own shipped permission mode, no instruments
 ggwarpdev instrumented    # THE RIG: product + WARP_FORK_ACP_MODE=default, event log, transcript
+ggwarpdev eventlog        # PRODUCT + WARP_FORK_EVENT_LOG=on, nothing else: the agent still in its own mode
 ggwarpdev stock           # UPSTREAM: all four WARP_FORK_* variables cleared, for A/B-ing a regression
 ggwarpdev status          # print what a launch would set, and the tree state, without launching
 ```

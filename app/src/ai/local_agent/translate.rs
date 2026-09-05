@@ -325,6 +325,21 @@ pub(super) struct Translator {
     ///
     /// Bounded by the calls in flight, not by the turn: an entry is removed by
     /// the result that answers it.
+    tool_names: HashMap<String, String>,
+    /// Claude's own session id, as the stream named it.
+    ///
+    /// The join key the event log writes as `linked_session_id` (viewer phase
+    /// 0): Claude's session file is `~/.claude/projects/<slug>/<this>.jsonl`,
+    /// and this is what ties Warp's log for a conversation to it. Read off
+    /// `system/init` rather than off the spawn arguments, for the same reason
+    /// the conversation token is: if `--resume` misses, Claude starts a fresh
+    /// session and says so, and the key must follow the session that exists.
+    /// A compaction knows its session before the stream opens, because the
+    /// caller refused to run one without it.
+    ///
+    /// `None` until the stream has said. `init` is the first line Claude
+    /// writes, so no tool event on this path is recorded before it is set.
+    session_id: Option<String>,
     /// Warp's one disclosure sentence, held until the task it would attach to
     /// exists.
     ///
@@ -339,7 +354,6 @@ pub(super) struct Translator {
     /// passed. Ordering against the stream is not something a unit test on the
     /// note can see.
     pending_announcement: Option<String>,
-    tool_names: HashMap<String, String>,
 }
 
 impl Translator {
@@ -350,6 +364,10 @@ impl Translator {
         mode: Mode,
         started_at: DateTime<Utc>,
     ) -> Self {
+        let session_id = match &mode {
+            Mode::Compact { session, .. } => Some(session.clone()),
+            Mode::Query { .. } => None,
+        };
         Self {
             task_id,
             task_needs_announcing,
@@ -362,7 +380,25 @@ impl Translator {
             started_at,
             tool_events: Vec::new(),
             tool_names: HashMap::new(),
+            session_id,
             pending_announcement: None,
+        }
+    }
+
+    /// Claude's session id, once the stream has named it.
+    ///
+    /// The caller stamps it onto every event-log line of the turn as
+    /// `linked_session_id`; see the field for why it comes from the stream.
+    pub(super) fn session_id(&self) -> Option<&str> {
+        self.session_id.as_deref()
+    }
+
+    /// Records the session a `system/init` named. An `init` with no id, which
+    /// nothing has produced yet, leaves the last known one in place rather than
+    /// erasing it.
+    fn note_session(&mut self, session_id: Option<String>) {
+        if let Some(id) = session_id.filter(|id| !id.is_empty()) {
+            self.session_id = Some(id);
         }
     }
 
@@ -418,6 +454,7 @@ impl Translator {
                 // arguments on purpose: if `--resume` misses, Claude starts a
                 // fresh session and says so, and the token must follow the
                 // session that actually exists.
+                self.note_session(system.session_id.clone());
                 let session_id = system.session_id.unwrap_or_default();
                 let mut events = vec![self.init(session_id)];
                 if self.task_needs_announcing {
@@ -547,7 +584,14 @@ impl Translator {
                 self.saw_result = true;
                 events.push(self.finished(result));
             }
-            ClaudeEvent::System(_) | ClaudeEvent::Ignored => {}
+            // The compaction's own `init` is not relayed (see above), but the
+            // session it names is still the one the log joins on.
+            ClaudeEvent::System(system) => {
+                if system.subtype == "init" {
+                    self.note_session(system.session_id);
+                }
+            }
+            ClaudeEvent::Ignored => {}
         }
         events
     }

@@ -32,6 +32,15 @@
                     every ask and answer is written down. Use it when you want
                     Warp in the loop and are prepared to answer for it.
 
+    -EventLog       PRODUCT + THE LOG. The product profile plus
+                    `WARP_FORK_EVENT_LOG=on` and nothing else: the agent stays
+                    in its shipped mode, so Warp is still never asked, and what
+                    the log gains is the tool calls and the join key to the
+                    agent's own session file (`linked_session_id`). Added for
+                    viewer phase 0 (`.fork/docs/observability.md`), whose
+                    question is whether that join holds under `auto`; the rig
+                    could not answer it because it forces `default`.
+
     -Stock          UPSTREAM. All four variables cleared. For A/B-ing a
                     suspected fork regression. Plan the shutdown first: with
                     `WARP_FORK_POLICY` untouched this still publishes a
@@ -65,11 +74,14 @@
 .EXAMPLE
   warpdev.ps1 -Instrumented   # launch the rig, for one session
 .EXAMPLE
+  warpdev.ps1 -EventLog       # the product, with the event log and nothing else
+.EXAMPLE
   warpdev.ps1 -Status         # print what a launch would set, and the tree state
 #>
 [CmdletBinding()]
 param(
     [switch]$Instrumented,
+    [switch]$EventLog,
     [switch]$Stock,
     [switch]$Status,
     [switch]$Force,
@@ -92,6 +104,13 @@ if ($Off) { Write-Host "warpdev: -Off is now -Stock" -ForegroundColor DarkGray; 
 if ($Instrumented -and $Stock) {
     Write-Host "warpdev: -Instrumented and -Stock exclude each other." -ForegroundColor Red
     exit 2
+}
+if ($EventLog -and $Stock) {
+    Write-Host "warpdev: -EventLog and -Stock exclude each other (stock has no fork log)." -ForegroundColor Red
+    exit 2
+}
+if ($EventLog -and $Instrumented) {
+    Write-Host "warpdev: -Instrumented already includes the event log; -EventLog ignored." -ForegroundColor DarkGray
 }
 
 $OldStateFile = Join-Path $HOME '.warpdev'
@@ -133,6 +152,9 @@ if ($Stock) {
 } elseif ($Instrumented) {
     $ProfileName = 'INSTRUMENTED (the rig)'
     $ToSet = @($Product + $Instruments)
+} elseif ($EventLog) {
+    $ProfileName = 'PRODUCT + EVENT LOG'
+    $ToSet = @($Product + ($Instruments | Where-Object { $_.Name -eq 'WARP_FORK_EVENT_LOG' }))
 } else {
     $ProfileName = 'PRODUCT'
     $ToSet = @($Product)

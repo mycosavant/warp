@@ -524,6 +524,13 @@ fn events<C: Send + 'static>(state: TurnState<C>) -> impl Stream<Item = Event> +
                     // that file stays free of a filesystem. The log is a
                     // no-op unless something asked for one, and these events
                     // are tool-call paced, so this costs nothing when off.
+                    //
+                    // Linked *before* the drain: `init` and a `tool_use` are
+                    // never one line, and `init` comes first, so the first
+                    // tool event of a turn already carries the join key.
+                    if let Some(session) = state.translator.session_id() {
+                        state.log.link(session);
+                    }
                     for event in state.translator.take_tool_events() {
                         crate::event_log::local_agent::record(&state.log, &event);
                     }

@@ -111,8 +111,11 @@ pub(crate) struct Entry<'a> {
     /// `CLAUDE.md` carried for a day after it stopped being true.
     ///
     /// So this is the join key, written from both ends: a line keyed by one id
-    /// names the other. Absent for every source with only one id, which is all
-    /// of them except the ACP path.
+    /// names the other. Present on the ACP path and, since viewer phase 0
+    /// (2026-09-05), on `local_agent` tool lines, where it is Claude's own
+    /// session id and names the harness's file
+    /// (`~/.claude/projects/<slug>/<id>.jsonl`). Absent for Warp's own agent
+    /// and for the OSC 777 plugin path, which carry one id each.
     pub linked_session_id: Option<&'a str>,
     /// A stable id for the tool call this event belongs to, so a `tool_complete`
     /// can be tied to the `permission_request` that preceded it.

@@ -37,6 +37,17 @@
 //! once turn it into a soup, and fan-out is the case this fork most wants to
 //! watch. So the field the stream already had is recorded rather than inferred.
 //!
+//! **`linked_session_id` is Claude's session id** (viewer phase 0, 2026-09-05).
+//! Until then this path wrote `None` there, on the reasoning that it had "no
+//! second id space to join to" — which was wrong: Claude's session id is the
+//! conversation token this path round-trips for `--resume`, and it names the
+//! file Claude itself keeps, `~/.claude/projects/<slug>/<id>.jsonl`. That file
+//! holds the full input of every call where `tool_input_preview` here holds
+//! 320 characters, so the viewer (`.fork/docs/observability.md`) treats it as
+//! the record and these lines as the index into it. The id is taken from the
+//! stream's `system/init`, not from the spawn arguments, so that a `--resume`
+//! that missed names the session Claude actually ran.
+//!
 //! What this does **not** carry is a permission event. Claude in `--print` mode
 //! does not report one: a refused tool comes back as an ordinary `tool_result`
 //! with `is_error`, indistinguishable on the wire from a tool that ran and
@@ -71,6 +82,10 @@ pub(crate) struct TurnContext {
     /// is what `conversation_token` carries here, and filing under it would put
     /// a turn's tools in a different file from its frame.
     session_id: String,
+    /// Claude's session id, once the stream has named it; the join key to
+    /// Claude's own session file. `None` only before `system/init`, which is
+    /// the first line of the stream, so no tool event is written without it.
+    linked_session_id: Option<String>,
     cwd: Option<String>,
 }
 
@@ -78,7 +93,18 @@ impl TurnContext {
     pub(crate) fn new(conversation_id: String, cwd: Option<String>) -> Self {
         Self {
             session_id: conversation_id,
+            linked_session_id: None,
             cwd,
+        }
+    }
+
+    /// Names the Claude session this turn's lines belong to.
+    ///
+    /// Called with whatever the translator has seen, on every line, so it has
+    /// to be cheap when nothing changed: it clones only when the id is new.
+    pub(crate) fn link(&mut self, session_id: &str) {
+        if self.linked_session_id.as_deref() != Some(session_id) {
+            self.linked_session_id = Some(session_id.to_owned());
         }
     }
 }
@@ -98,8 +124,7 @@ pub(crate) fn record(context: &TurnContext, event: &ToolEvent) {
         event: projected.event,
         source: SOURCE,
         session_id: Some(&context.session_id),
-        // One id only: this source has no second id space to join to.
-        linked_session_id: None,
+        linked_session_id: context.linked_session_id.as_deref(),
         call_id: Some(&projected.call_id),
         parent_call_id: projected.parent_call_id.as_deref(),
         cwd: context.cwd.as_deref(),
