@@ -1701,6 +1701,12 @@ Five files in `.fork/`, in the order a cold start wants them.
   sentence does two jobs and only one survives, because the objection T14.18
   actually measured was that **Warp was not in the loop**, not that a model
   decided. Read it before repeating the line.
+- **`VIEWER.md`** — the observability target, filed 2026-09-04 as a spec and
+  unbuilt. The maintainer's frame: the harness already keeps its transcript on
+  disk, so Warp parses that and adds only what it alone knows (its decisions,
+  who answered, live state). Names one defect that comes first:
+  `local_agent` writes `linked_session_id: None`, so the join key is missing on
+  that path. Read it before adding any new capture to the event log.
 - **`README.md`** — the operating manual: how to build and run on each platform,
   the full `warpctrl` surface, Warp Drive, WSL integration, and the gotchas that
   cost hours. Reach for it whenever you need to *use* something rather than
