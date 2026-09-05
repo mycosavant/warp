@@ -13,6 +13,10 @@ dev tree's work through `e5bff3436`.
 
 ## Method, three instruments
 
+The rig is kept as a runbook: `.fork/tools/egress-rig.md` has the exact command
+sequence, and the tools it drives (`egress-poll.ps1`, `egress-poll-wsl.sh`,
+`whisper-stub.py`) live beside it. What follows is what this run did.
+
 Two socket pollers and one decrypting proxy, each blind where another sees.
 
 1. **Windows sockets** — `.fork/tools/egress-poll.ps1`, `Get-NetTCPConnection`
@@ -99,7 +103,7 @@ Driven twice.
   server at http://127.0.0.1:8080/inference. Is it running?"* — fail-closed at
   the app level: it tried the configured loopback endpoint, gave up, and **did
   not fall back to `api.warp.dev`**.
-- **Then, against a logging stub** (`whisper_stub.py`, returning whisper.cpp's
+- **Then, against a logging stub** (`.fork/tools/whisper-stub.py`, returning whisper.cpp's
   `{text}` shape). The captured request:
 
   ```

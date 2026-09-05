@@ -4191,3 +4191,21 @@ were run: against the pre-merge tip it reproduced 94 / 386 / 64 / 6 and named
 the exact six conflicting files, and against the merged tree it reported zero.
 A `grep -EicP` bug that silently emptied the count was found the same way, by a
 number that came back blank where a known 6 was expected.
+
+### The egress rig
+
+`.fork/tools/egress-rig.md` is the runbook for measuring "nothing escapes"
+against a running build: two socket pollers (`egress-poll.ps1` on Windows,
+`egress-poll-wsl.sh` inside the distribution), a decrypting proxy (`mitmdump`),
+and a loopback endpoint stub (`whisper-stub.py`) for capturing the body of a
+POST the app makes to a local endpoint. Each instrument is blind where another
+sees, so the runbook uses them together and calibrates each against a known
+control before trusting a silence.
+
+Built and driven end to end on the Windows build 2026-09-05
+(`.fork/runs/egress-windows-2026-09-05/`): every `warp-oss` socket loopback,
+zero remote; the panel agent's `api.anthropic.com` traffic on the WSL side is
+the control that proves the pollers see real traffic. The rig also answered the
+voice-egress question (T2.5) and caught the cloud WebSocket that the egress
+deny-list cannot see failing pre-socket on missing credentials (T19). The
+runbook carries the command sequence and the four traps the first run hit.

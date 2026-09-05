@@ -126,7 +126,8 @@ appears in neither capture as an outbound socket. Full account and the three
 findings it turned up — voice audio going to loopback only (T2.5, now measured),
 the cloud WebSocket gated pre-socket by the missing-credentials check (T19), and
 upstream's `9282` failing to bind on this run — are in
-`.fork/runs/egress-windows-2026-09-05/`. `tcpdump` still was not used (root), so
+`.fork/runs/egress-windows-2026-09-05/`, and the rig is kept as a runbook at
+`.fork/tools/egress-rig.md` for the next run. `tcpdump` still was not used (root), so
 packet-level capture is not part of either run; the socket-plus-proxy pair
 covers the same ground.
 
