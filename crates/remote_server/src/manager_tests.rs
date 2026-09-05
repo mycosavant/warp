@@ -5,11 +5,12 @@ use warpui_core::App;
 
 use super::{
     HostRequestError, PendingHostRequest, RemoteServerManager, RemoteServerManagerEvent,
-    RipgrepSearchParams,
+    RipgrepSearchParams, version_is_compatible,
 };
 use crate::HostId;
 use crate::proto::{ClientMessage, RemoteAgentContextSnapshot, WriteFile, host_scoped_request};
 use crate::protocol::RequestId;
+use warp_core::channel::Channel;
 
 #[test]
 fn abort_host_request_removes_pending_request_and_resolves_caller() {
@@ -106,4 +107,35 @@ fn start_ripgrep_search_without_connected_host_resolves_immediately() {
             Err(HostRequestError::AllSessionsDisconnected)
         ));
     });
+}
+
+/// On a pinned channel a differing tag means "reinstall", so it is refused.
+#[test]
+fn a_pinned_channel_refuses_a_server_of_another_version() {
+    assert!(version_is_compatible(Channel::Stable, Some("v1"), "v1"));
+    assert!(!version_is_compatible(Channel::Stable, Some("v1"), "v2"));
+    assert!(!version_is_compatible(Channel::Stable, Some("v1"), ""));
+    assert!(version_is_compatible(Channel::Stable, None, "v2"));
+    assert!(version_is_compatible(Channel::Stable, None, ""));
+}
+
+/// On Oss there is nothing to reinstall from, and the "repair" would delete
+/// a hand-staged binary, so a differing tag is accepted and only logged.
+#[test]
+fn oss_accepts_a_server_of_another_version_because_it_cannot_reinstall_one() {
+    assert!(version_is_compatible(
+        Channel::Oss,
+        Some("v0.fork.ea61116e1"),
+        "v0.fork.14a9a5384"
+    ));
+    assert!(version_is_compatible(
+        Channel::Oss,
+        Some("v0.fork.ea61116e1"),
+        ""
+    ));
+    assert!(version_is_compatible(
+        Channel::Oss,
+        None,
+        "v0.fork.14a9a5384"
+    ));
 }

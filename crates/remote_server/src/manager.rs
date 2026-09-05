@@ -9,7 +9,7 @@ use repo_metadata::RepoMetadataUpdate;
 use serde::Serialize;
 use warp_core::SessionId;
 #[cfg(not(target_family = "wasm"))]
-use warp_core::channel::ChannelState;
+use warp_core::channel::{Channel, ChannelState};
 use warp_errors::report_error;
 use warp_util::remote_path::{RemoteNavigationResult, RemotePath};
 use warp_util::standardized_path::StandardizedPath;
@@ -257,8 +257,22 @@ impl RemoteServerErrorKind {
 ///   release-tagged client should not accept an untagged server — it
 ///   likely means the binary was deployed via the dev script rather
 ///   than the release channel.
+/// - **On [`Channel::Oss`] any pair is compatible.** The rule above exists
+///   so a mismatch can be *repaired*: delete the stale binary, reinstall the
+///   pinned artifact on reconnect. Oss has no pinned artifact — its binary
+///   path is unversioned and [`crate::setup::remote_server_binary`] documents
+///   it as "deployed/managed locally", which in practice is a symlink placed
+///   by hand — so on Oss the repair step is a plain `rm -f` of that symlink
+///   and the reconnect finds nothing to install. Measured 2026-09-05 with two
+///   builds of the same fork stamped a commit apart: the client refused, the
+///   symlink was deleted, and every later connect failed at spawn. A
+///   differing tag is logged by the caller instead, and the repository-level
+///   compatibility it can no longer vouch for is the operator's to keep.
 #[cfg(not(target_family = "wasm"))]
-fn version_is_compatible(client: Option<&str>, server: &str) -> bool {
+fn version_is_compatible(channel: Channel, client: Option<&str>, server: &str) -> bool {
+    if channel == Channel::Oss {
+        return true;
+    }
     match (client, server.is_empty()) {
         (Some(c), false) => c == server,
         (None, _) => true,
@@ -2315,7 +2329,20 @@ impl RemoteServerManager {
         // so this is a belt-and-suspenders check at zero extra cost (it
         // uses data already received in the InitializeResponse).
         let client_version = ChannelState::app_version();
-        if !version_is_compatible(client_version, &resp.server_version) {
+        if client_version.is_some_and(|c| c != resp.server_version) {
+            // Informational on Oss (where the check below passes anyway) and
+            // the last thing logged before the teardown everywhere else.
+            log::warn!(
+                "Remote server version differs from the client: session={session_id:?} \
+                 client={client_version:?} server={:?}",
+                resp.server_version
+            );
+        }
+        if !version_is_compatible(
+            ChannelState::channel(),
+            client_version,
+            &resp.server_version,
+        ) {
             log::warn!(
                 "Remote server version mismatch, removing stale binary: session={session_id:?} \
                  client={client_version:?} server={:?}",
