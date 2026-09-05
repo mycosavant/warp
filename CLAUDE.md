@@ -358,6 +358,15 @@ not set `GIT_RELEASE_TAG` for a local build**; both scripts clear it in case
 the shell inherited one. The live Windows script is `C:\dev\build.ps1`, and
 `.fork/tools/build.ps1` is its tracked copy: change one, copy to the other.
 
+Measured on WSL the same day, release profile: the commit that introduced
+the sidecar (and so changed `warp_core`) recompiled 53 crates in 6m57s, the
+last cascade; the docs-only commit after it is the second row.
+
+| build after | crates compiled | wall time |
+|---|---|---|
+| a `warp_core` change (`e8fb118ee`) | 53 | 6m57s |
+| a docs-only commit | SECOND_ROW |
+
 **The bigger one was underneath it, and it was live.**
 `generate_multi_agent_output` intercepts for the ACP and local agents *only when
 one is configured* — `handles()` asks whether the request carries a
