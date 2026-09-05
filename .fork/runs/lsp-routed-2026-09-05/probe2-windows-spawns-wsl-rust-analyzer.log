@@ -1,0 +1,56 @@
+[  0.01s] spawned pid=47336 cmd=['wsl.exe', '-d', 'Ubuntu', '--', 'rust-analyzer'] cwd=\\wsl.localhost\Ubuntu\home\effatha\scratch-lsp\repo
+[  0.10s] initialize -> serverInfo={'name': 'rust-analyzer', 'version': '1.96.0 (ac68faa 2026-05-25)'}
+[  0.11s] didOpen file:///home/effatha/scratch-lsp/repo/src/main.rs (242 bytes read from \\wsl.localhost\Ubuntu\home\effatha\scratch-lsp\repo\src\main.rs)
+[  0.11s] server request window/workDoneProgress/create -> null
+[  0.11s] progress rustAnalyzer/Fetching begin Fetching
+[  0.11s] documentSymbol -> [{"name": "ProbeMarker", "kind": 23, "tags": [], "deprecated": false, "location": {"uri": "file:///home/effatha/scratch-lsp/repo/src/main.rs", "range": {"start": {"line": 0, "character": 0}, "end": {"line": 3, "character": 1}}}}, {"name": "id", "kind": 8, "tags": [], "deprecated": false, "location": {"uri": "file:///home/effatha/scratch-lsp/repo/src/main.rs", "range": {"start": {"line": 2, "character": 4}, "end": {"line": 2, "character": 15}}}, "containerName": "ProbeMarker"}, {"name": "build_marker", "kind": 12, "tags": [], "deprecated": false, "location": {"uri": "file:///home/effatha/scratc
+[  0.35s] stderr: 2026-09-05T13:50:16.08388084-04:00  WARN notify error: No path was found.
+[  0.62s] stderr: 2026-09-05T13:50:16.324698957-04:00  WARN notify error: No path was found.
+[  1.11s] progress rustAnalyzer/Fetching end 
+[  1.11s] server request window/workDoneProgress/create -> null
+[  1.11s] progress rustAnalyzer/Building CrateGraph begin Building CrateGraph
+[  1.11s] progress rustAnalyzer/Building CrateGraph end 
+[  1.11s] server request window/workDoneProgress/create -> null
+[  1.11s] progress rustAnalyzer/Roots Scanned begin Roots Scanned
+[  1.11s] progress rustAnalyzer/Roots Scanned end 
+[  1.11s] server request window/workDoneProgress/create -> null
+[  1.11s] progress rustAnalyzer/Fetching begin Fetching
+[  1.11s] progress rustAnalyzer/Fetching end 
+[  1.11s] server request window/workDoneProgress/create -> null
+[  1.11s] progress rustAnalyzer/Building compile-time-deps begin Building compile-time-deps
+[  1.11s] progress rustAnalyzer/Building compile-time-deps end 
+[  1.11s] server request window/workDoneProgress/create -> null
+[  1.11s] progress rustAnalyzer/Building CrateGraph begin Building CrateGraph
+[  1.11s] progress rustAnalyzer/Building CrateGraph end 
+[  1.11s] server request window/workDoneProgress/create -> null
+[  1.11s] progress rustAnalyzer/Roots Scanned begin Roots Scanned
+[  1.11s] progress rustAnalyzer/Roots Scanned end 
+[  1.11s] server request window/workDoneProgress/create -> null
+[  1.11s] progress rustAnalyzer/Loading proc-macros begin Loading proc-macros
+[  1.11s] progress rustAnalyzer/Loading proc-macros end 
+[  1.11s] server request window/workDoneProgress/create -> null
+[  1.11s] progress rustAnalyzer/Fetching begin Fetching
+[  1.11s] progress rustAnalyzer/Fetching end 
+[  1.11s] server request window/workDoneProgress/create -> null
+[  1.11s] progress rustAnalyzer/Building CrateGraph begin Building CrateGraph
+[  1.11s] progress rustAnalyzer/Building CrateGraph end 
+[  1.11s] server request window/workDoneProgress/create -> null
+[  1.11s] progress rustAnalyzer/Loading proc-macros begin Loading proc-macros
+[  1.11s] progress rustAnalyzer/Loading proc-macros end 
+[  1.11s] server request window/workDoneProgress/create -> null
+[  1.11s] progress rustAnalyzer/cachePriming begin Indexing
+[  1.11s] progress rustAnalyzer/cachePriming end 
+[  1.11s] server request window/workDoneProgress/create -> null
+[  1.11s] progress rust-analyzer/flycheck/0 begin cargo check
+[  1.11s] progress rust-analyzer/flycheck/0 end 
+[  1.11s] server request workspace/diagnostic/refresh -> null
+[  1.11s] server request window/workDoneProgress/create -> null
+[  1.11s] progress rustAnalyzer/cachePriming begin Indexing
+[  1.11s] server request window/workDoneProgress/create -> null
+[  1.11s] progress rust-analyzer/flycheck/0 begin cargo check
+[  1.11s] progress rust-analyzer/flycheck/0 end 
+[  1.11s] server request workspace/diagnostic/refresh -> null
+[  2.41s] progress rustAnalyzer/cachePriming end 
+[  3.41s] definition(11,12) -> [{"originSelectionRange": {"start": {"line": 11, "character": 12}, "end": {"line": 11, "character": 24}}, "targetUri": "file:///home/effatha/scratch-lsp/repo/src/main.rs", "targetRange": {"start": {"line": 5, "character": 0}, "end": {"line": 8, "character": 1}}, "targetSelectionRange": {"start": {"line": 6, "character": 7}, "end": {"line": 6, "character": 19}}}]
+[  3.41s] hover -> {"contents": {"kind": "plaintext", "value": "lspprobe\n\npub fn build_marker(id: u32) -> ProbeMarker\n\n\nBuilds a marker."}, "range": {"start": {"line": 11, "character": 12}, "end": {"line": 11, "character": 24}}}
+[  3.50s] exit code 0

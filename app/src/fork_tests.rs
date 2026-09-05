@@ -1399,3 +1399,15 @@ fn the_agent_transport_refuses_before_it_reaches_warp() {
          fork can actually answer"
     );
 }
+
+#[test]
+fn wsl_lsp_in_distro_is_on_unless_switched_off_by_name() {
+    assert!(wsl_lsp_from(None));
+    assert!(wsl_lsp_from(Some("")));
+    assert!(wsl_lsp_from(Some("1")));
+    assert!(wsl_lsp_from(Some("on")));
+    assert!(!wsl_lsp_from(Some(" off ")));
+    assert!(!wsl_lsp_from(Some("0")));
+    assert!(!wsl_lsp_from(Some("off")));
+    assert!(!wsl_lsp_from(Some("false")));
+}

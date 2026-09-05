@@ -23,7 +23,7 @@ use warpui_core::SingletonEntity;
 use warpui_core::r#async::executor::Background;
 use warpui_core::{Entity, ModelContext};
 
-use crate::config::{LanguageId, lsp_uri_to_path};
+use crate::config::LanguageId;
 use crate::server_repo_watcher::LspRepoWatcher;
 use crate::supported_servers::LSPServerType;
 use crate::types::{
@@ -546,6 +546,7 @@ impl LspServerModel {
         position: Location,
     ) -> Result<impl Future<Output = Result<Vec<DefinitionLocation>>> + use<>> {
         let service = self.service()?;
+        let mapper = self.config.uri_mapper();
         Ok(async move {
             let result = service
                 .text_document()
@@ -553,7 +554,7 @@ impl LspServerModel {
                 .await?;
             Ok(result
                 .into_iter()
-                .filter_map(|location| DefinitionLocation::try_from(location).ok())
+                .filter_map(|location| DefinitionLocation::from_lsp(location, &mapper).ok())
                 .collect())
         })
     }
@@ -642,7 +643,7 @@ impl LspServerModel {
     ) {
         let uri = params.uri;
 
-        let path = match lsp_uri_to_path(&uri) {
+        let path = match self.config.uri_mapper().to_path(&uri) {
             Ok(path) => path,
             Err(e) => {
                 log::warn!(

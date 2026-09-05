@@ -23,7 +23,7 @@ use warp_errors::report_error;
 use warp_util::on_cancel::OnCancelFutureExt;
 
 use crate::LspServerLogLevel;
-use crate::config::{LanguageId, lsp_uri_to_path, path_to_lsp_uri};
+use crate::config::{LanguageId, UriMapper};
 use crate::types::{
     HoverResult, LspDefinitionLocation, ReferenceLocation, TextDocumentContentChangeEvent,
     TextEdit, WatchedFileChangeEvent,
@@ -44,6 +44,9 @@ pub struct LspService {
     open_documents: Arc<Mutex<HashMap<PathBuf, DocumentSyncState>>>,
     watched_files_registry: Arc<Mutex<WatchedFilesRegistry>>,
     notify_tx: async_channel::Sender<ServerNotificationEvent>,
+    /// How paths are spelled on the wire for this server; every URI this
+    /// service builds or reads goes through it.
+    mapper: UriMapper,
     #[cfg(not(target_arch = "wasm32"))]
     logger: Option<SimpleLogger>,
 }
@@ -136,10 +139,13 @@ impl LspService {
         jsonrpc_service: JsonRpcService,
         notify_tx: async_channel::Sender<ServerNotificationEvent>,
         workspace_root: PathBuf,
+        mapper: UriMapper,
         #[cfg(not(target_arch = "wasm32"))] logger: Option<SimpleLogger>,
     ) -> Result<Self> {
-        let watched_files_registry =
-            Arc::new(Mutex::new(WatchedFilesRegistry::new(workspace_root)));
+        let watched_files_registry = Arc::new(Mutex::new(WatchedFilesRegistry::new(
+            workspace_root,
+            mapper.clone(),
+        )));
 
         let server_request_handler = Arc::new(LspServerRequestHandler {
             watched_files_registry: watched_files_registry.clone(),
@@ -156,6 +162,7 @@ impl LspService {
             open_documents: Arc::new(Mutex::new(HashMap::new())),
             watched_files_registry,
             notify_tx,
+            mapper,
             #[cfg(not(target_arch = "wasm32"))]
             logger,
         };
@@ -258,7 +265,7 @@ impl LspService {
                 continue;
             }
 
-            match event.into_lsp() {
+            match event.into_lsp(&self.mapper) {
                 Ok(event) => changes.push(event),
                 Err(e) => log::warn!("Failed to convert file event: {e}"),
             }
@@ -320,13 +327,15 @@ impl LspService {
 
 struct WatchedFilesRegistry {
     workspace_root: PathBuf,
+    mapper: UriMapper,
     registrations: HashMap<String, Vec<GlobFileMatcher>>,
 }
 
 impl WatchedFilesRegistry {
-    fn new(workspace_root: PathBuf) -> Self {
+    fn new(workspace_root: PathBuf, mapper: UriMapper) -> Self {
         Self {
             workspace_root,
+            mapper,
             registrations: HashMap::new(),
         }
     }
@@ -402,7 +411,7 @@ impl WatchedFilesRegistry {
             OneOf::Right(uri) => uri,
         };
 
-        let base_path = match lsp_uri_to_path(&base_path) {
+        let base_path = match self.mapper.to_path(&base_path) {
             Ok(path) => path,
             Err(e) => {
                 let base_uri = base_path.as_str();
@@ -527,7 +536,7 @@ impl<'a> TextDocumentService<'a> {
 
         let did_open_params = DidOpenTextDocumentParams {
             text_document: TextDocumentItem {
-                uri: path_to_lsp_uri(path)?,
+                uri: self.service.mapper.to_uri(path)?,
                 language_id,
                 version: initial_version as i32,
                 text: content,
@@ -552,7 +561,7 @@ impl<'a> TextDocumentService<'a> {
 
         let did_close_params = DidCloseTextDocumentParams {
             text_document: TextDocumentIdentifier {
-                uri: path_to_lsp_uri(path)?,
+                uri: self.service.mapper.to_uri(path)?,
             },
         };
 
@@ -582,7 +591,7 @@ impl<'a> TextDocumentService<'a> {
 
         let did_change_params = DidChangeTextDocumentParams {
             text_document: VersionedTextDocumentIdentifier {
-                uri: path_to_lsp_uri(path)?,
+                uri: self.service.mapper.to_uri(path)?,
                 version,
             },
             content_changes: deltas.into_iter().map(|delta| delta.into_lsp()).collect(),
@@ -597,7 +606,7 @@ impl<'a> TextDocumentService<'a> {
         path: &Path,
         position: Position,
     ) -> anyhow::Result<Vec<LspDefinitionLocation>> {
-        let uri = path_to_lsp_uri(path)?;
+        let uri = self.service.mapper.to_uri(path)?;
 
         let definition_params = GotoDefinitionParams {
             text_document_position_params: TextDocumentPositionParams {
@@ -644,7 +653,7 @@ impl<'a> TextDocumentService<'a> {
     ) -> anyhow::Result<Option<Vec<TextEdit>>> {
         let format_params = DocumentFormattingParams {
             text_document: TextDocumentIdentifier {
-                uri: path_to_lsp_uri(path)?,
+                uri: self.service.mapper.to_uri(path)?,
             },
             options,
             work_done_progress_params: Default::default(),
@@ -673,7 +682,7 @@ impl<'a> TextDocumentService<'a> {
         path: &Path,
         position: Position,
     ) -> anyhow::Result<Option<HoverResult>> {
-        let uri = path_to_lsp_uri(path)?;
+        let uri = self.service.mapper.to_uri(path)?;
 
         let hover_params = HoverParams {
             text_document_position_params: TextDocumentPositionParams {
@@ -703,7 +712,7 @@ impl<'a> TextDocumentService<'a> {
         path: &Path,
         position: Position,
     ) -> anyhow::Result<Vec<ReferenceLocation>> {
-        let uri = path_to_lsp_uri(path)?;
+        let uri = self.service.mapper.to_uri(path)?;
 
         let reference_params = ReferenceParams {
             text_document_position: TextDocumentPositionParams {
@@ -733,7 +742,7 @@ impl<'a> TextDocumentService<'a> {
         Ok(result?
             .unwrap_or_default()
             .into_iter()
-            .filter_map(|loc| ReferenceLocation::try_from(loc).ok())
+            .filter_map(|loc| ReferenceLocation::from_lsp(loc, &self.service.mapper).ok())
             .collect())
     }
 }

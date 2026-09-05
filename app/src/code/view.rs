@@ -586,8 +586,11 @@ impl CodeView {
                     column_num: Some(*column),
                 };
 
+                // A path inside a WSL distribution with a connected host is
+                // that host's remote buffer (`code::routed_lsp`), and opens
+                // through the daemon rather than over the redirector.
                 me.open_or_focus_existing(
-                    Some(LocalOrRemotePath::Local(path.to_path_buf())),
+                    Some(crate::code::routed_lsp::location_for_lsp_path(path, ctx)),
                     Some(line_col),
                     ctx,
                 );

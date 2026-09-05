@@ -19,7 +19,8 @@ pub mod supported_servers;
 mod transport;
 pub mod types;
 
-pub use config::{LanguageId, LspServerConfig, default_init_params};
+pub use command_builder::wsl_argv;
+pub use config::{LanguageId, LspServerConfig, UriMapper, default_init_params};
 pub use jsonrpc::{JsonRpcService, ServerNotificationEvent, Transport};
 pub use lsp_types::notification::{self};
 pub use lsp_types::{Position, Range};
@@ -74,6 +75,7 @@ pub async fn spawn_lsp_service(
     logger: Option<SimpleLogger>,
 ) -> Result<LspServiceInitializationResult> {
     let workspace_root = config.initial_workspace().to_path_buf();
+    let mapper = config.uri_mapper();
 
     let resolved = match config.command_and_params().await {
         Ok(resolved) => resolved,
@@ -106,7 +108,13 @@ pub async fn spawn_lsp_service(
     );
 
     let (notify_tx, notify_rx) = async_channel::unbounded::<ServerNotificationEvent>();
-    let mut service = LspService::new(jsonrpc_service, notify_tx, workspace_root, logger.clone())?;
+    let mut service = LspService::new(
+        jsonrpc_service,
+        notify_tx,
+        workspace_root,
+        mapper,
+        logger.clone(),
+    )?;
 
     if let Err(e) = service.initialize(resolved.params).await {
         if let Some(ref logger) = logger {

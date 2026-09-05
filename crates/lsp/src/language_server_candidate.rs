@@ -32,8 +32,10 @@ pub trait LanguageServerCandidate: Send + Sync {
     ///
     /// By default, checks the data directory first, then falls back to PATH.
     async fn is_installed(&self, executor: &CommandBuilder) -> bool {
-        // First check if installed in our custom location
-        if self.is_installed_in_data_dir(executor).await {
+        // First check if installed in our custom location. A server that will
+        // run inside a WSL distribution cannot use it: what is there is a
+        // Windows executable, and `wsl.exe` cannot run one.
+        if executor.wsl_distro().is_none() && self.is_installed_in_data_dir(executor).await {
             return true;
         }
 

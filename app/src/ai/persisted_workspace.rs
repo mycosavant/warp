@@ -556,10 +556,14 @@ impl PersistedWorkspace {
         ctx.spawn(
             async move {
                 let path_env_var = path_future.await;
-                let executor = lsp::CommandBuilder::new(path_env_var);
+                let base_executor = lsp::CommandBuilder::new(path_env_var);
 
                 let mut results: Vec<(PathBuf, Vec<LSPServerType>)> = Vec::new();
                 for workspace_path in paths_to_scan {
+                    // Fork: the suggestion check runs where the server would.
+                    let executor = base_executor.clone().in_wsl_distro(
+                        crate::code::routed_lsp::distro_for_lsp_root(&workspace_path),
+                    );
                     let mut suggested = Vec::new();
                     for server_type in LSPServerType::all() {
                         let candidate = server_type.candidate(http_client.clone());
@@ -957,10 +961,20 @@ impl PersistedWorkspace {
 
         let repo_root_clone = repo_root.clone();
         let file_path_clone = file_path.clone();
-        let executor = lsp::CommandBuilder::new(path_env_var);
+        let executor = lsp::CommandBuilder::new(path_env_var)
+            .in_wsl_distro(crate::code::routed_lsp::distro_for_lsp_root(&repo_root));
         let http_client = ServerApiProvider::as_ref(ctx).get_http_client();
         ctx.spawn(
             async move {
+                // Fork: what Warp downloads is a Windows executable, and a
+                // server for this workspace runs inside the distribution.
+                if let Some(distro) = executor.wsl_distro() {
+                    anyhow::bail!(
+                        "{} runs inside the WSL distribution {distro} for this workspace and \
+                         has to be installed there",
+                        server_type.binary_name()
+                    );
+                }
                 let candidate = server_type.candidate(http_client);
                 let metadata = candidate.fetch_latest_server_metadata().await?;
                 candidate.install(metadata, &executor).await?;
@@ -1092,6 +1106,12 @@ impl PersistedWorkspace {
                 http_client,
             )
             .with_log_relative_path(log_relative_path);
+            // Fork: a workspace inside a WSL distribution gets its server
+            // inside the distribution (`code::routed_lsp`).
+            let config = match crate::code::routed_lsp::distro_for_lsp_root(&workspace_root) {
+                Some(distro) => config.with_wsl_distro(distro),
+                None => config,
+            };
 
             LspManagerModel::handle(ctx).update(ctx, |manager, m_ctx| {
                 manager.register(workspace_root.clone(), config, m_ctx);
@@ -1241,11 +1261,14 @@ impl PersistedWorkspace {
                 });
 
                 let http_client = ServerApiProvider::as_ref(ctx).get_http_client();
+                // Fork: the installed check runs where the server would.
+                let wsl_distro = crate::code::routed_lsp::distro_for_lsp_root(&repo_root);
                 ctx.spawn(
                     async move {
                         // Wait for interactive PATH, then check installation
                         let path_env_var = path_future.await;
-                        let executor = lsp::CommandBuilder::new(path_env_var);
+                        let executor =
+                            lsp::CommandBuilder::new(path_env_var).in_wsl_distro(wsl_distro);
                         let candidate = server_type.candidate(http_client);
                         candidate.is_installed(&executor).await
                     },

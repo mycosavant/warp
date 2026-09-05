@@ -30,24 +30,23 @@ use warp_util::content_version::ContentVersion;
 use warp_util::path::LineAndColumnArg;
 use warp_util::standardized_path::StandardizedPath;
 use warpui::clipboard::ClipboardContent;
-use warpui::elements::FormattedTextElement;
 use warpui::elements::new_scrollable::{
     NewScrollable, NewScrollableElement, ScrollableAppearance, SingleAxisConfig,
 };
 use warpui::elements::{
     Align, Border, ChildAnchor, ChildView, Clipped, ClippedScrollStateHandle, ConstrainedBox,
     Container, CornerRadius, CrossAxisAlignment, DEFAULT_UI_LINE_HEIGHT_RATIO, DispatchEventResult,
-    DragBarSide, Element, Empty, EventHandler, Flex, Hoverable, List, ListState, MainAxisAlignment,
-    MainAxisSize, MouseStateHandle, OffsetPositioning, ParentAnchor, ParentElement,
-    ParentOffsetBounds, Percentage, PositionedElementAnchor, PositionedElementOffsetBounds, Radius,
-    Rect, Resizable, ResizableStateHandle, SavePosition, ScrollOffset, ScrollStateHandle,
-    ScrollbarWidth, Shrinkable, Stack, Text, resizable_state_handle,
+    DragBarSide, Element, Empty, EventHandler, Flex, FormattedTextElement, Hoverable, List,
+    ListState, MainAxisAlignment, MainAxisSize, MouseStateHandle, OffsetPositioning, ParentAnchor,
+    ParentElement, ParentOffsetBounds, Percentage, PositionedElementAnchor,
+    PositionedElementOffsetBounds, Radius, Rect, Resizable, ResizableStateHandle, SavePosition,
+    ScrollOffset, ScrollStateHandle, ScrollbarWidth, Shrinkable, Stack, Text,
+    resizable_state_handle,
 };
 use warpui::fonts::{Properties, Weight};
 use warpui::keymap::Keystroke;
 use warpui::platform::Cursor;
-use warpui::text_layout::TextAlignment;
-use warpui::text_layout::{ClipConfig, default_compute_baseline_position};
+use warpui::text_layout::{ClipConfig, TextAlignment, default_compute_baseline_position};
 use warpui::ui_components::button::{ButtonVariant, TextAndIcon, TextAndIconAlignment};
 use warpui::ui_components::components::{Coords, UiComponent, UiComponentStyles};
 use warpui::units::Pixels;
@@ -3339,9 +3338,11 @@ impl CodeReviewView {
                     mgr.maybe_register_external_file(path, *source_server_id);
                 });
 
-                // LSP go-to-definition produces an absolute local filesystem path.
+                // LSP go-to-definition produces an absolute path of this
+                // machine, or of a WSL distribution a connected host serves,
+                // in which case it is that host's buffer (`code::routed_lsp`).
                 self.open_file_in_tab(
-                    LocalOrRemotePath::Local(path.clone()),
+                    crate::code::routed_lsp::location_for_lsp_path(path, ctx),
                     Some(LineAndColumnArg {
                         // LSP uses 0-indexed lines, but we display 1-indexed
                         line_num: *line + 1,

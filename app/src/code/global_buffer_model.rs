@@ -397,9 +397,9 @@ impl GlobalBufferModel {
         // Collect paths for didClose before removing entries.
         let paths_to_close: Vec<PathBuf> = ids_to_remove
             .iter()
-            .filter_map(|id| match self.location_to_id.get_by_right(id) {
-                Some(LocalOrRemotePath::Local(path)) => Some(path.clone()),
-                Some(LocalOrRemotePath::Remote(_)) | None => None,
+            .filter_map(|id| {
+                let location = self.location_to_id.get_by_right(id)?;
+                crate::code::routed_lsp::lsp_path_for(location, ctx)
             })
             .collect();
 
@@ -434,8 +434,8 @@ impl GlobalBufferModel {
 
     fn cleanup_file_id(&mut self, file_id: FileId, _ctx: &mut ModelContext<Self>) {
         // Send didClose before removing the entry.
-        if let Some((LocalOrRemotePath::Local(path), _)) =
-            self.location_to_id.remove_by_right(&file_id)
+        if let Some((location, _)) = self.location_to_id.remove_by_right(&file_id)
+            && let Some(path) = crate::code::routed_lsp::lsp_path_for(&location, _ctx)
         {
             self.close_document_with_lsp(&path, _ctx);
         }
@@ -1523,9 +1523,9 @@ impl GlobalBufferModel {
             .location_to_id
             .iter()
             .filter_map(|(location, id)| {
-                let LocalOrRemotePath::Local(path) = location else {
-                    return None;
-                };
+                // A routed WSL buffer is `Remote` and has an LSP path all the
+                // same (`code::routed_lsp`); any other remote buffer has none.
+                let path = crate::code::routed_lsp::lsp_path_for(location, ctx)?;
                 if !path.starts_with(workspace_path) {
                     return None;
                 }
@@ -1535,7 +1535,7 @@ impl GlobalBufferModel {
                 }
                 let buffer = state.buffer.upgrade(ctx)?;
                 let version = buffer.as_ref(ctx).buffer_version();
-                Some((path.clone(), buffer, version))
+                Some((path, buffer, version))
             })
             .collect();
 
@@ -1700,7 +1700,27 @@ impl GlobalBufferModel {
             let path_for_edit = path_str.clone();
             ctx.subscribe_to_model(&buffer, move |me, _, event, ctx| {
                 use warp_editor::content::buffer::BufferEvent;
-                if let BufferEvent::ContentChanged { delta, origin, .. } = event {
+                if let BufferEvent::ContentChanged {
+                    delta,
+                    origin,
+                    buffer_version,
+                    ..
+                } = event
+                {
+                    // Fork: keep the language server in step with a routed
+                    // buffer, under the LSP path `code::routed_lsp` gives it.
+                    // A user's edit is an incremental `didChange`; the
+                    // server's own pushes (the initial content and every
+                    // `BufferUpdatedPush`) arrive as system edits and are a
+                    // `didOpen` the first time and a full resync after.
+                    me.sync_remote_buffer_with_lsp(
+                        file_id,
+                        &delta.precise_deltas,
+                        origin.from_user(),
+                        *buffer_version,
+                        ctx,
+                    );
+
                     // Skip server-originated changes to prevent echo loop.
                     // Server pushes applied via insert_at_char_offset_ranges
                     // emit ContentChanged with SystemEdit origin.
@@ -1804,6 +1824,47 @@ impl GlobalBufferModel {
     /// On success, replaces the buffer content with the server's latest
     /// on-disk content, resets the `SyncClock`, and emits `BufferLoaded`.
     /// On failure, emits `FailedToLoad`.
+    /// The LSP half of a routed buffer's `ContentChanged`. `None` from
+    /// `lsp_path_for` -- the fork switch off, a host `WslHosts` never saw, a
+    /// non-WSL remote -- makes this a no-op, which is upstream's behaviour.
+    fn sync_remote_buffer_with_lsp(
+        &mut self,
+        file_id: FileId,
+        precise_deltas: &[PreciseDelta],
+        from_user: bool,
+        buffer_version: BufferVersion,
+        ctx: &mut ModelContext<Self>,
+    ) {
+        let Some(lsp_path) = self
+            .location_to_id
+            .get_by_right(&file_id)
+            .and_then(|location| crate::code::routed_lsp::lsp_path_for(location, ctx))
+        else {
+            return;
+        };
+        let Some(state) = self.buffers.get_mut(&file_id) else {
+            return;
+        };
+        let Some(buffer) = state.buffer.upgrade(ctx) else {
+            return;
+        };
+        let previous_version = state.latest_buffer_version;
+        state.latest_buffer_version = Some(buffer_version.as_usize());
+
+        if from_user {
+            self.notify_lsp_of_content_change(
+                buffer,
+                precise_deltas,
+                &lsp_path,
+                buffer_version,
+                previous_version,
+                ctx,
+            );
+        } else {
+            self.open_or_sync_document_with_lsp(buffer, &lsp_path, buffer_version, ctx);
+        }
+    }
+
     fn apply_open_buffer_response(
         &mut self,
         file_id: FileId,

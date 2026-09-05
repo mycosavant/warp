@@ -10,12 +10,48 @@ use command::r#async::Command;
 #[derive(Clone)]
 pub struct CommandBuilder {
     path_env_var: Option<String>,
+    /// When set, every command runs inside this WSL distribution through
+    /// `wsl.exe` instead of on this machine. See [`wsl_argv`].
+    wsl_distro: Option<String>,
+}
+
+/// The `wsl.exe` arguments that run `program` inside `distro`.
+///
+/// `--shell-type login` is load-bearing: without it the child gets WSL's
+/// system PATH and not the user's profile, so a server installed under
+/// `~/.cargo/bin` or `~/.local/bin` is invisible. Measured 2026-09-05 on the
+/// distribution this fork lives in: the default PATH had nothing under
+/// `/home`, the login one had three entries there. `--` ends the flag section
+/// so a program name starting with `-` cannot be read as one of `wsl.exe`'s.
+pub fn wsl_argv(distro: &str, program: &std::ffi::OsStr) -> Vec<std::ffi::OsString> {
+    vec![
+        "-d".into(),
+        distro.into(),
+        "--shell-type".into(),
+        "login".into(),
+        "--".into(),
+        program.to_os_string(),
+    ]
 }
 
 impl CommandBuilder {
     /// Creates a new CommandBuilder with the given PATH environment variable.
     pub fn new(path_env_var: Option<String>) -> Self {
-        Self { path_env_var }
+        Self {
+            path_env_var,
+            wsl_distro: None,
+        }
+    }
+
+    /// Runs every command inside `distro` (`Some`) or on this machine (`None`).
+    pub fn in_wsl_distro(mut self, distro: Option<String>) -> Self {
+        self.wsl_distro = distro;
+        self
+    }
+
+    /// The distribution commands run inside, if any.
+    pub fn wsl_distro(&self) -> Option<&str> {
+        self.wsl_distro.as_deref()
     }
 
     /// Returns the PATH environment variable, if set.
@@ -35,6 +71,17 @@ impl CommandBuilder {
     /// `CreateProcessW` which only resolves `.exe` extensions.
     #[cfg(not(target_arch = "wasm32"))]
     pub fn command(&self, program: impl AsRef<std::ffi::OsStr>) -> Command {
+        if let Some(distro) = &self.wsl_distro {
+            // No `cmd.exe` here: the program is a Linux binary resolved by the
+            // distribution's login shell, and `.cmd` resolution is a Windows
+            // concern. PATH is still set for `wsl.exe` itself.
+            let mut cmd = Command::new("wsl.exe");
+            cmd.args(wsl_argv(distro, program.as_ref()));
+            if let Some(path) = &self.path_env_var {
+                cmd.env("PATH", path);
+            }
+            return cmd;
+        }
         #[cfg(windows)]
         let mut cmd = {
             let mut cmd = Command::new("cmd.exe");
@@ -49,3 +96,7 @@ impl CommandBuilder {
         cmd
     }
 }
+
+#[cfg(test)]
+#[path = "command_builder_tests.rs"]
+mod tests;

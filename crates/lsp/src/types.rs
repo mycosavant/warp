@@ -5,7 +5,7 @@ use lsp_types::{
     Range as LspRange,
 };
 
-use crate::config::{lsp_uri_to_path, path_to_lsp_uri};
+use crate::config::UriMapper;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FileLocation {
@@ -104,11 +104,14 @@ pub struct DefinitionLocation {
     pub target: FileLocation,
 }
 
-impl TryFrom<LspDefinitionLocation> for DefinitionLocation {
-    type Error = anyhow::Error;
-
-    fn try_from(location: LspDefinitionLocation) -> anyhow::Result<Self> {
-        let path = lsp_uri_to_path(&location.target.uri)?;
+impl DefinitionLocation {
+    /// Reads the server's URI back through the mapping the server was spawned
+    /// with; a `TryFrom` cannot carry that, which is why this is a function.
+    pub(crate) fn from_lsp(
+        location: LspDefinitionLocation,
+        mapper: &UriMapper,
+    ) -> anyhow::Result<Self> {
+        let path = mapper.to_path(&location.target.uri)?;
 
         Ok(Self {
             origin: location.origin.map(Into::into),
@@ -127,11 +130,9 @@ pub struct ReferenceLocation {
     pub range: Range,
 }
 
-impl TryFrom<LspLocation> for ReferenceLocation {
-    type Error = anyhow::Error;
-
-    fn try_from(location: LspLocation) -> anyhow::Result<Self> {
-        let path = lsp_uri_to_path(&location.uri)?;
+impl ReferenceLocation {
+    pub(crate) fn from_lsp(location: LspLocation, mapper: &UriMapper) -> anyhow::Result<Self> {
+        let path = mapper.to_path(&location.uri)?;
 
         Ok(Self {
             file_path: path,
@@ -271,9 +272,9 @@ pub struct WatchedFileChangeEvent {
 }
 
 impl WatchedFileChangeEvent {
-    pub fn into_lsp(self) -> anyhow::Result<FileEvent> {
+    pub fn into_lsp(self, mapper: &UriMapper) -> anyhow::Result<FileEvent> {
         Ok(FileEvent {
-            uri: path_to_lsp_uri(&self.path)?,
+            uri: mapper.to_uri(&self.path)?,
             typ: self.typ,
         })
     }

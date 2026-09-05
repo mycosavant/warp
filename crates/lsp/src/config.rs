@@ -2,7 +2,7 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use anyhow::Result;
+use anyhow::{Result, anyhow, bail};
 #[cfg(not(target_arch = "wasm32"))]
 use command::r#async::Command;
 use lsp_types::{
@@ -102,6 +102,11 @@ pub struct LspServerConfig {
     client: Arc<http_client::Client>,
     /// Optional path relative to the LSP log namespace for server stderr output.
     log_relative_path: Option<PathBuf>,
+    /// The WSL distribution to run the server inside, when the workspace is a
+    /// `\\wsl$\<distro>\...` path on Windows. `None` is upstream's behaviour:
+    /// the server is a process of this machine, reading the workspace directly.
+    /// See [`UriMapper`] for what else changes when this is set.
+    wsl_distro: Option<String>,
 }
 
 impl fmt::Debug for LspServerConfig {
@@ -112,6 +117,7 @@ impl fmt::Debug for LspServerConfig {
             .field("path_env_var", &self.path_env_var)
             .field("client_name", &self.client_name)
             .field("log_relative_path", &self.log_relative_path)
+            .field("wsl_distro", &self.wsl_distro)
             .finish()
     }
 }
@@ -131,6 +137,29 @@ impl LspServerConfig {
             client_name,
             client,
             log_relative_path: None,
+            wsl_distro: None,
+        }
+    }
+
+    /// Runs the server inside `distro` instead of on this machine. The
+    /// workspace stays a Windows path; the spawn wraps the binary in
+    /// `wsl.exe` and the URI seam translates (`.fork/docs/wsl.md`, item 3).
+    pub fn with_wsl_distro(mut self, distro: String) -> Self {
+        self.wsl_distro = Some(distro);
+        self
+    }
+
+    /// The distribution this server runs inside, if it is not a process of
+    /// this machine.
+    pub fn wsl_distro(&self) -> Option<&str> {
+        self.wsl_distro.as_deref()
+    }
+
+    /// How this server's paths are spelled on the wire.
+    pub fn uri_mapper(&self) -> UriMapper {
+        match &self.wsl_distro {
+            Some(distro) => UriMapper::WslDistro(distro.clone()),
+            None => UriMapper::Local,
         }
     }
 
@@ -163,13 +192,18 @@ impl LspServerConfig {
     /// and working on PATH, we use that. Otherwise, we fall back to our custom installation.
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) async fn command_and_params(self) -> Result<ResolvedLspCommand> {
+        let mapper = self.uri_mapper();
         // PATH takes precedence - only use custom installation if not working on PATH
-        let executor = crate::CommandBuilder::new(self.path_env_var.clone());
+        let executor = crate::CommandBuilder::new(self.path_env_var.clone())
+            .in_wsl_distro(self.wsl_distro.clone());
         let is_working_on_path = self
             .server_type
             .is_working_on_path(&executor, self.client.clone())
             .await;
-        let custom_binary_config = if is_working_on_path {
+        // A server that runs inside a WSL distribution has to come from that
+        // distribution's PATH: what Warp downloads into its data directory is
+        // a Windows executable, and `wsl.exe` cannot run one.
+        let custom_binary_config = if is_working_on_path || self.wsl_distro.is_some() {
             // Binary works on PATH, don't use custom installation
             None
         } else {
@@ -183,10 +217,17 @@ impl LspServerConfig {
         // binary that doesn't exist (which would fail with a confusing
         // "No such file or directory" OS error).
         if !is_working_on_path && custom_binary_config.is_none() {
-            anyhow::bail!(
-                "{} is not installed. Binary was not found on PATH and no custom installation exists",
-                self.server_type.binary_name()
-            );
+            match &self.wsl_distro {
+                Some(distro) => bail!(
+                    "{} is not on the PATH inside the WSL distribution {distro}. Install it \
+                     there; a copy on Windows cannot serve a workspace inside the distribution",
+                    self.server_type.binary_name()
+                ),
+                None => bail!(
+                    "{} is not installed. Binary was not found on PATH and no custom installation exists",
+                    self.server_type.binary_name()
+                ),
+            }
         }
 
         let mut command = self
@@ -195,6 +236,9 @@ impl LspServerConfig {
 
         // Set the working directory to the workspace root. This is required for
         // LSP servers like rust-analyzer to properly discover the project structure.
+        // For a server inside a WSL distribution this is the `\\wsl$\...` root,
+        // which `wsl.exe` maps to the Linux directory it stands for -- measured
+        // 2026-09-05, `pwd` inside the child answered `/home/...`.
         command.current_dir(&self.initial_workspace);
 
         log::info!(
@@ -203,7 +247,7 @@ impl LspServerConfig {
             custom_binary_config
         );
 
-        let params = default_init_params(&self.initial_workspace, self.client_name)?;
+        let params = default_init_params(&self.initial_workspace, self.client_name, &mapper)?;
 
         Ok(ResolvedLspCommand { command, params })
     }
@@ -211,6 +255,121 @@ impl LspServerConfig {
     pub(crate) fn server_type(&self) -> LSPServerType {
         self.server_type
     }
+}
+
+/// How a server's paths are spelled on the wire.
+///
+/// `Local` is upstream's mapping: `url::Url::from_file_path` one way and a
+/// percent-decode the other, for a server that is a process of this machine.
+///
+/// `WslDistro` is the fork's, for a server running inside a WSL distribution
+/// while Warp keys its workspace on the `\\wsl$\<distro>\...` spelling every
+/// other map in the app uses (`.fork/docs/wsl.md`, item 3). Out:
+/// `\\wsl$\ubuntu\home\x.rs` becomes `file:///home/x.rs`. In: every
+/// `file:///...` the server answers with comes back under the same prefix,
+/// including paths outside the workspace such as a toolchain's `core` source,
+/// because a server inside the distribution can only ever name files inside
+/// it. Measured 2026-09-05: a Linux `rust-analyzer` spawned by a Windows
+/// process through `wsl.exe` answered a definition with these URIs in 3.4 s
+/// where the Windows binary over the redirector took 25 s on the same crate.
+///
+/// This is a mapping rather than a second call to [`path_to_lsp_uri`] because
+/// that function cannot spell a Linux path on Windows at all:
+/// `Path::is_absolute` is false without a drive or UNC prefix, and
+/// `url::Url::from_file_path` refuses on that alone.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum UriMapper {
+    Local,
+    WslDistro(String),
+}
+
+impl UriMapper {
+    pub(crate) fn to_uri(&self, path: &Path) -> Result<Uri> {
+        match self {
+            Self::Local => path_to_lsp_uri(path),
+            Self::WslDistro(distro) => wsl_path_to_lsp_uri(path, distro),
+        }
+    }
+
+    pub(crate) fn to_path(&self, uri: &Uri) -> Result<PathBuf> {
+        match self {
+            Self::Local => lsp_uri_to_path(uri),
+            Self::WslDistro(distro) => lsp_uri_to_wsl_path(uri, distro),
+        }
+    }
+}
+
+/// `\\wsl$\<distro>\a\b.rs` (any of the spellings `parse_wsl_unc_path`
+/// accepts) to `file:///a/b.rs`, for a server running inside `distro`.
+fn wsl_path_to_lsp_uri(path: &Path, distro: &str) -> Result<Uri> {
+    let parsed = warp_util::path::parse_wsl_unc_path(path)
+        .ok_or_else(|| anyhow!("Path is not inside a WSL distribution: {}", path.display()))?;
+    // Distribution names are case-insensitive on the redirector, which is why
+    // the canonical spelling lower-cases them; compare the same way.
+    if !parsed.distro.eq_ignore_ascii_case(distro) {
+        bail!(
+            "Path is inside WSL distribution {} but this server runs inside {distro}: {}",
+            parsed.distro,
+            path.display()
+        );
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        // `set_path` percent-encodes what a path segment cannot carry, which
+        // is the part of `Url::from_file_path` this needs and the only part
+        // it can do on this side of the boundary.
+        let mut url = url::Url::parse("file:///").expect("a constant file URL parses");
+        url.set_path(&parsed.linux_path);
+        // Same bracket rule as `path_to_lsp_uri`, for the same servers.
+        let uri_str = url.as_str().replace('[', "%5B").replace(']', "%5D");
+        uri_str.parse::<Uri>().map_err(anyhow::Error::from)
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    {
+        format!("file://{}", parsed.linux_path)
+            .parse::<Uri>()
+            .map_err(anyhow::Error::from)
+    }
+}
+
+/// `file:///a/b.rs` from a server inside `distro` to `\\wsl$\<distro>\a\b.rs`,
+/// in the lower-cased spelling `warp_util::path::canonicalize_wsl_unc_path`
+/// folds every other spelling to, so the result is a key the rest of the app
+/// already holds rather than a second name for the same file.
+fn lsp_uri_to_wsl_path(uri: &Uri, distro: &str) -> Result<PathBuf> {
+    if uri.scheme().map(|s| s.as_str()) != Some("file") {
+        bail!("Invalid file URI: {}", uri.as_str());
+    }
+    if let Some(authority) = uri.authority() {
+        let host = authority.host().as_str();
+        if !host.is_empty() && host != "localhost" {
+            bail!(
+                "URI names a host, not the distribution the server runs inside: {}",
+                uri.as_str()
+            );
+        }
+    }
+
+    let decoded = uri
+        .path()
+        .as_estr()
+        .decode()
+        .into_string()
+        .map_err(|e| anyhow!("Invalid UTF-8 in URI path: {e}"))?;
+    let linux_path: &str = decoded.as_ref();
+    if !linux_path.starts_with('/') {
+        bail!("URI path is not absolute: {}", uri.as_str());
+    }
+
+    let mut spelled = format!(r"\\wsl$\{}", distro.to_ascii_lowercase());
+    // The distribution root is the whole path already; a translated `/` would
+    // leave a trailing separator on it.
+    if linux_path != "/" {
+        spelled.push_str(&linux_path.replace('/', r"\"));
+    }
+    Ok(PathBuf::from(spelled))
 }
 
 pub(crate) fn path_to_lsp_uri(path: &Path) -> Result<Uri> {
@@ -270,8 +429,8 @@ pub(crate) fn lsp_uri_to_path(uri: &Uri) -> Result<PathBuf> {
     Ok(PathBuf::from(path_str))
 }
 
-fn path_to_workspace_folder(path: &Path) -> Result<WorkspaceFolder> {
-    path_to_lsp_uri(path).map(|url| WorkspaceFolder {
+fn path_to_workspace_folder(path: &Path, mapper: &UriMapper) -> Result<WorkspaceFolder> {
+    mapper.to_uri(path).map(|url| WorkspaceFolder {
         uri: url,
         name: path
             .file_name()
@@ -322,8 +481,12 @@ fn default_client_capabilities() -> ClientCapabilities {
     }
 }
 
-pub fn default_init_params(workspace_uri: &Path, client_name: String) -> Result<InitializeParams> {
-    let workspace_folder = path_to_workspace_folder(workspace_uri)?;
+pub fn default_init_params(
+    workspace_uri: &Path,
+    client_name: String,
+    mapper: &UriMapper,
+) -> Result<InitializeParams> {
+    let workspace_folder = path_to_workspace_folder(workspace_uri, mapper)?;
 
     Ok(InitializeParams {
         process_id: Some(std::process::id()),

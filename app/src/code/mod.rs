@@ -28,6 +28,8 @@ pub mod language_server_shutdown_manager;
 #[cfg(not(target_family = "wasm"))]
 pub mod lsp_logs;
 pub mod lsp_telemetry;
+#[cfg(not(target_family = "wasm"))]
+pub mod routed_lsp;
 
 #[derive(Debug, thiserror::Error)]
 #[cfg_attr(target_family = "wasm", allow(dead_code))]
@@ -133,6 +135,8 @@ pub fn init(app: &mut AppContext) {
     self::file_tree::init(app);
     #[cfg(not(target_family = "wasm"))]
     self::find_references_view::init(app);
+    #[cfg(not(target_family = "wasm"))]
+    self::routed_lsp::init(app);
 }
 
 /// The diff that results from editing a file.

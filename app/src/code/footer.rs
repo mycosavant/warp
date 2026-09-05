@@ -9,14 +9,12 @@ use lsp::{
 use pathfinder_color::ColorU;
 use pathfinder_geometry::vector::vec2f;
 #[cfg(feature = "local_fs")]
-use repo_metadata::repositories::DetectedRepositories;
 use warp_core::send_telemetry_from_ctx;
 use warp_core::ui::Icon;
 use warp_core::ui::appearance::Appearance;
 use warp_core::ui::theme::color::internal_colors;
 use warp_core::ui::theme::{AnsiColorIdentifier, Fill as ThemeFill, WarpTheme};
 #[cfg(feature = "local_fs")]
-use warp_util::local_or_remote_path::LocalOrRemotePath;
 use warpui::elements::{
     Border, ChildAnchor, ChildView, ConstrainedBox, Container, CornerRadius, CrossAxisAlignment,
     Dismiss, Empty, Fill, Flex, Hoverable, MainAxisAlignment, MainAxisSize, MouseStateHandle,
@@ -695,13 +693,9 @@ impl CodeFooterView {
             return LspRepoStatus::CheckingForInstallation;
         };
 
-        let repo_root = DetectedRepositories::handle(ctx)
-            .as_ref(ctx)
-            .get_root_for_path(&LocalOrRemotePath::Local(file_path.to_path_buf()))
-            .and_then(|r| r.to_local_path().map(std::path::Path::to_path_buf))
-            .or_else(|| file_path.parent().map(|p| p.to_path_buf()));
-
-        let Some(repo_root) = repo_root else {
+        // Local repository, then a routed buffer's remote one, then the parent.
+        let Some(repo_root) = crate::code::routed_lsp::repo_root_for_lsp_path(file_path, ctx)
+        else {
             return LspRepoStatus::CheckingForInstallation;
         };
 

@@ -953,6 +953,45 @@ fn wsl_auto_connect_from(value: Option<&str>) -> bool {
     )
 }
 
+/// Set to `0`, `off` or `false` to keep a language server for a
+/// `\\wsl$\<distro>\...` workspace on the Windows side, reading the crate
+/// over the redirector, which is upstream's behaviour.
+const WSL_LSP_ENV_VAR: &str = "WARP_FORK_WSL_LSP";
+
+/// Whether a language server for a workspace inside a WSL distribution runs
+/// inside that distribution (`.fork/docs/wsl.md`, item 3).
+///
+/// Upstream spawns the server on Windows against the `\\wsl$` path, so it
+/// needs a Windows-installed server and reads every file of the crate over
+/// 9p. Measured 2026-09-05 on a three-symbol crate: 25 s to the first
+/// definition that way, 3.4 s with the same request answered by the
+/// distribution's own `rust-analyzer` spawned through `wsl.exe`. On this
+/// repository the second shape answered from cold in 61 s.
+///
+/// What the predicate switches is one field on `LspServerConfig` and the
+/// `CommandBuilder` behind the footer's installed check: with it, the server
+/// is `wsl.exe -d <distro> --shell-type login -- <binary>` with the UNC root
+/// as its working directory, and `lsp::UriMapper::WslDistro` spells paths
+/// as `file:///...` on the wire. Every key in Warp stays the Windows path.
+/// A routed buffer gets an LSP path through `code::routed_lsp` and joins the
+/// same server as the unrouted pane next to it, because both key the
+/// workspace on the same spelling.
+///
+/// Consumed by `PersistedWorkspace` (spawn, installed check, suggestion) and
+/// `code::routed_lsp`.
+pub fn wsl_lsp_in_distro_enabled() -> bool {
+    is_active() && wsl_lsp_from(std::env::var(WSL_LSP_ENV_VAR).ok().as_deref())
+}
+
+/// Split from the environment so the decision can be asserted without setting
+/// a process-global variable from a test that runs beside others.
+fn wsl_lsp_from(value: Option<&str>) -> bool {
+    !matches!(
+        value.map(str::trim),
+        Some("0") | Some("off") | Some("false")
+    )
+}
+
 /// The owner written into Warp Drive objects created without an account.
 ///
 /// Deliberately a fixed constant rather than a per-install UUID. `UserWorkspaces

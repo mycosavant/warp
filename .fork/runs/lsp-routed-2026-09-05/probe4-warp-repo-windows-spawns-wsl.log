@@ -1,0 +1,63 @@
+[  0.01s] spawned pid=36784 cmd=['wsl.exe', '-d', 'Ubuntu', '--shell-type', 'login', '--', 'rust-analyzer'] cwd=\\wsl.localhost\Ubuntu\home\effatha\git\warp
+[  0.23s] initialize -> serverInfo={'name': 'rust-analyzer', 'version': '1.92.0 (ded5c06 2025-12-08)'}
+[  0.24s] didOpen file:///home/effatha/git/warp/crates/lsp/src/config.rs (12666 bytes read from \\wsl.localhost\Ubuntu\home\effatha\git\warp\crates\lsp\src\config.rs)
+[  0.24s] server request window/workDoneProgress/create -> null
+[  0.24s] progress rustAnalyzer/Fetching begin Fetching
+[  0.24s] documentSymbol -> [{"name": "ResolvedLspCommand", "kind": 23, "tags": [], "deprecated": false, "location": {"uri": "file:///home/effatha/git/warp/crates/lsp/src/config.rs", "range": {"start": {"line": 16, "character": 0}, "end": {"line": 21, "character": 1}}}}, {"name": "command", "kind": 8, "tags": [], "deprecated": false, "location": {"uri": "file:///home/effatha/git/warp/crates/lsp/src/config.rs", "range": {"start": {"line": 19, "character": 4}, "end": {"line": 19, "character": 24}}}, "containerName": "ResolvedLspCommand"}, {"name": "params", "kind": 8, "tags": [], "deprecated": false, "location": {"uri": "f
+[  2.25s] progress rustAnalyzer/Fetching end 
+[  2.25s] server request window/workDoneProgress/create -> null
+[  2.25s] progress rustAnalyzer/Building CrateGraph begin Building CrateGraph
+[  2.25s] progress rustAnalyzer/Building CrateGraph end 
+[  2.25s] server request window/workDoneProgress/create -> null
+[  2.25s] progress rustAnalyzer/Roots Scanned begin Roots Scanned
+[  2.25s] server request window/workDoneProgress/create -> null
+[  2.25s] progress rustAnalyzer/Fetching begin Fetching
+[  3.25s] progress rustAnalyzer/Fetching end 
+[  3.25s] server request window/workDoneProgress/create -> null
+[  3.25s] progress rustAnalyzer/Building compile-time-deps begin Building compile-time-deps
+[  3.51s] stderr: 2026-09-05T13:55:54.889115065-04:00  WARN notify error: No path was found. about ["/home/effatha/.config/rust-analyzer/rust-analyzer.toml"]
+[  4.25s] progress rustAnalyzer/Roots Scanned end 
+[  4.25s] server request window/workDoneProgress/create -> null
+[  4.25s] progress rustAnalyzer/Fetching begin Fetching
+[  4.93s] stderr: 2026-09-05T13:55:56.189425799-04:00  WARN cyclic deps: computer_use(Idx::<CrateBuilder>(74)) -> computer_use(Idx::<CrateBuilder>(74)), alternative path: computer_use(Idx::<CrateBuilder>(74))
+[  4.93s] stderr: 2026-09-05T13:55:56.189737939-04:00  WARN cyclic deps: sum_tree(Idx::<CrateBuilder>(131)) -> sum_tree(Idx::<CrateBuilder>(131)), alternative path: sum_tree(Idx::<CrateBuilder>(131))
+[  4.93s] stderr: 2026-09-05T13:55:56.189949893-04:00  WARN cyclic deps: warp_completer(Idx::<CrateBuilder>(142)) -> warp_completer(Idx::<CrateBuilder>(142)), alternative path: warp_completer(Idx::<CrateBuilder>(142))
+[  4.93s] stderr: 2026-09-05T13:55:56.19024675-04:00  WARN cyclic deps: warp_util(Idx::<CrateBuilder>(169)) -> warpui_core(Idx::<CrateBuilder>(196)), alternative path: warpui_core(Idx::<CrateBuilder>(196)) -> warp_util(Idx::<CrateBuilder>(169))
+[  4.93s] stderr: 2026-09-05T13:55:56.190288547-04:00  WARN cyclic deps: warpui(Idx::<CrateBuilder>(171)) -> warpui(Idx::<CrateBuilder>(171)), alternative path: warpui(Idx::<CrateBuilder>(171))
+[  4.93s] stderr: 2026-09-05T13:55:56.190340575-04:00  WARN cyclic deps: warpui_core(Idx::<CrateBuilder>(196)) -> warpui_core(Idx::<CrateBuilder>(196)), alternative path: warpui_core(Idx::<CrateBuilder>(196))
+[  4.93s] stderr: 2026-09-05T13:55:56.190352436-04:00  WARN cyclic deps: warpui_extras(Idx::<CrateBuilder>(200)) -> warpui_extras(Idx::<CrateBuilder>(200)), alternative path: warpui_extras(Idx::<CrateBuilder>(200))
+[  5.25s] progress rustAnalyzer/Fetching end 
+[  5.25s] server request window/workDoneProgress/create -> null
+[  5.25s] progress rustAnalyzer/Building CrateGraph begin Building CrateGraph
+[  5.25s] progress rustAnalyzer/Building CrateGraph end 
+[  5.25s] server request window/workDoneProgress/create -> null
+[  5.25s] progress rustAnalyzer/Loading proc-macros begin Loading proc-macros
+[  5.25s] progress rustAnalyzer/Loading proc-macros end 
+[  5.25s] progress rustAnalyzer/Building compile-time-deps end 
+[  5.25s] server request window/workDoneProgress/create -> null
+[  5.25s] progress rustAnalyzer/Building CrateGraph begin Building CrateGraph
+[  5.33s] stderr: 2026-09-05T13:55:56.553136423-04:00  WARN cyclic deps: computer_use(Idx::<CrateBuilder>(74)) -> computer_use(Idx::<CrateBuilder>(74)), alternative path: computer_use(Idx::<CrateBuilder>(74))
+[  5.33s] stderr: 2026-09-05T13:55:56.553476374-04:00  WARN cyclic deps: sum_tree(Idx::<CrateBuilder>(131)) -> sum_tree(Idx::<CrateBuilder>(131)), alternative path: sum_tree(Idx::<CrateBuilder>(131))
+[  5.33s] stderr: 2026-09-05T13:55:56.5536982-04:00  WARN cyclic deps: warp_completer(Idx::<CrateBuilder>(142)) -> warp_completer(Idx::<CrateBuilder>(142)), alternative path: warp_completer(Idx::<CrateBuilder>(142))
+[  5.33s] stderr: 2026-09-05T13:55:56.554023967-04:00  WARN cyclic deps: warp_util(Idx::<CrateBuilder>(169)) -> warpui_core(Idx::<CrateBuilder>(196)), alternative path: warpui_core(Idx::<CrateBuilder>(196)) -> warp_util(Idx::<CrateBuilder>(169))
+[  5.33s] stderr: 2026-09-05T13:55:56.554068141-04:00  WARN cyclic deps: warpui(Idx::<CrateBuilder>(171)) -> warpui(Idx::<CrateBuilder>(171)), alternative path: warpui(Idx::<CrateBuilder>(171))
+[  5.33s] stderr: 2026-09-05T13:55:56.554113856-04:00  WARN cyclic deps: warpui_core(Idx::<CrateBuilder>(196)) -> warpui_core(Idx::<CrateBuilder>(196)), alternative path: warpui_core(Idx::<CrateBuilder>(196))
+[  5.33s] stderr: 2026-09-05T13:55:56.554125629-04:00  WARN cyclic deps: warpui_extras(Idx::<CrateBuilder>(200)) -> warpui_extras(Idx::<CrateBuilder>(200)), alternative path: warpui_extras(Idx::<CrateBuilder>(200))
+[  5.34s] progress rustAnalyzer/Building CrateGraph end 
+[  5.34s] server request window/workDoneProgress/create -> null
+[  5.34s] progress rustAnalyzer/Loading proc-macros begin Loading proc-macros
+[  5.34s] server request window/workDoneProgress/create -> null
+[  5.34s] progress rustAnalyzer/Roots Scanned begin Roots Scanned
+[  5.35s] stderr: 2026-09-05T13:55:56.577160963-04:00  WARN notify error: No path was found. about ["/home/effatha/.config/rust-analyzer/rust-analyzer.toml"]
+[  5.79s] progress rustAnalyzer/Roots Scanned end 
+[  6.91s] progress rustAnalyzer/Loading proc-macros end 
+[  6.91s] server request window/workDoneProgress/create -> null
+[  6.91s] progress rustAnalyzer/Fetching begin Fetching
+[  6.91s] progress rustAnalyzer/Fetching end 
+[  6.91s] server request window/workDoneProgress/create -> null
+[  6.91s] progress rustAnalyzer/cachePriming begin Indexing
+[  6.94s] server request window/workDoneProgress/create -> null
+[  6.94s] progress rust-analyzer/flycheck/0 begin cargo check
+[ 60.58s] definition(273,4) -> [{"originSelectionRange": {"start": {"line": 273, "character": 4}, "end": {"line": 273, "character": 19}}, "targetUri": "file:///home/effatha/git/warp/crates/lsp/src/config.rs", "targetRange": {"start": {"line": 215, "character": 0}, "end": {"line": 242, "character": 1}}, "targetSelectionRange": {"start": {"line": 215, "character": 14}, "end": {"line": 215, "character": 29}}}]
+[ 60.59s] hover -> {"contents": {"kind": "plaintext", "value": "lsp::config\n\npub(crate) fn path_to_lsp_uri(path: &Path) -> Result<Uri>"}, "range": {"start": {"line": 273, "character": 4}, "end": {"line": 273, "character": 19}}}
+[ 65.70s] exit code 0

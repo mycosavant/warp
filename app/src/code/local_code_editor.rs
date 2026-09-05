@@ -562,7 +562,7 @@ impl LocalCodeEditorView {
             ) + Send
             + 'static,
     {
-        let Some(file_path) = self.file_path() else {
+        let Some(file_path) = self.lsp_path(ctx) else {
             return false;
         };
 
@@ -572,7 +572,7 @@ impl LocalCodeEditorView {
 
         let future = match lsp_server
             .as_ref(ctx)
-            .goto_definition(file_path.to_path_buf(), lsp_position)
+            .goto_definition(file_path, lsp_position)
         {
             Ok(future) => future,
             Err(e) => {
@@ -604,7 +604,7 @@ impl LocalCodeEditorView {
             .offset_to_lsp_position(offset, ctx);
 
         if cfg!(debug_assertions)
-            && let (Some(file_path), Some(lsp_server)) = (self.file_path(), &self.lsp_server)
+            && let (Some(file_path), Some(lsp_server)) = (self.lsp_path(ctx), &self.lsp_server)
         {
             let buffer_version = self.editor().as_ref(ctx).buffer_version(ctx).as_usize();
             lsp_server.as_ref(ctx).log_to_server_log(
@@ -635,7 +635,7 @@ impl LocalCodeEditorView {
         lsp_position: lsp::types::Location,
         ctx: &mut ViewContext<Self>,
     ) {
-        let Some(file_path) = self.file_path().map(|p| p.to_path_buf()) else {
+        let Some(file_path) = self.lsp_path(ctx) else {
             return;
         };
 
@@ -740,7 +740,7 @@ impl LocalCodeEditorView {
         anchor_offset: CharOffset,
         ctx: &mut ViewContext<Self>,
     ) {
-        let Some(file_path) = self.file_path().map(|p| p.to_path_buf()) else {
+        let Some(file_path) = self.lsp_path(ctx) else {
             return;
         };
 
@@ -943,7 +943,7 @@ impl LocalCodeEditorView {
             return;
         }
         let lsp_manager = LspManagerModel::handle(ctx);
-        let Some(path) = self.file_path().map(|p| p.to_path_buf()) else {
+        let Some(path) = self.lsp_path(ctx) else {
             return;
         };
 
@@ -971,8 +971,8 @@ impl LocalCodeEditorView {
         // Subscribe to LSP server events for diagnostics updates.
         ctx.subscribe_to_model(&lsp_server, |me, _, event, ctx| {
             if let LspEvent::DiagnosticsUpdated { path: updated_path } = event
-                && let Some(file_path) = me.file_path()
-                && file_path == updated_path
+                && let Some(file_path) = me.lsp_path(ctx)
+                && &file_path == updated_path
             {
                 me.refresh_diagnostics(ctx);
             }
@@ -990,7 +990,7 @@ impl LocalCodeEditorView {
     fn subscribe_to_lsp_manager_updates(&self, ctx: &mut ViewContext<Self>) {
         let lsp_manager = LspManagerModel::handle(ctx);
         ctx.subscribe_to_model(&lsp_manager, |me, _, event, ctx| {
-            let Some(file_path) = me.file_path() else {
+            let Some(file_path) = me.lsp_path(ctx) else {
                 return;
             };
             match event {
@@ -1438,9 +1438,8 @@ impl LocalCodeEditorView {
 
     /// Adds the LSP status footer to the editor view.
     pub(crate) fn add_footer(&mut self, ctx: &mut ViewContext<Self>) {
-        if let Some(path) = self.file_path() {
-            let footer =
-                ctx.add_typed_action_view(|ctx| CodeFooterView::new(path.to_path_buf(), ctx));
+        if let Some(path) = self.lsp_path(ctx) {
+            let footer = ctx.add_typed_action_view(|ctx| CodeFooterView::new(path, ctx));
             ctx.subscribe_to_view(&footer, |_, _, event, ctx| match event {
                 CodeFooterViewEvent::RunTabConfigSkill { path } => {
                     ctx.emit(LocalCodeEditorEvent::RunTabConfigSkill { path: path.clone() });
@@ -1532,24 +1531,9 @@ impl LocalCodeEditorView {
         // Find the appropriate LSP server type for this language
         let lsp_server_type = language_id.server_type();
 
-        // Get the repository root from PersistedWorkspace.
-        // If it doesn't exist, try to get it from DetectedRepositories.
-        // If it also doesn't exist in DetectedRepositories, use the parent path.
-        let repo_root = if let Some(workspace_root) =
-            PersistedWorkspace::as_ref(ctx).root_for_workspace(path)
-        {
-            Some(workspace_root.to_path_buf())
-        } else {
-            match DetectedRepositories::as_ref(ctx)
-                .get_root_for_path(&LocalOrRemotePath::Local(path.to_path_buf()))
-                .and_then(|r| PathBuf::try_from(r).ok())
-            {
-                Some(root) => Some(root),
-                None => path.parent().map(|s| s.to_path_buf()), // If we can't find root, treat the parent as the root.
-            }
-        };
-
-        let Some(repo_root) = repo_root else {
+        // The repository root: PersistedWorkspace, then DetectedRepositories
+        // (local, then the routed buffer's remote root), then the parent.
+        let Some(repo_root) = crate::code::routed_lsp::repo_root_for_lsp_path(path, ctx) else {
             return;
         };
 
@@ -1889,6 +1873,17 @@ impl LocalCodeEditorView {
     /// Returns `None` for remote files. Used by LSP and other local-only code paths.
     pub fn file_path(&self) -> Option<&Path> {
         self.file_location().and_then(|loc| loc.to_local_path())
+    }
+
+    /// The path the LSP stack knows this buffer by: its local path, or for a
+    /// routed WSL buffer the `\\wsl$` spelling `code::routed_lsp` derives.
+    /// `None` for any other remote buffer. Every LSP-facing read of
+    /// `file_path()` goes through this; the file-operation reads (save,
+    /// delete, relative display) keep `file_path()`, because those act on
+    /// this machine's filesystem and a routed buffer's is not.
+    pub fn lsp_path(&self, ctx: &AppContext) -> Option<PathBuf> {
+        let location = self.file_location()?;
+        crate::code::routed_lsp::lsp_path_for(location, ctx)
     }
 
     /// Update this editor's file identity after a `GlobalBufferModel::rename`.

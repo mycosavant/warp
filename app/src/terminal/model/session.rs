@@ -183,8 +183,20 @@ impl Sessions {
                     session_id: sid,
                     host_id,
                 } => {
+                    let mut wsl_distro = None;
                     if let Some(session) = sessions.sessions.get(sid) {
                         session.set_remote_host_id(Some(host_id.clone()));
+                        wsl_distro = session.wsl_distro_name().map(str::to_owned);
+                    }
+                    // Fork: the one place the host id and the distribution
+                    // it serves are both in hand. `code::routed_lsp` needs
+                    // the pairing to give a routed buffer an LSP path.
+                    if let Some(distro) = wsl_distro
+                        && ctx.has_singleton_model::<crate::code::routed_lsp::WslHosts>()
+                    {
+                        let host_id = host_id.clone();
+                        crate::code::routed_lsp::WslHosts::handle(ctx)
+                            .update(ctx, |hosts, _| hosts.record(host_id, distro));
                     }
                 }
                 RemoteServerManagerEvent::SessionDisconnected {

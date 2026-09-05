@@ -1,0 +1,239 @@
+[  0.01s] spawned pid=32568 cmd=['C:\\Users\\onemind\\.rustup\\toolchains\\1.92.0-x86_64-pc-windows-msvc\\bin\\rust-analyzer.exe'] cwd=\\wsl.localhost\Ubuntu\home\effatha\scratch-lsp\repo
+[  0.03s] initialize -> serverInfo={'name': 'rust-analyzer', 'version': '1.92.0 (ded5c06c 2025-12-08)'}
+[  0.04s] didOpen file://wsl.localhost/Ubuntu/home/effatha/scratch-lsp/repo/src/main.rs (242 bytes read from \\wsl.localhost\Ubuntu\home\effatha\scratch-lsp\repo\src\main.rs)
+[  0.06s] server request window/workDoneProgress/create -> null
+[  0.06s] progress rustAnalyzer/Fetching begin Fetching
+[  0.07s] documentSymbol -> [{"name": "ProbeMarker", "kind": 23, "tags": [], "deprecated": false, "location": {"uri": "file://wsl.localhost/Ubuntu/home/effatha/scratch-lsp/repo/src/main.rs", "range": {"start": {"line": 0, "character": 0}, "end": {"line": 3, "character": 1}}}}, {"name": "id", "kind": 8, "tags": [], "deprecated": false, "location": {"uri": "file://wsl.localhost/Ubuntu/home/effatha/scratch-lsp/repo/src/main.rs", "range": {"start": {"line": 2, "character": 4}, "end": {"line": 2, "character": 15}}}, "containerName": "ProbeMarker"}, {"name": "build_marker", "kind": 12, "tags": [], "deprecated": false, "locatio
+[  1.82s] stderr: 2026-09-05T13:54:52.2595823-04:00  WARN `cargo metadata` failed and returning succeeded result with `--no-deps` error=`cargo metadata` exited with an error: error: unexpected argument '--lockfile-path' found
+[  1.82s] stderr: 
+[  1.82s] stderr:   tip: a similar argument exists: '--locked'
+[  1.82s] stderr: 
+[  1.82s] stderr: Usage: cargo.exe metadata --format-version <VERSION> --manifest-path <PATH> --filter-platform <TRIPLE> --locked
+[  1.82s] stderr: 
+[  1.82s] stderr: For more information, try '--help'.
+[  1.82s] stderr: 
+[  1.82s] stderr: 
+[  1.82s] stderr: Stack backtrace:
+[  1.82s] stderr:    0: std::backtrace_rs::backtrace::win64::trace
+[  1.82s] stderr:              at /rustc/ded5c06cf21d2b93bffd5d884aa6e96934ee4234/library\std\src\..\..\backtrace\src\backtrace\win64.rs:85
+[  1.82s] stderr:    1: std::backtrace_rs::backtrace::trace_unsynchronized
+[  1.82s] stderr:              at /rustc/ded5c06cf21d2b93bffd5d884aa6e96934ee4234/library\std\src\..\..\backtrace\src\backtrace\mod.rs:66
+[  1.82s] stderr:    2: std::backtrace::Backtrace::create
+[  1.82s] stderr:              at /rustc/ded5c06cf21d2b93bffd5d884aa6e96934ee4234/library\std\src\backtrace.rs:331
+[  1.82s] stderr:    3: std::backtrace::Backtrace::capture
+[  1.82s] stderr:              at /rustc/ded5c06cf21d2b93bffd5d884aa6e96934ee4234/library\std\src\backtrace.rs:296
+[  1.82s] stderr:    4: <unknown>
+[  1.82s] stderr:    5: <unknown>
+[  1.82s] stderr:    6: <unknown>
+[  1.82s] stderr:    7: <unknown>
+[  1.82s] stderr:    8: alloc::boxed::impl$29::call_once
+[  1.82s] stderr:              at /rustc/ded5c06cf21d2b93bffd5d884aa6e96934ee4234/library\alloc\src\boxed.rs:2005
+[  1.82s] stderr:    9: alloc::boxed::impl$29::call_once
+[  1.82s] stderr:              at /rustc/ded5c06cf21d2b93bffd5d884aa6e96934ee4234/library\alloc\src\boxed.rs:2005
+[  1.82s] stderr:   10: std::sys::thread::windows::impl$0::new::thread_start
+[  1.82s] stderr:              at /rustc/ded5c06cf21d2b93bffd5d884aa6e96934ee4234/library\std\src\sys\thread\windows.rs:60
+[  1.82s] stderr:   11: BaseThreadInitThunk
+[  1.82s] stderr:   12: RtlUserThreadStart
+[  1.91s] stderr: 2026-09-05T13:54:52.4484085-04:00  WARN `cargo metadata` failed and returning succeeded result with `--no-deps` error=`cargo metadata` exited with an error: error: unexpected argument '--lockfile-path' found
+[  1.91s] stderr: 
+[  1.91s] stderr:   tip: a similar argument exists: '--locked'
+[  1.91s] stderr: 
+[  1.91s] stderr: Usage: cargo.exe metadata --format-version <VERSION> --manifest-path <PATH> --filter-platform <TRIPLE> --locked
+[  1.91s] stderr: 
+[  1.91s] stderr: For more information, try '--help'.
+[  1.91s] stderr: 
+[  1.91s] stderr: 
+[  1.91s] stderr: Stack backtrace:
+[  1.91s] stderr:    0: std::backtrace_rs::backtrace::win64::trace
+[  1.91s] stderr:              at /rustc/ded5c06cf21d2b93bffd5d884aa6e96934ee4234/library\std\src\..\..\backtrace\src\backtrace\win64.rs:85
+[  1.91s] stderr:    1: std::backtrace_rs::backtrace::trace_unsynchronized
+[  1.91s] stderr:              at /rustc/ded5c06cf21d2b93bffd5d884aa6e96934ee4234/library\std\src\..\..\backtrace\src\backtrace\mod.rs:66
+[  1.91s] stderr:    2: std::backtrace::Backtrace::create
+[  1.91s] stderr:              at /rustc/ded5c06cf21d2b93bffd5d884aa6e96934ee4234/library\std\src\backtrace.rs:331
+[  1.91s] stderr:    3: std::backtrace::Backtrace::capture
+[  1.91s] stderr:              at /rustc/ded5c06cf21d2b93bffd5d884aa6e96934ee4234/library\std\src\backtrace.rs:296
+[  1.91s] stderr:    4: <unknown>
+[  1.91s] stderr:    5: <unknown>
+[  1.91s] stderr:    6: <unknown>
+[  1.91s] stderr:    7: <unknown>
+[  1.91s] stderr:    8: <unknown>
+[  1.91s] stderr:    9: alloc::boxed::impl$29::call_once
+[  1.91s] stderr:              at /rustc/ded5c06cf21d2b93bffd5d884aa6e96934ee4234/library\alloc\src\boxed.rs:2005
+[  1.91s] stderr:   10: alloc::boxed::impl$29::call_once
+[  1.91s] stderr:              at /rustc/ded5c06cf21d2b93bffd5d884aa6e96934ee4234/library\alloc\src\boxed.rs:2005
+[  1.91s] stderr:   11: std::sys::thread::windows::impl$0::new::thread_start
+[  1.91s] stderr:              at /rustc/ded5c06cf21d2b93bffd5d884aa6e96934ee4234/library\std\src\sys\thread\windows.rs:60
+[  1.91s] stderr:   12: BaseThreadInitThunk
+[  1.91s] stderr:   13: RtlUserThreadStart
+[  2.08s] progress rustAnalyzer/Fetching end 
+[  2.08s] server request window/workDoneProgress/create -> null
+[  2.08s] progress rustAnalyzer/Building CrateGraph begin Building CrateGraph
+[  2.08s] progress rustAnalyzer/Building CrateGraph end 
+[  2.08s] notif window/showMessage
+[  2.08s] server request window/workDoneProgress/create -> null
+[  2.08s] progress rustAnalyzer/Fetching begin Fetching
+[  2.08s] server request window/workDoneProgress/create -> null
+[  2.08s] progress rustAnalyzer/Roots Scanned begin Roots Scanned
+[  2.43s] stderr: 2026-09-05T13:54:52.9633966-04:00  WARN `cargo metadata` failed and returning succeeded result with `--no-deps` error=`cargo metadata` exited with an error: error: unexpected argument '--lockfile-path' found
+[  2.43s] stderr: 
+[  2.43s] stderr:   tip: a similar argument exists: '--locked'
+[  2.43s] stderr: 
+[  2.43s] stderr: Usage: cargo.exe metadata --format-version <VERSION> --manifest-path <PATH> --filter-platform <TRIPLE> --locked
+[  2.43s] stderr: 
+[  2.43s] stderr: For more information, try '--help'.
+[  2.43s] stderr: 
+[  2.43s] stderr: 
+[  2.43s] stderr: Stack backtrace:
+[  2.43s] stderr:    0: std::backtrace_rs::backtrace::win64::trace
+[  2.43s] stderr:              at /rustc/ded5c06cf21d2b93bffd5d884aa6e96934ee4234/library\std\src\..\..\backtrace\src\backtrace\win64.rs:85
+[  2.43s] stderr:    1: std::backtrace_rs::backtrace::trace_unsynchronized
+[  2.43s] stderr:              at /rustc/ded5c06cf21d2b93bffd5d884aa6e96934ee4234/library\std\src\..\..\backtrace\src\backtrace\mod.rs:66
+[  2.43s] stderr:    2: std::backtrace::Backtrace::create
+[  2.43s] stderr:              at /rustc/ded5c06cf21d2b93bffd5d884aa6e96934ee4234/library\std\src\backtrace.rs:331
+[  2.43s] stderr:    3: std::backtrace::Backtrace::capture
+[  2.43s] stderr:              at /rustc/ded5c06cf21d2b93bffd5d884aa6e96934ee4234/library\std\src\backtrace.rs:296
+[  2.43s] stderr:    4: <unknown>
+[  2.43s] stderr:    5: <unknown>
+[  2.43s] stderr:    6: <unknown>
+[  2.43s] stderr:    7: <unknown>
+[  2.43s] stderr:    8: alloc::boxed::impl$29::call_once
+[  2.43s] stderr:              at /rustc/ded5c06cf21d2b93bffd5d884aa6e96934ee4234/library\alloc\src\boxed.rs:2005
+[  2.43s] stderr:    9: alloc::boxed::impl$29::call_once
+[  2.43s] stderr:              at /rustc/ded5c06cf21d2b93bffd5d884aa6e96934ee4234/library\alloc\src\boxed.rs:2005
+[  2.43s] stderr:   10: std::sys::thread::windows::impl$0::new::thread_start
+[  2.43s] stderr:              at /rustc/ded5c06cf21d2b93bffd5d884aa6e96934ee4234/library\std\src\sys\thread\windows.rs:60
+[  2.43s] stderr:   11: BaseThreadInitThunk
+[  2.43s] stderr:   12: RtlUserThreadStart
+[  2.51s] stderr: 2026-09-05T13:54:53.0459807-04:00  WARN `cargo metadata` failed and returning succeeded result with `--no-deps` error=`cargo metadata` exited with an error: error: unexpected argument '--lockfile-path' found
+[  2.51s] stderr: 
+[  2.51s] stderr:   tip: a similar argument exists: '--locked'
+[  2.51s] stderr: 
+[  2.51s] stderr: Usage: cargo.exe metadata --format-version <VERSION> --manifest-path <PATH> --filter-platform <TRIPLE> --locked
+[  2.51s] stderr: 
+[  2.51s] stderr: For more information, try '--help'.
+[  2.51s] stderr: 
+[  2.51s] stderr: 
+[  2.51s] stderr: Stack backtrace:
+[  2.51s] stderr:    0: std::backtrace_rs::backtrace::win64::trace
+[  2.51s] stderr:              at /rustc/ded5c06cf21d2b93bffd5d884aa6e96934ee4234/library\std\src\..\..\backtrace\src\backtrace\win64.rs:85
+[  2.51s] stderr:    1: std::backtrace_rs::backtrace::trace_unsynchronized
+[  2.51s] stderr:              at /rustc/ded5c06cf21d2b93bffd5d884aa6e96934ee4234/library\std\src\..\..\backtrace\src\backtrace\mod.rs:66
+[  2.51s] stderr:    2: std::backtrace::Backtrace::create
+[  2.51s] stderr:              at /rustc/ded5c06cf21d2b93bffd5d884aa6e96934ee4234/library\std\src\backtrace.rs:331
+[  2.51s] stderr:    3: std::backtrace::Backtrace::capture
+[  2.51s] stderr:              at /rustc/ded5c06cf21d2b93bffd5d884aa6e96934ee4234/library\std\src\backtrace.rs:296
+[  2.51s] stderr:    4: <unknown>
+[  2.51s] stderr:    5: <unknown>
+[  2.51s] stderr:    6: <unknown>
+[  2.51s] stderr:    7: <unknown>
+[  2.51s] stderr:    8: <unknown>
+[  2.51s] stderr:    9: alloc::boxed::impl$29::call_once
+[  2.51s] stderr:              at /rustc/ded5c06cf21d2b93bffd5d884aa6e96934ee4234/library\alloc\src\boxed.rs:2005
+[  2.51s] stderr:   10: alloc::boxed::impl$29::call_once
+[  2.51s] stderr:              at /rustc/ded5c06cf21d2b93bffd5d884aa6e96934ee4234/library\alloc\src\boxed.rs:2005
+[  2.51s] stderr:   11: std::sys::thread::windows::impl$0::new::thread_start
+[  2.51s] stderr:              at /rustc/ded5c06cf21d2b93bffd5d884aa6e96934ee4234/library\std\src\sys\thread\windows.rs:60
+[  2.51s] stderr:   12: BaseThreadInitThunk
+[  2.51s] stderr:   13: RtlUserThreadStart
+[  3.08s] progress rustAnalyzer/Fetching end 
+[  3.08s] server request window/workDoneProgress/create -> null
+[  3.08s] progress rustAnalyzer/Building compile-time-deps begin Building compile-time-deps
+[  3.08s] progress rustAnalyzer/Building compile-time-deps end 
+[ 20.64s] stderr: 2026-09-05T13:55:11.1735872-04:00  WARN notify error: Input watch path is neither a file nor a directory.
+[ 20.82s] stderr: 2026-09-05T13:55:11.3582058-04:00  WARN notify error: Input watch path is neither a file nor a directory.
+[ 21.09s] progress rustAnalyzer/Roots Scanned end 
+[ 21.09s] server request window/workDoneProgress/create -> null
+[ 21.09s] progress rustAnalyzer/Building CrateGraph begin Building CrateGraph
+[ 21.09s] progress rustAnalyzer/Building CrateGraph end 
+[ 21.09s] server request window/workDoneProgress/create -> null
+[ 21.09s] progress rustAnalyzer/Roots Scanned begin Roots Scanned
+[ 21.09s] server request window/workDoneProgress/create -> null
+[ 21.09s] progress rustAnalyzer/Loading proc-macros begin Loading proc-macros
+[ 21.09s] progress rustAnalyzer/Loading proc-macros end 
+[ 21.09s] server request window/workDoneProgress/create -> null
+[ 21.09s] progress rustAnalyzer/Fetching begin Fetching
+[ 21.09s] progress rustAnalyzer/Roots Scanned end 
+[ 21.25s] stderr: 2026-09-05T13:55:11.7799691-04:00  WARN `cargo metadata` failed and returning succeeded result with `--no-deps` error=`cargo metadata` exited with an error: error: unexpected argument '--lockfile-path' found
+[ 21.25s] stderr: 
+[ 21.25s] stderr:   tip: a similar argument exists: '--locked'
+[ 21.25s] stderr: 
+[ 21.25s] stderr: Usage: cargo.exe metadata --format-version <VERSION> --manifest-path <PATH> --filter-platform <TRIPLE> --locked
+[ 21.25s] stderr: 
+[ 21.25s] stderr: For more information, try '--help'.
+[ 21.25s] stderr: 
+[ 21.25s] stderr: 
+[ 21.25s] stderr: Stack backtrace:
+[ 21.25s] stderr:    0: std::backtrace_rs::backtrace::win64::trace
+[ 21.25s] stderr:              at /rustc/ded5c06cf21d2b93bffd5d884aa6e96934ee4234/library\std\src\..\..\backtrace\src\backtrace\win64.rs:85
+[ 21.25s] stderr:    1: std::backtrace_rs::backtrace::trace_unsynchronized
+[ 21.25s] stderr:              at /rustc/ded5c06cf21d2b93bffd5d884aa6e96934ee4234/library\std\src\..\..\backtrace\src\backtrace\mod.rs:66
+[ 21.25s] stderr:    2: std::backtrace::Backtrace::create
+[ 21.25s] stderr:              at /rustc/ded5c06cf21d2b93bffd5d884aa6e96934ee4234/library\std\src\backtrace.rs:331
+[ 21.25s] stderr:    3: std::backtrace::Backtrace::capture
+[ 21.25s] stderr:              at /rustc/ded5c06cf21d2b93bffd5d884aa6e96934ee4234/library\std\src\backtrace.rs:296
+[ 21.25s] stderr:    4: <unknown>
+[ 21.25s] stderr:    5: <unknown>
+[ 21.25s] stderr:    6: <unknown>
+[ 21.25s] stderr:    7: <unknown>
+[ 21.25s] stderr:    8: alloc::boxed::impl$29::call_once
+[ 21.25s] stderr:              at /rustc/ded5c06cf21d2b93bffd5d884aa6e96934ee4234/library\alloc\src\boxed.rs:2005
+[ 21.25s] stderr:    9: alloc::boxed::impl$29::call_once
+[ 21.25s] stderr:              at /rustc/ded5c06cf21d2b93bffd5d884aa6e96934ee4234/library\alloc\src\boxed.rs:2005
+[ 21.25s] stderr:   10: std::sys::thread::windows::impl$0::new::thread_start
+[ 21.25s] stderr:              at /rustc/ded5c06cf21d2b93bffd5d884aa6e96934ee4234/library\std\src\sys\thread\windows.rs:60
+[ 21.25s] stderr:   11: BaseThreadInitThunk
+[ 21.25s] stderr:   12: RtlUserThreadStart
+[ 21.32s] stderr: 2026-09-05T13:55:11.8543613-04:00  WARN `cargo metadata` failed and returning succeeded result with `--no-deps` error=`cargo metadata` exited with an error: error: unexpected argument '--lockfile-path' found
+[ 21.32s] stderr: 
+[ 21.32s] stderr:   tip: a similar argument exists: '--locked'
+[ 21.32s] stderr: 
+[ 21.32s] stderr: Usage: cargo.exe metadata --format-version <VERSION> --manifest-path <PATH> --filter-platform <TRIPLE> --locked
+[ 21.32s] stderr: 
+[ 21.32s] stderr: For more information, try '--help'.
+[ 21.32s] stderr: 
+[ 21.32s] stderr: 
+[ 21.32s] stderr: Stack backtrace:
+[ 21.32s] stderr:    0: std::backtrace_rs::backtrace::win64::trace
+[ 21.32s] stderr:              at /rustc/ded5c06cf21d2b93bffd5d884aa6e96934ee4234/library\std\src\..\..\backtrace\src\backtrace\win64.rs:85
+[ 21.32s] stderr:    1: std::backtrace_rs::backtrace::trace_unsynchronized
+[ 21.32s] stderr:              at /rustc/ded5c06cf21d2b93bffd5d884aa6e96934ee4234/library\std\src\..\..\backtrace\src\backtrace\mod.rs:66
+[ 21.32s] stderr:    2: std::backtrace::Backtrace::create
+[ 21.32s] stderr:              at /rustc/ded5c06cf21d2b93bffd5d884aa6e96934ee4234/library\std\src\backtrace.rs:331
+[ 21.32s] stderr:    3: std::backtrace::Backtrace::capture
+[ 21.32s] stderr:              at /rustc/ded5c06cf21d2b93bffd5d884aa6e96934ee4234/library\std\src\backtrace.rs:296
+[ 21.32s] stderr:    4: <unknown>
+[ 21.32s] stderr:    5: <unknown>
+[ 21.32s] stderr:    6: <unknown>
+[ 21.32s] stderr:    7: <unknown>
+[ 21.32s] stderr:    8: <unknown>
+[ 21.32s] stderr:    9: alloc::boxed::impl$29::call_once
+[ 21.32s] stderr:              at /rustc/ded5c06cf21d2b93bffd5d884aa6e96934ee4234/library\alloc\src\boxed.rs:2005
+[ 21.32s] stderr:   10: alloc::boxed::impl$29::call_once
+[ 21.32s] stderr:              at /rustc/ded5c06cf21d2b93bffd5d884aa6e96934ee4234/library\alloc\src\boxed.rs:2005
+[ 21.32s] stderr:   11: std::sys::thread::windows::impl$0::new::thread_start
+[ 21.32s] stderr:              at /rustc/ded5c06cf21d2b93bffd5d884aa6e96934ee4234/library\std\src\sys\thread\windows.rs:60
+[ 21.32s] stderr:   12: BaseThreadInitThunk
+[ 21.32s] stderr:   13: RtlUserThreadStart
+[ 21.32s] progress rustAnalyzer/Fetching end 
+[ 21.32s] server request window/workDoneProgress/create -> null
+[ 21.32s] progress rustAnalyzer/Building CrateGraph begin Building CrateGraph
+[ 21.33s] progress rustAnalyzer/Building CrateGraph end 
+[ 21.33s] server request window/workDoneProgress/create -> null
+[ 21.33s] progress rustAnalyzer/Loading proc-macros begin Loading proc-macros
+[ 21.39s] progress rustAnalyzer/Loading proc-macros end 
+[ 22.39s] server request window/workDoneProgress/create -> null
+[ 22.39s] progress rustAnalyzer/cachePriming begin Indexing
+[ 22.39s] progress rustAnalyzer/cachePriming end 
+[ 22.39s] server request window/workDoneProgress/create -> null
+[ 22.39s] progress rustAnalyzer/cachePriming begin Indexing
+[ 22.39s] server request window/workDoneProgress/create -> null
+[ 22.39s] progress rust-analyzer/flycheck/0 begin cargo check
+[ 22.39s] progress rust-analyzer/flycheck/0 end 
+[ 22.39s] server request window/workDoneProgress/create -> null
+[ 22.39s] progress rust-analyzer/flycheck/0 begin cargo check
+[ 22.39s] progress rust-analyzer/flycheck/0 end 
+[ 22.84s] progress rustAnalyzer/cachePriming end 
+[ 22.84s] notif window/showMessage
+[ 25.27s] definition(11,12) -> [{"originSelectionRange": {"start": {"line": 11, "character": 12}, "end": {"line": 11, "character": 24}}, "targetUri": "file://wsl.localhost/Ubuntu/home/effatha/scratch-lsp/repo/src/main.rs", "targetRange": {"start": {"line": 5, "character": 0}, "end": {"line": 8, "character": 1}}, "targetSelectionRange": {"start": {"line": 6, "character": 7}, "end": {"line": 6, "character": 19}}}]
+[ 25.59s] hover -> {"contents": {"kind": "plaintext", "value": "lspprobe\n\npub fn build_marker(id: u32) -> ProbeMarker\n\n\nBuilds a marker."}, "range": {"start": {"line": 11, "character": 12}, "end": {"line": 11, "character": 24}}}
+[ 25.85s] exit code 0

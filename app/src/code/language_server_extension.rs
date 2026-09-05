@@ -179,12 +179,12 @@ impl LocalCodeEditorView {
         let Some(lsp_server) = self.lsp_server.as_ref() else {
             return Vec::new();
         };
-        let Some(file_path) = self.file_path() else {
+        let Some(file_path) = self.lsp_path(ctx) else {
             return Vec::new();
         };
         let Some(doc_diagnostics) = lsp_server
             .as_ref(ctx)
-            .diagnostics_for_path(file_path)
+            .diagnostics_for_path(&file_path)
             .ok()
             .flatten()
         else {
@@ -309,7 +309,7 @@ impl LocalCodeEditorView {
             .as_ref(ctx)
             .offset_to_lsp_position(offset, ctx);
 
-        let Some(file_path) = self.file_path() else {
+        let Some(file_path) = self.lsp_path(ctx) else {
             return;
         };
 
@@ -323,7 +323,7 @@ impl LocalCodeEditorView {
             .as_ref()
             .unwrap()
             .as_ref(ctx)
-            .hover(file_path.to_path_buf(), lsp_position)
+            .hover(file_path, lsp_position)
         {
             Ok(future) => future,
             Err(e) => {
