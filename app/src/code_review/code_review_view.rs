@@ -30,6 +30,7 @@ use warp_util::content_version::ContentVersion;
 use warp_util::path::LineAndColumnArg;
 use warp_util::standardized_path::StandardizedPath;
 use warpui::clipboard::ClipboardContent;
+use warpui::elements::FormattedTextElement;
 use warpui::elements::new_scrollable::{
     NewScrollable, NewScrollableElement, ScrollableAppearance, SingleAxisConfig,
 };
@@ -45,6 +46,7 @@ use warpui::elements::{
 use warpui::fonts::{Properties, Weight};
 use warpui::keymap::Keystroke;
 use warpui::platform::Cursor;
+use warpui::text_layout::TextAlignment;
 use warpui::text_layout::{ClipConfig, default_compute_baseline_position};
 use warpui::ui_components::button::{ButtonVariant, TextAndIcon, TextAndIconAlignment};
 use warpui::ui_components::components::{Coords, UiComponent, UiComponentStyles};
@@ -3984,16 +3986,35 @@ impl CodeReviewView {
                 .finish(),
             )
             .with_child(
-                Container::new(
-                    Text::new(
-                        message,
-                        appearance.ui_font_family(),
-                        appearance.ui_font_size() + 2.,
+                // Wrapped, the way the project explorer's error state already
+                // is. Upstream's messages here were one short line each; the
+                // fork's WSL one is a sentence and a half, and a plain `Text`
+                // drew it as a single line past the panel's edge, pushing the
+                // icon and title out of view (measured 2026-09-05, first run
+                // of `099b26ea5`).
+                ConstrainedBox::new(
+                    Shrinkable::new(
+                        1.,
+                        Container::new(
+                            Shrinkable::new(
+                                1.,
+                                FormattedTextElement::from_str(
+                                    message,
+                                    appearance.ui_font_family(),
+                                    appearance.ui_font_size() + 2.,
+                                )
+                                .with_alignment(TextAlignment::Center)
+                                .with_color(theme.disabled_text_color(theme.background()).into())
+                                .finish(),
+                            )
+                            .finish(),
+                        )
+                        .with_margin_top(4.)
+                        .finish(),
                     )
-                    .with_color(theme.disabled_text_color(theme.background()).into())
                     .finish(),
                 )
-                .with_margin_top(4.)
+                .with_max_width(425.)
                 .finish(),
             );
 
@@ -4005,11 +4026,15 @@ impl CodeReviewView {
             main_column.finish()
         };
 
-        Flex::row()
-            .with_main_axis_size(MainAxisSize::Max)
-            .with_main_axis_alignment(MainAxisAlignment::Center)
-            .with_child(main_column)
-            .finish()
+        Container::new(
+            Flex::row()
+                .with_main_axis_size(MainAxisSize::Max)
+                .with_main_axis_alignment(MainAxisAlignment::Center)
+                .with_child(Shrinkable::new(1., main_column).finish())
+                .finish(),
+        )
+        .with_horizontal_margin(16.)
+        .finish()
     }
 
     pub fn render_remote_state(
