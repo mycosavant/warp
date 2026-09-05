@@ -131,7 +131,12 @@ fn has_open_file_for_workspace(root: &Path, app: &AppContext) -> bool {
                     continue;
                 }
 
-                let Some(path) = editor_ref.file_path() else {
+                // The LSP path rather than the local one: a routed WSL buffer
+                // is remote and keeps its server busy all the same
+                // (`code::routed_lsp`). Measured on the first live run: with
+                // `file_path()` here, the server this buffer had just started
+                // was stopped as unused ten seconds later.
+                let Some(path) = editor_ref.lsp_path(app) else {
                     continue;
                 };
 

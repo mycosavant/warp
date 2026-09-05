@@ -63,6 +63,7 @@ impl WslHosts {
     /// daemon identity per machine and user, and a stale entry can only be
     /// consulted through a remote buffer, which implies a live connection.
     pub fn record(&mut self, host_id: HostId, distro: String) {
+        log::info!("[routed-lsp] host {host_id:?} is WSL distribution {distro}");
         self.distros.insert(host_id, distro);
     }
 
