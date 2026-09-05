@@ -1179,6 +1179,28 @@ failure set (`gh`-dependent git tests, flaky secret-redaction globals, terminal
 view) whose members vary run to run — a count that matches can still hide a
 regression, and a count that differs by one is usually the flaky set.
 
+**How wide that variation actually is, measured across six runs of `-p warp
+--lib` on 2026-09-04:** 19, 20, 21, 21, 23 and 28 failures, against a union of at
+least 26 distinct names (26 across the five runs that were saved to a file; the
+28-failure run was read off the terminal and lost, which is its own small
+lesson). So the count carries almost no information — a nine-failure swing is
+the normal weather here, and a single number will either alarm or reassure at
+random. The baseline has to be a *union of at least two runs*, or one flaky pass
+in a single baseline run promotes an old failure to a fresh "regression". That
+happened on this merge: two names showed as regressions against a two-run
+baseline and were neither.
+
+**And the family behind the swing has a name: shared login state.** The cluster
+that moves is `ai::mcp::file_based_manager` (up to nine at once), and its
+assertion is *"post-login activation should start TUI Warp-global servers"* —
+the same global the already-listed `auth_completion_waits_for_cloud_initial_load_before_migrating`
+and `test_byo_api_key_disabled_for_anonymous_firebase_user` contend over. All of
+it passes at `--test-threads=1` and 3/3 in isolation. So when a whole module
+fails together and then passes alone, look for a global the tests are logging in
+and out of, not for a bug in that module. The two auth tests above fail
+*serially* too, which is what separates the genuinely broken from the merely
+ordered.
+
 **And the same trap has a third crate in it: `-p warp_cli`.** Measured
 2026-08-31, by walking into it. The empty-approvals sentence was edited in
 `crates/warp_cli/src/local_control/commands.rs`; `-p local_control` and `-p warp
