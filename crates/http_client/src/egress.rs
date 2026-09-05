@@ -1,4 +1,14 @@
-//! Fork policy: a last-resort egress backstop for telemetry and analytics.
+//! Fork policy: a last-resort egress backstop.
+//!
+//! **Two lists, two switches, two different claims.**
+//! [`BLOCKED_HOST_SUFFIXES`] is telemetry and analytics vendors, which must
+//! never receive data. [`BLOCKED_FIRST_PARTY_HOST_SUFFIXES`] is Warp's own
+//! services, which the product legitimately uses and this fork has replaced
+//! one at a time. Conflating them would be convenient and wrong: the second
+//! list has a legitimate reason to be lifted — `WARP_FORK_POLICY=0` is the
+//! documented way to A/B a suspected fork regression against stock upstream,
+//! and it cannot reach this module — so it answers to
+//! `WARP_FORK_ALLOW_WARP_EGRESS` rather than to the telemetry switch.
 //!
 //! Requests built through [`crate::Client`] are checked in two places, and the
 //! second exists because the first sentence here used to claim there was only
@@ -51,6 +61,19 @@
 /// behaviour against upstream). Absent or any other value keeps blocking.
 const ALLOW_ENV_VAR: &str = "WARP_FORK_ALLOW_TELEMETRY_EGRESS";
 
+/// Set to `1`/`true` to allow this build to talk to Warp's own services.
+/// Absent or any other value keeps blocking.
+///
+/// Deliberately **not** the same switch as [`ALLOW_ENV_VAR`], and not
+/// `WARP_FORK_POLICY`. The two lists below are blocked for different reasons
+/// and one of them has a legitimate reason to be lifted: this file already
+/// tells people to run `WARP_FORK_POLICY=0` to A/B a suspected fork
+/// regression against stock upstream, and `is_active` reads neither that nor
+/// anything in `app::fork` — so without a switch of its own, first-party
+/// blocking would silently break the one debugging workflow the fork
+/// documents. Telemetry has no such case and keeps its own, narrower switch.
+const ALLOW_FIRST_PARTY_ENV_VAR: &str = "WARP_FORK_ALLOW_WARP_EGRESS";
+
 /// Hosts that must never receive data.
 ///
 /// Matched as exact host or dot-suffix, so `sentry.io` also covers
@@ -85,6 +108,39 @@ const BLOCKED_HOST_SUFFIXES: &[&str] = &[
     "launchdarkly.com",
 ];
 
+/// Warp's own services, blocked because this fork does not use them.
+///
+/// **This is a different claim from the list above and is worth keeping
+/// separate.** Those hosts must never receive data under any reading of the
+/// fork's thesis. These are hosts the *product* legitimately talks to, that
+/// this fork has replaced one at a time — the agent transport, `/ai/transcribe`,
+/// `/ai/relevant_files`, the embedding index, Warp Drive, autoupdate — and the
+/// entry here is what makes "replaced" mean "cannot happen" rather than "does
+/// not happen on the paths anybody checked".
+///
+/// The specific hole it closes: `ai::agent::api::generate_multi_agent_output`
+/// intercepts for the ACP and local agents **only when one is configured**.
+/// With neither `WARP_FORK_ACP_COMMAND` nor `WARP_FORK_LOCAL_AGENT` set it
+/// falls through to `warp_multi_agent_client` and sends the user's prompt and
+/// context to `app.warp.dev`, with no warning and nothing in the log. That is
+/// upstream's default behaving exactly as upstream intends, and it was the one
+/// live first-party call left when this list was written (2026-09-04).
+///
+/// `ai::agent::api::r#impl` refuses that turn first, with a message naming the
+/// two variables, because a blocked request surfaces as an opaque connection
+/// failure rather than an explanation. This is the backstop under that refusal,
+/// for the call site that has not been written yet.
+///
+/// Note `firebase_auth_api_key` and Firebase's own hosts are **not** here.
+/// Sign-in is gated in `app::fork::account_gate_bypassed` rather than at the
+/// socket, and blocking Google's identity endpoints by suffix would reach
+/// further than this fork's argument does.
+const BLOCKED_FIRST_PARTY_HOST_SUFFIXES: &[&str] = &[
+    // `app.warp.dev` (GraphQL, `/ai/*`, `/client_version`), `rtc.app.warp.dev`
+    // and `sessions.app.warp.dev` are all suffixes of this one.
+    "warp.dev",
+];
+
 /// Where blocked requests are redirected.
 ///
 /// Port 0 can never be connected to, so the request fails immediately at the
@@ -94,7 +150,7 @@ const BLOCKED_HOST_SUFFIXES: &[&str] = &[
 /// same (the caller sees a connection failure).
 const BLACKHOLE_URL: &str = "http://0.0.0.0:0/";
 
-/// Whether the egress backstop is active for this process.
+/// Whether the telemetry half of the backstop is active for this process.
 pub(crate) fn is_active() -> bool {
     !matches!(
         std::env::var(ALLOW_ENV_VAR).as_deref(),
@@ -102,20 +158,57 @@ pub(crate) fn is_active() -> bool {
     )
 }
 
-/// Returns true if `host` is, or is a subdomain of, a blocked host.
-pub(crate) fn is_blocked_host(host: &str) -> bool {
-    let host = host.trim_end_matches('.').to_ascii_lowercase();
-    BLOCKED_HOST_SUFFIXES
+/// Whether the first-party half of the backstop is active for this process.
+pub(crate) fn first_party_is_active() -> bool {
+    !matches!(
+        std::env::var(ALLOW_FIRST_PARTY_ENV_VAR).as_deref(),
+        Ok("1") | Ok("true")
+    )
+}
+
+fn normalize(host: &str) -> String {
+    host.trim_end_matches('.').to_ascii_lowercase()
+}
+
+fn matches_suffix(host: &str, suffixes: &[&str]) -> bool {
+    suffixes
         .iter()
         .any(|blocked| host == *blocked || host.ends_with(&format!(".{blocked}")))
 }
 
+/// Returns true if `host` is, or is a subdomain of, a host on either list.
+///
+/// Deliberately pure: it answers "is this host listed", not "would this request
+/// be blocked right now". The switches live in [`is_blocked`], so this stays
+/// testable without touching the environment — which matters more since there
+/// are now two switches and a test that read one of them would pass or fail
+/// depending on how the suite was invoked.
+pub(crate) fn is_blocked_host(host: &str) -> bool {
+    let host = normalize(host);
+    matches_suffix(&host, BLOCKED_HOST_SUFFIXES)
+        || matches_suffix(&host, BLOCKED_FIRST_PARTY_HOST_SUFFIXES)
+}
+
+/// The blocking rule, with both switches passed in.
+///
+/// Split out from [`is_blocked`] so the rule that actually matters -- that
+/// lifting one switch never lifts the other -- can be tested without mutating
+/// process-global environment variables. A test that sets and restores env has
+/// to be serialised against every other test that reads the same names, and
+/// `http_client` carries no `serial_test`; making the rule pure was cheaper
+/// than adding a dependency, and is a better test besides.
+fn blocked_by(host: &str, telemetry_active: bool, first_party_active: bool) -> bool {
+    let host = normalize(host);
+    (telemetry_active && matches_suffix(&host, BLOCKED_HOST_SUFFIXES))
+        || (first_party_active && matches_suffix(&host, BLOCKED_FIRST_PARTY_HOST_SUFFIXES))
+}
+
 /// Returns true if the request to `url` must be blocked.
+///
+/// Each half answers to its own switch, so lifting one never lifts the other.
 pub(crate) fn is_blocked(url: &reqwest::Url) -> bool {
-    if !is_active() {
-        return false;
-    }
-    url.host_str().is_some_and(is_blocked_host)
+    url.host_str()
+        .is_some_and(|host| blocked_by(host, is_active(), first_party_is_active()))
 }
 
 /// The URL blocked requests are rewritten to.

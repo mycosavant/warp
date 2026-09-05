@@ -314,7 +314,7 @@ upstream and rebasable.
 | file | what it owns |
 |---|---|
 | `app/src/fork.rs` | **the policy seam.** `is_active()`, `FORCE_ENABLED`/`FORCE_DISABLED` feature flags, and ~a dozen predicates (`local_agent_enabled`, `local_drive_enabled`, `account_gate_bypassed`, …). Start here. |
-| `crates/http_client/src/egress.rs` | the telemetry deny-list. The "nothing escapes" claim rests on this — and it is enforced in **two** places, not one. `Client::execute_inner` covers every verb builder and the oauth2 adapter; `RequestBuilder::eventsource` reaches `execute_inner` **never** and carries its own check. That second one exists because this module's docs claimed for a long time that a check in `execute_inner` *"cannot be bypassed by a call site that forgot"*, and `eventsource` had been bypassing it the whole time — found 2026-08-31 by an agent in Warp's own panel, in the file the fork's strongest claim rests on. Not a live leak (every SSE call site targets Warp's own service), which is exactly why it was closed rather than noted: a backstop whose coverage depends on where today's call sites point is a fact about today. **Adding a way out of `Client` means adding a `redirect_if_blocked` call — grep `self.wrapped` in `lib.rs`, that is the shape of a bypass.** And remember it is a *deny-list*: an unlisted host is an allowed host, so it protects only retroactively and only against the vendors named in it. |
+| `crates/http_client/src/egress.rs` | the deny-lists — **two of them since 2026-09-04, with a switch each**: telemetry vendors (`WARP_FORK_ALLOW_TELEMETRY_EGRESS`) and Warp's own hosts (`WARP_FORK_ALLOW_WARP_EGRESS`). Kept apart because they make different claims and only the second has a legitimate reason to be lifted — `WARP_FORK_POLICY=0` cannot reach this crate. The "nothing escapes" claim rests on this — and it is enforced in **two** places, not one. `Client::execute_inner` covers every verb builder and the oauth2 adapter; `RequestBuilder::eventsource` reaches `execute_inner` **never** and carries its own check. That second one exists because this module's docs claimed for a long time that a check in `execute_inner` *"cannot be bypassed by a call site that forgot"*, and `eventsource` had been bypassing it the whole time — found 2026-08-31 by an agent in Warp's own panel, in the file the fork's strongest claim rests on. Not a live leak (every SSE call site targets Warp's own service), which is exactly why it was closed rather than noted: a backstop whose coverage depends on where today's call sites point is a fact about today. **Adding a way out of `Client` means adding a `redirect_if_blocked` call — grep `self.wrapped` in `lib.rs`, that is the shape of a bypass.** And remember it is a *deny-list*: an unlisted host is an allowed host, so it protects only retroactively and only against the hosts named in it. |
 | `app/src/ai/local_agent/` | a local implementation of the one agent-transport function, answering from the `claude` CLI. |
 | `app/src/ai/acp_agent/` | the same function again, answering from **whatever agent `WARP_FORK_ACP_COMMAND` names**, over the Agent Client Protocol (T14.5). It denies every permission request it receives — but **that is not read-only and must never be described as it**: measured, an agent at its own defaults wrote a file and asked nothing, so Warp denied nothing. T14.8 names that mechanism: `claude-agent-acp` starts in session mode **`auto`**, which it describes itself as *"use a model classifier to approve/deny permission prompts"* — so the thing deciding was a model, and Warp was never in the loop. `session/set_mode` to `default` is what makes it ask. **Re-measured 2026-08-30 at 0.70.0: still `auto` by default, now six modes.** And it is *that agent's* feature, not the protocol's — `modes` is protocol-level and `SessionModeId` is an opaque string, so `opencode` 1.18.25 answers `modes: null` and has no auto-anything to set. Do not generalise a mode id across agents. **And the panel path sends no `set_mode` at all** (T14.18): `acp_agent` sends `session/new` with a cwd and nothing else, so with `claude-agent-acp` a panel session runs in `auto` for its whole life and Warp is asked nothing — measured, 0 permission requests and the file written, against 2 requests when `default` is sent first. The fork's permission model is not too tight there; it is **unreached**. This has stayed hidden because every panel session on the board used `opencode`, which has no modes to be in. **T14.18 answers it by disclosing, not by choosing**: the mode a session starts in is now reported in the panel in the agent's own words, and `WARP_FORK_ACP_MODE` requests one — with no default, because a mode id is opaque and the protocol's own examples are `ask`/`architect`/`code`. Warp says which mode is in force; it never picks one for you. |
 | `app/src/drive/local_sync/` | account-free Warp Drive: snapshot, apply, git-backed sync. |
@@ -323,6 +323,53 @@ upstream and rebasable.
 | `app/src/terminal/model/session/filesystem.rs` | **where a session's files actually live**, as one answer. `SessionType` is a *bootstrap* fact and a WSL session's is `Local` — `determine_session_type` compares hostnames and WSL2 inherits the Windows machine name — while its files are inside the distribution. Every call site that asked `session_type()` about a *file* therefore reached back across the 9p redirector, at roughly 20 ms per directory entry, past a server sitting idle beside those files. `session_filesystem` returns `Local`, `Host(id)` or `Unreachable`; the rule is a pure `classify(session_type, is_wsl, connected_host)` with unit tests, the lookups around it are not. **`Unreachable` is a third state on purpose**: a remote session with no server attached is not local, and a caller that treats it as local reads *this* machine's filesystem for another machine's paths — which succeeds often enough to be worse than failing. Two places keep `session_type()` deliberately and say why: the orchestration gate (about where *commands* run, and a WSL shell is already native Linux) and the completer (which had already solved this upstream in `wsl_guest_listing`, APP-3993 — **upstream independently found that enumerating a WSL directory from Windows is wrong, and asks the guest**). A new reader is caught by `every_file_that_reads_session_type_has_been_classified`, which requires every live `session_type()` read in `app/src` to appear in a list with a reason. |
 | `app/src/local_control/`, `crates/local_control/`, `crates/warp_cli/src/local_control/` | the `warpctrl` control plane, 114 actions. The count is pinned by **two** tests in different crates — update both, and never loosen either. **This line said 109 for two phases**: T11.2 took it to 110, T11.4 to 111 and T11.5 to 114, and each updated the pins without updating this table. Read the count off the test, never off prose — and grep for `fn catalog_has_exactly`, because the test's own name embeds the number and so goes stale on exactly the schedule this warning is about. |
 | `app/src/remote_server/wsl_transport.rs`, `crates/remote_server/src/wsl.rs` | the second `RemoteTransport`: Warp's remote-development server, in a WSL distro instead of over SSH. |
+
+**The fork no longer talks to Warp's servers at all, and the two things that
+were stopping it were both accidents.** Closed 2026-09-04, from a question about
+why the About page reads `v#.##.###`.
+
+That string is not a version format. It is the `unwrap_or` fallback at
+`about_page.rs:72`, so it means **no version was stamped**: `app_version()` is
+`option_env!("GIT_RELEASE_TAG")`, set by release CI and by nothing else, and
+`--version` says `<unknown>` while the commit sha appears zero times in the
+binary. Local builds were unidentifiable, which with two checkouts had already
+cost time twice.
+
+The fix is one environment variable, and setting it would have switched on
+autoupdate. Two of the three guards on the self-replace path are
+`app_version().is_none()`, so *not knowing its own version* was what stopped the
+fork replacing its binary from Warp's servers. `fork.rs` had no autoupdate
+predicate and `egress.rs` did not cover `warp.dev`. Now
+`FeatureFlag::Autoupdate` is in `FORCE_DISABLED` and `fork::autoupdate_allowed`
+guards `check_for_update`, so the two are decoupled and `.fork/tools/build.sh`
+and `build.ps1` both stamp `v0.fork.<sha>`.
+
+**The bigger one was underneath it, and it was live.**
+`generate_multi_agent_output` intercepts for the ACP and local agents *only when
+one is configured* — `handles()` asks whether the request carries a
+`UserQuery` — so a fork build with neither `WARP_FORK_ACP_COMMAND` nor
+`WARP_FORK_LOCAL_AGENT` set sent the prompt, the conversation and the attached
+context to `app.warp.dev`, with **no warning, no log line and nothing in the
+panel**. Upstream's default, working exactly as upstream intends. Two layers
+now: `impl.rs` refuses with a message naming both variables, and `warp.dev` is
+on a new first-party deny-list in `egress.rs`.
+
+That list is deliberately **separate from the telemetry one, with its own
+switch** (`WARP_FORK_ALLOW_WARP_EGRESS`). The two make different claims —
+vendors must never receive data; Warp's own hosts are ones the product
+legitimately uses and this fork replaced one at a time — and the first-party
+half has a real reason to be lifted: `WARP_FORK_POLICY=0` is this file's own
+advice for A/B-ing a suspected regression, and it cannot reach `http_client` at
+all. One switch would have silently broken that.
+
+Two things this cost, both worth knowing. The seam refusal is `cfg`-ed out of
+test builds, because the same condition (`any(test, feature = "test-util")`) is
+what reroutes server URLs to a mockito instance — so it has **no runtime test**
+and is pinned by source text; the deny-list is the layer with real assertions.
+And it broke three upstream autoupdate tests on its first placement, in
+`get_next_request`, which owns a request-queue state machine that upstream
+drives directly. The guard belongs at `check_for_update`, where the request is
+spawned.
 
 Environment variables the fork adds: `WARP_FORK_ACP_COMMAND` (**name an agent and
 it answers the agent panel**; naming the command *is* the switch, there is no
@@ -473,7 +520,11 @@ with one it asked, and Warp denied. This corrects an earlier claim here that the
 config came from wherever Warp was launched), `WARP_FORK_POLICY` (set `0`/`off`/`false`
 to run stock upstream behaviour without rebuilding — use this to A/B a suspected
 fork regression), `WARP_FORK_ACP_MODE` (**the session mode to ask the ACP agent for, by that agent's own id for it** — `default` for `claude-agent-acp`, which is how you make it ask rather than let its `auto` classifier answer. Unset by default and deliberately so: ids are opaque and vendor-specific, so Warp discloses the mode in force and never chooses one. An id the agent did not advertise **refuses the turn** — it is not sent and the turn does not run. This line said "reported, not sent" until 2026-08-31, and so did `mode.rs`'s own module header; both were describing a first cut that `Decision::Refuse` records as wrong and replaced, because a note scrolls and what it is a note *about* is a session running under a policy nobody chose. The parser shape here is `WARP_FORK_CONTROL_BIND`'s — a typo would otherwise silently mean something — and unlike that one, refusing costs only the turn. **And the mode does not survive a resume, measured 2026-09-01: it is re-sent on every turn because every `session/load` brings the session back in the agent's own mode.** `session_mode`, written from the agent's reply, read `current auto` on all four turns of one conversation, each after Warp had set `default` the turn before, while the agent asked for permission on every one — which `auto` does not do. So that per-turn re-send is load-bearing, and removing it as redundant would put every turn after the first back under the agent's classifier with an event log of **zero** permission requests, which reads as "nothing needed asking" and means "Warp was not in the loop". Not separable from outside: whether the agent truly reverts or merely reports its opening mode on load), `WARP_FORK_LOCAL_AGENT`, `WARP_FORK_AGENT_SPAWN_DEPTH`,
-`WARP_FORK_ALLOW_TELEMETRY_EGRESS`, `WARP_FORK_QUAKE_VISOR` (the one that
+`WARP_FORK_ALLOW_TELEMETRY_EGRESS`, `WARP_FORK_ALLOW_WARP_EGRESS` (**lifts the
+first-party block only** — `warp.dev` and its subdomains. Separate from the
+telemetry switch on purpose, and needed because `WARP_FORK_POLICY=0` cannot
+reach `http_client`: without it, the documented way to A/B a suspected fork
+regression would fail at the socket with no clue why), `WARP_FORK_QUAKE_VISOR` (the one that
 defaults **on** — set it off to get upstream's terminal in the hotkey window),
 `WARP_FORK_FRAME_LOG` (`on`, or a threshold in ms — slow-frame accounting to
 the local log; **reach for this before theorising about why something feels

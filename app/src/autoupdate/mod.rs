@@ -247,6 +247,21 @@ impl AutoupdateState {
     /// The caller is responsible for checking that we _should_ check for an update. Generally, the
     /// only caller should be [`Self::try_execute_request`].
     fn check_for_update(&mut self, request_type: RequestType, ctx: &mut ModelContext<Self>) {
+        // Fork: a build here never asks Warp whether a newer one exists.
+        //
+        // The primary removal is `FeatureFlag::Autoupdate` in
+        // `fork::FORCE_DISABLED`, which stops the poll loop being registered at
+        // all. This is the second check, and it sits here rather than in
+        // `get_next_request` because that function owns the request-queue state
+        // machine -- three upstream tests drive it directly and assert what it
+        // dequeues, and a fork guard there made all three fail by returning
+        // `None` forever. The queue is bookkeeping; this function is where the
+        // request is spawned, so this is the honest place for it.
+        if !crate::fork::autoupdate_allowed() {
+            log::info!("fork: not checking Warp for a newer build");
+            return;
+        }
+
         let current_date = chrono::Local::now().date_naive();
         let is_daily = self.should_make_daily_request(
             request_type,

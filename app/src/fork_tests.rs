@@ -1267,3 +1267,115 @@ fn the_symbol_map_leaves_by_exactly_one_call_site_and_it_is_guarded() {
         "the only call site must still be behind the fork predicate"
     );
 }
+
+/// Autoupdate is off because the fork decided so, not because of how the build
+/// happens to be packaged.
+///
+/// The two assertions are opposite in spirit and both are the point.
+/// `autoupdate` being absent from the Cargo `default` list is what makes this
+/// entry belt-and-braces *today* — the inverse of
+/// `the_index_that_uploads_source_is_forced_off_not_merely_absent`, where the
+/// cargo feature is on and the runtime force is the only removal. It is
+/// asserted rather than assumed because `remote_codebase_indexing = [...]`
+/// already proved that a feature can be switched on by another feature's
+/// dependency list without appearing in `default`, and reading the TOML gave
+/// the wrong answer that day.
+#[test]
+fn the_fork_never_asks_warp_for_a_newer_binary() {
+    assert!(
+        !cfg!(feature = "autoupdate"),
+        "the cargo feature has come on — probably pulled in by another feature's \
+         dependency list. The FORCE_DISABLED entry is now the primary removal \
+         rather than a backstop, which is fine, but stop treating it as spare"
+    );
+    assert!(
+        FORCE_DISABLED.contains(&FeatureFlag::Autoupdate),
+        "packaging is not a policy: RELEASE_FLAGS membership is what would switch \
+         this on, and that is a property of how the binary is bundled rather than \
+         of anything this fork chose"
+    );
+}
+
+/// The predicate must not consult the version, or stamping a commit into the
+/// binary silently re-arms the download path.
+///
+/// This is the whole reason `autoupdate_allowed` exists as a function rather
+/// than being left to `app_version().is_none()`, which is what upstream's two
+/// download guards use. Nothing here can be caught by the type system: the
+/// coupling was between "the About page shows a placeholder" and "the fork may
+/// replace its own binary", and those two facts have no compile-time relation.
+#[test]
+fn asking_for_an_update_does_not_depend_on_whether_a_version_was_stamped() {
+    let source = include_str!("fork.rs");
+    let body = source
+        .split("pub fn autoupdate_allowed()")
+        .nth(1)
+        .expect("autoupdate_allowed is defined in fork.rs");
+    let body = &body[..body.find('}').expect("the function has a body")];
+
+    assert!(
+        !body.contains("app_version"),
+        "autoupdate_allowed must not read app_version: a build that stamps \
+         GIT_RELEASE_TAG to identify itself would then be eligible to update"
+    );
+}
+
+/// The second check exists and is at the point a request leaves the queue.
+///
+/// Pinned by call site rather than by behaviour because the behaviour under
+/// fork policy is "nothing happens", which is indistinguishable from the guard
+/// having been deleted. `egress.rs` needed the same treatment for the same
+/// reason — a backstop whose coverage rests on where today's callers point is
+/// a fact about today.
+#[test]
+fn the_autoupdate_request_queue_is_guarded_as_well_as_the_flag() {
+    let autoupdate = include_str!("autoupdate/mod.rs");
+    let spawn_site = autoupdate
+        .split("fn check_for_update(")
+        .nth(1)
+        .expect("check_for_update is defined in autoupdate/mod.rs");
+
+    assert!(
+        spawn_site.contains("fork::autoupdate_allowed()"),
+        "the flag in FORCE_DISABLED stops the poll loop being registered; this \
+         is the check for a caller that reaches the request another way. It \
+         belongs here and not in `get_next_request`, which owns the queue state \
+         machine that three upstream tests drive directly"
+    );
+}
+
+/// The agent transport refuses before it reaches Warp.
+///
+/// Pinned by source text, which is weaker than a behavioural test and is the
+/// honest option here: the refusal is `cfg`-ed out of test builds, because the
+/// same condition is what reroutes every server URL to a local mock, so there
+/// is no build in which the test suite can both compile the guard and observe
+/// it. `egress.rs`'s first-party deny-list is the layer that does not have this
+/// problem — it is live in test builds and pinned by real assertions.
+///
+/// What this catches is the realistic failure: somebody adds a third fork agent
+/// above it, or reorders the interceptions, and quietly drops the refusal.
+#[test]
+fn the_agent_transport_refuses_before_it_reaches_warp() {
+    let source = include_str!("ai/agent/api/impl.rs");
+
+    let (before, after) = source
+        .split_once("WARP_FORK_ACP_COMMAND")
+        .expect("the refusal names the variable a person has to set");
+
+    assert!(
+        before.contains("crate::fork::is_active()"),
+        "the refusal must be gated on fork policy, so WARP_FORK_POLICY=0 still \
+         reaches upstream's transport for an A/B"
+    );
+    assert!(
+        after.contains("WARP_FORK_LOCAL_AGENT"),
+        "both ways of naming a local agent belong in the message; a person told \
+         about only one of them will conclude the other was removed"
+    );
+    assert!(
+        before.contains("acp_agent::generate") && before.contains("local_agent::generate"),
+        "the refusal must come after both interceptions, or it refuses turns the \
+         fork can actually answer"
+    );
+}

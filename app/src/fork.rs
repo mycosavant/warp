@@ -72,7 +72,30 @@ pub fn is_active() -> bool {
 /// matching files it `POST`s `/ai/relevant_files` with each file's path and
 /// symbol names for ranking. That is a smaller disclosure than source content
 /// and it is not zero, and it is untouched by this entry.
+///
+/// `Autoupdate` is a third case again: **it was off by accident of packaging,
+/// and this entry is what makes it a decision.** The flag lives in
+/// `RELEASE_FLAGS`, which `features::enabled_features` extends only when
+/// `ChannelState::is_release_bundle()`, and behind an `autoupdate` Cargo
+/// feature that is in no `default` list and that nothing pulls in
+/// transitively. So it is already off in every build made here — which is
+/// exactly the argument the embedding index nearly won, and lost.
+///
+/// The reason not to leave it to packaging is that the thing it gates is
+/// **the fork replacing its own binary from Warp's servers**. Two of the
+/// three guards on that path test `app_version()`, which is `None` only
+/// because a local build stamps no `GIT_RELEASE_TAG` — so stamping a version
+/// to answer "which commit is this binary" would have re-armed the download
+/// path as a side effect. That coupling is the whole reason this entry exists;
+/// see `autoupdate_allowed`.
+///
+/// And the check is not gated the way the download is: nothing on the path to
+/// `AutoupdateState::check_for_update` looks at `app_version()` at all, and
+/// `fetch_version` issues its request *before* the Oss-channel arm bails. So
+/// with the flag on, an untagged fork build would ask Warp's `/client_version`
+/// daily and throw the answer away.
 const FORCE_DISABLED: &[FeatureFlag] = &[
+    FeatureFlag::Autoupdate,
     FeatureFlag::FullSourceCodeEmbedding,
     FeatureFlag::CrashReporting,
     FeatureFlag::CocoaSentry,
@@ -366,6 +389,32 @@ fn spawn_depth_limit_from(value: Option<&str>) -> u32 {
 /// downstream depends on the platform plugin existing, and reporting a failure
 /// would surface a warning about a thing the user did not ask for.
 pub fn cloud_harness_plugin_allowed() -> bool {
+    !is_active()
+}
+
+/// Whether this build may contact Warp to look for a newer one.
+///
+/// **No, under fork policy, and this is the backstop rather than the removal.**
+/// The removal is `FeatureFlag::Autoupdate` in [`FORCE_DISABLED`], which stops
+/// `AutoupdateState::register` from ever starting the poll loop. This sits one
+/// layer in, at `get_next_request`, where a request is dequeued — the same
+/// two-places shape `egress.rs` ended up with, and for the same reason: the
+/// claim being protected is the fork's central one, and a guard that holds only
+/// because of where today's call sites happen to be is a fact about today.
+///
+/// The specific hazard it closes is a coupling nobody would expect. Autoupdate
+/// asks two questions on the way to replacing the binary, and both are
+/// `ChannelState::app_version().is_none()` — true only because a local build
+/// bakes no `GIT_RELEASE_TAG`. So the fork's version being *unknown* is what
+/// was stopping the download, which means the obvious fix for "the About page
+/// says `v#.##.###`" was also an autoupdate switch. Stamping the commit is now
+/// safe because this predicate does not consult the version at all.
+///
+/// Note what is deliberately **not** claimed: this stops the fork asking. It is
+/// not a network block, and `egress.rs` does not cover Warp's own hosts, so a
+/// future call site reaching `/client_version` by another route is not caught
+/// here.
+pub fn autoupdate_allowed() -> bool {
     !is_active()
 }
 

@@ -33,6 +33,50 @@ pub async fn generate_multi_agent_output(
         return Ok(crate::ai::local_agent::generate(params, cancellation_rx).await);
     }
 
+    // Everything below this line is upstream's transport: it sends the prompt,
+    // the conversation and the attached context to Warp's servers. Reaching it
+    // means neither fork agent claimed the request, and until 2026-09-04 that
+    // was silent -- no warning, no log line, nothing in the panel -- so a fork
+    // build with no agent configured worked perfectly by doing the one thing
+    // this fork exists to prevent.
+    //
+    // `warp.dev` is on `egress.rs`'s first-party deny-list, so the request
+    // could not complete in any case. This refusal is here because that one
+    // arrives as a dead socket: the person needs to be told which variable to
+    // set, not handed a connection error.
+    //
+    // Deliberately refuses EVERY input kind, not just `UserQuery`. The fork
+    // agents claim a request via `handles`, which asks only whether there is a
+    // user query in it -- so `TriggerPassiveSuggestion`, `AutoCodeDiffQuery`,
+    // `InitProjectRules` and the rest fall through here even when an agent is
+    // configured, and every one of them is an LLM call carrying the user's
+    // context. A refusal that covered only the case a person can see would
+    // leave exactly the ones they cannot.
+    //
+    // Compiled out of test builds, using this crate's existing
+    // `any(test, feature = "test-util")` idiom -- that is the condition under
+    // which `ChannelState::mock_server` reroutes every server URL to a local
+    // mockito instance, so such a request was never going to reach `warp.dev`.
+    // Refusing it only breaks upstream's agent tests, and it did:
+    // `driver_tests`' `ambient_driver_with_idle_window_still_injects_buffered_child_event`
+    // drives a mock conversation end to end and failed on the first version of
+    // this.
+    //
+    // The consequence, stated rather than left for someone to find: this
+    // refusal has no runtime test, because in a test build it does not exist.
+    // `fork_tests::the_agent_transport_refuses_before_it_reaches_warp` pins it
+    // by source text instead, which is weaker and is the reason `warp.dev` is
+    // on the egress deny-list rather than this being the only guard.
+    #[cfg(all(not(target_family = "wasm"), not(any(test, feature = "test-util"))))]
+    if crate::fork::is_active() {
+        return Err(ConvertToAPITypeError::Other(anyhow::anyhow!(
+            "This build does not send agent requests to Warp's servers. \
+             Name a local agent with WARP_FORK_ACP_COMMAND (an Agent Client \
+             Protocol command, e.g. `claude-agent-acp`), or set \
+             WARP_FORK_LOCAL_AGENT=1 to answer from the `claude` CLI."
+        )));
+    }
+
     let supported_tools = params
         .supported_tools_override
         .take()

@@ -111,14 +111,22 @@ fn a_blocked_host_is_redirected_on_the_eventsource_path_too() {
 /// The other half, and the one that cannot pass by accident.
 ///
 /// A `redirect_if_blocked` that returned `true` unconditionally would satisfy
-/// the test above perfectly while sending every SSE stream — including Warp's
-/// own agent traffic, which is what these call sites actually carry — into a
-/// hole. Checking that an ordinary host is left alone is what makes the first
+/// the test above perfectly while sending every SSE stream into a hole.
+/// Checking that an un-listed host is left alone is what makes the first
 /// assertion mean anything.
+///
+/// **The host here used to be `app.warp.dev`, described as "Warp's own agent
+/// traffic, which is what these call sites actually carry".** True when
+/// written; `warp.dev` went on the first-party deny-list on 2026-09-04, so the
+/// example became one of the blocked cases and the test failed — correctly, and
+/// it is worth noting that this is the *only* way that policy change announced
+/// itself. `api.anthropic.com` replaces it because it is what the fork's agent
+/// traffic goes to now, which keeps the comment's original point intact rather
+/// than just picking any host that passes.
 #[test]
-fn an_ordinary_host_is_left_alone_on_the_eventsource_path() {
+fn an_unlisted_host_is_left_alone_on_the_eventsource_path() {
     let client = Client::new();
-    let mut builder = client.get("https://app.warp.dev/api/stream");
+    let mut builder = client.get("https://api.anthropic.com/v1/messages");
 
     assert!(
         !builder.redirect_if_blocked(),
@@ -131,5 +139,5 @@ fn an_ordinary_host_is_left_alone_on_the_eventsource_path() {
         .and_then(|builder| builder.build().ok())
         .map(|request| request.url().clone())
         .expect("the untouched request is buildable");
-    assert_eq!(url.as_str(), "https://app.warp.dev/api/stream");
+    assert_eq!(url.as_str(), "https://api.anthropic.com/v1/messages");
 }
