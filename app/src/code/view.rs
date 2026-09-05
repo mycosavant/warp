@@ -377,6 +377,11 @@ impl CodeView {
         ctx: &mut ViewContext<Self>,
     ) -> ViewHandle<LocalCodeEditorView> {
         let is_local = matches!(location, LocalOrRemotePath::Local(_));
+        // A routed WSL buffer is remote and still has a language server
+        // (`code::routed_lsp`), so it gets the footer and the references card;
+        // the selection-as-context target below stays local-only, because it
+        // spells the file relative to a terminal's local directory.
+        let has_lsp_path = crate::code::routed_lsp::lsp_path_for(&location, ctx).is_some();
         ctx.add_typed_action_view(|ctx| {
             let mut editor = LocalCodeEditorView::new_with_global_buffer(
                 location,
@@ -400,8 +405,8 @@ impl CodeView {
                 None,
                 ctx,
             );
-            if is_local {
-                if FeatureFlag::HoaCodeReview.is_enabled() {
+            if is_local || has_lsp_path {
+                if is_local && FeatureFlag::HoaCodeReview.is_enabled() {
                     editor = editor
                         .with_selection_as_context(Box::new(get_context_target_terminal_view));
                 }
