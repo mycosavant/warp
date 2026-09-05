@@ -1756,6 +1756,20 @@ T16 phase 2 the only way to tell was to read the app log for a
 from a missing log line, which is the shape of mistake this file already
 records twice.
 
+**The diff panel works in a WSL pane either way, and the "never finishes" this
+file's neighbours carried for the unrouted case did not reproduce.** Measured
+2026-09-05 on the Windows debug build: routed, the remote diff stack built for
+SSH drew this repo's changes within 8 s of their being made outside the pane;
+unrouted (`WARP_FORK_WSL_AUTO_CONNECT=0`), the same panel drew them over
+`\\wsl$` 3 s after the `cd`, with the full 6505-file walk done in 27 s. What
+the friction-log screenshot was showing is therefore not established. What
+did change (`099b26ea5`): the tree, search and the diff panel used to take a
+WSL pane as *unsupported* from `is_wsl()` alone, so a routed pane looked
+exactly like an unrouted one to all three; they now ask
+`session_filesystem`, a routed pane is a remote session with a server, and the
+unrouted fallback names the 9p read instead of blaming WSL. `.fork/docs/wsl.md`
+has the three screenshots by name.
+
 **And connect before you `cd`, or rather: it no longer matters, which is the
 point.** Until 2026-09-02 a pane that navigated into a repository and *then* ran
 `remote wsl connect` kept its Windows-side tree for the rest of its life —

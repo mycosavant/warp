@@ -16,6 +16,9 @@ grep -n "bootstrapped\|remote_server\|remote server\|Remote server\|wsl_transpor
 |---|---|---|
 | `run1-ea61116e1.log` | the arm alone | fired 3 s after launch, cold daemon started, handshake refused on a version mismatch, **staged symlink deleted** by upstream's repair |
 | `run2-1a42ecdb8.log` | plus the Oss version rule | routed in ~1 s; second tab routed in the same second; symlink intact |
+| (not kept; the log is recreated per launch) | `1a42ecdb8`, evening | both restored panes routed at launch; diff panel opened routed on this repo for the first time, works; `C:\dev\shots\diff-routed-{2,3}.png` |
+| (not kept) | `099b26ea5` | routed in the repo and in `/tmp`: diffs, then "Diffs only work for git repositories"; `diff-routed-4.png`, `diff-routed-norepo.png` |
+| `run5-099b26ea5-autoconnect-off.log` | `099b26ea5`, `WARP_FORK_WSL_AUTO_CONNECT=0` | zero connect attempts; **unrouted diff panel works on this repo**, 3 s to the panel and 27 s to the 6505-file walk (the `repo_metadata::local_model` line; this file is filtered with the pattern above plus `code_review|Code Review|repo_metadata|attaching`); in `/tmp` the WSL text, unwrapped -- `diff-unrouted.png`, `diff-unrouted-norepo.png` |
 
 One line in run 2 is not about WSL: `CloudObjects::Listener: Attempting to
 start websocket connection`, then `failed to connect ... missing

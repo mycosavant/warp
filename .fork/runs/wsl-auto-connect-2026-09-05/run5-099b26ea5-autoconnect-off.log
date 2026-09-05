@@ -1,0 +1,17 @@
+12:2026-09-05T17:15:06Z [INFO] [warp::server::cloud_objects::listener] Attempting to start websocket connection in CloudObjects::Listener
+58:2026-09-05T17:15:06Z [WARN] [warp::server::cloud_objects::listener] CloudObjects::Listener: websocket connection failed to connect or finished with an error; trying again: missing authentication credentials
+148:2026-09-05T17:15:10Z [INFO] [warp::terminal::model::session] Shell is bootstrapped with session_id SessionId(7119429485034318194)
+154:2026-09-05T17:15:10Z [INFO] [warp::terminal::model::session] Shell is bootstrapped with session_id SessionId(7453318349999057354)
+171:2026-09-05T17:15:39Z [INFO] [warp::server::cloud_objects::listener] Attempting to start websocket connection in CloudObjects::Listener
+172:2026-09-05T17:15:39Z [WARN] [warp::server::cloud_objects::listener] CloudObjects::Listener: websocket connection failed to connect or finished with an error; trying again: missing authentication credentials
+173:2026-09-05T17:16:08Z [INFO] [warp::server::cloud_objects::listener] Attempting to start websocket connection in CloudObjects::Listener
+174:2026-09-05T17:16:08Z [WARN] [warp::server::cloud_objects::listener] CloudObjects::Listener: websocket connection failed to connect or finished with an error; trying again: missing authentication credentials
+175:2026-09-05T17:16:46Z [INFO] [warp::server::cloud_objects::listener] Attempting to start websocket connection in CloudObjects::Listener
+176:2026-09-05T17:16:46Z [WARN] [warp::server::cloud_objects::listener] CloudObjects::Listener: websocket connection failed to connect or finished with an error; trying again: missing authentication credentials
+177:2026-09-05T17:17:15Z [INFO] [warp::server::cloud_objects::listener] Attempting to start websocket connection in CloudObjects::Listener
+178:2026-09-05T17:17:15Z [WARN] [warp::server::cloud_objects::listener] CloudObjects::Listener: websocket connection failed to connect or finished with an error; trying again: missing authentication credentials
+179:2026-09-05T17:17:42Z [INFO] [warp::server::cloud_objects::listener] Attempting to start websocket connection in CloudObjects::Listener
+180:2026-09-05T17:17:42Z [ERROR] [errors::report_error] CloudObjects::Listener websocket connection failed: missing authentication credentials
+189:2026-09-05T17:18:46Z [INFO] [warp::code_review::code_review_view] Code Review Panel: Setting state to loading after receiving 'loading' message.
+199:2026-09-05T17:18:49Z [INFO] [warp::code_review::code_review_view] Code Review: Set available_branches with 4 branches
+201:2026-09-05T17:19:13Z [INFO] [repo_metadata::local_model] Successfully indexed repository: \\wsl$\ubuntu\home\effatha\git\warp with 6505 files

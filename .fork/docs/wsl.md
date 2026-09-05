@@ -1,6 +1,6 @@
 # WSL, as a remote server
 
-**As of 2026-09-05, evening.** This page is the current state of one surface.
+**As of 2026-09-05, evening, second pass.** This page is the current state of one surface.
 It is rewritten in place when the state changes; the history is in `git log`
 and in the tickets it cites (T6, T16, T17, T18, T20.1). Where a row says
 *measured*, there is a date and a ticket; where it says *unmeasured* or *read*,
@@ -41,7 +41,7 @@ is what a pane gets when that connect failed, when
 | open a file in the editor | **inside the distribution** (`OpenBuffer`) | 9p, works | measured 2026-09-02, T16 phase 2 |
 | global search | **inside the distribution** (`ripgrep_search`) | 9p, ~9 s where `C:` takes 0.1 s | measured 2026-09-02, T16 phase 2 |
 | git branch and dirty chip | inside the distribution | through `wsl.exe` | measured, T6 and T16 |
-| **diff panel** | **unmeasured.** The remote diff stack exists and was built for SSH; nobody has opened it on a WSL host | 9p. Works on a small repo (T6.1). On this repo the panel sits on *"Diffs don't currently work in WSL"* because repository detection never finishes | read 2026-09-05, see below |
+| diff panel | **inside the distribution** (`RemoteDiffStateModel` over `GetDiffState`). Opened on this repo: header names the distribution, a clean tree says "No open changes", two changes made outside the pane appeared with their hunks within 8 s | 9p, and on this repo it **works**: panel 3 s after the `cd`, the full index (6505 files) 27 s. The "never finishes" this row carried was not reproduced. The no-repository fallback, reached only in a directory that is not one, names the 9p read since `099b26ea5` | measured 2026-09-05, both columns, below |
 | **editor language servers** | **absent by construction.** A routed buffer is `Remote`, the editor's LSP path takes local paths only, and the protocol has no LSP messages | the server is spawned **on Windows** against a `\\wsl$` path: needs Windows-installed servers, reads the crate over 9p | read 2026-09-05, see below |
 | agent panel | the agent starts inside the distribution | same | measured 2026-09-02, T18 |
 | the agent's own LSP tool | inside the distribution, the agent's own server | same | measured 2026-09-02, T17 |
@@ -53,41 +53,87 @@ is routed only routed after someone connected, and the product profile
 connected nothing. See "Connecting, as built" below for what the first run of
 the automatic connect found, which was not the thing it was built to find.
 
-## Why the diff panel says what it says
+## The diff panel, routed and not
 
-The message is a fallback, and it names the wrong cause.
+**Routed, it works, and nothing had to be built.** Measured 2026-09-05 on the
+debug build `1a42ecdb8`, scratch profile, this repository. Both panes
+restored at launch routed before the first prompt; `cd` into the repo and
+`warpctrl surface code-review open`, and four seconds later the panel's
+header read `WSL: Ubuntu:/home/effatha/git/warp` over "No open changes" for a
+clean tree. Two edits made from a WSL shell outside Warp -- a line appended to
+a tracked file and a new untracked file -- appeared in the panel within eight
+seconds with their hunks and a "93 unmodified lines" fold, with no command
+typed in the pane: the daemon's watcher saw them. The tab's own chip went to
+`+3 -0` in the same interval. The remote diff stack was written for SSH and
+had never been opened against a WSL host; it needed no change. The
+screenshots are `C:\dev\shots\diff-routed-{2,3}.png`.
 
-What decides whether a diff shows is whether a repository has been **detected**
-for the pane's directory. Detection publishes `RepositoriesChanged`; the right
-panel picks a path from it and builds a code review view for that path
-(`app/src/workspace/view/right_panel.rs:581`). A `Remote` path builds
-`RemoteDiffStateModel` over the server; a `Local` one builds
-`LocalDiffStateModel` on this machine (`app/src/code_review/diff_state/mod.rs:454-476`).
+**Not routed, on this repo, it also works -- which this page said it did
+not.** Measured 2026-09-05 on `099b26ea5`, same profile, launched with
+`WARP_FORK_WSL_AUTO_CONNECT=0` (zero `attaching a remote server` lines in the
+log, `session inspect` → `local`). `cd` into the repo at 17:18:46; the panel
+reported `loading` in the same second, had the branch list at 17:18:49, and
+drew both changes over `\\wsl$\ubuntu\home\effatha\git\warp` with the same
+hunks as the routed run. `repo_metadata::local_model` finished the full walk
+at 17:19:13: **6505 files in 27 s**, about 4 ms a file, not the 20 ms an
+entry T16 measured for the tree. So the friction #1 screenshot -- the fallback
+sitting on this repo in the product instance -- was not reproduced here, and
+its cause is not established; the sentence this page carried, that
+"repository detection never finishes" on this repo, was an inference from
+T16's tree measurement and is retracted. What the unrouted column costs on
+this repo is a 27 s walk and the Windows-side LSP hint at the foot of the
+panel (*"Language support is not currently enabled. Enable rust-analyzer"*),
+which is the 9p editor path the next section describes.
 
-When nothing has been detected, the view has no repo and renders
-`render_no_repo_for_env`. That reads `session.is_wsl()` and, if true, prints
-`WSL_TEXT` (`app/src/code_review/code_review_view.rs:2884` and `:270`). The
-left panel does the same at `app/src/workspace/view.rs:17695`. Neither asks
-whether a server is attached, and neither can reach the `RemoteSession` arm:
-`is_remote` comes from `Session::is_local`, which reads `session_type()`, and a
-WSL session's type is `Local` (`app/src/terminal/model/session.rs:1389`,
-`session/filesystem.rs` explains why).
+**The message, when it is reached, used to name the wrong cause and now
+names the real one.** What decides whether a diff shows is whether a
+repository has been **detected** for the pane's directory. Detection publishes
+`RepositoriesChanged`; the right panel picks a path from it and builds a
+code review view for that path (`app/src/workspace/view/right_panel.rs`).
+A `Remote` path builds `RemoteDiffStateModel` over the server; a `Local` one
+builds `LocalDiffStateModel` on this machine
+(`app/src/code_review/diff_state/mod.rs:454-476`).
 
-So in a not-routed pane on a large repository the sequence is: Windows-side
-detection starts walking the repo over 9p at about 20 ms per entry (T16's
-measurement), the panel has no repo for the duration, and the fallback text
-blames WSL. The honest text would be *"still looking for a repository"*, and on
-this repo it would stay up for an hour.
+When nothing has been detected the view draws a fallback, and until
+`099b26ea5` three panels chose it from `session.is_wsl()` alone: the diff
+panel (`code_review_view::session_env`), the right panel's own copy of that
+match, and the project explorer through the enablement `workspace/view.rs`
+computes. A WSL session's type is `Local` (`session/filesystem.rs` says why),
+so `is_remote` was never true for one, and a routed pane looked exactly like
+an unrouted one to all three. In an unrouted pane on this repo the sequence
+was: Windows-side detection starts walking the repo over 9p at about 20 ms an
+entry (T16), the panel has no repository for the duration, and the text
+blames WSL.
 
-In a routed pane the repo should arrive as `Remote` and the panel should build
-the remote model. **That has not been run on a WSL host.** T16's phase-2 table
-measured the tree, the buffer, search and the git chip; the code review panel is
-not in it. The daemon side exists (`app/src/remote_server/diff_state_tracker.rs`,
-`crates/remote_server/proto/diff_state.proto`, `GetDiffState` at
-`remote_server.proto:67`), so the expectation is that it works or fails small.
+Now `CodingPanelEnablementState::from_session_env_with_wsl_routing` takes one
+more fact, `session_filesystem(..).host().is_some()`, and a routed WSL pane is
+`RemoteSession { has_remote_server: true }`: the explorer shows its loading
+state until the daemon's metadata lands, search runs through the daemon, and
+the diff panel with no repository says "Diffs only work for git
+repositories" -- the daemon ran detection, nothing arrived, so the directory
+is not one. That last text also replaces "Diffs only work for local
+workspaces" for an SSH session with a server, which was wrong for the same
+reason. An unrouted WSL pane keeps the `UnsupportedSession` arm, because its
+9p path still works on a small repo and slow is not broken; its text is now
+*"This WSL pane has no Warp server attached, so its repository is read from
+Windows over 9p and can take minutes to detect. Connect one from the command
+palette."* The explorer's says the same of its listing. The rule is pure and
+has four tests, one of which walks every input combination to show upstream's
+answer is unchanged whenever nothing is routed.
+
+Measured on the Windows debug build the same evening, all three arms, in
+`C:\dev\shots\diff-*.png`: routed in the repo, the diffs (`diff-routed-4`);
+routed in `/tmp`, *"Diffs only work for git repositories"* with no button
+(`diff-routed-norepo`); unrouted in `/tmp`, the WSL text
+(`diff-unrouted-norepo`). The last one drew as a single line past the panel's
+edge on its first run and took the icon and title with it -- upstream's
+messages were each one short line and a plain `Text` never had to wrap --
+fixed in `6c9f68bf5` with the explorer's `FormattedTextElement`-in-a-
+`Shrinkable` shape and re-measured (`diff-unrouted-norepo-wrapped`).
 
 Check first, before theorising: `warpctrl session inspect` on the pane. If it
-says `local`, the pane was never connected and the screenshot is the 9p column.
+says `local`, the pane was never connected and what you are looking at is the
+9p column.
 
 ## Why the editor has no language server in a routed pane
 
@@ -237,12 +283,10 @@ into it; the release binary ignores the variable.
    is the log and `session inspect` -- and that waits for the friction log to
    ask.
 
-2. **Open the diff panel on a routed pane and fix what is found.** Then replace
-   the two `is_wsl()` gates with `session_filesystem` so the fallback says the
-   true cause: `Host` → loading, `Unreachable` → remote without a server,
-   `Local` → not a repository. If `code_review_view.rs` starts reading
-   `session_type()`, `every_file_that_reads_session_type_has_been_classified`
-   will ask for a reason; give it one.
+2. **Open the diff panel on a routed pane and fix what is found.** Done,
+   `099b26ea5`, above. Nothing was found on the routed side; what was fixed
+   was the fallback, and it turned out to be three sites reading one bool,
+   not two.
 
 3. **Language servers for routed buffers.** Two shapes, and the cheaper one
    should be measured before the expensive one is designed.
@@ -274,7 +318,8 @@ into it; the release binary ignores the variable.
 | the version rule that deleted the symlink, and its Oss case | `crates/remote_server/src/manager.rs` (`version_is_compatible`) |
 | the palette action | `app/src/terminal/view/init.rs:1213`, handled at `terminal/view.rs:27799` |
 | `warpctrl remote wsl connect` / `list` | `app/src/local_control/handlers/remote_wsl.rs` |
-| the diff panel's fallback and its remote stack | `app/src/code_review/code_review_view.rs:2870-2935`, `code_review/diff_state/{mod,remote}.rs`, `app/src/remote_server/diff_state_tracker.rs` |
+| the panels' enablement, with the routed-WSL arm | `app/src/coding_panel_enablement_state.rs` (`from_session_env_with_wsl_routing`), computed in `app/src/workspace/view.rs` (grep `wsl_routed`) and `code_review_view::session_env` |
+| the diff panel's fallback and its remote stack | `code_review_view::render_no_repo_for_enablement`, `code_review/diff_state/{mod,remote}.rs`, `app/src/remote_server/diff_state_tracker.rs` |
 | the editor's LSP attach | `app/src/code/local_code_editor.rs:940`, `code/global_buffer_model.rs:1400` |
 | the protocol | `crates/remote_server/proto/remote_server.proto`, `diff_state.proto` |
 | OSC 52 | `crates/warp_terminal/src/model/grid/ansi_handler.rs:1166`, `app/src/terminal/view.rs:12071` |
@@ -282,14 +327,16 @@ into it; the release binary ignores the variable.
 
 ## Open, as of this date
 
-- Whether the pane in the 2026-09-05 screenshot was routed. Run 1's *"no
-  daemon running"* says the product instance had never started a daemon, so
-  no. Moot for panes opened in a build at or after `ea61116e1`.
-- `RemoteDiffStateModel` against a WSL host: never opened.
-- Global search's `UnsupportedSession` arm is a hard block
-  (`workspace/view/global_search/view.rs:366`), the left panel sets that state
-  for every WSL pane, and T16 measured routed search working. Those three
-  facts have not been reconciled.
+- What the friction #1 screenshot was actually showing. The unrouted panel
+  works on this repo on `099b26ea5` (27 s walk); the product instance that
+  day sat on the fallback, and nothing here says why. Candidates, all
+  unmeasured: the outline/indexing walk running concurrently, or a
+  detection that had failed rather than one still running.
+- Global search's `UnsupportedSession` arm: read again 2026-09-05, it is not
+  a hard block. `blocker()` returns `NoSearchableRoots` only when the pane
+  gave no directory, and its own doc says the state is misnamed for search.
+  A routed pane now reaches the `RemoteSession` arm instead, which blocks
+  nothing. Reconciled by reading; T16's routed-search measurement stands.
 - The default of `terminal.osc52_clipboard_access`.
 - For the cheap LSP shape: whether a Linux `rust-analyzer` accepts the URIs a
   Windows-side client sends, and what `crates/lsp` does with a root it cannot
