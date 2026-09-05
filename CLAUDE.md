@@ -365,7 +365,11 @@ last cascade; the docs-only commit after it is the second row.
 | build after | crates compiled | wall time |
 |---|---|---|
 | a `warp_core` change (`e8fb118ee`) | 53 | 6m57s |
-| a docs-only commit | SECOND_ROW |
+| a docs-only commit (`c56fc22de`) | **0** | **0.56s** |
+
+The second row is the whole argument: `--version` answered the new sha
+from a binary whose timestamp had not moved, because nothing it was built
+from had changed. Under the stamp it would have been 55 crates again.
 
 **The bigger one was underneath it, and it was live.**
 `generate_multi_agent_output` intercepts for the ACP and local agents *only when
