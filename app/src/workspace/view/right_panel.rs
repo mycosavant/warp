@@ -35,6 +35,7 @@ use crate::code_review::code_review_view::{
 };
 use crate::code_review::diff_state::DiffStateModel;
 use crate::code_review::telemetry_event::CodeReviewContextDestination;
+use crate::coding_panel_enablement_state::CodingPanelEnablementState;
 use crate::drive::panel::{MAX_SIDEBAR_WIDTH_RATIO, MIN_SIDEBAR_WIDTH};
 use crate::pane_group::pane::view::header::PANE_HEADER_HEIGHT;
 use crate::pane_group::pane::view::header::components::HEADER_EDGE_PADDING;
@@ -186,12 +187,6 @@ struct CodeReviewState {
     selected_repo_path: Option<LocalOrRemotePath>,
     /// Avoid showing the jump-to-repo button if the focused repo has not changed
     did_focused_repo_change: bool,
-}
-
-#[cfg(feature = "local_fs")]
-struct CodeReviewSessionEnv {
-    is_remote: bool,
-    is_wsl: bool,
 }
 
 /// Resolve the repo-switcher dropdown's text color from the current theme.
@@ -433,7 +428,12 @@ pub struct RightPanelView {
     maximize_button: ViewHandle<ActionButton>,
     code_review_state: Option<CodeReviewState>,
     #[cfg(feature = "local_fs")]
-    code_review_session_env: Option<CodeReviewSessionEnv>,
+    /// The active session's enablement, as `workspace/view.rs` last computed
+    /// it; drawn only while no repository is selected. Used to be two bools
+    /// (`is_remote`, `is_wsl`) with a copy of `CodeReviewView`'s match over
+    /// them, and the copy could not tell a routed WSL pane from an unrouted
+    /// one.
+    code_review_session_env: Option<CodingPanelEnablementState>,
     is_agent_management_view_open: bool,
     panel_position: super::PanelPosition,
 }
@@ -543,11 +543,10 @@ impl RightPanelView {
     #[cfg(feature = "local_fs")]
     pub fn update_session_env(
         &mut self,
-        is_remote: bool,
-        is_wsl: bool,
+        enablement: CodingPanelEnablementState,
         ctx: &mut ViewContext<Self>,
     ) {
-        self.code_review_session_env = Some(CodeReviewSessionEnv { is_remote, is_wsl });
+        self.code_review_session_env = Some(enablement);
         ctx.notify();
     }
 
@@ -881,24 +880,11 @@ impl RightPanelView {
             let simple_header = self.render_simple_header(close_button);
 
             #[cfg(feature = "local_fs")]
-            let no_repo_body = {
-                let open_repo_button =
-                    || Some(ChildView::new(&self.open_repository_button).finish());
-                if let Some(env) = &self.code_review_session_env {
-                    if env.is_remote {
-                        // No "Open repository" CTA when the session is remote — the
-                        // button navigates to a local folder, which is not meaningful
-                        // in a remote session.
-                        CodeReviewView::render_remote_state(appearance, None)
-                    } else if env.is_wsl {
-                        CodeReviewView::render_wsl_state(appearance, open_repo_button())
-                    } else {
-                        CodeReviewView::render_not_repo_state(appearance, open_repo_button())
-                    }
-                } else {
-                    CodeReviewView::render_not_repo_state(appearance, open_repo_button())
-                }
-            };
+            let no_repo_body = CodeReviewView::render_no_repo_for_enablement(
+                appearance,
+                self.code_review_session_env,
+                Some(ChildView::new(&self.open_repository_button).finish()),
+            );
 
             #[cfg(not(feature = "local_fs"))]
             let no_repo_body = CodeReviewView::render_not_repo_state(appearance, None);

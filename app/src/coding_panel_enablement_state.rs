@@ -38,3 +38,41 @@ impl CodingPanelEnablementState {
         }
     }
 }
+
+impl CodingPanelEnablementState {
+    /// `from_session_env` with the one fact the fork's WSL routing adds.
+    ///
+    /// A WSL pane is `SessionType::Local` (`session/filesystem.rs` says why)
+    /// and upstream reads that as *unsupported*: the tree, search and the
+    /// diff panel all take the `is_wsl` bool and draw a "doesn't work in WSL"
+    /// fallback. Since T16 a WSL pane can have Warp's remote-development
+    /// server attached inside its distribution, and then it is exactly what
+    /// upstream calls a remote session with a server: repo metadata arrives
+    /// from the daemon, and the panels should wait for it rather than
+    /// declare the pane unsupported. `wsl_routed` is
+    /// `session_filesystem(..).host().is_some()` for a WSL session.
+    ///
+    /// An unrouted WSL pane keeps the `UnsupportedSession` arm on purpose.
+    /// Its files are still read from Windows over 9p, which is slow rather
+    /// than broken; what changed for it is only the fallback text, which now
+    /// names that.
+    pub(crate) fn from_session_env_with_wsl_routing(
+        is_enabled: bool,
+        is_remote: bool,
+        is_wsl: bool,
+        has_remote_server: bool,
+        wsl_routed: bool,
+    ) -> Self {
+        let wsl_routed = is_wsl && wsl_routed;
+        Self::from_session_env(
+            is_enabled,
+            is_remote || wsl_routed,
+            is_wsl && !wsl_routed,
+            has_remote_server || wsl_routed,
+        )
+    }
+}
+
+#[cfg(test)]
+#[path = "coding_panel_enablement_state_tests.rs"]
+mod tests;

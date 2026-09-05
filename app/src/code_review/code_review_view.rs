@@ -267,7 +267,14 @@ const COMMENT_EDITOR_SCROLL_BUFFER: f32 = 200.0;
 pub const CODE_REVIEW_TOOLTIP_TEXT: &str = "View changes";
 const REMOTE_TEXT: &str = "Diffs only work for local workspaces.";
 const DISABLED_TEXT: &str = "Diffs only work for git repositories.";
-const WSL_TEXT: &str = "Diffs don't currently work in WSL.";
+// Upstream's text was "Diffs don't currently work in WSL." It fired in every
+// WSL pane with no repository selected, including the one where detection was
+// still walking the repo from Windows over 9p at ~20 ms an entry (T16) -- so
+// it blamed WSL for a wait, and it kept firing after the fork gave a WSL pane
+// a server (the routed pane no longer reaches this arm; see
+// `CodingPanelEnablementState::from_session_env_with_wsl_routing`). What is
+// left of the arm is the unrouted pane, and this names its cause.
+const WSL_TEXT: &str = "This WSL pane has no Warp server attached, so its repository is read from Windows over 9p and can take minutes to detect. Connect one from the command palette.";
 
 pub fn get_discard_button_disabled_tooltip(git_operation_blocked: bool) -> String {
     if git_operation_blocked {
@@ -2882,16 +2889,17 @@ impl CodeReviewView {
             let is_local = terminal.active_session_is_local(ctx);
             let is_remote = matches!(is_local, Some(false));
             let is_wsl = session.as_ref().map(|s| s.is_wsl()).unwrap_or(false);
+            // Where the files are, not what the shell is: a routed WSL pane
+            // answers `Host` here while `is_wsl` stays true and `is_local`
+            // stays `Some(true)`. Same question `workspace/view.rs` asks when
+            // it sets the panels' enablement, so the two agree.
+            let wsl_routed = terminal
+                .active_session_filesystem(ctx)
+                .is_some_and(|filesystem| filesystem.host().is_some());
 
-            let enablement = if is_remote {
-                CodingPanelEnablementState::RemoteSession {
-                    has_remote_server: false,
-                }
-            } else if is_wsl {
-                CodingPanelEnablementState::UnsupportedSession
-            } else {
-                CodingPanelEnablementState::Enabled
-            };
+            let enablement = CodingPanelEnablementState::from_session_env_with_wsl_routing(
+                true, is_remote, is_wsl, false, wsl_routed,
+            );
 
             Some(GitSessionState { enablement })
         })
@@ -2912,26 +2920,46 @@ impl CodeReviewView {
         app: &AppContext,
         appearance: &Appearance,
     ) -> Box<dyn Element> {
-        let open_repo_button = || Some(ChildView::new(&self.open_repository_button).finish());
-        match self.session_env(app) {
-            Some(GitSessionState {
-                enablement: CodingPanelEnablementState::RemoteSession { .. },
-            }) => {
-                // No "Open repository" CTA when the session is remote — the
-                // button navigates to a local folder, which is not meaningful
-                // in a remote session.
+        let open_repo_button = Some(ChildView::new(&self.open_repository_button).finish());
+        let enablement = self.session_env(app).map(|env| env.enablement);
+        Self::render_no_repo_for_enablement(appearance, enablement, open_repo_button)
+    }
+
+    /// The no-repository body, chosen from the session's enablement. One
+    /// function because the right panel draws the same body before a view
+    /// exists (`right_panel.rs`) and the two used to disagree.
+    ///
+    /// Two arms differ from upstream. A remote session *with* a server is not
+    /// "diffs only work for local workspaces": the daemon runs repository
+    /// detection and the remote diff stack renders what it finds (measured
+    /// 2026-09-05 on a WSL host, `.fork/docs/wsl.md`), so no repository
+    /// having arrived means the directory is not one, and the text says
+    /// that. And the WSL arm, which only an *unrouted* WSL pane reaches now,
+    /// names the 9p read instead of blaming WSL. The "Open repository" button
+    /// stays off for any remote session; it navigates to a local folder.
+    pub(crate) fn render_no_repo_for_enablement(
+        appearance: &Appearance,
+        enablement: Option<CodingPanelEnablementState>,
+        open_repo_button: Option<Box<dyn Element>>,
+    ) -> Box<dyn Element> {
+        match enablement {
+            Some(CodingPanelEnablementState::RemoteSession {
+                has_remote_server: true,
+            }) if FeatureFlag::RemoteCodeReview.is_enabled() => {
+                Self::render_not_repo_state(appearance, None)
+            }
+            Some(CodingPanelEnablementState::RemoteSession { .. }) => {
                 Self::render_remote_state(appearance, None)
             }
-            Some(GitSessionState {
-                enablement: CodingPanelEnablementState::UnsupportedSession,
-            }) => Self::render_wsl_state(appearance, open_repo_button()),
+            Some(CodingPanelEnablementState::UnsupportedSession) => {
+                Self::render_wsl_state(appearance, open_repo_button)
+            }
             None
-            | Some(GitSessionState {
-                enablement:
-                    CodingPanelEnablementState::Enabled
-                    | CodingPanelEnablementState::PendingRemoteSession
-                    | CodingPanelEnablementState::Disabled,
-            }) => Self::render_not_repo_state(appearance, open_repo_button()),
+            | Some(
+                CodingPanelEnablementState::Enabled
+                | CodingPanelEnablementState::PendingRemoteSession
+                | CodingPanelEnablementState::Disabled,
+            ) => Self::render_not_repo_state(appearance, open_repo_button),
         }
     }
 

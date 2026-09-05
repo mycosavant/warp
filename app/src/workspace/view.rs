@@ -17651,6 +17651,7 @@ impl Workspace {
                     path_if_local,
                     is_local,
                     is_wsl_session,
+                    wsl_routed,
                     session_id,
                     has_pending_ssh,
                 ) = terminal_handle.read(ctx, |terminal, ctx| {
@@ -17661,6 +17662,14 @@ impl Workspace {
                     let path_if_local = terminal.active_session_path_if_local(ctx);
                     let is_local = terminal.active_session_is_local(ctx);
                     let is_wsl_session = session.as_ref().map(|s| s.is_wsl()).unwrap_or(false);
+                    // A WSL pane with Warp's server attached inside its
+                    // distribution (T16, `.fork/docs/wsl.md`). `is_local`
+                    // still says `Some(true)` for it, because that reads the
+                    // bootstrap session type; this reads where the files are.
+                    let wsl_routed = is_wsl_session
+                        && terminal
+                            .active_session_filesystem(ctx)
+                            .is_some_and(|filesystem| filesystem.host().is_some());
                     let has_pending_ssh = terminal.has_pending_ssh_command();
                     (
                         session,
@@ -17668,6 +17677,7 @@ impl Workspace {
                         path_if_local,
                         is_local,
                         is_wsl_session,
+                        wsl_routed,
                         active_session_id,
                         has_pending_ssh,
                     )
@@ -17704,11 +17714,17 @@ impl Workspace {
                         RemoteServerManager::as_ref(ctx).is_session_potentially_active(sid)
                     });
 
-                let enablement = CodingPanelEnablementState::from_session_env(
+                // A routed WSL pane is the `RemoteSession { has_remote_server:
+                // true }` case in everything but its session type: the tree
+                // and the diff panel wait for the daemon's repo metadata, and
+                // search runs through it. Unrouted, it stays `Unsupported`,
+                // whose fallback text now says why.
+                let enablement = CodingPanelEnablementState::from_session_env_with_wsl_routing(
                     file_tree_and_global_search_are_enabled,
                     is_remote,
                     is_unsupported_session,
                     has_remote_server,
+                    wsl_routed,
                 );
 
                 // When an SSH command is running (pending host set + block
@@ -17731,7 +17747,7 @@ impl Workspace {
                 #[cfg(feature = "local_fs")]
                 {
                     self.right_panel_view.update(ctx, |right_panel, ctx| {
-                        right_panel.update_session_env(is_remote, is_wsl_session, ctx);
+                        right_panel.update_session_env(enablement, ctx);
                     });
 
                     // Code review panel setup is handled by the RepositoriesChanged
@@ -17755,7 +17771,7 @@ impl Workspace {
                 #[cfg(feature = "local_fs")]
                 {
                     self.right_panel_view.update(ctx, |right_panel, ctx| {
-                        right_panel.update_session_env(false, false, ctx);
+                        right_panel.update_session_env(enablement, ctx);
                     });
                 }
             }

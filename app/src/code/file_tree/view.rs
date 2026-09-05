@@ -68,7 +68,12 @@ use crate::settings::{CodeSettings, CodeSettingsChangedEvent};
 
 const REMOTE_TEXT: &str = "The Project Explorer requires access to your local workspace, which isn’t supported in remote sessions.";
 const DISABLED_TEXT: &str = "The Project Explorer requires access to your local workspace. Open a new session or navigate to an active session to view.";
-const WSL_TEXT: &str = "The Project Explorer doesn't currently work in WSL.";
+// Reached by an *unrouted* WSL pane only: one with Warp's server attached
+// inside its distribution is a remote session with a server from here on
+// (`CodingPanelEnablementState::from_session_env_with_wsl_routing`) and shows
+// the loading state until the daemon's metadata lands. Upstream's text blamed
+// WSL for what is a 9p walk from Windows.
+const WSL_TEXT: &str = "This WSL pane has no Warp server attached, so its files are listed from Windows over 9p and can take minutes on a large tree. Connect one from the command palette.";
 
 /// Stable identifier for an item in the file tree.
 /// Includes both the root directory and the index within that root's flattened list.
