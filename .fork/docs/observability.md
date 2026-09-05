@@ -205,7 +205,17 @@ the ACP shim already gave opposite answers to one question in a week. The rules:
 (`warp` | `harness`) beside `who`, because the person's prompt is in both files
 and the viewer shows that rather than deduplicating it. `harness_lines_skipped`
 in the header counts the bookkeeping kinds rendered as nothing. `usage` is the
-last harness row. Every output format is JSON until phase 2.
+last harness row.
+
+**Phase 2, the same night.** `trace_render.rs`: text with the gutter for
+`--output-format pretty` (the default, as for every other `warpctrl` verb;
+`ndjson` keeps phase 1's rows) and `--html FILE` for the page. A call is one
+item drawn once at its earliest stamp with both files' timestamps beside it,
+which is how the clock finding below is shown rather than hidden. The page
+loads nothing, runs nothing, and escapes everything at generation time; a test
+feeds it a prompt containing `<script>` and asserts on the entity. Written
+owner-only, because it holds the whole conversation. The text form drops Warp's
+copy of the prompt when the harness has the same text; the JSON keeps both.
 
 **The two files are stamped by two clocks, and "order by timestamp" above was
 written as if they shared one.** Found on the first live trace of the phase 0
@@ -245,8 +255,9 @@ clocks disagree around it.
    shapes for a compaction, a denial, a failed result and an unparseable line.
    Ten tests. The Windows read takes `--harness-dir` rather than `native_path`,
    because the verb has no session to ask; the caller owns reachability.
-2. **`--pretty` and `--html`.** The static page is the deliverable the frame
-   asked for.
+2. **Done 2026-09-05.** Text for the default output format, `--html FILE` for
+   the page; sixteen tests across the two modules. The page is the deliverable
+   the frame asked for, and it is a file.
 3. **Only if a friction log asks:** opencode's database, and a live view.
 
 ## Unverified, as of filing

@@ -18,6 +18,7 @@ mod mcp;
 mod output;
 mod selectors;
 mod trace;
+mod trace_render;
 use std::ffi::OsString;
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -843,8 +844,9 @@ pub enum AgentCommand {
     /// Reads two files and needs no running Warp. Not a catalog action: nothing
     /// is asked of an instance, so nothing is gated or paired. The harness's
     /// file is the record; Warp's log adds what it alone knows (what it
-    /// decided, which surface answered). Output is JSON, one row per line, with
-    /// a header row first. `.fork/docs/observability.md`.
+    /// decided, which surface answered). Text by default; `--output-format
+    /// ndjson` for one JSON row per line after a header row, `json` for one
+    /// object; `--html FILE` for a self-contained page. `.fork/docs/observability.md`.
     Trace(AgentTraceArgs),
 
     /// Spawn a child agent in a hidden pane.
@@ -978,6 +980,14 @@ pub struct AgentTraceArgs {
     /// The harness's session file itself. Outranks --harness-dir and the slug.
     #[arg(long = "harness-file", value_name = "FILE")]
     pub harness_file: Option<PathBuf>,
+
+    /// Also write the trace as a self-contained HTML page to this file.
+    ///
+    /// The page loads nothing and runs no script; open it in any browser. It
+    /// holds the whole conversation, prompts included, so it is written
+    /// owner-only where the filesystem has modes.
+    #[arg(long = "html", value_name = "FILE")]
+    pub html: Option<PathBuf>,
 }
 
 /// `warpctrl graph …` — run several agents in a declared order.

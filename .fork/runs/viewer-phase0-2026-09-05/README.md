@@ -50,6 +50,15 @@ one header row and 17 rows. It is where the clock skew was noticed: Warp's
 about five seconds apart, harness later, on both calls. The header reports
 it as `clock_offset_ms`. Read the rows by `call_id`, not by position.
 
+**Phase 2, the same night.** `trace.txt` is the default text form and
+`trace.html` the page, both from `--html`, on the same two files; the page
+was opened in a scratch-profile Brave on the Windows side and photographed
+as `C:\dev\shots\trace-phase2-brave.png`. The first live text render put the
+person's prompt *after* both tool calls: the renderer dropped Warp's copy of
+the prompt as a duplicate and kept the harness's, whose skewed clock stamps
+it seven seconds later. Reversed: Warp's copy is kept because it is in the
+right place, and a test now pins the prompt before the first call.
+
 Not measured here: the `local_agent` path live. Its join key was written by
 the same commit and is pinned by unit tests; the product profile runs the
 ACP agent, so this run exercises the ACP half.

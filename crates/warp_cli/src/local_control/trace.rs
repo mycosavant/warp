@@ -58,8 +58,10 @@
 //! session -- Warp's own agent, or a log written before T14.15 -- the trace is
 //! Warp's rows alone and the header says so.
 //!
-//! Text rendering (`--pretty`, `--html`) is phase 2; today every output format
-//! is JSON, one row per line or one array.
+//! The text and HTML forms (phase 2) are in `trace_render.rs`; the global
+//! `--output-format` picks text (`pretty`, the default) or the JSON rows
+//! (`ndjson` for lines, `json` for one object), and `--html FILE` writes the
+//! page beside whichever was printed.
 
 use std::collections::BTreeSet;
 use std::path::PathBuf;
@@ -226,17 +228,47 @@ pub(super) fn run(args: AgentTraceArgs, output_format: OutputFormat) -> Result<(
         harness.as_deref(),
         note,
     );
+    if let Some(path) = &args.html {
+        write_private(path, &super::trace_render::render_html(&trace)).map_err(|err| {
+            ControlError::new(
+                ErrorCode::InvalidParams,
+                format!("could not write {}: {err}", path.display()),
+            )
+        })?;
+    }
     match output_format {
         OutputFormat::Json => write_json(&trace),
-        // Text rendering is phase 2; until then pretty is the line form too.
-        OutputFormat::Ndjson | OutputFormat::Pretty | OutputFormat::Text => {
+        OutputFormat::Ndjson => {
             write_json_line(&trace.header)?;
             for row in &trace.rows {
                 write_json_line(row)?;
             }
             Ok(())
         }
+        OutputFormat::Pretty | OutputFormat::Text => {
+            print!("{}", super::trace_render::render_text(&trace));
+            if let Some(path) = &args.html {
+                println!("wrote {}", path.display());
+            }
+            Ok(())
+        }
     }
+}
+
+/// Writes the page owner-only from the first byte, the way the fork's
+/// transcript and event log are written: the mode goes on the `open`, not on
+/// a `chmod` after it, because the window between the two is exactly when the
+/// first line lands.
+fn write_private(path: &std::path::Path, contents: &str) -> std::io::Result<()> {
+    use std::io::Write as _;
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt as _;
+        options.mode(0o600);
+    }
+    options.open(path)?.write_all(contents.as_bytes())
 }
 
 /// Everything after the files are in hand, split out so a test can run the

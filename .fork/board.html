@@ -114,7 +114,7 @@
       <li><small>day 2</small>Measure egress on Windows, against the merged binary.</li>
       <li><small>day 3&ndash;4</small>Composer cancel path, test before fix.</li>
       <li><small>day 4</small>Hide the two cloud chips.</li>
-      <li><small>then</small>The viewer, phase 0 first. <em>Phases 0 and 1 done 2026-09-05; phase 2 next.</em></li>
+      <li><small>then</small>The viewer, phase 0 first. <em>All three phases done 2026-09-05.</em></li>
       <li><small>day 1 of living</small>WSL parity: connect automatically, then diffs, then LSP.</li>
     </ol>
   </section>
@@ -250,14 +250,14 @@
     </div>
   </article>
 
-  <article class="item" data-id="viewer" data-default="active">
+  <article class="item" data-id="viewer" data-default="done">
     <div class="rank">6</div>
     <div class="body">
       <div class="head">
         <h2>The viewer: one trace from the record the agent already keeps</h2>
         <button class="status" type="button" aria-label="cycle status">open</button>
       </div>
-      <div class="meta"><span>.fork/docs/observability.md</span><span>specified 2026-09-04</span><span>phase 0 done 2026-09-05, <code>7bb323cbc</code></span><span>phase 1 done 2026-09-05</span></div>
+      <div class="meta"><span>.fork/docs/observability.md</span><span>specified 2026-09-04</span><span>phase 0 done 2026-09-05, <code>7bb323cbc</code></span><span>phases 1 and 2 done 2026-09-05</span></div>
       <p>The observability target, reframed. The harness's own session file is the record: for run 2 it held the full input for all 59 calls where Warp's log truncated 14, and the two joined on the tool-call id Warp already writes. Warp adds only what no harness file has: what it decided, which surface answered, why a request was refused, and live state. The viewer merges the two on that id, orders by time, labels every line by author, and never writes. Compaction is a boundary row, so a session can always be viewed without being compacted, which was I21's whole ask.</p>
       <div class="split">
         <div>
@@ -272,7 +272,7 @@
           <h3>Phase 1, done 2026-09-05</h3>
           <ul>
             <li><code>warpctrl agent trace &lt;conversation&gt;</code>: JSON lines, a header row naming both files, four provenances, the join on <code>toolu_</code> ids. Reads files, needs no Warp, is not a catalog action. Ten tests against the phase 0 files kept unedited under <code>.fork/viewer/fixtures/</code>.</li>
-            <li>Next, phase 2: <code>--pretty</code>, then <code>--html</code> as a static file. The UI is a file.</li>
+            <li>Phase 2, the same night: text by default with the gutter, <code>--html FILE</code> for a page that loads nothing and runs no script. A call is one item with both files' clocks beside it. The UI is a file.</li>
             <li>No console route: a transcript on a paired phone is a posture question, and posture is frozen.</li>
           </ul>
         </div>
