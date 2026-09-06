@@ -1,0 +1,30 @@
+{
+  "action": "agent.read",
+  "ok": true,
+  "instance_id": "inst_86a0e0acb26e4a08be7c7923912ec638",
+  "conversation": {
+    "conversation_id": "b52ae5e9-01da-42fd-a701-be8b3f481ae1",
+    "title": "Say the single word ready and nothing else.",
+    "status": "success",
+    "is_busy": false,
+    "pane_id": "Pane Pane Terminal (10714)",
+    "tab_id": "10324",
+    "session_mode": "default"
+  },
+  "exchanges": [
+    {
+      "index": 0,
+      "input": "Say the single word ready and nothing else.",
+      "output": "`WARP_FORK_ACP_MODE` asked for the agent's `default` mode, which the agent describes as “Always ask before making changes”, and the agent accepted, so that is the mode this session is running under.\n\nThis turn began with the session in the agent's `auto` mode, which the agent describes as “Claude handles permission decisions”.\n[Warp] Warp is keeping a transcript of this conversation at /home/effatha/git/warp/.warp/transcripts/b52ae5e9-01da-42fd-a701-be8b3f481ae1.md and telling the agent it can search it. Nothing else is added to your prompts. Unset `WARP_FORK_TRANSCRIPT` to stop.\nready",
+      "is_complete": true
+    },
+    {
+      "index": 1,
+      "input": "Create the file /tmp/phone-1788725277.txt containing the single word hello. Use your Write tool. Say done when it exists.",
+      "output": "Wrote /tmp/phone-1788725277.txt\n\n/tmp/phone-1788725277.txt\n```\nhello\n```\nThe agent is waiting for permission: Write /tmp/phone-1788725277.txt\n\nAnswer yes with `warpctrl agent approve b46e3842-b73f-4147-912e-2d96ff765a06:0` or no with `warpctrl agent deny b46e3842-b73f-4147-912e-2d96ff765a06:0` — both take the `digest` that `warpctrl agent approvals` reports. A yes covers this one call and nothing after it. A paired device can answer too, though *yes* only travels there when WARP_FORK_REMOTE_APPROVE is set.\n\nIt says this acts on `/tmp/phone-1788725277.txt`.\n\nThis session runs in `/home/effatha/git/warp` — Warp chose that from the pane. The agent resolves its own permission rules from there, and Warp cannot see them.\nAnswered: yes, for this one call. Nothing after it is covered.\ndone",
+      "is_complete": true
+    }
+  ],
+  "exchange_count": 2,
+  "included_tool_results": false
+}

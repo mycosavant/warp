@@ -1,0 +1,2 @@
+2026-09-06T19:36:10Z [INFO] local-control wide listener started at 192.168.254.3:41234, serving TLS
+2026-09-06T19:36:10Z [INFO] local-control server started at http://127.0.0.1:51823/v1/control

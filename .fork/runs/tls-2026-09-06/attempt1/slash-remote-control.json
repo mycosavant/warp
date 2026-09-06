@@ -1,0 +1,7 @@
+{
+  "ok": false,
+  "error": {
+    "code": "invalid_params",
+    "message": "`remote-control` is not available in this build; `slash.list` reports what is"
+  }
+}

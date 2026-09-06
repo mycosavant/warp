@@ -1,0 +1,7 @@
+HTTP/1.1 200 OK
+content-type: application/x-x509-ca-cert
+content-disposition: attachment; filename="warp-console-ca.crt"
+cache-control: no-store
+content-length: 672
+date: Sun, 06 Sep 2026 19:34:12 GMT
+

@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#0e1116">
+<title>Warp — install the certificate</title>
+<!-- Served in the clear, on the wide listener, to any request that did not
+     start a TLS handshake (tls.rs). A constant: no script, no interpolation,
+     nothing secret. Its one job is to hand a phone the certificate authority
+     it needs before https:// at this address is a page with no warning. -->
+<style>
+  :root { color-scheme: dark; --bg:#0e1116; --panel:#161b22; --line:#21262d; --dim:#8b949e; --fg:#c9d1d9; --hi:#e6edf3; --ok:#3fb950; }
+  * { box-sizing: border-box; }
+  html, body { margin:0; }
+  body {
+    background: var(--bg); color: var(--fg);
+    font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    padding: calc(1rem + env(safe-area-inset-top)) calc(1rem + env(safe-area-inset-right)) calc(1rem + env(safe-area-inset-bottom)) calc(1rem + env(safe-area-inset-left));
+    max-width: 40rem; margin: 0 auto;
+  }
+  h1 { font-size: 1.1rem; color: var(--hi); margin: 0 0 .8rem; }
+  h2 { font-size: .9rem; color: var(--dim); text-transform: lowercase; margin: 1.4rem 0 .3rem; }
+  p { margin: 0 0 .6rem; }
+  ol { padding-left: 1.2rem; margin: 0 0 .6rem; }
+  li { margin: 0 0 .3rem; }
+  a.get { display: inline-block; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: .55rem .9rem; color: var(--ok); text-decoration: none; margin: .4rem 0 .8rem; }
+  code { color: var(--hi); }
+  .dim { color: var(--dim); }
+</style>
+</head>
+<body>
+<h1>warp console</h1>
+<p>This address speaks HTTPS with a certificate Warp minted itself, on the machine you scanned. Install its certificate authority once on this phone, and from then on the console opens with no warning and the browser lets it notify you.</p>
+<a class="get" href="/ca.crt" download="warp-console-ca.crt">get the certificate</a>
+
+<h2>android</h2>
+<ol>
+  <li>Tap the button; Chrome saves <code>warp-console-ca.crt</code> to Downloads.</li>
+  <li>Settings › Security &amp; privacy › More security settings › Encryption &amp; credentials › Install a certificate › CA certificate, then pick the file. The path varies a little by maker; searching Settings for <em>CA certificate</em> finds it.</li>
+  <li>Android warns that a CA lets its owner see your traffic. That is true, and the owner is the machine on your desk.</li>
+</ol>
+
+<h2>iphone and ipad</h2>
+<ol>
+  <li>Tap the button in Safari; iOS asks to download a configuration profile. Allow it.</li>
+  <li>Settings › General › VPN &amp; Device Management (or Profile Downloaded) › the profile › Install.</li>
+  <li>Settings › General › About › Certificate Trust Settings, and turn on full trust for the Warp fork console CA. Without this last step Safari still warns.</li>
+</ol>
+
+<h2>then</h2>
+<p>Open the same address with <code>https://</code> in front, or scan the code in the pane again. Nothing here is a login: what a phone may do is decided by the code it scans, and that code lives two minutes.</p>
+<p class="dim">This page is the whole of what this address answers without TLS. Everything else the console does is over HTTPS only.</p>
+</body>
+</html>

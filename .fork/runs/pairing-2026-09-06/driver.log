@@ -1,0 +1,38 @@
+[20:07:23] binary v0.fork.a09fd38f2 (2026-09-06 16:07)
+[20:07:23] instances before: 0
+[20:07:23] launch: warpdev.ps1 -Instrumented -Console -Bind 192.168.254.3:41234 (agent in default mode, so a Write asks)
+[20:07:30] instance: 1 record(s)
+[20:07:30] authority fetched in the clear: 1 certificate; same as the tls run's: yes
+[20:07:30] --- a conversation, the chip once: waiting
+[20:07:40] conversation C b52ae5e9-01da-42fd-a701-be8b3f481ae1
+CLICKED window(905,516) -> client(905,516) pid=30676
+[20:07:53] clipboard: https://192.168.254.3:41234/#<code>
+[20:07:53] --- the phone scans: redeem over TLS
+[20:07:53] redeem: device | expires_at: ABSENT (no clock) | confined: b52ae5e9-01da-42fd-a701-be8b3f481ae1
+[20:07:57] --- a prompt from the phone that makes the agent ask
+   OK  - {"action": "agent.prompt", "ok": true, "instance_id": "inst_86a0e0acb26e4a08be7c7923912ec638", "conv
+  approvals as the phone sees them: 1
+    b46e3842-b73f-4147-912e-2d96ff765a06:0 edit | can_approve True | conversation b52ae5e9-01da-42fd-a701-be8b3f481ae1
+[20:08:10] --- the phone says yes
+   OK  - {"action": "agent.approve", "ok": true, "instance_id": "inst_86a0e0acb26e4a08be7c7923912ec638", "app
+[20:08:16] C has 2 exchanges
+[20:08:16] file inside the distribution: 6 /tmp/phone-1788725277.txt -> hello
+[20:08:16] --- the record
+    20:07:40.128 session_start | via None | answered_by None | decision None | Say the single word ready and nothing else.
+    20:07:46.062 stop | via None | answered_by None | decision None | Say the single word ready and nothing else.
+    20:07:57.905 prompt_submit | via paired_device | answered_by None | decision None | Create the file /tmp/phone-1788725277.txt containi
+    20:08:07.932 permission_request | via None | answered_by None | decision None | approval b46e3842-b73f-4147-912e-2d96ff765a06:0 · 
+    20:08:10.830 permission_replied | via paired_device | answered_by control_plane | decision allowed | approval b46e3842-b73f-4147-912e-2d96ff765a06:0
+    20:08:12.869 stop | via None | answered_by None | decision None | Create the file /tmp/phone-1788725277.txt containi
+[20:08:16] trace lines mentioning the phone: 0
+[20:08:16] html trace mentions the phone: 
+[20:08:16] --- stop sharing from the desk: the phone is refused, the block goes
+CLICKED window(905,516) -> client(905,516) pid=30676
+   REFUSED unauthorized_local_client - local-control credential is invalid
+[20:08:21] --- a second conversation, the chip once, and two minutes: expired
+CLICKED window(905,516) -> client(905,516) pid=30676
+[20:08:34] waiting 125 s for the code to die unscanned
+[20:10:39] chip after the code died (should read /remote-control again): see state-expired.png
+[20:10:39] --- close
+[20:10:47] after close: 0 record(s)
+[20:10:47] done

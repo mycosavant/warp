@@ -725,11 +725,16 @@ refuses one action over, reporting the keystroke it sent rather than
 `approved: true` because *"a result claiming `approved: true` would assert an
 effect this process cannot observe"*. The result now carries
 `close: "requested"`, `cancellable: true` and a `verify` sentence naming
-`instance list` as the check. **Deliberately not claimed: why a close would be
-refused** — the mechanism has not been established by running it, and one
-candidate is ruled out (`CloseSessionConfirmationDialog` covers pane and tab
-closes; `OpenDialogSource` has no window arm), so naming a cause would be
-invented certainty.
+`instance list` as the check. **One mechanism for a refused close, measured
+2026-09-06**: Warp's own *Quit Warp? You have 1 process running* dialog. With
+a freshly split pane whose shell was still starting, `window close` returned
+`ok: true`, the dialog stood over the window
+(`.fork/runs/tls-2026-09-06/after-close-refused.png`), and `instance list`
+kept its record until a second `window close`. That is one cause, not the
+cause: `CloseSessionConfirmationDialog` covers pane and tab closes and
+`OpenDialogSource` has no window arm, so the earlier version of this
+sentence, which declined to name a mechanism, was right to; this one names
+the one that has been seen.
 
 **Whether a refusal costs the whole turn is a fact about the agent you named,
 not about the fork.** Measured 2026-08-31 with `acp probe`, the same prompt and
@@ -1598,11 +1603,19 @@ nothing about why until you know there was something to load.
 **What the pairing path does and does not defend — three corrections, audited
 2026-08-30.** Each was believed in this session before it was read:
 
-- **The control server is plaintext HTTP.** `pairing.rs:288` builds
-  `http://{origin}{path}#{secret}` and `discovery.rs:82` the same; there is no
-  TLS anywhere in the control plane. On a home LAN that is an accepted residual.
-  It is *not* survivable across the internet, and no amount of digest discipline
-  fixes it: the token and every approval payload are in the clear.
+- **The control server was plaintext HTTP until 2026-09-06.** `pairing.rs`
+  built `http://{origin}{path}#{secret}` and `discovery.rs:82` the same; there
+  was no TLS anywhere in the control plane, and on a home LAN that was an
+  accepted residual. **The wide listener speaks TLS now** (T19,
+  `app/src/local_control/tls.rs`): an authority Warp mints once under
+  `fork::state_dir()`, a server certificate per launch for the bind address,
+  and the same port answering plain HTTP with the authority at `/ca.crt` and
+  an install page, nothing else. The phone installs the authority once and
+  `https://<bind>` is a secure context with no warning. Loopback stays plain,
+  so `warpctrl` and the discovery record are untouched. What is still true:
+  the token and every approval payload are in the clear to a phone that never
+  installed the authority and tapped through the warning instead, and the
+  digest argument below is unchanged.
 - **`tool_digest.rs` contributes nothing to this threat model.** It is TOFU
   pinning of **MCP tool definitions** — it hashes what a server advertised at
   connect, diffs on the next connect, and *warns*; its own docs say

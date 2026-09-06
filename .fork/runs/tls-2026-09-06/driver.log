@@ -1,0 +1,36 @@
+[19:34:05] binary v0.fork.dd68ff0de (2026-09-06 15:28)
+[19:34:05] instances before: 0
+[19:34:05] launch: warpdev.ps1 -Console -Bind 192.168.254.3:41234, detached
+[19:34:09] instance: 1 record(s)
+[19:34:12] log: 0 listener lines; ; 
+[19:34:12] --- the clear half: http://192.168.254.3:41234 answers the certificate and an install page, nothing else
+[19:34:12]   /ca.crt: HTTP/1.1 200 OK; content-type: application/x-x509-ca-cert; 1 certificate(s)
+  authority: subject=CN = Warp fork console CA ed1cbed4, O = warp fork notBefore=Sep  5 19:30:24 2026 GMT notAfter=Sep  3 19:30:24 2036 GMT X509v3 Basic Constraints: critical     CA:TRUE [19:34:12]   GET /v1/state in the clear: HTTP/1.1 200 OK; the install page; 3 lines mention warp
+[19:34:12]   GET / in the clear: HTTP/1.1 200 OK; the install page; 3 lines mention warp
+[19:34:12]   GET /console.js in the clear: HTTP/1.1 200 OK; the install page; 3 lines mention warp
+[19:34:12] --- the TLS half: https://192.168.254.3:41234 with the authority trusted, and without
+[19:34:12]   GET / over TLS, --cacert: 200 verify=0 <!doctype html>
+  GET /ca.crt over TLS: 200
+[19:34:12]   GET / over TLS, no --cacert: exit 60 (000) -- the warning page a fresh phone sees
+[19:34:12]   curl.exe --cacert without --ssl-no-revoke: CertGetCertificateChain trust error CERT_TRUST_REVOCATION_STATUS_UNKNOWN
+[19:34:13]   leaf: protocol Tls13 cipher  subject CN=Warp console 192.168.254.3 issuer O=warp fork, CN=Warp fork console CA ed1cbed4 notAfter 2027-10-08 15:34:05Z Subject Alternative Name: IP Address=192.168.254.3 Enhanced Key Usage: Server Authentication (1.3.6.1.5.5.7.3.1) 
+[19:34:13] --- the 09-05 flow, over https://
+[19:34:20] conversation C 0a816be9-a6c3-4e77-9a9a-c183256931bb
+[19:34:27] pair show: url scheme https://, ca_url http://192.168.254.3:41234/ca.crt
+[19:34:27]   pretty: first time on this phone: open http://192.168.254.3:41234/ca.crt and install the certificate, then scan
+[19:34:27] redeem over TLS: device | expires_at: 2026-09-07T07:34:27.632853900Z | confined: 0a816be9-a6c3-4e77-9a9a-c183256931bb
+[19:34:27] prompt C with Origin: https://192.168.254.3:41234 (the page's own origin)
+   OK  - {"action": "agent.prompt", "ok": true, "instance_id": "inst_0f7e1ac47e17486ea4370ffa9e52d3da", "conv
+[19:34:34] prompt C with Origin: http://192.168.254.3:41234 (a scheme this listener never served; must be refused)
+   REFUSED unauthorized_local_client - browser-origin local-control requests are allowed only from this instance's own console
+[19:34:36] C has 2 exchanges (2 expected: ready, over-tls)
+  GET /v1/state over TLS with the prompt credential (wrong scope, expect 403): 403
+[19:34:36] --- the block in the pane: the chip clicked, then a narrow pane
+CLICKED window(905,516) -> client(905,516) pid=28568
+[19:34:48]   two splits: ['Pane Pane Terminal (10958)', 'Pane Pane Terminal (12761)']
+[19:34:48] --- Brave, scratch profile, standing in for a phone that has NOT installed the authority
+[19:35:01]   and the same page with the certificate check switched off, which is what a phone with the authority installed gets, as far as a screenshot can say
+[19:35:09] --- close
+[19:35:18] after close: 0 record(s)
+[19:35:18] netstat on the port after close: 0 LISTENING
+[19:35:18] done

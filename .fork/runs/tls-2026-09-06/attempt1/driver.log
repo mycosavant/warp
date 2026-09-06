@@ -1,0 +1,34 @@
+[19:30:23] binary v0.fork.dd68ff0de (2026-09-06 15:28)
+[19:30:23] instances before: 0
+[19:30:23] launch: warpdev.ps1 -Console -Bind 192.168.254.3:41234, detached
+[19:30:26] instance: 1 record(s)
+[19:30:29] log: 0 listener lines; ; 
+[19:30:29] --- the clear half: http://192.168.254.3:41234 answers the certificate and an install page, nothing else
+[19:30:29]   /ca.crt: HTTP/1.1 200 OK; content-type: application/x-x509-ca-cert; 1 certificate(s)
+  authority: subject=CN = Warp fork console CA ed1cbed4, O = warp fork notBefore=Sep  5 19:30:24 2026 GMT notAfter=Sep  3 19:30:24 2036 GMT X509v3 Basic Constraints: critical     CA:TRUE [19:30:29]   GET /v1/state in the clear: HTTP/1.1 200 OK; the install page; 3 lines mention warp
+[19:30:29]   GET / in the clear: HTTP/1.1 200 OK; the install page; 3 lines mention warp
+[19:30:29]   GET /console.js in the clear: HTTP/1.1 200 OK; the install page; 3 lines mention warp
+[19:30:29] --- the TLS half: https://192.168.254.3:41234 with the authority trusted, and without
+[19:30:29]   GET / over TLS, --cacert: curl: unknown --write-out variable: 'tls_version:-'
+000 0 tls= 
+  GET /ca.crt over TLS: 000
+[19:30:30]   GET / over TLS, no --cacert: exit 60 (000) -- the warning page a fresh phone sees
+[19:30:30]   s_client: ; 
+  leaf: Could not read certificate from <stdin> Unable to load certificate [19:30:30] --- the 09-05 flow, over https://
+[19:30:36] conversation C 50101588-2f21-4e8a-9a38-ded05d0f1565
+[19:30:46] pair show: url scheme https://, ca_url http://192.168.254.3:41234/ca.crt
+[19:30:46]   pretty: first time on this phone: open http://192.168.254.3:41234/ca.crt and install the certificate, then scan
+[19:30:47] redeem over TLS: 
+[19:30:47] prompt C with Origin: https://192.168.254.3:41234 (the page's own origin)
+[19:30:50] prompt C with Origin: http://192.168.254.3:41234 (a scheme this listener never served; must be refused)
+[19:30:53] C has 1 exchanges (2 expected: ready, over-tls)
+  GET /v1/state over TLS with the prompt credential (wrong scope, expect 403): 000
+[19:30:53] --- the block in the pane: /remote-control by slash run, then a narrow pane
+[19:30:53]   slash run: {   "ok": false,   "error": {     "code": "invalid_params",     "message": "`remote-control` is not available in this build; `slash.list` reports what is"   } }
+[19:31:00]   two splits: ['Pane Pane Terminal (7063)', 'Pane Pane Terminal (8104)']
+[19:31:01] --- Brave, scratch profile, standing in for a phone that has NOT installed the authority
+[19:31:13]   and the same page with the certificate check switched off, which is what a phone with the authority installed gets, as far as a screenshot can say
+[19:31:22] --- close
+[19:31:30] after close: 0 record(s)
+[19:31:30] netstat on the port after close: 0 LISTENING
+[19:31:30] done

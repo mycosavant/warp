@@ -1,0 +1,115 @@
+{
+  "action": "pane.list",
+  "panes": [
+    {
+      "pane_id": "Pane Pane Code (2144)",
+      "tab_id": "2045",
+      "tab_index": 0,
+      "window_id": "0",
+      "window_index": 0,
+      "index": 0,
+      "is_active": true,
+      "has_terminal_session": false
+    },
+    {
+      "pane_id": "Pane Pane Terminal (2618)",
+      "tab_id": "2213",
+      "tab_index": 1,
+      "window_id": "0",
+      "window_index": 0,
+      "index": 0,
+      "is_active": true,
+      "has_terminal_session": true
+    },
+    {
+      "pane_id": "Pane Pane Terminal (3085)",
+      "tab_id": "2687",
+      "tab_index": 2,
+      "window_id": "0",
+      "window_index": 0,
+      "index": 0,
+      "is_active": true,
+      "has_terminal_session": true
+    },
+    {
+      "pane_id": "Pane Pane Terminal (3552)",
+      "tab_id": "3154",
+      "tab_index": 3,
+      "window_id": "0",
+      "window_index": 0,
+      "index": 0,
+      "is_active": true,
+      "has_terminal_session": true
+    },
+    {
+      "pane_id": "Pane Pane Terminal (4019)",
+      "tab_id": "3621",
+      "tab_index": 4,
+      "window_id": "0",
+      "window_index": 0,
+      "index": 0,
+      "is_active": false,
+      "has_terminal_session": true
+    },
+    {
+      "pane_id": "Pane Pane Terminal (4428)",
+      "tab_id": "3621",
+      "tab_index": 4,
+      "window_id": "0",
+      "window_index": 0,
+      "index": 1,
+      "is_active": false,
+      "has_terminal_session": true
+    },
+    {
+      "pane_id": "Pane Pane Terminal (4837)",
+      "tab_id": "3621",
+      "tab_index": 4,
+      "window_id": "0",
+      "window_index": 0,
+      "index": 2,
+      "is_active": true,
+      "has_terminal_session": true
+    },
+    {
+      "pane_id": "Pane Pane Terminal (5306)",
+      "tab_id": "4908",
+      "tab_index": 5,
+      "window_id": "0",
+      "window_index": 0,
+      "index": 0,
+      "is_active": true,
+      "has_terminal_session": true
+    },
+    {
+      "pane_id": "Pane Pane Terminal (7068)",
+      "tab_id": "6678",
+      "tab_index": 6,
+      "window_id": "0",
+      "window_index": 0,
+      "index": 0,
+      "is_active": false,
+      "has_terminal_session": true
+    },
+    {
+      "pane_id": "Pane Pane Terminal (10958)",
+      "tab_id": "6678",
+      "tab_index": 6,
+      "window_id": "0",
+      "window_index": 0,
+      "index": 1,
+      "is_active": false,
+      "has_terminal_session": true
+    },
+    {
+      "pane_id": "Pane Pane Terminal (12761)",
+      "tab_id": "6678",
+      "tab_index": 6,
+      "window_id": "0",
+      "window_index": 0,
+      "index": 2,
+      "is_active": true,
+      "has_terminal_session": true
+    }
+  ]
+}

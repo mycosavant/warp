@@ -107,21 +107,21 @@
     <tr><th>capability</th><th>ours</th><th>Claude Code's</th></tr>
     <tr><td>read the record live</td><td class="yes">yes</td><td>yes</td></tr>
     <tr><td>tool calls, inputs, outcomes</td><td class="yes">yes</td><td>yes, "tool activity"</td></tr>
-    <tr><td>diffs of edits</td><td class="no">no, the edit's input as text</td><td>yes, a diff pane</td></tr>
+    <tr><td>diffs of edits</td><td class="part">built 2026-09-06: an edit's old and new strings drawn as a diff in the page and in <code>agent trace</code>; not yet photographed</td><td>yes, a diff pane</td></tr>
     <tr><td>send the next prompt</td><td class="yes">yes</td><td>yes</td></tr>
     <tr><td>answer a permission request</td><td class="yes">yes, two taps in four seconds</td><td>not documented</td></tr>
     <tr><td>stop a turn</td><td class="yes">yes</td><td>yes</td></tr>
-    <tr><td>be told when the agent needs you</td><td class="no">no, the page must be open</td><td>yes, push notifications</td></tr>
-    <tr><td>see the mode and model in force</td><td class="part">in the record, not the header</td><td>model and effort shown</td></tr>
-    <tr><td>see the working directory</td><td class="part">in the record's first line</td><td>not documented</td></tr>
+    <tr><td>be told when the agent needs you</td><td class="part">foreground only, built 2026-09-06: a notification and a buzz on a permission request or a turn ending while the page is open in the background; needs the certificate installed; not yet measured on a phone. Push is not built</td><td>yes, push notifications</td></tr>
+    <tr><td>see the mode and model in force</td><td class="part">in the header since 2026-09-06, read off the record; not yet photographed</td><td>model and effort shown</td></tr>
+    <tr><td>see the working directory</td><td class="part">in the header since 2026-09-06; not yet photographed</td><td>not documented</td></tr>
     <tr><td>switch conversations</td><td class="no">one per code; a second scan replaces</td><td>no, <code>/resume</code> is local only</td></tr>
     <tr><td>change permission mode</td><td class="no">no, by design</td><td>not documented</td></tr>
     <tr><td>end it from the desk</td><td class="yes">Stop sharing; closing Warp</td><td><code>/remote-control</code> again; closing the terminal</td></tr>
     <tr><td>end it from the phone</td><td class="part">forgets its token locally; the server does not know</td><td>not documented</td></tr>
-    <tr><td>the desk sees the phone act</td><td class="part">chip reads Stop sharing; a phone's prompt looks like yours</td><td>connection status, tool activity, <code>/rc active</code></td></tr>
-    <tr><td>transport</td><td class="no">plaintext HTTP on the LAN; not a secure context, so the browser withholds notifications, service workers and push</td><td>HTTPS to Anthropic; transcript stored there</td></tr>
+    <tr><td>the desk sees the phone act</td><td class="yes">the block says waiting, paired at HH:MM, or expired (measured 2026-09-06); the event log and the trace mark the phone's prompts and answers; the conversation shows them as yours</td><td>connection status, tool activity, <code>/rc active</code></td></tr>
+    <tr><td>transport</td><td class="part">HTTPS on the LAN with an authority Warp mints and the phone installs once, built 2026-09-06 (<code>tls.rs</code>); the same port hands the authority out in the clear and nothing else. A phone with it installed has not been measured yet</td><td>HTTPS to Anthropic; transcript stored there</td></tr>
     <tr><td>where the words go</td><td class="yes">nowhere; the phone talks to the machine</td><td>Anthropic's servers</td></tr>
-    <tr><td>lifetimes</td><td>code 2 min; device 12 h; credential 5 min</td><td>session outlives the server by about 4 h</td></tr>
+    <tr><td>lifetimes</td><td>code 2 min; a control pairing has no clock and ends on Stop sharing, the conversation going away, or Warp closing (2026-09-06); a watch pairing 12 h; credential 5 min</td><td>session outlives the server by about 4 h</td></tr>
     <tr><td>how many</td><td>8 devices per instance, any conversations</td><td>one remote session per interactive process</td></tr>
   </table>
   </div>

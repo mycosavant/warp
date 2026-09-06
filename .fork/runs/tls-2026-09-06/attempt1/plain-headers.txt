@@ -1,0 +1,10 @@
+HTTP/1.1 200 OK
+content-type: text/html; charset=utf-8
+content-security-policy: default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; connect-src 'self'; img-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
+x-content-type-options: nosniff
+x-frame-options: DENY
+referrer-policy: no-referrer
+cache-control: no-store
+content-length: 3344
+date: Sun, 06 Sep 2026 19:30:29 GMT
+

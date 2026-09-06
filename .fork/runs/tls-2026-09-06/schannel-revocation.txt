@@ -1,0 +1,7 @@
+*   Trying 192.168.254.3:41234...
+* schannel: disabled automatic use of client certificate
+* schannel: using IP address, SNI is not supported by OS.
+* ALPN: curl offers http/1.1
+* schannel: added 1 certificate(s) from CA file '/home/effatha/git/warp/.fork/runs/tls-2026-09-06/ca.crt'
+* schannel: CertGetCertificateChain trust error CERT_TRUST_REVOCATION_STATUS_UNKNOWN
+* closing connection #0

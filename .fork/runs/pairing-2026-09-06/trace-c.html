@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>trace b52ae5e9-01da-42fd-a701-be8b3f481ae1</title><style>
+:root{color-scheme:light dark;--bg:#fbfaf7;--fg:#1d1c1a;--dim:#6f6a62;--rule:#d9d4cb;
+--p:#2b5fb4;--a:#7a4ea8;--w:#b3651a;--h:#5d7a4a;--ok:#3a7d44;--bad:#b23a3a;--den:#8a5a00;--mono:ui-monospace,Menlo,Consolas,monospace}
+@media(prefers-color-scheme:dark){:root{--bg:#161513;--fg:#e8e4dc;--dim:#9a948a;--rule:#3a3733;--p:#7ea6ea;--a:#c2a1e6;--w:#e6a36b;--h:#a3c28b;--ok:#7dc48a;--bad:#e07a7a;--den:#e0b25a}}
+html{background:var(--bg);color:var(--fg)}body{margin:0;font:14px/1.45 system-ui,sans-serif;max-width:64rem;padding:1.5rem}
+header h1{font-size:1.1rem;margin:0 0 .5rem}header dl{display:grid;grid-template-columns:max-content 1fr;gap:.15rem 1rem;margin:0;color:var(--dim);font-size:.85rem}header dt{font-weight:600}header dd{margin:0;word-break:break-all}
+main{margin-top:1.5rem}
+.row{display:grid;grid-template-columns:6.5rem 1.4rem 1fr;gap:.5rem;padding:.3rem 0;border-top:1px solid var(--rule);align-items:baseline}
+.row time{font:.8rem var(--mono);color:var(--dim)}.g{font:700 .8rem var(--mono);text-align:center;border-radius:3px;color:#fff}
+.who-person .g{background:var(--p)}.who-agent .g{background:var(--a)}.who-warp .g{background:var(--w)}.who-harness .g{background:var(--h)}
+.t{white-space:pre-wrap;word-break:break-word;min-width:0}.label{color:var(--dim);font-size:.85rem}.thinking .t{font-style:italic;color:var(--dim)}
+.call .head b{font-family:var(--mono)}.call code{font:.85rem var(--mono);background:color-mix(in srgb,var(--fg) 7%,transparent);padding:0 .25rem;border-radius:3px}
+.badge{font:.75rem var(--mono);padding:0 .35rem;border-radius:3px;border:1px solid currentColor;margin-left:.4rem}
+.state-done .badge{color:var(--ok)}.state-failed .badge{color:var(--bad)}.state-denied .badge{color:var(--den)}.state-unanswered .badge,.state-open .badge{color:var(--dim)}
+.stamps{font:.75rem var(--mono);color:var(--dim);margin:.15rem 0}
+pre{margin:.3rem 0 0;font:.8rem var(--mono);white-space:pre-wrap;word-break:break-word;background:color-mix(in srgb,var(--fg) 5%,transparent);padding:.4rem .6rem;border-radius:4px;max-height:24rem;overflow:auto}
+details summary{cursor:pointer;color:var(--dim);font-size:.85rem}
+.boundary{border-top:2px dashed var(--h);margin:1rem 0 .5rem;padding-top:.3rem;color:var(--h);font-size:.85rem;text-align:center}
+footer{margin-top:1.5rem;padding-top:.5rem;border-top:1px solid var(--rule);color:var(--dim);font-size:.85rem}
+</style></head>
+<body>
+<header><h1>trace <code>b52ae5e9-01da-42fd-a701-be8b3f481ae1</code></h1><dl><dt>warp</dt><dd>14 lines, C:\Users\onemind\AppData\Local\warp\WarpOss\data\fork\events\b52ae5e9-01da-42fd-a701-be8b3f481ae1.jsonl</dd><dt>claude-code</dt><dd>2.1.257 · 26 lines (20 bookkeeping) · \\wsl.localhost\Ubuntu\home\effatha\.claude\projects\-home-effatha-git-warp\412ce54b-d1c7-4f62-896e-14be80118433.jsonl</dd><dt>session</dt><dd>412ce54b-d1c7-4f62-896e-14be80118433</dd><dt>clocks</dt><dd>1 calls joined; the harness&#39;s clock reads +1372 ms against Warp&#39;s, disclosed and not applied</dd></dl></header>
+<main>
+<div class="row who-person "><time>20:07:40.128</time><span class="g">P</span><div class="t">Say the single word ready and nothing else.</div></div>
+<div class="row who-warp "><time>20:07:41.726</time><span class="g">W</span><div class="t"><span class="label">agent</span> @agentclientprotocol/claude-agent-acp 0.73.0 “Claude Agent”</div></div>
+<div class="row who-warp "><time>20:07:42.741</time><span class="g">W</span><div class="t"><span class="label">mode</span> current `auto`; offered `default` (“Always ask before making changes”); `acceptEdits` (“Automatically accept all file edits”); `plan` (“Create a plan before making changes”); `auto` (“Claude handles permission decisions”); `bypassPermissions` (“Accepts all permissions”)</div></div>
+<div class="row who-warp "><time>20:07:42.741</time><span class="g">W</span><div class="t"><span class="label">model</span> `model` “Model”, current `fable`</div></div>
+<div class="row who-person "><time>20:07:42.755</time><span class="g">P</span><div class="t">[Warp] The full transcript of this conversation, including turns older than your current context, is at /home/effatha/git/warp/.warp/transcripts/b52ae5e9-01da-42fd-a701-be8b3f481ae1.md. Search it with grep rather than reading it whole if you need something from earlier.</div></div>
+<div class="row who-agent "><time>20:07:45.868</time><span class="g">A</span><div class="t">ready</div></div>
+<div class="row who-warp "><time>20:07:46.062</time><span class="g">W</span><div class="t"><span class="label">stop</span> </div></div>
+<div class="row who-person "><time>20:07:57.905</time><span class="g">P</span><div class="t"><span class="label">from the phone</span> Create the file /tmp/phone-1788725277.txt containing the single word hello. Use your Write tool. Say done when it exists.</div></div>
+<div class="row who-warp "><time>20:07:58.831</time><span class="g">W</span><div class="t"><span class="label">agent</span> @agentclientprotocol/claude-agent-acp 0.73.0 “Claude Agent”</div></div>
+<div class="row who-warp "><time>20:08:00.772</time><span class="g">W</span><div class="t"><span class="label">mode</span> current `auto`; offered `default` (“Always ask before making changes”); `acceptEdits` (“Automatically accept all file edits”); `plan` (“Create a plan before making changes”); `auto` (“Claude handles permission decisions”); `bypassPermissions` (“Accepts all permissions”)</div></div>
+<div class="row who-warp "><time>20:08:00.772</time><span class="g">W</span><div class="t"><span class="label">model</span> `model` “Model”, current `claude-fable-5-1`</div></div>
+<div class="row who-person "><time>20:08:00.920</time><span class="g">P</span><div class="t">[Warp] The full transcript of this conversation, including turns older than your current context, is at /home/effatha/git/warp/.warp/transcripts/b52ae5e9-01da-42fd-a701-be8b3f481ae1.md. Search it with grep rather than reading it whole if you need something from earlier.</div></div>
+<div class="row who-agent call state-done"><time>20:08:06.598</time><span class="g">A</span><div class="t"><div class="head"><b>Write</b> <code>{&quot;file_path&quot;:&quot;/tmp/phone-1788725277.txt&quot;,&quot;content&quot;:&quot;hello\n&quot;}</code><span class="badge">done</span> <span class="label">Warp: allowed by control_plane from the phone</span></div><div class="stamps">warp 20:08:06.598 → 20:08:10.883 · harness 20:08:07.970 → 20:08:10.910</div><pre>File created successfully at: /tmp/phone-1788725277.txt (file state is current in your context — no need to Read it back)</pre></div></div>
+<div class="row who-agent "><time>20:08:12.805</time><span class="g">A</span><div class="t">done</div></div>
+<div class="row who-warp "><time>20:08:12.869</time><span class="g">W</span><div class="t"><span class="label">stop</span> </div></div>
+</main>
+<footer>usage: 3 assistant messages, 60 input, 92 output, 96984 cache read, 121191 cache created</footer>
+</body></html>

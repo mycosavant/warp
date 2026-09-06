@@ -1,0 +1,27 @@
+=== will name the build v0.fork.a09fd38f2 ===
+=== building warp-oss (release, features: gui,warp_control_cli) at 15:57:33 ===
+warning: use of deprecated method `futures::futures_channel::mpsc::UnboundedReceiver::<T>::try_next`: please use `try_recv` instead
+   --> app\src\ai\blocklist\orchestration_event_streamer.rs:904:59
+    |
+904 |             while let Ok(Some(item)) = sse.event_receiver.try_next() {
+    |                                                           ^^^^^^^^
+System.Management.Automation.RemoteException
+warning: use of deprecated method `futures::futures_channel::mpsc::UnboundedReceiver::<T>::try_next`: please use `try_recv` instead
+    --> app\src\ai\blocklist\orchestration_event_streamer.rs:1570:59
+     |
+1570 |             while let Ok(Some(item)) = sse.event_receiver.try_next() {
+     |                                                           ^^^^^^^^
+System.Management.Automation.RemoteException
+warning: use of deprecated method `futures::futures_channel::mpsc::UnboundedReceiver::<T>::try_next`: please use `try_recv` instead
+    --> app\src\ai\blocklist\orchestration_event_streamer.rs:2604:59
+     |
+2604 |             while let Ok(Some(item)) = sse.event_receiver.try_next() {
+     |                                                           ^^^^^^^^
+System.Management.Automation.RemoteException
+warning: `warp` (lib) generated 5 warnings (run `cargo fix --lib -p warp` to apply 1 suggestion)
+    Finished `release` profile [optimized + debuginfo] target(s) in 9m 29s
+=== cargo exit 0 at 16:07:02 ===
+=== sidecar .\target\release\warp-oss.version = v0.fork.a09fd38f2 ===
+=== binary 2026-09-06 16:07:02 353458688 bytes ===
+=== warpctrl: present ===
+build exit 0

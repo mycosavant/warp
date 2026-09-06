@@ -1,0 +1,30 @@
+{
+  "action": "agent.read",
+  "ok": true,
+  "instance_id": "inst_0f7e1ac47e17486ea4370ffa9e52d3da",
+  "conversation": {
+    "conversation_id": "0a816be9-a6c3-4e77-9a9a-c183256931bb",
+    "title": "Say the single word ready and nothing else.",
+    "status": "success",
+    "is_busy": false,
+    "pane_id": "Pane Pane Terminal (7068)",
+    "tab_id": "6678",
+    "session_mode": "auto"
+  },
+  "exchanges": [
+    {
+      "index": 0,
+      "input": "Say the single word ready and nothing else.",
+      "output": "This session is in the agent's `auto` mode, which the agent describes as “Claude handles permission decisions”.\n\nWarp did not choose it and cannot tell what it permits — a mode is the agent's own idea, so only the agent's description above says anything about it. To ask for a different one, set `WARP_FORK_ACP_MODE` to its id before starting Warp. This agent offers: `default` (“Always ask before making changes”); `acceptEdits` (“Automatically accept all file edits”); `plan` (“Create a plan before making changes”); `auto` (“Claude handles permission decisions”); `bypassPermissions` (“Accepts all permissions”).\nready",
+      "is_complete": true
+    },
+    {
+      "index": 1,
+      "input": "Reply with the single word over-tls and nothing else.",
+      "output": "over-tls",
+      "is_complete": true
+    }
+  ],
+  "exchange_count": 2,
+  "included_tool_results": false
+}

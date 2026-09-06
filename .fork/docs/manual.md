@@ -2621,7 +2621,10 @@ does not.
 ### Letting a phone watch — the wide bind, and pairing
 
 Everything above is `127.0.0.1`. T11.4 adds a second listener, and it is off
-unless you name an address:
+unless you name an address. **Since 2026-09-06 that listener speaks TLS**
+(`.fork/docs/remote-control.md`, "Trust on the wire"): the QR's URL is
+`https://`, and a phone installs the console's certificate authority once from
+`http://<bind>/ca.crt`, which is the one thing the port answers in the clear.
 
 ```console
 $ WARP_FORK_CONTROL_BIND=192.168.1.5 warp-oss   # plus the usual launch recipe
@@ -2763,7 +2766,10 @@ that served it.
 ### The console — the page a scan actually lands on
 
 Scan the QR and you get a page. Before T12.1 you got a `405`, because the QR
-pointed at `/v1/pair`, which only answers `POST`.
+pointed at `/v1/pair`, which only answers `POST`. Since 2026-09-06 the page
+is `https://` on the wide listener; a phone that has not installed the
+authority gets its browser's warning page instead, and the block in the pane
+says which address to open first (`/ca.crt`, in the clear).
 
 ```console
 $ warpctrl pair show          # on the machine running Warp
@@ -2964,6 +2970,10 @@ Scan it and the console opens on that conversation with the live record, its
 permission requests, Stop, and a prompt box. *Stop sharing*, the same chip,
 cuts the phone off. Needs the wide listener (`ggwarpdev console`, or
 `WARP_FORK_CONTROL_BIND`); without it the click is a toast naming the variable.
+A phone pairs once and stays paired until Stop sharing, the conversation being
+deleted, or Warp closing (2026-09-06; no clock on a control pairing). The first
+time on a phone, open the `http://…/ca.crt` line the block prints and install
+the certificate, or the `https://` link is a warning page.
 
 ```console
 $ warpctrl pair show --conversation 7f178839-c751-4d19-bdf0-7ea96cc7abe5   # the same code, from the CLI
