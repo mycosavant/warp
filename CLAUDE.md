@@ -702,6 +702,20 @@ alive. Three piled up in one session that way. So `ambiguous_instance` always
 comes from live Warps nobody could stop — whether they refused to close or were
 resurrected by killing their parent — and never from records nobody cleaned.
 
+**…and until 2026-09-05 a closed instance's listeners outlived it on Windows,
+so the next launch on the console's port failed with "only one usage of each
+socket address".** Measured three times in one night: `netstat` showed the
+wide listener `LISTENING` under the dead pid, held by `wsl.exe` children Warp
+had spawned for its git chip and left orphaned. The `mio` this build locks
+creates inheritable sockets, and every child Warp spawns with stdio inherits
+them. Both control listeners are marked non-inheritable now
+(`keep_from_children` in `app/src/local_control/mod.rs`); upstream's `9282`
+still fails to bind the same way, which is the cause behind the egress run's
+"honest note". The orphaned relays themselves are still there after a close
+and are not the fork's fix yet. If a port is refused, `netstat -ano | findstr
+<port>` names the dead pid, and the holders are the `wsl` processes created
+at that instance's start.
+
 **…and `ok: true` from `window close` never meant the window closed.** Read
 2026-08-30: the handler sends the close with `TerminationMode::Cancellable` —
 *"the termination can be interrupted"* — and returns the instant it has asked,

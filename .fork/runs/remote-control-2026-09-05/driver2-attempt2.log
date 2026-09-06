@@ -1,0 +1,11 @@
+2026-09-06T02:30:49Z [INFO] [warp::local_control] local-control wide listener started at 192.168.254.3:41234
+[02:31:02] cd the pane, one text-only conversation
+[02:31:07] conversation C 
+[02:33:25] trace C as the machine: does a text-only turn join now?
+[02:33:25] pair a device for C
+[02:33:26] prompt C on the credential, before the stop
+[02:35:48] Stop sharing: the chip, clicked
+CLICKED window(575,516) -> client(575,516) pid=652
+[02:35:52] the same credential, after the stop (must be refused)
+[02:35:52] a fresh credential from the revoked device (must be refused)
+[02:35:56] C has  exchanges (2 expected: ready, before)

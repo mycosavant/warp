@@ -1,0 +1,14 @@
+warpdev: ~/.warpdev is no longer read (profiles are per launch); delete it when convenient.
+warpdev: profile PRODUCT + CONSOLE
+  WARP_FORK_ACP_COMMAND    = wsl.exe -d Ubuntu -- npx -y @agentclientprotocol/claude-agent-acp@0.73.0
+                             the agent panel answers from this agent, started inside WSL so a pane cwd resolves
+  WARP_FORK_EVENT_LOG      = on
+                             one JSONL per conversation, the record the console draws a run from
+  WARP_FORK_CONTROL_BIND   = 192.168.254.3:41234
+                             the wide listener, so a phone on the LAN can pair; the only variable that reaches off the machine
+  cleared: WARP_FORK_ACP_MODE, WARP_FORK_TRANSCRIPT
+  note: a Warp started any other way gets none of this.
+warpdev: binary C:\dev\warp\target\debug\warp-oss.exe
+warpdev: tree at e8a51f21d fork: the listeners are not handed to warp's children (T19)
+warpdev: launching PRODUCT + CONSOLE
+warpdev: up - inst_60494600d9754a04b0ecd7bc8604e8b8 (pid 652, channel warp-oss, app dev.warp.WarpOss, protocol 1)

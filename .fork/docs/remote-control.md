@@ -127,7 +127,7 @@ click. Two defects found and closed the same night:
   was drawn in a 300-pixel-wide pane and the text column was clipped at the
   right, readable but not whole.
 - A phone actually scanning the block, as opposed to Brave opening the link.
-- Why a dead instance's wide listener can outlive it: the first launch of the
-  run found `41234` still `LISTENING` under the phase 3 instance's dead pid.
-  Something inherited the handle; nothing on the Windows side was left to
-  name. The run used `41235`.
+- Whether the `wsl.exe` relays Warp spawns for its git chip should outlive
+  the instance at all. They held the wide listener until the listener was
+  marked non-inheritable (`keep_from_children`, measured: a close and a
+  relaunch on the same port); they still outlive it, holding nothing.

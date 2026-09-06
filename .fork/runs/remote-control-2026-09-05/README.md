@@ -77,15 +77,58 @@ socket owned by a dead pid is one whose handle something inherited; no
 `wsl.exe`, `node` or `claude-agent-acp` process was left on the Windows side
 to name. This run used `41235`; the cause is open (`driver-attempt1.log`).
 
-## Second run
+## Second run, on `v0.fork.e8a51f21d`
 
-*(filled in below after the rebuild)*
+`rc2a.sh` and `rc2b.sh`, `driver2.log`; the two earlier attempts
+(`driver2-attempt1.log`, `driver2-attempt2.log`) fell over the port and a
+restored window with no terminal, and are kept.
+
+**A text-only turn joins.** Conversation C, one turn, no tool: the trace's
+header names `linked_session_id` and the harness's file inside the
+distribution, 13 lines, and the agent's `ready` is a row. Before the fix the
+same shape traced as Warp's half alone.
+
+**A revoked phone is refused at once.** A device paired for C prompted it
+(`before`, answered in the panel), then minted another `agent.prompt`
+credential and kept it. *Stop sharing* was clicked in the footer
+(`rc2-before-stop.png` at `(890,516)`, `rc2-after-stop.png`: the toast
+*Remote control stopped; the phone was cut off* and the chip back to
+`/remote-control`). Then:
+
+| after the stop | answer |
+|---|---|
+| the kept credential | refused, `unauthorized_local_client`: *credential is invalid* |
+| a fresh credential from the device | refused, `unauthorized_local_client`: *device is not paired with this instance* |
+| C's exchanges | 2: `ready`, `before`; no `after` |
+
+**The listener no longer outlives the instance.** `window close`, then
+`netstat`: no `LISTENING` on `41234`. A relaunch on the same port bound it
+(`local-control wide listener started at 192.168.254.3:41234`, 02:38:01).
+Two orphaned `wsl.exe` relays from this instance were still alive after the
+close, which is the half not fixed: they hold nothing now, and they should
+not exist.
+
+## The port, explained
+
+The listener was inheritable. The `mio` this build locks (1.1.1) creates
+Windows sockets without `WSA_FLAG_NO_HANDLE_INHERIT` (1.2.2 sets it), and
+`std::process::Command` enables handle inheritance whenever it wires up
+stdio, so every child Warp spawned held a copy of the listener. The
+children that outlived the instance were `wsl.exe` relays for the git chip
+and repository metadata, five per instance at launch and more per turn, and
+`git branch` in a bash over WSL should not still be running an hour later.
+Both listeners are marked non-inheritable after binding now
+(`keep_from_children`). Upstream's `9282` fails to bind the same way for the
+same reason. The orphans are recorded, not chased.
 
 ## Files
 
 `rc.sh`, `driver.log`, `driver-attempt1.log`, `launch.txt`, `pair-show.json`
 (spent), `pair.json`, `cred-prompt.json`, `list.json`, `prompt-*.json`,
 `trace-*.json`, `read-b.json`, `trace-live.txt`, `events-b.jsonl`,
-`conversation-b.txt`, `clipboard.txt`, `console-url.txt`, and the
-screenshots `rc-before.png`, `rc-after-start.png`, `console-confined.png`,
-`console-prompted.png`, `console-after-stop.png`.
+`conversation-b.txt`, `clipboard.txt`, `console-url.txt`, the second run's
+`rc2a.sh`, `rc2b.sh`, `driver2*.log`, `trace-c.json`, `pair-show-2.json`,
+`pair-2.json`, `cred-*.json`, `prompt-after-stop.json`, `read-c.json`,
+`conversation-c.txt`, and the screenshots `rc-before.png`,
+`rc-after-start.png`, `rc2-before-stop.png`, `rc2-after-stop.png`,
+`console-confined.png`, `console-prompted.png`, `console-after-stop.png`.

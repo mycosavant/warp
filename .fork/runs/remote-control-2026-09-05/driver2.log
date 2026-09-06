@@ -1,14 +1,18 @@
-[02:23:08] cd the pane, one text-only conversation
-[02:23:12] conversation C 2b116d3d-fed4-4f1e-91b9-f8b0a861cb64
-[02:23:22] trace C as the machine: does a text-only turn join now?
-  linked_session_id: 46fd7eb8-832d-4bad-bb7f-df63823c997c
-  harness_file: \\wsl$\ubuntu\home\effatha\.claude\projects\-home-effatha-git-warp\46fd7eb8-832d-4bad-bb7f-df63823c997c.jsonl
+[02:36:29] cd the pane, one text-only conversation
+[02:36:33] conversation C 15c03b3d-2193-4f66-a850-9ebfd37f34b6
+[02:36:40] trace C as the machine: does a text-only turn join now?
+  linked_session_id: 4b5b35b6-734e-490c-9b92-af142af0a2ce
+  harness_file: \\wsl$\ubuntu\home\effatha\.claude\projects\-home-effatha-git-warp\4b5b35b6-734e-490c-9b92-af142af0a2ce.jsonl
   harness_lines: 13 note: None
   agent text rows: ['ready']
-[02:23:23] pair a device for C
-[02:23:23] prompt C on the credential, before the stop
-[02:23:27] Stop sharing: the chip, clicked
-CLICKED window(575,516) -> client(575,516) pid=37316
-[02:23:31] the same credential, after the stop (must be refused)
-[02:23:31] a fresh credential from the revoked device (must be refused)
-[02:23:34] C has 1 exchanges (2 expected: ready, before)
+[02:36:40] pair a device for C
+[02:36:40] prompt C on the credential, before the stop
+   ok {"action": "agent.prompt", "ok": true, "instance_id": "inst_60494600d9754a04b0ecd7bc8604e8b8", "conversation_id": "15c03
+[02:37:33] a prompt credential minted before the stop, kept
+[02:37:33] Stop sharing: the chip at (890,516), clicked
+CLICKED window(890,516) -> client(890,516) pid=652
+[02:37:37] the kept credential, after the stop (must be refused)
+   REFUSED unauthorized_local_client - local-control credential is invalid
+[02:37:37] a fresh credential from the revoked device (must be refused)
+   REFUSED unauthorized_local_client - device is not paired with this instance
+[02:37:41] C has 2 exchanges (2 expected: ready, before; no 'after')
