@@ -9,9 +9,11 @@
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icon.png">
 <!-- iOS ignores the manifest for Add to Home Screen and reads these instead.
-     It is also the only platform where a standalone launch is achievable here:
-     plain HTTP at a LAN address is not a secure context, so there is no service
-     worker and therefore no install prompt anywhere else. -->
+     Until T19 (2026-09-06) it was also the only platform where a standalone
+     launch was achievable here: plain HTTP at a LAN address is not a secure
+     context, so no service worker and no install prompt anywhere else. The
+     wide listener speaks TLS now, with an authority the phone installs once
+     (see #pairing below), and a secure context is what the page runs in. -->
 <link rel="apple-touch-icon" href="/icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="warp">
@@ -126,6 +128,17 @@
   <section id="pairing" hidden>
     <h2>not paired</h2>
     <p class="note" id="pairing-note"></p>
+    <!-- Whether the browser treats this page as a secure context, read off
+         `window.isSecureContext` by the script. Shown here because it is the
+         first thing to check when a phone is not notified: over http:// at a
+         LAN address it is false, and every API item 5 uses is withheld. -->
+    <p class="note" id="pairing-trust"></p>
+    <!-- The authority, linked by a relative path so this works from whatever
+         address served the page. A phone that reached this page through a
+         certificate warning installs it and reloads; one that installed it
+         already sees a secure context above and can ignore this. Text and
+         href are static, which is what the no-markup-sinks test allows. -->
+    <p class="note" id="pairing-install">First time on this phone: <a href="/ca.crt" download="warp-console-ca.crt">install the console's certificate</a>, then reload. Android: Settings › Security › Encryption &amp; credentials › Install a certificate › CA certificate. iPhone: allow the profile, install it under Settings › General › VPN &amp; Device Management, then turn on full trust under Settings › General › About › Certificate Trust Settings.</p>
   </section>
 
   <!-- One conversation, live (board item 6, phase 3). Opened by tapping a row

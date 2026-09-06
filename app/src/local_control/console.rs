@@ -130,7 +130,7 @@ pub(super) async fn handle_console_icon_request() -> Response {
 /// and manifest do not need that and would not suffer from a lifetime, but they
 /// are fetched about once per install, so one header set is worth more than the
 /// bytes a second one would save.
-fn served(body: &'static [u8], content_type: &'static str) -> Response {
+pub(super) fn served(body: &'static [u8], content_type: &'static str) -> Response {
     let headers: [(HeaderName, &'static str); 6] = [
         (CONTENT_TYPE, content_type),
         (CONTENT_SECURITY_POLICY, POLICY),

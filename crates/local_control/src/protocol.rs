@@ -933,6 +933,12 @@ pub struct PairingResult {
     /// for one (`ControlPairParams::conversation_id`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub conversation_id: Option<String>,
+    /// Where a phone that has not yet installed the console's certificate
+    /// authority fetches it, in the clear (T19). The QR's own URL is
+    /// `https://` and a phone without the authority gets a warning page from
+    /// it; this is the one thing to do first, once per phone.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ca_url: Option<String>,
 }
 
 /// Result of redeeming a pairing code at `POST /v1/pair` (T11.4).

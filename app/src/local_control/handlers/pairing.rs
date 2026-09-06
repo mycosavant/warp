@@ -21,7 +21,7 @@ use crate::local_control::LocalControlBridge;
 use crate::local_control::bridge::PairingContext;
 use crate::local_control::console::CONSOLE_PATH;
 use crate::local_control::handlers::agent::parse_conversation_id;
-use crate::local_control::pairing::{Scope, pair_url};
+use crate::local_control::pairing::{Scope, ca_url, pair_url};
 
 /// Answers `control.pair`.
 pub fn control_pair(
@@ -102,6 +102,7 @@ pub(crate) fn mint(
             .map(|action| action.as_str().to_owned())
             .collect(),
         conversation_id: scope.conversation().map(str::to_owned),
+        ca_url: Some(ca_url(&pairing.origin)),
     })
 }
 

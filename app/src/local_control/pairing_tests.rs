@@ -205,7 +205,13 @@ fn the_code_rides_in_the_fragment() {
     let code = AuthToken::from_secret("s3cret");
     let url = pair_url("192.168.1.5:41234", "/v1/pair", &code);
 
-    assert_eq!(url, "http://192.168.1.5:41234/v1/pair#s3cret");
+    assert_eq!(url, "https://192.168.1.5:41234/v1/pair#s3cret");
+    // The certificate, by contrast, is fetched in the clear by a phone that
+    // cannot yet trust the listener, and carries no secret.
+    assert_eq!(
+        ca_url("192.168.1.5:41234"),
+        "http://192.168.1.5:41234/ca.crt"
+    );
     let (addressed, fragment) = url.split_once('#').expect("a fragment");
     assert!(
         !addressed.contains("s3cret"),

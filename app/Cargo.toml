@@ -349,6 +349,11 @@ aws-types = "1"
 notify-debouncer-full.workspace = true
 rquickjs = { workspace = true, optional = true }
 rustls.workspace = true
+rcgen.workspace = true
+tokio-rustls.workspace = true
+hyper-util.workspace = true
+time.workspace = true
+pem.workspace = true
 syntect = "5.0"
 sysinfo.workspace = true
 warp-command-signatures = { workspace = true, features = ["embed-signatures"] }

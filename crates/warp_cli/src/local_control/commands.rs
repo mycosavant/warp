@@ -359,6 +359,11 @@ fn render_pairing(data: &serde_json::Value) -> String {
             "\nconfined to conversation {conversation}: it may drive that one and touch no other"
         ));
     }
+    if let Some(ca_url) = data.get("ca_url").and_then(serde_json::Value::as_str) {
+        out.push_str(&format!(
+            "\nfirst time on this phone: open {ca_url} and install the certificate, then scan"
+        ));
+    }
     out
 }
 

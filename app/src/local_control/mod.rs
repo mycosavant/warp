@@ -65,6 +65,7 @@ pub(crate) mod pairing;
 mod permissions;
 pub(crate) mod remote_control;
 pub(crate) mod resolver;
+mod tls;
 
 use std::collections::HashMap;
 #[cfg(unix)]
@@ -138,6 +139,35 @@ const EVENT_STREAM_TICK: std::time::Duration = std::time::Duration::from_secs(15
 
 /// App-owned authority shared by one instance's broker and HTTP listener.
 ///
+/// One address this instance answers on, with the scheme it answers in.
+///
+/// `authority` is what a `Host` header carries (`host:port`); `scheme` is what
+/// the `Origin` a same-origin page sends has to start with. Loopback is plain
+/// and the wide listener speaks TLS (T19), and a request that names one with
+/// the other's scheme is refused: the scheme is part of what "the origin that
+/// served this page" means.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ListenerOrigin {
+    pub(crate) scheme: &'static str,
+    pub(crate) authority: String,
+}
+
+impl ListenerOrigin {
+    pub(crate) fn plain(authority: String) -> Self {
+        Self {
+            scheme: "http",
+            authority,
+        }
+    }
+
+    pub(crate) fn tls(authority: String) -> Self {
+        Self {
+            scheme: "https",
+            authority,
+        }
+    }
+}
+
 /// Broker-issued bearer tokens map to grants only in this process-local state.
 /// Knowing the endpoint from discovery is therefore insufficient to authenticate
 /// an HTTP request.
@@ -145,16 +175,22 @@ const EVENT_STREAM_TICK: std::time::Duration = std::time::Duration::from_secs(15
 struct ControlServerState {
     bridge_spawner: ModelSpawner<LocalControlBridge>,
     instance_id: InstanceId,
-    /// Every `host:port` this instance answers on — one entry, or two once a
-    /// wide listener is open (T11.4).
+    /// Every origin this instance answers on — one entry, or two once a wide
+    /// listener is open (T11.4), each with the scheme that listener speaks.
     ///
     /// A list rather than a string because the two listeners share one router,
     /// and each has its own address. It stays an *exact* membership test over a
     /// short, server-chosen list: no wildcard, no port-only match, no suffix
     /// rule. That is what keeps the `Host` check doing its job, which is to stop
     /// a name the server never chose — `evil.example` resolved to this
-    /// machine — from reaching a route.
-    expected_hosts: Arc<Vec<String>>,
+    /// machine — from reaching a route. The scheme rides along since T19 put
+    /// TLS on the wide listener: the `Origin` a page sends names the scheme it
+    /// was served over, and the check compares the whole thing.
+    expected_origins: Arc<Vec<ListenerOrigin>>,
+    /// The console authority's public half, once a wide listener speaks TLS,
+    /// for `GET /ca.crt`. `None` with no wide listener, when the route answers
+    /// 404: loopback has no certificate to install.
+    ca_certificate_pem: Option<Arc<str>>,
     credentials: Arc<Mutex<HashMap<String, CredentialGrant>>>,
     /// Pairing codes and device tokens, or `None` when no wide listener is open
     /// (T11.4).
@@ -331,17 +367,20 @@ impl LocalControlServer {
             drop(runtime_guard);
             (pipe_name, pipe)
         };
-        let mut expected_hosts = vec![format!(
+        let mut expected_origins = vec![ListenerOrigin::plain(format!(
             "{}:{}",
             control_endpoint.host, control_endpoint.port
-        )];
-        if let Some((_, wide_origin)) = &wide_listener {
-            expected_hosts.push(wide_origin.clone());
+        ))];
+        if let Some((_, wide_origin, _)) = &wide_listener {
+            expected_origins.push(ListenerOrigin::tls(wide_origin.clone()));
         }
         let state = ControlServerState {
             bridge_spawner,
             instance_id,
-            expected_hosts: Arc::new(expected_hosts),
+            expected_origins: Arc::new(expected_origins),
+            ca_certificate_pem: wide_listener
+                .as_ref()
+                .map(|(_, _, tls)| tls.ca_certificate_pem.clone()),
             credentials: Arc::default(),
             // No wide listener, no pairing. Not a convenience: a pairing code
             // that no device could ever present is a secret displayed for
@@ -358,7 +397,7 @@ impl LocalControlServer {
             bridge.set_pairing(
                 state.pairings.clone(),
                 state.credentials.clone(),
-                wide_listener.as_ref().map(|(_, origin)| origin.clone()),
+                wide_listener.as_ref().map(|(_, origin, _)| origin.clone()),
             );
         });
         let router = Router::new()
@@ -392,6 +431,12 @@ impl LocalControlServer {
                 console::CONSOLE_ICON_PATH,
                 get(console::handle_console_icon_request),
             )
+            // The console authority's public half (T19). On both listeners,
+            // like the pairing routes and for the same reason; on loopback it
+            // answers 404, because there is nothing to install for it. The
+            // wide listener also answers it *in the clear*, from a router of
+            // its own that reaches nothing else (`tls::serve`).
+            .route(tls::CA_PATH, get(handle_ca_request))
             .with_state(state.clone());
         runtime.spawn({
             let router = router.clone();
@@ -401,16 +446,15 @@ impl LocalControlServer {
                 }
             }
         });
-        if let Some((wide, wide_origin)) = wide_listener {
+        if let Some((wide, wide_origin, tls)) = wide_listener {
             // The address, never a secret. Pairing codes and device tokens exist
             // only in memory and in the QR a person chose to display; nothing in
             // this module ever hands one to `log`.
-            log::info!("local-control wide listener started at {wide_origin}");
-            runtime.spawn(async move {
-                if let Err(err) = axum::serve(wide, router).await {
-                    log::warn!("local-control wide listener stopped: {err:#}");
-                }
-            });
+            log::info!("local-control wide listener started at {wide_origin}, serving TLS");
+            // Not `axum::serve`: the wide listener speaks TLS to the router and
+            // plain HTTP to a two-route router that hands out the authority
+            // (`tls.rs`). Loopback above stays `axum::serve`, plain, on purpose.
+            runtime.spawn(tls::serve(wide, tls, router));
         }
         #[cfg(unix)]
         runtime.spawn(run_credential_broker(broker_listener, state));
@@ -441,6 +485,14 @@ impl LocalControlServer {
     }
 }
 
+/// Answers `GET /ca.crt` on the router both listeners share (T19).
+async fn handle_ca_request(State(state): State<ControlServerState>) -> Response {
+    match &state.ca_certificate_pem {
+        Some(pem) => tls::ca_response(pem),
+        None => StatusCode::NOT_FOUND.into_response(),
+    }
+}
+
 /// Binds the second listener `WARP_FORK_CONTROL_BIND` asked for, if any (T11.4).
 ///
 /// Returns the listener and its `host:port`, or `None` for every case in which
@@ -450,7 +502,13 @@ impl LocalControlServer {
 /// which is the only sanctioned way to stop a running Warp. A mistyped
 /// environment variable must not be able to produce an instance nothing can
 /// shut down.
-async fn bind_wide_listener() -> Option<(tokio::net::TcpListener, String)> {
+///
+/// Since T19 the wide listener also needs TLS material, and failing to mint it
+/// is handled like a failed bind: logged, no wide listener, loopback keeps
+/// serving. A wide listener that fell back to plaintext when the authority
+/// could not be written would be the silent downgrade this module's other
+/// failure modes are all built to avoid.
+async fn bind_wide_listener() -> Option<(tokio::net::TcpListener, String, tls::ConsoleTls)> {
     let (address, port) = match crate::fork::control_bind() {
         crate::fork::ControlBind::LoopbackOnly => return None,
         crate::fork::ControlBind::Refused(reason) => {
@@ -470,7 +528,16 @@ async fn bind_wide_listener() -> Option<(tokio::net::TcpListener, String)> {
         Ok(listener) => match listener.local_addr() {
             Ok(bound) => {
                 keep_from_children(&listener);
-                Some((listener, bound.to_string()))
+                match tls::for_address(bound.ip()) {
+                    Ok(tls) => Some((listener, bound.to_string(), tls)),
+                    Err(err) => {
+                        log::warn!(
+                            "local-control wide listener not opened: its TLS material could \
+                             not be prepared: {err:#}"
+                        );
+                        None
+                    }
+                }
             }
             Err(err) => {
                 log::warn!("local-control wide listener address is unreadable: {err:#}");
@@ -1242,9 +1309,10 @@ async fn handle_pair_request(
 ///
 /// A paired device presents its device token and one action, and gets back the
 /// same short-lived, action-scoped [`ScopedCredential`] a local client gets. The
-/// difference is entirely in what it may ask for: [`pairing::ensure_pairable`]
-/// runs *before* [`issue_credential`], so a device is refused the executing half
-/// of the catalog before any policy is even consulted for it.
+/// difference is entirely in what it may ask for:
+/// [`pairing::ensure_pairable_under`] runs *before* [`issue_credential`], with
+/// the scope the device was paired under, so a device is refused the executing
+/// half of the catalog before any policy is even consulted for it.
 #[cfg(any(unix, windows, test))]
 async fn handle_pair_credential_request(
     State(state): State<ControlServerState>,
@@ -1329,7 +1397,7 @@ fn authenticate_pairing_headers(
     let reject = |status: StatusCode, error: ControlError| -> Response {
         (status, Json(ErrorResponseEnvelope::new(error))).into_response()
     };
-    if let Err(error) = validate_endpoint_headers(headers, &state.expected_hosts) {
+    if let Err(error) = validate_endpoint_headers(headers, &state.expected_origins) {
         return Err(reject(StatusCode::FORBIDDEN, error));
     }
     if let Err(error) = ensure_feature_enabled() {
@@ -1385,7 +1453,7 @@ fn authenticate(
     let reject = |status: StatusCode, error: ControlError| -> Response {
         (status, Json(ErrorResponseEnvelope::new(error))).into_response()
     };
-    if let Err(error) = validate_endpoint_headers(headers, &state.expected_hosts) {
+    if let Err(error) = validate_endpoint_headers(headers, &state.expected_origins) {
         return Err(reject(StatusCode::FORBIDDEN, error));
     }
     if let Err(error) = ensure_feature_enabled() {
@@ -1492,7 +1560,7 @@ fn local_control_publication_supported() -> bool {
 ///   time `Origin` is compared to it.
 pub(crate) fn validate_endpoint_headers(
     headers: &HeaderMap,
-    expected_hosts: &[String],
+    expected_origins: &[ListenerOrigin],
 ) -> Result<(), ControlError> {
     let host = headers
         .get(HOST)
@@ -1507,20 +1575,28 @@ pub(crate) fn validate_endpoint_headers(
     // a suffix rule and not a port comparison: the attack this stops is a name
     // that resolves to this machine but that the server never chose, and a
     // relaxed match is how that name gets back in.
-    if !expected_hosts.iter().any(|expected| expected == host) {
+    let Some(listener) = expected_origins
+        .iter()
+        .find(|expected| expected.authority == host)
+    else {
         return Err(ControlError::new(
             ErrorCode::UnauthorizedLocalClient,
             "Host header does not match the selected local-control endpoint",
         ));
-    }
+    };
     // Checked after `Host` and against it, so this is literally "same origin"
     // (T12.1). A request with no `Origin` at all is not a browser and is left
-    // alone — that is every existing `warpctrl` client.
+    // alone — that is every existing `warpctrl` client. The scheme is the one
+    // the listener that owns this `Host` speaks: `https://` on the wide one
+    // since T19, `http://` on loopback, and never the other, because a page
+    // claiming to have been served over a scheme this listener does not speak
+    // was not served by it.
     if let Some(origin) = headers.get(ORIGIN) {
         let same_origin = origin
             .to_str()
             .ok()
-            .and_then(|origin| origin.strip_prefix("http://"))
+            .and_then(|origin| origin.strip_prefix(listener.scheme))
+            .and_then(|rest| rest.strip_prefix("://"))
             .is_some_and(|authority| authority == host);
         if !same_origin {
             return Err(ControlError::new(

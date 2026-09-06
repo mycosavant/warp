@@ -19,12 +19,12 @@ use warpui::SingletonEntity as _;
 use super::ensure_peer_uid;
 use super::resolver::validate_action_target;
 use super::{
-    ControlServerState, LocalControlBridge, LocalControlServer, MAX_ACTIVE_CREDENTIALS,
-    capabilities, ensure_feature_enabled, ensure_protocol_version, ensure_settings_allow_action,
-    handle_control_request, insert_credential, issue_credential, lookup_credential,
-    require_active_window_id, resolve_index_from_ids, resolve_title_from_matches,
-    validate_action_params, validate_endpoint_headers, validate_request_authority,
-    validate_tab_create_target,
+    ControlServerState, ListenerOrigin, LocalControlBridge, LocalControlServer,
+    MAX_ACTIVE_CREDENTIALS, capabilities, ensure_feature_enabled, ensure_protocol_version,
+    ensure_settings_allow_action, handle_control_request, insert_credential, issue_credential,
+    lookup_credential, require_active_window_id, resolve_index_from_ids,
+    resolve_title_from_matches, validate_action_params, validate_endpoint_headers,
+    validate_request_authority, validate_tab_create_target,
 };
 use crate::settings::{LocalControlMode, LocalControlModeSetting, LocalControlSettings};
 
@@ -177,7 +177,7 @@ fn capabilities_advertises_the_complete_catalog() {
 
 #[test]
 fn loopback_headers_reject_origin_and_host_mismatch() {
-    let expected_hosts = vec!["127.0.0.1:1234".to_owned()];
+    let expected_hosts = vec![ListenerOrigin::plain("127.0.0.1:1234".to_owned())];
     let mut headers = HeaderMap::new();
     headers.insert(HOST, HeaderValue::from_static("127.0.0.1:1234"));
 
@@ -211,7 +211,10 @@ fn loopback_headers_reject_origin_and_host_mismatch() {
 /// obvious way to make two listeners work — would wave it through.
 #[test]
 fn the_host_check_accepts_the_addresses_bound_and_no_others() {
-    let expected_hosts = vec!["127.0.0.1:1234".to_owned(), "192.168.1.5:5678".to_owned()];
+    let expected_hosts = vec![
+        ListenerOrigin::plain("127.0.0.1:1234".to_owned()),
+        ListenerOrigin::tls("192.168.1.5:5678".to_owned()),
+    ];
     let host = |value: &'static str| {
         let mut headers = HeaderMap::new();
         headers.insert(HOST, HeaderValue::from_static(value));
@@ -258,7 +261,10 @@ fn the_host_check_accepts_the_addresses_bound_and_no_others() {
 /// only stops a same-origin request from being collateral damage.
 #[test]
 fn the_origin_check_accepts_this_instances_own_console_and_no_others() {
-    let expected_hosts = vec!["127.0.0.1:1234".to_owned(), "192.168.1.5:5678".to_owned()];
+    let expected_hosts = vec![
+        ListenerOrigin::plain("127.0.0.1:1234".to_owned()),
+        ListenerOrigin::tls("192.168.1.5:5678".to_owned()),
+    ];
     let request = |host: &'static str, origin: &'static str| {
         let mut headers = HeaderMap::new();
         headers.insert(HOST, HeaderValue::from_static(host));
@@ -268,7 +274,8 @@ fn the_origin_check_accepts_this_instances_own_console_and_no_others() {
 
     for (host, origin) in [
         ("127.0.0.1:1234", "http://127.0.0.1:1234"),
-        ("192.168.1.5:5678", "http://192.168.1.5:5678"),
+        // The wide listener speaks TLS (T19), so the page it served says so.
+        ("192.168.1.5:5678", "https://192.168.1.5:5678"),
     ] {
         assert!(
             validate_endpoint_headers(&request(host, origin), &expected_hosts).is_ok(),
@@ -290,11 +297,22 @@ fn the_origin_check_accepts_this_instances_own_console_and_no_others() {
         .is_err(),
         "our own other listener is still not this request's origin"
     );
+    // The scheme is the listener's, not a choice the page gets to make: the
+    // wide listener never served a page over `http://`, and loopback never
+    // served one over `https://`.
+    assert!(
+        validate_endpoint_headers(
+            &request("192.168.1.5:5678", "http://192.168.1.5:5678"),
+            &expected_hosts,
+        )
+        .is_err(),
+        "a plaintext origin at the TLS listener's address was not served by it"
+    );
 
     for origin in [
         // The ordinary cross-site attacker.
         "http://evil.example",
-        // A scheme this plaintext server cannot have served from, so a page
+        // A scheme this plaintext listener cannot have served from, so a page
         // claiming it was served by us was not. Bare-authority comparison —
         // the obvious shortcut — would have accepted this.
         "https://127.0.0.1:1234",
@@ -325,7 +343,7 @@ fn the_origin_check_accepts_this_instances_own_console_and_no_others() {
 /// the new console kept working.
 #[test]
 fn a_client_that_is_not_a_browser_still_needs_no_origin() {
-    let expected_hosts = vec!["127.0.0.1:1234".to_owned()];
+    let expected_hosts = vec![ListenerOrigin::plain("127.0.0.1:1234".to_owned())];
     let mut headers = HeaderMap::new();
     headers.insert(HOST, HeaderValue::from_static("127.0.0.1:1234"));
     validate_endpoint_headers(&headers, &expected_hosts).expect("no Origin is the CLI's shape");
@@ -549,7 +567,10 @@ fn disabling_scripting_invalidates_existing_grant_and_prevents_new_grants() {
             ControlServerState {
                 bridge_spawner: ctx.spawner(),
                 instance_id: instance_id.clone(),
-                expected_hosts: std::sync::Arc::new(vec![expected_host.clone()]),
+                expected_origins: std::sync::Arc::new(vec![ListenerOrigin::plain(
+                    expected_host.clone(),
+                )]),
+                ca_certificate_pem: None,
                 credentials: Default::default(),
                 pairings: None,
             }

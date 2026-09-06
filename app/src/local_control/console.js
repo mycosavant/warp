@@ -110,6 +110,8 @@
     clock: document.getElementById('clock'),
     pairing: document.getElementById('pairing'),
     pairingNote: document.getElementById('pairing-note'),
+    pairingTrust: document.getElementById('pairing-trust'),
+    pairingInstall: document.getElementById('pairing-install'),
     approvals: document.getElementById('approvals'),
     waitingCount: document.getElementById('waiting-count'),
     waitingNote: document.getElementById('waiting-note'),
@@ -260,6 +262,13 @@
   function showPairing(why) {
     el.pairing.hidden = false;
     el.pairingNote.textContent = why;
+    // Read off the browser, not inferred from the URL: a secure context is
+    // the browser's decision, and it is what decides whether this page can
+    // notify at all (item 5). Over http:// at a LAN address it is false.
+    el.pairingTrust.textContent = window.isSecureContext
+      ? 'secure context: yes — this browser trusts the console\'s certificate, and notifications can work.'
+      : 'secure context: no — the browser does not trust this address, so it will not notify you. Install the certificate below and open the https:// address.';
+    el.pairingInstall.hidden = !!window.isSecureContext;
     el.unpair.hidden = true;
     badge(el.link, 'not paired', 'warn');
   }

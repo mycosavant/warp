@@ -262,6 +262,14 @@ resvg = "0.47.0"
 rust-embed = { version = "8.7.0", features = ["include-exclude"] }
 rustc-hash = "2.1.1"
 rustls = "0.23.39"
+# The fork's console listener (T19): a CA minted once and a server certificate
+# signed by it. `aws_lc_rs` rather than the default `ring`, because that is the
+# rustls provider the rest of this graph already compiles.
+rcgen = { version = "0.14.10", default-features = false, features = ["aws_lc_rs", "pem"] }
+tokio-rustls = { version = "0.26.4", default-features = false }
+hyper-util = { version = "0.1.16", features = ["server-auto", "service", "tokio"] }
+time = "0.3.47"
+pem = "4.0.0"
 schemars = { version = "1", features = ["chrono04"] }
 sentry = { version = "0.47.0", default-features = false, features = [
   "anyhow",

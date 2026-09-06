@@ -462,8 +462,19 @@ pub(super) fn ensure_pairable_under(action: ActionKind, scope: &Scope) -> Result
 /// yet, so today this is a convention the pairing client is asked to follow
 /// rather than something a browser guarantees. It costs nothing to get right
 /// now and would cost a redesign later.
+///
+/// `https://` since T19: `origin` is always the wide listener's, and the wide
+/// listener speaks TLS. The loopback origin in the discovery record is built
+/// elsewhere and stays `http://`.
 pub(super) fn pair_url(origin: &str, path: &str, code: &AuthToken) -> String {
-    format!("http://{origin}{path}#{}", code.secret())
+    format!("https://{origin}{path}#{}", code.secret())
+}
+
+/// Where a phone that has not installed the console's authority yet fetches
+/// it: the same address, in the clear, which the wide listener answers with
+/// the certificate and nothing else (`tls.rs`).
+pub(crate) fn ca_url(origin: &str) -> String {
+    format!("http://{origin}{}", super::tls::CA_PATH)
 }
 
 #[cfg(test)]
