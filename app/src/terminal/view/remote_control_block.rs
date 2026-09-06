@@ -9,6 +9,7 @@
 //! the code stays spendable until it expires, and a phone that already
 //! scanned stays paired until *Stop sharing* in the footer cuts it off.
 use pathfinder_geometry::vector::vec2f;
+use warpui::r#async::{SpawnedFutureHandle, Timer};
 use warpui::clipboard::ClipboardContent;
 use warpui::color::ColorU;
 use warpui::elements::{
@@ -23,6 +24,7 @@ use warpui::{
 
 use crate::appearance::Appearance;
 use crate::drive::sharing::qr_code::{QUIET_ZONE_MODULES, QrMatrix, qr_matrix_for_url};
+use crate::local_control::remote_control::ControlState;
 use crate::ui_components::icons::Icon;
 use crate::view_components::DismissibleToast;
 use crate::view_components::action_button::{ActionButton, ButtonSize, NakedTheme};
@@ -41,7 +43,16 @@ const QR_SIZE: f32 = 176.;
 /// its child unbounded width.
 const STACK_BELOW_WIDTH: f32 = 480.;
 
+/// How often the block re-reads the pairing map while a code is outstanding.
+/// The map has no notifier and a redeem happens on the server's thread, so
+/// the view polls; two seconds is well inside how long a person looks at a
+/// phone after scanning, and the tick stops once the state can no longer
+/// change on its own.
+const STATE_TICK: std::time::Duration = std::time::Duration::from_secs(2);
+
 pub(crate) struct RemoteControlBlock {
+    /// The conversation the code was minted for; what the state is read by.
+    conversation_id: String,
     url: String,
     /// Where a phone that has not installed the console's certificate
     /// authority yet fetches it, in the clear (T19). Once per phone.
@@ -52,10 +63,13 @@ pub(crate) struct RemoteControlBlock {
     close_button: ViewHandle<ActionButton>,
     copy_button: ViewHandle<ActionButton>,
     should_hide: bool,
+    /// The tick that redraws the state line while it can still change.
+    tick: Option<SpawnedFutureHandle>,
 }
 
 impl RemoteControlBlock {
     pub(crate) fn new(
+        conversation_id: String,
         result: &::local_control::protocol::PairingResult,
         ctx: &mut ViewContext<Self>,
     ) -> Self {
@@ -76,7 +90,8 @@ impl RemoteControlBlock {
                     ctx.dispatch_typed_action(RemoteControlBlockAction::CopyLink);
                 })
         });
-        Self {
+        let mut block = Self {
+            conversation_id,
             matrix: qr_matrix_for_url(&result.url).ok(),
             url: result.url.clone(),
             ca_url: result.ca_url.clone(),
@@ -85,6 +100,57 @@ impl RemoteControlBlock {
             close_button,
             copy_button,
             should_hide: false,
+            tick: None,
+        };
+        block.schedule_tick(ctx);
+        block
+    }
+
+    /// Re-reads the state in two seconds, and keeps doing so while a scan is
+    /// still possible. Stops once paired or idle: from there only a click on
+    /// the chip changes anything, and the chip's own handler redraws.
+    fn schedule_tick(&mut self, ctx: &mut ViewContext<Self>) {
+        self.tick = Some(ctx.spawn_abortable(
+            Timer::after(STATE_TICK),
+            |block, _, ctx| {
+                block.tick = None;
+                if block.should_hide {
+                    return;
+                }
+                ctx.notify();
+                if matches!(
+                    crate::local_control::remote_control::state_of(&block.conversation_id, ctx),
+                    ControlState::Waiting { .. }
+                ) {
+                    block.schedule_tick(ctx);
+                }
+            },
+            |_, _| {},
+        ));
+    }
+
+    /// The state line: what the desk knows about the phone (2026-09-06, the
+    /// first half of "the desk should know what the phone did"). Read off the
+    /// pairing map on each render, so a redeem on the server's thread shows
+    /// on the next tick and Stop sharing shows at once.
+    fn state_line(&self, app: &AppContext) -> String {
+        match crate::local_control::remote_control::state_of(&self.conversation_id, app) {
+            ControlState::Waiting { expires_at } => format!(
+                "Waiting for a scan; the code dies at {}.",
+                expires_at.format("%H:%M:%S UTC")
+            ),
+            ControlState::Paired { since, devices: 1 } => {
+                format!("Paired at {}.", since.format("%H:%M:%S UTC"))
+            }
+            ControlState::Paired { since, devices } => format!(
+                "Paired at {}; {devices} devices hold this conversation.",
+                since.format("%H:%M:%S UTC")
+            ),
+            ControlState::Idle => {
+                "The code expired unscanned, or sharing was stopped. Click /remote-control again \
+                 for a new one."
+                    .to_owned()
+            }
         }
     }
 
@@ -134,6 +200,7 @@ impl RemoteControlBlock {
     /// The title, the sentences, the link and the copy button, as one column.
     fn render_text(
         &self,
+        app: &AppContext,
         appearance: &Appearance,
         theme: &warp_core::ui::theme::WarpTheme,
     ) -> Box<dyn Element> {
@@ -156,6 +223,12 @@ impl RemoteControlBlock {
             .with_spacing(8.)
             .with_cross_axis_alignment(CrossAxisAlignment::Start);
         text.add_child(title);
+        text.add_child(
+            Text::new(self.state_line(app), appearance.ui_font_family(), 14.)
+                .with_style(Properties::default().weight(Weight::Bold))
+                .with_color(theme.main_text_color(theme.background()).into_solid())
+                .finish(),
+        );
         text.add_child(line(
             "Scan with a phone on this network to drive this conversation from it: watch its \
              record, answer its permission requests, stop it, prompt it. That conversation and \
@@ -228,13 +301,13 @@ impl View for RemoteControlBlock {
             // `Expanded`, not `Align`: the text takes what the QR leaves and
             // wraps inside it, which is what the plugin-instructions block
             // does for the same shape.
-            .with_child(Expanded::new(1., self.render_text(appearance, theme)).finish())
+            .with_child(Expanded::new(1., self.render_text(app, appearance, theme)).finish())
             .finish();
         let below = Flex::column()
             .with_spacing(16.)
             .with_cross_axis_alignment(CrossAxisAlignment::Start)
             .with_child(qr(self))
-            .with_child(self.render_text(appearance, theme))
+            .with_child(self.render_text(app, appearance, theme))
             .finish();
         let content = SizeConstraintSwitch::new(
             beside,
@@ -277,6 +350,7 @@ impl TypedActionView for RemoteControlBlock {
         match action {
             RemoteControlBlockAction::Close => {
                 self.should_hide = true;
+                self.tick = None;
                 ctx.emit(RemoteControlBlockEvent::Close);
                 ctx.notify();
             }
@@ -329,7 +403,9 @@ impl super::TerminalView {
         self.remove_remote_control_blocks(ctx);
         ctx.clipboard()
             .write(ClipboardContent::plain_text(result.url.clone()));
-        let block = ctx.add_typed_action_view(|ctx| RemoteControlBlock::new(&result, ctx));
+        let block = ctx.add_typed_action_view(|ctx| {
+            RemoteControlBlock::new(conversation_id.clone(), &result, ctx)
+        });
         ctx.subscribe_to_view(&block, |view, block, event, ctx| match event {
             RemoteControlBlockEvent::Close => {
                 view.remove_remote_control_block(block.clone(), ctx);

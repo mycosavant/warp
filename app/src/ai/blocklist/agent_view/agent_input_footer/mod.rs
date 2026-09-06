@@ -2114,12 +2114,25 @@ impl AgentInputFooter {
         // instance that the click reports as a toast naming the variable,
         // which is a better place for that sentence than a greyed chip.
         if crate::fork::is_active() {
+            // Names the variable only when it is what is missing: measured
+            // 2026-09-06, the tooltip said "(needs WARP_FORK_CONTROL_BIND)" over
+            // a chip whose listener was open and serving. Read off the variable
+            // rather than the bridge, because `LocalControlBridge` is a
+            // singleton a test app never registers and `as_ref` on a missing
+            // one panics (two layout tests, first try). A bind that was asked
+            // for and failed reads as available here; the click's toast is
+            // the accurate report.
+            let tooltip = if matches!(
+                crate::fork::control_bind(),
+                crate::fork::ControlBind::Additional(..)
+            ) {
+                "Hand this conversation to a phone"
+            } else {
+                "Hand this conversation to a phone (needs WARP_FORK_CONTROL_BIND)"
+            };
             self.start_remote_control_button.update(ctx, |button, ctx| {
                 button.set_disabled(false, ctx);
-                button.set_tooltip(
-                    Some("Hand this conversation to a phone (needs WARP_FORK_CONTROL_BIND)"),
-                    ctx,
-                );
+                button.set_tooltip(Some(tooltip), ctx);
             });
             return;
         }

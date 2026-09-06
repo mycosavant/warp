@@ -22,6 +22,7 @@ use warpui::{AppContext, SingletonEntity};
 
 use crate::local_control::LocalControlBridge;
 use crate::local_control::handlers::pairing::mint;
+pub(crate) use crate::local_control::pairing::ControlState;
 use crate::local_control::pairing::Scope;
 
 /// Hands a conversation to whatever scans the code this returns.
@@ -57,6 +58,18 @@ pub(crate) fn stop(conversation_id: &str, app: &AppContext) -> usize {
         return 0;
     };
     pairings.revoke_conversation(conversation_id)
+}
+
+/// Where remote control of a conversation stands, for the block in the pane:
+/// waiting for a scan, paired since when, or nothing outstanding.
+pub(crate) fn state_of(conversation_id: &str, app: &AppContext) -> ControlState {
+    let Some(pairing) = LocalControlBridge::as_ref(app).pairing().cloned() else {
+        return ControlState::Idle;
+    };
+    let Ok(pairings) = pairing.pairings.lock() else {
+        return ControlState::Idle;
+    };
+    pairings.control_state(conversation_id, chrono::Utc::now())
 }
 
 /// Whether a conversation is handed to a device right now: a live device

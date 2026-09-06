@@ -289,7 +289,27 @@ struct PairedDevice {
     token: AuthToken,
     /// `None` for a control pairing, which has no clock; see [`DEVICE_LIFETIME`].
     expires_at: Option<DateTime<Utc>>,
+    /// When the code was spent, for the block in the pane to say "paired at".
+    paired_at: DateTime<Utc>,
     scope: Scope,
+}
+
+/// Where remote control of one conversation stands, as the block in the pane
+/// draws it (2026-09-06). Read off the map on every render rather than pushed
+/// to the view, because the map is process-local state with no notifier and
+/// the block is the only reader.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum ControlState {
+    /// No device paired and no code outstanding. For a block that was drawn
+    /// with a code, this is "the code expired unscanned".
+    Idle,
+    /// A code is outstanding and no device has spent one yet.
+    Waiting { expires_at: DateTime<Utc> },
+    /// At least one device spent a code; `since` is the earliest.
+    Paired {
+        since: DateTime<Utc>,
+        devices: usize,
+    },
 }
 
 /// A minted pairing code and its deadline.
@@ -359,6 +379,35 @@ impl Pairings {
                 .any(|pending| pending.scope == scope && pending.expires_at > now)
     }
 
+    /// Where remote control of a conversation stands right now; see
+    /// [`ControlState`].
+    pub(crate) fn control_state(&self, conversation_id: &str, now: DateTime<Utc>) -> ControlState {
+        let scope = Scope::Control {
+            conversation_id: conversation_id.to_owned(),
+        };
+        let paired: Vec<&PairedDevice> = self
+            .devices
+            .iter()
+            .filter(|device| device.scope == scope && device.is_live(now))
+            .collect();
+        if let Some(since) = paired.iter().map(|device| device.paired_at).min() {
+            return ControlState::Paired {
+                since,
+                devices: paired.len(),
+            };
+        }
+        match self
+            .codes
+            .iter()
+            .filter(|pending| pending.scope == scope && pending.expires_at > now)
+            .map(|pending| pending.expires_at)
+            .max()
+        {
+            Some(expires_at) => ControlState::Waiting { expires_at },
+            None => ControlState::Idle,
+        }
+    }
+
     /// Spends a pairing code and returns the device token it buys.
     ///
     /// The code is removed whether or not the rest succeeds, which is what makes
@@ -392,6 +441,7 @@ impl Pairings {
         self.devices.push(PairedDevice {
             token: token.clone(),
             expires_at,
+            paired_at: now,
             scope: scope.clone(),
         });
         Ok(IssuedDevice {

@@ -100,6 +100,48 @@ fn a_control_pairing_outlives_the_working_day_and_a_watch_pairing_does_not() {
     );
 }
 
+/// The three states the block in the pane draws (2026-09-06): waiting while a
+/// code is outstanding, paired once one is spent, idle once the code died
+/// unscanned or Stop sharing took the conversation back.
+#[test]
+fn the_block_can_read_waiting_paired_and_expired_off_the_map() {
+    let mut pairings = Pairings::default();
+    let control = Scope::Control {
+        conversation_id: "c-1".to_owned(),
+    };
+    assert_eq!(pairings.control_state("c-1", at(0)), ControlState::Idle);
+
+    let code = pairings.issue_code(at(0), control.clone());
+    assert_eq!(
+        pairings.control_state("c-1", at(1)),
+        ControlState::Waiting {
+            expires_at: code.expires_at
+        }
+    );
+    // Another conversation's code is not this one's.
+    assert_eq!(pairings.control_state("c-2", at(1)), ControlState::Idle);
+
+    // Unscanned past its lifetime: idle, which the block draws as expired.
+    assert_eq!(pairings.control_state("c-1", at(3)), ControlState::Idle);
+
+    let code = pairings.issue_code(at(3), control);
+    pairings.redeem(&code.code, at(4)).expect("pairs");
+    assert_eq!(
+        pairings.control_state("c-1", at(30)),
+        ControlState::Paired {
+            since: at(4),
+            devices: 1
+        }
+    );
+    // No clock on it: still paired a day later.
+    assert!(matches!(
+        pairings.control_state("c-1", at(4) + Duration::days(1)),
+        ControlState::Paired { devices: 1, .. }
+    ));
+    pairings.revoke_conversation("c-1");
+    assert_eq!(pairings.control_state("c-1", at(30)), ControlState::Idle);
+}
+
 /// The two secrets are drawn from the same generator and are the same shape, so
 /// nothing about them *looks* different — only the list they are checked against
 /// keeps them apart. A device token that could be redeemed as a pairing code
