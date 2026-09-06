@@ -157,8 +157,16 @@ egress deny-list's blind spot is unreachable without an account.
       start/stop state reads the pairing map. The seam this ticket named as
       `terminal/view.rs:22356` had moved to 22562 by then; line numbers in a
       read-only ticket are a fact about the day they were read.
-- [ ] **Hide `HandoffToCloud` under fork policy.** Nothing to point it at.
-      Still open; board item 5.
+- [x] **Hide `HandoffToCloud` under fork policy.** Nothing to point it at.
+      Done 2026-09-06: `FeatureFlag::HandoffLocalCloud` in `fork::FORCE_DISABLED`.
+      One flag rather than a branch in the footer, because the same flag gates
+      the `&` prefix, `/move-to-cloud`, the one-time toolbar migration and
+      auto-handoff on sleep, and each of those is the same cloud machine by
+      another door. `OzHandoff` was left alone: twenty-odd call sites, most of
+      them about cloud panes this ticket has no opinion on. The cargo feature is
+      in `default`, so the runtime force is the removal and not a backstop;
+      `the_footer_does_not_offer_to_hand_a_conversation_to_a_cloud_it_cannot_reach`
+      pins both halves.
 - [x] **Re-run the whole ticket before building.** The one empirical claim,
       that the chip renders, held; the rest was built against the code as
       read and then run on Windows (`.fork/runs/remote-control-2026-09-05/`).

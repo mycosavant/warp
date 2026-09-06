@@ -94,8 +94,23 @@ pub fn is_active() -> bool {
 /// `fetch_version` issues its request *before* the Oss-channel arm bails. So
 /// with the flag on, an untagged fork build would ask Warp's `/client_version`
 /// daily and throw the answer away.
+///
+/// `HandoffLocalCloud` is the fourth shape: **a surface with nothing local to
+/// point at.** It gates every entry to local-to-cloud handoff -- the "Hand off
+/// to cloud" chip in the agent footer, the `&` prefix in the input,
+/// `/move-to-cloud`, the one-time migration that appends the chip to a
+/// customised toolbar, auto-handoff on sleep, and the two settings widgets --
+/// all of which fork the conversation onto an Oz cloud machine under a Warp
+/// account. "Hand off to a machine I own" is a different feature that shares a
+/// word (`remote_server`, the WSL transport), so there is no fork-side target to
+/// repoint this at, unlike `/remote-control`. The chip's real gate was a login
+/// prompt, which in a no-account product is a contradiction drawn in the footer
+/// (T19, board item 5). The narrower of the two flags is the one listed:
+/// `OzHandoff` has twenty-odd call sites and gates cloud-pane behaviour this
+/// entry has no opinion on.
 const FORCE_DISABLED: &[FeatureFlag] = &[
     FeatureFlag::Autoupdate,
+    FeatureFlag::HandoffLocalCloud,
     FeatureFlag::FullSourceCodeEmbedding,
     FeatureFlag::CrashReporting,
     FeatureFlag::CocoaSentry,

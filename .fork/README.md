@@ -58,7 +58,7 @@ number means the file whose name starts with that number.
 | `T16-wsl-explorer-9p.md` | the WSL explorer walked over 9p; routing through the server | phases 1–3 built |
 | `T17-lsp-for-agents.md` | is LSP for agents already built and switched off? | answered |
 | `T18-wsl-pane-turns.md` | every turn in a WSL pane died before it began | fixed |
-| `T19-agent-footer-chips.md` | the two cloud chips in the agent footer | open |
+| `T19-agent-footer-chips.md` | the two cloud chips in the agent footer | closed 2026-09-06 |
 | `T20-what-run-2-left.md` | what run 2 left | |
 | `open-questions.md` | the open-questions list from the old board | |
 

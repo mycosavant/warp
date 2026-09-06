@@ -1316,6 +1316,25 @@ fn the_fork_never_asks_warp_for_a_newer_binary() {
     );
 }
 
+/// The footer's "Hand off to cloud" is switched off by the fork, not by
+/// packaging: `handoff_local_cloud` is in `app/Cargo.toml`'s `default` list, so
+/// the chip, the `&` prefix and `/move-to-cloud` all render in a build made
+/// here unless something turns the flag off. This entry is that something, and
+/// the `cfg!` is the evidence it is the primary removal rather than a backstop
+/// (the shape of `the_index_that_uploads_source_is_forced_off_not_merely_absent`).
+#[test]
+fn the_footer_does_not_offer_to_hand_a_conversation_to_a_cloud_it_cannot_reach() {
+    assert!(
+        cfg!(feature = "handoff_local_cloud"),
+        "the cargo feature has gone off -- the FORCE_DISABLED entry is now \
+         belt-and-braces rather than the removal; fine, but say so in its doc"
+    );
+    assert!(
+        FORCE_DISABLED.contains(&FeatureFlag::HandoffLocalCloud),
+        "with the cargo feature on, nothing else in this build hides the chip"
+    );
+}
+
 /// The predicate must not consult the version, or stamping a commit into the
 /// binary silently re-arms the download path.
 ///
