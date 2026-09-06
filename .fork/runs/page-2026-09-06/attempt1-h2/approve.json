@@ -1,0 +1,1 @@
+{"protocol_version":1,"request_id":"3953822e-6b56-4cde-9e13-9fabbbc6a982","response":{"status":"ok","data":{"action":"agent.approve","ok":true,"instance_id":"inst_88e54b606f484ca9a2464ff29a40b67f","approval_id":"9fffb16d-d397-4e43-948d-adb7846cd971:0","decision":"allow","agent":"wsl.exe","keystroke":"allow-once"}}}

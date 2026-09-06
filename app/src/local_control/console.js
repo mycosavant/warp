@@ -937,12 +937,22 @@
   // "Is the agent asking me or its classifier" is the first thing a phone
   // wants to know, and a zero on permission requests means Warp was not in
   // the loop, never that nothing was decided.
+  // The mode and model lines are the agent's whole disclosure ("current
+  // `auto`; offered `default` (…)"), which the record keeps whole; the
+  // header wants the current id, so the backticked value after "current" is
+  // taken when there is one. Photographed whole first
+  // (`.fork/runs/page-2026-09-06/page-head.png`), trimmed after.
+  function currentOf(text) {
+    var m = /current (`[^`]*`)/.exec(text);
+    return m ? m[1] : text;
+  }
+
   function recordFacts(rows) {
     var facts = {};
     rows.forEach(function (row) {
       if (row.from !== 'warp' || !row.raw) return;
-      if (row.kind === 'session_mode' && row.text) facts.mode = row.text;
-      if (row.kind === 'session_model' && row.text) facts.model = row.text;
+      if (row.kind === 'session_mode' && row.text) facts.mode = currentOf(row.text);
+      if (row.kind === 'session_model' && row.text) facts.model = currentOf(row.text);
       if (row.kind === 'session_agent' && row.text) facts.agent = row.text;
       if (row.raw.cwd && !facts.cwd) facts.cwd = String(row.raw.cwd);
     });

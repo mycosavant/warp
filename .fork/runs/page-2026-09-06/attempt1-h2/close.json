@@ -1,0 +1,8 @@
+{
+  "action": "window.close",
+  "ok": true,
+  "instance_id": "inst_88e54b606f484ca9a2464ff29a40b67f",
+  "close": "requested",
+  "cancellable": true,
+  "verify": "a cancellable close can be refused and this result does not observe the outcome; poll `instance list` until this instance is gone. If it stays, end any CLI agent running in a pane and cancel any in-flight agent turn, then close again."
+}

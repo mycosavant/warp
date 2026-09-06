@@ -1631,11 +1631,26 @@ nothing about why until you know there was something to load.
   perfectly to the nasty request. **It binds server-state to server-state; it
   never binds what the human saw.**
 
-The remedy for all three is transport encryption the fork does not have. A
-Tailscale address is *one literal IP* and so fits `WARP_FORK_CONTROL_BIND`'s
-parser unchanged — binding it is **narrower** than the LAN bind, not wider, and
-retires the mirrored-networking firewall rule. Prefer it as a *replacement*
-bind, never an addition, and never a port-forward.
+The remedy for all three was transport encryption, and since 2026-09-06 the
+wide listener has it (above). A Tailscale address is still *one literal IP*
+and so fits `WARP_FORK_CONTROL_BIND`'s parser unchanged for reach — binding
+it is **narrower** than the LAN bind, not wider, and retires the
+mirrored-networking firewall rule. Prefer it as a *replacement* bind, never an
+addition, and never a port-forward.
+
+**An instrument narrower than the thing it stands in for passes what the
+thing fails, measured 2026-09-06 twice in one day.** `curl.exe` drove the
+whole TLS flow green in the morning; the first browser to reach the same
+listener was refused every request, *Host header is required*, because it
+negotiated HTTP/2 from the ALPN list and over h2 the authority is a
+pseudo-header the `Host` check never sees, while `curl.exe` offers HTTP/1.1
+only. And `curl.exe` is Schannel, which refuses a private authority's chain
+outright (`CERT_TRUST_REVOCATION_STATUS_UNKNOWN`) where every phone accepts
+it, so the first driver pass read `000` on every TLS line and looked like a
+broken server. Neither was the fork; both were the stand-in. When the real
+client is a phone, put a browser in the loop before believing curl, and read
+what protocol it negotiated (`.fork/runs/page-2026-09-06/`,
+`.fork/runs/tls-2026-09-06/`).
 
 **`DEVICE_LIFETIME` is 12 hours** (`pairing.rs:116`), so a phone paired at
 breakfast is unpaired by dinner, and re-pairing needs a locally-authenticated

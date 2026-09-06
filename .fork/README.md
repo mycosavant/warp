@@ -20,7 +20,9 @@ built.
 
 **`HANDOFF-MOBILE.md` is the handoff for that work**, written 2026-09-06 for a
 fresh session after the maintainer answered the spec's four decisions
-(`decisions/2026-09-06-the-phone-surface-four-decisions.md`). Live while the
+(`decisions/2026-09-06-the-phone-surface-four-decisions.md`). Its steps 1
+(the code half) to 6 were built and measured the same day; what remains is a
+person with a phone, and the checklist at its top is that run. Live while the
 work is open; it moves to `archive/` when the last step is measured.
 
 ## docs/ — one page per surface, current truth
@@ -95,6 +97,11 @@ undated in the source and say so in their filename. Later decisions live in
 | `runs/classifier/` | the permission-classifier eval set, probes and their README |
 | `runs/viewer-phase0-2026-09-05/` | the viewer's phase 0: the join between Warp's log and the agent's session file, measured live under `auto` |
 | `runs/viewer-phase3-2026-09-05/` | the viewer's phase 3: the record served to a paired device on the Windows build, the harness file found inside the distribution, the page photographed |
+| `runs/remote-control-2026-09-05/` | `/remote-control` handed to a device: the scope, the confinement, two defects found and closed |
+| `runs/handoff-chip-2026-09-06/` | the cloud handoff switched off, measured against a baseline taken by accident |
+| `runs/tls-2026-09-06/` | the wide listener over TLS: the authority in the clear, the console over TLS, the block wrapped and stacked, Brave on three pages |
+| `runs/pairing-2026-09-06/` | a control pairing with no clock, the block's three states, `via: paired_device` in the record and "from the phone" in the trace |
+| `runs/page-2026-09-06/` | the console's header, diff and notify button on the Windows build; the h2 refusal found and closed; the chip flipping back on its own |
 
 ## viewer/ — fixtures the trace is pinned against
 

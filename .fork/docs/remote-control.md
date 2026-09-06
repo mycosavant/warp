@@ -218,8 +218,9 @@ click. Two defects found and closed the same night:
 
 ## Being told, and what the record shows (2026-09-06, page only)
 
-Steps 5 and 6 of the handoff, in `console.js`, built after the runs below and
-not yet photographed on the Windows build.
+Steps 5 and 6 of the handoff, in `console.js`, photographed on the Windows
+build in `.fork/runs/page-2026-09-06/` (a desktop Brave standing in for a
+phone that installed the authority).
 
 - **Foreground notifications.** A *notify me* button in the header, drawn
   only in a secure context where the Notification API exists and permission
@@ -266,11 +267,23 @@ On the Windows release builds `v0.fork.dd68ff0de` and `v0.fork.a09fd38f2`:
   paired_device · answered_by control_plane · decision allowed`, and the
   trace's *from the phone* on the prompt row and the decision line, text and
   HTML. The file the phone asked for existed in the distribution.
-- **Two things the runs found**: the chip did not flip back from *Stop
+- **The page** (`.fork/runs/page-2026-09-06/`, Brave with certificate errors
+  ignored, HTTP/1.1): paired and *live*, *notify me* in the header, an `Edit`
+  drawn as `- beta` / `+ delta` under its file with *Warp: allowed by
+  control_plane from the phone* on its decision line, and the header reading
+  the record's mode, model, agent and directory. The chip flipped back to
+  `/remote-control` on its own 125 s after a code nobody scanned.
+- **Three things the runs found**: the chip did not flip back from *Stop
   sharing* when a code died, because nothing re-rendered the footer (a tick
-  from the click now does, built after the run, not yet photographed); and
-  `warpctrl agent trace` on Windows needs `--harness-dir` naming the
-  distribution, as its help says.
+  from the click now does, measured on the page run:
+  `.fork/runs/page-2026-09-06/chip-after-expiry.png`); `warpctrl agent trace`
+  on Windows needs `--harness-dir` naming the distribution, as its help says;
+  and **the first browser to reach the TLS listener was refused every
+  request**, *Host header is required*, because it negotiated HTTP/2 from
+  the ALPN list and over h2 the authority is a pseudo-header the `Host` check
+  never sees. `curl.exe` offers HTTP/1.1 only, so the morning's flow had
+  passed under an instrument narrower than a phone. The listener advertises
+  HTTP/1.1 only now (`e8005d252`).
 
 ## Unverified, as of writing
 
@@ -283,8 +296,6 @@ On the Windows release builds `v0.fork.dd68ff0de` and `v0.fork.a09fd38f2`:
   page in the background, adding to the home screen (Chrome should now offer
   a real install; iOS adds it either way), a lock and unlock mid-turn, and
   the pairing surviving overnight. Each is one line in the next run's README.
-- The chip flipping back on its own when a code dies, after the fix.
-- The notify button, the header facts and the diff, on the Windows build.
 - Whether the `wsl.exe` relays Warp spawns for its git chip should outlive
   the instance at all. They held the wide listener until the listener was
   marked non-inheritable (`keep_from_children`, measured: a close and a

@@ -4,6 +4,47 @@ Written 2026-09-06 for a fresh session. Repo `/home/effatha/git/warp`, branch
 `dev`, HEAD at or after `29308327a`. Everything below is either measured and
 says so, or read and says that.
 
+## Where it stands, 2026-09-06 evening
+
+Steps 1 (its code half), 2, 3, 4, 5 and 6 below are built and committed
+(`5a954bf7e`..`fbb75ca19` and after). Measured on the Windows release build:
+the wire (`.fork/runs/tls-2026-09-06/`), the block's layout and its three
+states, the no-clock pairing and the record (`.fork/runs/pairing-2026-09-06/`).
+`remote-control.md`'s "Measured 2026-09-06" and "Unverified" sections are the
+current truth. **What needs a person with a phone is unchanged and is the
+first thing left**, and it is now one checklist rather than step 1's
+paragraph:
+
+1. `ggwarpdev console` (or `warpdev.ps1 -Console`); on the phone, on the LAN,
+   open `http://192.168.254.3:41234/ca.crt` in its browser and install the
+   authority (Android: Settings › Security › Encryption & credentials ›
+   Install a certificate › CA certificate; iOS: allow the profile, install it
+   under VPN & Device Management, then Certificate Trust Settings › full
+   trust). Record which screens it took and whether the download was
+   offered at all.
+2. In a pane with a conversation, click `/remote-control`; scan the block.
+   Expect `https://…` with **no warning page**; the pairing page will not be
+   shown because the code pairs on load, so open `https://192.168.254.3:41234/`
+   in a second tab once to read *secure context: yes* or *no*.
+3. Tap *notify me* in the header, allow. Put the phone down with the page in
+   the background; at the desk, prompt the conversation with something that
+   asks (the rig profile, `-Instrumented`, makes a Write ask). Expect a buzz
+   and a notification titled with the first prompt. Note whether it arrives
+   with the screen locked (it should not; that is push, not built).
+4. Answer the request from the phone; send a prompt from the box; look at
+   the block on the desk (*Paired at …*) and at `warpctrl agent trace <id>
+   --harness-dir '\\wsl.localhost\Ubuntu\home\effatha\.claude\projects'`
+   for *from the phone*.
+5. Add to home screen. Expect Chrome to offer a real install now (the page
+   is a secure context with a manifest); iOS adds it either way.
+6. Leave it overnight. Expect the pairing to hold (no clock) and the page to
+   reconnect on wake; the five-minute credentials turn over on their own.
+7. Stop sharing at the desk; expect the phone refused on its next tap.
+
+Each line is one row in `.fork/runs/phone-<date>/README.md`. Still not
+built, by decision: Web Push. Still later: several pairings on one phone
+(step 7 below).
+
 ## What you are doing
 
 Making the fork's `/remote-control` good enough to live on: a phone that was
