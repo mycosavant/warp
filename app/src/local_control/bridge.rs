@@ -42,6 +42,16 @@ pub struct LocalControlBridge {
 #[derive(Clone)]
 pub(super) struct PairingContext {
     pub(super) pairings: std::sync::Arc<std::sync::Mutex<super::pairing::Pairings>>,
+    /// The live credential map, so that taking a conversation back
+    /// (`remote_control::stop`) can void the credentials a device already
+    /// minted for it. **Measured 2026-09-05, the first version did not**: a
+    /// phone cut off by *Stop sharing* prompted the conversation again on a
+    /// credential it had minted a minute earlier, because revoking removed the
+    /// device from the pairing map and a credential, once minted, lives in
+    /// this map for five minutes with no back-reference to the device. Both
+    /// have to go.
+    pub(super) credentials:
+        std::sync::Arc<std::sync::Mutex<std::collections::HashMap<String, CredentialGrant>>>,
     /// `host:port` of the *wide* listener, not the loopback one. A pairing URL
     /// pointing at `127.0.0.1` would be a QR that only works on the machine
     /// displaying it.
@@ -85,11 +95,18 @@ impl LocalControlBridge {
     pub(super) fn set_pairing(
         &mut self,
         pairings: Option<std::sync::Arc<std::sync::Mutex<super::pairing::Pairings>>>,
+        credentials: std::sync::Arc<
+            std::sync::Mutex<std::collections::HashMap<String, CredentialGrant>>,
+        >,
         origin: Option<String>,
     ) {
         self.pairing = pairings
             .zip(origin)
-            .map(|(pairings, origin)| PairingContext { pairings, origin });
+            .map(|(pairings, origin)| PairingContext {
+                pairings,
+                credentials,
+                origin,
+            });
     }
 
     pub(super) fn handle_request(

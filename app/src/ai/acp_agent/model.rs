@@ -205,7 +205,13 @@ const SOURCE: &str = "acp_agent";
 /// Compact on purpose. `opencode`'s single model option alone holds hundreds
 /// of selectable values, so the line names each model option and its current
 /// selection rather than enumerating the choices.
-pub(crate) fn log(conversation_id: &str, agent: &str, cwd: &str, catalog: &Catalog) {
+pub(crate) fn log(
+    conversation_id: &str,
+    linked_session_id: Option<&str>,
+    agent: &str,
+    cwd: &str,
+    catalog: &Catalog,
+) {
     let options = catalog.options();
     if options.is_empty() {
         return;
@@ -232,7 +238,8 @@ pub(crate) fn log(conversation_id: &str, agent: &str, cwd: &str, catalog: &Catal
         event: "session_model",
         source: SOURCE,
         session_id: Some(conversation_id),
-        linked_session_id: None,
+        // See `mode::log`: the join key, on a line every turn writes.
+        linked_session_id,
         call_id: None,
         parent_call_id: None,
         cwd: Some(cwd),

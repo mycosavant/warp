@@ -1,0 +1,43 @@
+[02:11:39] cd the pane, two conversations
+[02:11:44] conversation A 4ca0a8f8-17ba-4d2e-afff-2d3bd617fca4
+[02:11:54] conversation B 7e0375eb-8982-4830-a43a-1eaa6a7aea3b (the one handed over)
+[02:12:11] pair show --conversation B
+actions: app.ping agent.list events.subscribe agent.approvals agent.deny agent.cancel agent.trace agent.prompt agent.approve
+confined: 7e0375eb-8982-4830-a43a-1eaa6a7aea3b
+device actions: app.ping agent.list events.subscribe agent.approvals agent.deny agent.cancel agent.trace agent.prompt agent.approve
+device confined: 7e0375eb-8982-4830-a43a-1eaa6a7aea3b
+[02:12:11] credential for agent.prompt, what the grant says
+grant: agent.prompt conversation 7e0375eb-8982-4830-a43a-1eaa6a7aea3b
+[02:12:11] agent.list as the device (filtered?)
+sees: ['7e0375eb-8982-4830-a43a-1eaa6a7aea3b']
+[02:12:11] prompt A from the device (must be refused)
+REFUSED: insufficient_permissions - this device was paired for conversation 7e0375eb-8982-4830-a43a-1eaa6a7aea3b only and may not prompt conversation 4ca0a8f8-17ba-4d2e-afff-2d3bd617fca4
+[02:12:11] prompt with no conversation (must be refused)
+REFUSED: insufficient_permissions - this device was paired for conversation 7e0375eb-8982-4830-a43a-1eaa6a7aea3b only and may not start a new conversation
+[02:12:12] trace A (must be refused)
+REFUSED: insufficient_permissions - this device was paired for conversation 7e0375eb-8982-4830-a43a-1eaa6a7aea3b only and may not read conversation 4ca0a8f8-17ba-4d2e-afff-2d3bd617fca4
+[02:12:12] prompt B from the device (must run)
+OK: {"action": "agent.prompt", "ok": true, "instance_id": "inst_7fa3d83509fa4bc88a1bc33354eaf859", "conversation_id": "7e0375eb-8982-4830-a43a-1eaa6a7aea3b", "created": false}
+[02:12:25] B's record as the device, last rows
+  warp stop Say the single word second and nothing else.
+  warp prompt_submit Reply with the single word phone and nothing else.
+  warp session_agent @agentclientprotocol/claude-agent-acp 0.73.0 “Claude Agent”
+  warp session_mode current `auto`; offered `default` (“Always ask before making
+  warp session_model `model` “Model”, current `claude-fable-5-1`
+  warp stop Reply with the single word phone and nothing else.
+[02:12:25] the pane the prompt landed in: agent read B says Pane Pane Terminal (3296) exchanges 2
+[02:12:25] stop sharing from the CLI side: no verb for it, so via the chip later; a second pair show for A stays watch-scoped:
+  watch code actions: app.ping agent.list events.subscribe agent.approvals agent.deny agent.cancel agent.trace confined: None
+[02:12:29] agent trace --live from the CLI
+trace 7e0375eb-8982-4830-a43a-1eaa6a7aea3b · warp 10 lines
+  events   C:\Users\onemind\AppData\Local\warp\WarpOss\data\fork\events\7e0375eb-8982-4830-a43a-1eaa6a7aea3b.jsonl
+  note     Warp's log names no linked session, so there is no harness file to join: this is Warp's half alone.
+
+             P  Say the single word second and nothing else.
+             W  agent: @agentclientprotocol/claude-agent-acp 0.73.0 “Claude Agent”
+             W  mode: current `auto`; offered `default` (“Always ask before making changes”); `acceptEdits` (“Automatically accept all file edits”); `plan` (“Create a plan before making changes”); `auto` (“Claude handles permission decisions”); `bypassPermissions` (“Accepts all permissions”)
+             W  model: `model` “Model”, current `fable`
+             W  stop
+             P  Reply with the single word phone and nothing else.
+             W  agent: @agentclientprotocol/claude-agent-acp 0.73.0 “Claude Agent”
+             W  mode: current `auto`; offered `default` (“Always ask before making changes”); `acceptEdits` (“Automatically accept all file edits”); `plan` (“Create a plan before making changes”); `auto` (“Claude handles permission decisions”); `bypassPermissions` (“Accepts all permissions”)

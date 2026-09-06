@@ -224,3 +224,24 @@ fn the_stream_shows_a_confined_device_its_conversations_lines_only() {
     ));
     assert!(!line_is_within("not json", Some(MINE)));
 }
+
+/// Stop sharing voids the credentials a device already minted for the
+/// conversation, and nothing else's. Measured before this existed: the phone
+/// kept prompting on a credential minted before the stop.
+#[test]
+fn taking_a_conversation_back_voids_its_live_credentials_only() {
+    let mut credentials = std::collections::HashMap::new();
+    credentials.insert("mine-prompt".to_owned(), confined(ActionKind::AgentPrompt));
+    credentials.insert("mine-trace".to_owned(), confined(ActionKind::AgentTrace));
+    credentials.insert("local".to_owned(), unconfined(ActionKind::AgentPrompt));
+    credentials.insert(
+        "other".to_owned(),
+        unconfined(ActionKind::AgentTrace).confined_to(Some(OTHER.to_owned())),
+    );
+
+    assert_eq!(purge_confined(&mut credentials, MINE), 2);
+
+    let mut left: Vec<&str> = credentials.keys().map(String::as_str).collect();
+    left.sort();
+    assert_eq!(left, ["local", "other"]);
+}

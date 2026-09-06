@@ -275,7 +275,11 @@ clocks disagree around it.
    launcher's product profile carries `WARP_FORK_EVENT_LOG=on` since this,
    because the log has a reader. `warpctrl agent trace --live` asks the
    instance the same way. opencode's database stays where it was: only if a
-   friction log asks. **Measured 2026-09-05 on the Windows build**
+   friction log asks. **And a text-only turn joins now**: found the same
+   night while measuring remote control, a conversation whose turns called
+   no tool traced as Warp's half alone, because on the ACP path only tool
+   lines carried `linked_session_id`. The `session_mode` and
+   `session_model` lines carry it since. **Measured 2026-09-05 on the Windows build**
    (`.fork/runs/viewer-phase3-2026-09-05/`): a device paired the way a phone
    does got the seven actions, asked for the record mid-turn and as a tail
    after it, and the instance found the harness's file inside the

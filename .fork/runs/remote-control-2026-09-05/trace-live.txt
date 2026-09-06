@@ -1,0 +1,12 @@
+trace 7e0375eb-8982-4830-a43a-1eaa6a7aea3b · warp 10 lines
+  events   C:\Users\onemind\AppData\Local\warp\WarpOss\data\fork\events\7e0375eb-8982-4830-a43a-1eaa6a7aea3b.jsonl
+  note     Warp's log names no linked session, so there is no harness file to join: this is Warp's half alone.
+
+             P  Say the single word second and nothing else.
+             W  agent: @agentclientprotocol/claude-agent-acp 0.73.0 “Claude Agent”
+             W  mode: current `auto`; offered `default` (“Always ask before making changes”); `acceptEdits` (“Automatically accept all file edits”); `plan` (“Create a plan before making changes”); `auto` (“Claude handles permission decisions”); `bypassPermissions` (“Accepts all permissions”)
+             W  model: `model` “Model”, current `fable`
+             W  stop
+             P  Reply with the single word phone and nothing else.
+             W  agent: @agentclientprotocol/claude-agent-acp 0.73.0 “Claude Agent”
+             W  mode: current `auto`; offered `default` (“Always ask before making changes”); `acceptEdits` (“Automatically accept all file edits”); `plan` (“Create a plan before making changes”); `auto` (“Claude handles permission decisions”); `bypassPermissions` (“Accepts all permissions”)

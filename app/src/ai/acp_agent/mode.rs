@@ -385,6 +385,7 @@ const SOURCE: &str = "acp_agent";
 /// reader tires, and a log is read by something that does not.
 pub(crate) fn log(
     conversation_id: &str,
+    linked_session_id: Option<&str>,
     agent: &str,
     cwd: &str,
     advertised: Option<&SessionModeState>,
@@ -407,7 +408,10 @@ pub(crate) fn log(
         event: "session_mode",
         source: SOURCE,
         session_id: Some(conversation_id),
-        linked_session_id: None,
+        // The join key to the agent's own session file, on a line every turn
+        // writes. Until 2026-09-05 only tool lines carried it, so a turn with
+        // no tool call had no join and the trace was Warp's half alone.
+        linked_session_id,
         call_id: None,
         parent_call_id: None,
         cwd: Some(cwd),

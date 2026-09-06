@@ -121,6 +121,24 @@ pub(super) fn confine_result(kind: ActionKind, data: &mut Value, grant: &Credent
     }
 }
 
+/// Voids every live credential confined to a conversation: the other half of
+/// taking it back.
+///
+/// **Measured 2026-09-05 before this existed**: *Stop sharing* removed the
+/// phone from the pairing map, and the phone prompted the conversation again
+/// a minute later on the `agent.prompt` credential it had minted before the
+/// stop, which lives in the credential map for five minutes and names no
+/// device. Revoking the device is necessary and not sufficient; the grant is
+/// what a request carries, so the grant is what has to go.
+pub(super) fn purge_confined(
+    credentials: &mut std::collections::HashMap<String, CredentialGrant>,
+    conversation: &str,
+) -> usize {
+    let before = credentials.len();
+    credentials.retain(|_, grant| grant.conversation.as_deref() != Some(conversation));
+    before - credentials.len()
+}
+
 /// Whether one line of the event log belongs to the confined conversation.
 ///
 /// Unconfined grants see everything. A line that does not parse, or names no

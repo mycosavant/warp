@@ -356,6 +356,7 @@ impl LocalControlServer {
         LocalControlBridge::handle(ctx).update(ctx, |bridge, _| {
             bridge.set_pairing(
                 state.pairings.clone(),
+                state.credentials.clone(),
                 wide_listener.as_ref().map(|(_, origin)| origin.clone()),
             );
         });

@@ -1,0 +1,1 @@
+{"protocol_version":1,"request_id":"f590d124-ea88-447e-8e54-2f65012ffb8d","response":{"status":"error","error":{"code":"insufficient_permissions","message":"this device was paired for conversation 7e0375eb-8982-4830-a43a-1eaa6a7aea3b only and may not prompt conversation 4ca0a8f8-17ba-4d2e-afff-2d3bd617fca4"}}}

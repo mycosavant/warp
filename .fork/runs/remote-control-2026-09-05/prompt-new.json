@@ -1,0 +1,1 @@
+{"protocol_version":1,"request_id":"6aa6b3ff-395e-4a85-8755-f1fd3ec06b06","response":{"status":"error","error":{"code":"insufficient_permissions","message":"this device was paired for conversation 7e0375eb-8982-4830-a43a-1eaa6a7aea3b only and may not start a new conversation"}}}

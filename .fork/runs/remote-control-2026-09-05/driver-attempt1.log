@@ -1,0 +1,23 @@
+[02:09:15] cd the pane, two conversations
+[02:09:20] conversation A a51e5412-3926-49ee-b206-ed99f2222afa
+[02:09:27] conversation B 01cdb86d-8a6f-456f-8196-5c3a441435fd (the one handed over)
+[02:09:36] pair show --conversation B
+[02:09:37] credential for agent.prompt, what the grant says
+[02:09:37] agent.list as the device (filtered?)
+[02:09:37] prompt A from the device (must be refused)
+[02:09:37] prompt with no conversation (must be refused)
+[02:09:37] trace A (must be refused)
+[02:09:38] prompt B from the device (must run)
+[02:09:41] B's record as the device, last rows
+[02:09:41] the pane the prompt landed in: agent read B says Pane Pane Terminal (3268) exchanges 1
+[02:09:41] stop sharing from the CLI side: no verb for it, so via the chip later; a second pair show for A stays watch-scoped:
+[02:09:42] agent trace --live from the CLI
+trace 01cdb86d-8a6f-456f-8196-5c3a441435fd · warp 5 lines
+  events   C:\Users\onemind\AppData\Local\warp\WarpOss\data\fork\events\01cdb86d-8a6f-456f-8196-5c3a441435fd.jsonl
+  note     Warp's log names no linked session, so there is no harness file to join: this is Warp's half alone.
+
+             P  Say the single word second and nothing else.
+             W  agent: @agentclientprotocol/claude-agent-acp 0.73.0 “Claude Agent”
+             W  mode: current `auto`; offered `default` (“Always ask before making changes”); `acceptEdits` (“Automatically accept all file edits”); `plan` (“Create a plan before making changes”); `auto` (“Claude handles permission decisions”); `bypassPermissions` (“Accepts all permissions”)
+             W  model: `model` “Model”, current `fable`
+             W  stop

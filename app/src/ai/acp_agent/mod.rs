@@ -692,7 +692,17 @@ async fn exchange(
             // mode is precisely the turn an audit reader will be asking about,
             // and logging only the turns that proceeded would leave the record
             // silent about every one that did not.
-            mode::log(&conversation_id, &program, &cwd_text, advertised.as_ref());
+            // With the agent's session id on it, so a turn that calls no tool
+            // still names the harness's file (measured 2026-09-05: a text-only
+            // conversation traced as Warp's half alone).
+            let linked = session_id.to_string();
+            mode::log(
+                &conversation_id,
+                Some(&linked),
+                &program,
+                &cwd_text,
+                advertised.as_ref(),
+            );
             // T14.14: the model picker, from this turn's own reply, filtered
             // by the one seam both doors share (see `model`). Brought into
             // existence next to the mode decision because both answer "what
@@ -700,7 +710,13 @@ async fn exchange(
             // which is the render door (`Catalog::options`) gated before any
             // surface exists.
             let catalog = model::Catalog::of(config_options.as_deref());
-            model::log(&conversation_id, &program, &cwd_text, &catalog);
+            model::log(
+                &conversation_id,
+                Some(&linked),
+                &program,
+                &cwd_text,
+                &catalog,
+            );
             if let Some(reason) = decision.refusal() {
                 return Err(anyhow!(reason.to_owned()).into());
             }

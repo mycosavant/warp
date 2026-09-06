@@ -101,11 +101,33 @@ pointed at. The pinned test that grew is
 | `crates/local_control` | `CredentialGrant::conversation`, `ControlPairParams`, `conversation_id` on both pairing results |
 | `console.js` | the prompt box behind `can('agent.prompt')`, a confined device landing on its conversation |
 
+## Measured 2026-09-05 (`.fork/runs/remote-control-2026-09-05/`)
+
+On the Windows build: the scope, the grant, the filtered list, the three
+refusals with their sentences, a prompt from the device landing in the
+conversation's own pane, the console landing a confined device on its
+conversation with the prompt box, a prompt sent from the box, the chip
+reading *Stop sharing* and the block appearing in the pane on the second
+click. Two defects found and closed the same night:
+
+- **A revoked phone kept working for the life of its credential.** *Stop
+  sharing* removed the device from the pairing map; the `agent.prompt`
+  credential it had minted a minute earlier lived on for five minutes with
+  no back-reference to the device, and a prompt sent after the stop reached
+  the agent. `remote_control::stop` now voids every credential confined to
+  the conversation before revoking the device (`confine::purge_confined`).
+  The grant is what a request carries, so the grant is what has to go.
+- **A text-only turn had no join key**, so the phone saw Warp's frame lines
+  and none of the agent's words: on the ACP path only tool lines carried the
+  agent's session id. `session_mode` and `session_model` carry it now.
+
 ## Unverified, as of writing
 
-- Whether the footer chip flips to *Stop sharing* on the click without
-  another event; the render reads the pairing map and the footer's action
-  handler asks for a render after emitting, which depends on the event
-  reaching the terminal view before that render.
-- The QR block's layout beside a long URL on a narrow pane.
+- The QR block's layout beside a long URL on a narrow pane; in the run it
+  was drawn in a 300-pixel-wide pane and the text column was clipped at the
+  right, readable but not whole.
 - A phone actually scanning the block, as opposed to Brave opening the link.
+- Why a dead instance's wide listener can outlive it: the first launch of the
+  run found `41234` still `LISTENING` under the phase 3 instance's dead pid.
+  Something inherited the handle; nothing on the Windows side was left to
+  name. The run used `41235`.

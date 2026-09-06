@@ -47,6 +47,12 @@ pub(crate) fn stop(conversation_id: &str, app: &AppContext) -> usize {
     let Some(pairing) = LocalControlBridge::as_ref(app).pairing().cloned() else {
         return 0;
     };
+    // The credentials first, because they are what a request carries: a
+    // device that is gone from the pairing map but still holds a five-minute
+    // credential is a device that is not gone. Measured, before this line.
+    if let Ok(mut credentials) = pairing.credentials.lock() {
+        crate::local_control::confine::purge_confined(&mut credentials, conversation_id);
+    }
     let Ok(mut pairings) = pairing.pairings.lock() else {
         return 0;
     };
