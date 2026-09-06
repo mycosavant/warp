@@ -167,9 +167,12 @@ impl RemoteControlBlock {
                 .with_color(theme.main_text_color(theme.background()).into_solid())
                 .finish(),
         );
+        // The clock is the code's, not the phone's: a control pairing has none
+        // (2026-09-06), and the sentence says what ends it instead.
         text.add_child(line(format!(
-            "The code in the link is a secret: spendable once, dead at {}. Stop sharing in the \
-             footer cuts the phone off.",
+            "The code in the link is a secret: spendable once, dead at {}. A phone that scans \
+             it stays paired until Stop sharing in the footer, this conversation being \
+             deleted, or Warp closing.",
             self.expires_at
         )));
         if let Some(ca_url) = &self.ca_url {

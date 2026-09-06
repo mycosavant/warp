@@ -235,10 +235,22 @@ impl Scope {
 /// room and unlock a phone.
 const CODE_LIFETIME: Duration = Duration::minutes(2);
 
-/// How long a paired device stays paired.
+/// How long a device paired under the *watch* scope stays paired.
 ///
 /// A working day, so a phone paired in the morning is still watching in the
-/// evening, and a phone lost on the way home is not.
+/// evening, and a phone lost on the way home is not. A weak credential minted
+/// by a variable gets a clock.
+///
+/// **A control pairing has no clock** (2026-09-06, the decision on record in
+/// `.fork/decisions/2026-09-06-the-phone-surface-four-decisions.md`). It was
+/// minted by a person pointing at a conversation, and twelve hours meant a
+/// run started at breakfast asked for a walk back to the machine at dinner to
+/// keep watching it. It ends on *Stop sharing* ([`Pairings::revoke_conversation`],
+/// which also purges every credential confined to the conversation), on the
+/// conversation being removed from the history model (the same call, from
+/// `remove_conversation_from_memory`), and on Warp closing, since this map is
+/// in memory. The credential purge on stop is what bounds a leak, not the
+/// clock.
 const DEVICE_LIFETIME: Duration = Duration::hours(12);
 
 /// Ceilings, so a bug cannot grow either list without bound. Both are far above
@@ -275,7 +287,8 @@ struct PendingCode {
 
 struct PairedDevice {
     token: AuthToken,
-    expires_at: DateTime<Utc>,
+    /// `None` for a control pairing, which has no clock; see [`DEVICE_LIFETIME`].
+    expires_at: Option<DateTime<Utc>>,
     scope: Scope,
 }
 
@@ -285,10 +298,10 @@ pub(super) struct IssuedCode {
     pub(super) expires_at: DateTime<Utc>,
 }
 
-/// A redeemed device token, its deadline, and what it holds.
+/// A redeemed device token, its deadline if it has one, and what it holds.
 pub(super) struct IssuedDevice {
     pub(super) token: AuthToken,
-    pub(super) expires_at: DateTime<Utc>,
+    pub(super) expires_at: Option<DateTime<Utc>>,
     pub(super) scope: Scope,
 }
 
@@ -339,7 +352,7 @@ impl Pairings {
         };
         self.devices
             .iter()
-            .any(|device| device.scope == scope && device.expires_at > now)
+            .any(|device| device.scope == scope && device.is_live(now))
             || self
                 .codes
                 .iter()
@@ -372,7 +385,10 @@ impl Pairings {
             self.devices.remove(0);
         }
         let token = AuthToken::generate();
-        let expires_at = now + DEVICE_LIFETIME;
+        let expires_at = match scope {
+            Scope::Watch => Some(now + DEVICE_LIFETIME),
+            Scope::Control { .. } => None,
+        };
         self.devices.push(PairedDevice {
             token: token.clone(),
             expires_at,
@@ -404,7 +420,13 @@ impl Pairings {
 
     fn prune(&mut self, now: DateTime<Utc>) {
         self.codes.retain(|pending| pending.expires_at > now);
-        self.devices.retain(|device| device.expires_at > now);
+        self.devices.retain(|device| device.is_live(now));
+    }
+}
+
+impl PairedDevice {
+    fn is_live(&self, now: DateTime<Utc>) -> bool {
+        self.expires_at.is_none_or(|expires_at| expires_at > now)
     }
 }
 

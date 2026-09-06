@@ -948,7 +948,11 @@ pub struct PairedDeviceResult {
     /// code, over the connection that spent it.
     pub device_token: String,
     /// When the pairing lapses and the device has to be shown a new code.
-    pub expires_at: DateTime<Utc>,
+    /// Absent for a device paired for one conversation by `/remote-control`
+    /// (2026-09-06): that pairing has no clock and ends when the person at the
+    /// machine stops sharing, the conversation is removed, or Warp closes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expires_at: Option<DateTime<Utc>>,
     /// The actions this token may be exchanged for credentials for. Given so a
     /// client can present a truthful capability list rather than discovering the
     /// boundary one refusal at a time.

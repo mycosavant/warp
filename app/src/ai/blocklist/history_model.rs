@@ -2428,6 +2428,21 @@ impl BlocklistAIHistoryModel {
         terminal_surface_id: Option<EntityId>,
         ctx: &mut ModelContext<Self>,
     ) {
+        // Fork (T19, 2026-09-06): a conversation handed to a phone by
+        // `/remote-control` is taken back when it goes away, because a control
+        // pairing has no clock and this is one of the three things that end
+        // it. Both `remove_conversation` and `delete_conversation` come
+        // through here. A no-op under upstream behaviour and with no wide
+        // listener; the phone would have been refused anyway, since every
+        // handler it reaches looks the conversation up, but the pairing and
+        // its credentials should not outlive the thing they were minted for.
+        let cut_off = crate::local_control::remote_control::stop(&conversation_id.to_string(), ctx);
+        if cut_off > 0 {
+            log::info!(
+                "remote control of conversation {conversation_id} ended with the conversation; \
+                 {cut_off} device(s) cut off"
+            );
+        }
         // Capture the run_id BEFORE the in-memory record is dropped so the
         // RemoveConversation event can carry it (event subscribers can no
         // longer look it up via `conversation()` after this function returns).

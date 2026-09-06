@@ -46,10 +46,56 @@ fn a_paired_device_stops_being_paired_after_a_working_day() {
         .redeem(&code.code, at(0))
         .expect("pairing succeeds");
 
+    let expires_at = device.expires_at.expect("a watch pairing has a clock");
     assert!(pairings.verify_device(&device.token, at(0)).is_ok());
     assert!(
         pairings
-            .verify_device(&device.token, device.expires_at + Duration::seconds(1))
+            .verify_device(&device.token, expires_at + Duration::seconds(1))
+            .is_err()
+    );
+}
+
+/// A control pairing has no clock (2026-09-06): a phone handed a conversation
+/// at breakfast is still driving it after dinner, and what ends it is Stop
+/// sharing, the conversation going away, or Warp closing. The watch pairing,
+/// minted by a variable rather than a gesture, keeps its twelve hours.
+#[test]
+fn a_control_pairing_outlives_the_working_day_and_a_watch_pairing_does_not() {
+    let mut pairings = Pairings::default();
+    let control = Scope::Control {
+        conversation_id: "c-1".to_owned(),
+    };
+    let watcher = {
+        let code = pairings.issue_code(at(0), Scope::Watch);
+        pairings.redeem(&code.code, at(0)).expect("pairs")
+    };
+    let driver = {
+        let code = pairings.issue_code(at(0), control.clone());
+        pairings.redeem(&code.code, at(0)).expect("pairs")
+    };
+    assert!(watcher.expires_at.is_some());
+    assert_eq!(driver.expires_at, None, "no clock to report");
+
+    let thirteen_hours_on = at(0) + Duration::hours(13);
+    assert!(
+        pairings
+            .verify_device(&watcher.token, thirteen_hours_on)
+            .is_err(),
+        "the watch pairing lapsed"
+    );
+    assert_eq!(
+        pairings
+            .verify_device(&driver.token, thirteen_hours_on)
+            .expect("the control pairing is still valid"),
+        control
+    );
+    assert!(pairings.is_controlling("c-1", thirteen_hours_on));
+
+    // And it still ends the way it is meant to.
+    assert_eq!(pairings.revoke_conversation("c-1"), 1);
+    assert!(
+        pairings
+            .verify_device(&driver.token, thirteen_hours_on)
             .is_err()
     );
 }
@@ -249,6 +295,13 @@ fn a_code_minted_for_one_conversation_buys_driving_it() {
     }
     assert_eq!(control.conversation(), Some("c-1"));
     assert_eq!(Scope::Watch.conversation(), None);
+
+    // And what it buys has no clock: the device that spends a control code
+    // carries no expiry, where a watch device carries twelve hours.
+    let mut pairings = Pairings::default();
+    let code = pairings.issue_code(at(0), control);
+    let driver = pairings.redeem(&code.code, at(0)).expect("pairs");
+    assert_eq!(driver.expires_at, None);
 }
 
 /// The scope rides from the code to the device that spent it, and the device
