@@ -1,0 +1,7 @@
+{
+  "ok": false,
+  "error": {
+    "code": "local_control_disabled",
+    "message": "this instance has no wide listener, so there is nothing to pair with; set WARP_FORK_CONTROL_BIND to the address to listen on and restart"
+  }
+}

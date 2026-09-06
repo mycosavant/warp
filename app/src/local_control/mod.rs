@@ -288,6 +288,7 @@ impl LocalControlServer {
                 err.to_string(),
             )
         })?;
+        keep_from_children(&listener);
         let control_endpoint = ControlEndpoint::localhost(port.port());
         // T11.4. Bound *in addition to* loopback, never instead of it, and the
         // reason is the discovery record: local clients find this instance by
@@ -467,7 +468,10 @@ async fn bind_wide_listener() -> Option<(tokio::net::TcpListener, String)> {
     // exactly like any other failed bind: logged, loopback keeps serving.
     match tokio::net::TcpListener::bind(SocketAddr::from((address, port))).await {
         Ok(listener) => match listener.local_addr() {
-            Ok(bound) => Some((listener, bound.to_string())),
+            Ok(bound) => {
+                keep_from_children(&listener);
+                Some((listener, bound.to_string()))
+            }
             Err(err) => {
                 log::warn!("local-control wide listener address is unreadable: {err:#}");
                 None
@@ -477,6 +481,56 @@ async fn bind_wide_listener() -> Option<(tokio::net::TcpListener, String)> {
             log::warn!("local-control wide bind to {address}:{port} failed: {err:#}");
             None
         }
+    }
+}
+
+/// Stops a listening socket from being inherited by the processes Warp spawns
+/// (2026-09-05).
+///
+/// **Measured, three instances in a row.** After `window close`, `netstat`
+/// still showed the wide listener `LISTENING` under the dead instance's pid,
+/// and the next launch on that port failed with *only one usage of each
+/// socket address*. The holders were `wsl.exe` children Warp had spawned for
+/// its git chip and repository metadata, orphaned when the instance closed
+/// and still alive an hour later, each holding a copy of the listener's
+/// handle. Windows hands an inheritable handle to every child created with
+/// handle inheritance on, and `std::process::Command` turns that on whenever
+/// it wires up stdio. The socket is inheritable because the `mio` this build
+/// locks (1.1.1) creates sockets without `WSA_FLAG_NO_HANDLE_INHERIT`; 1.2.2
+/// sets it, and when upstream takes that bump this function becomes a no-op
+/// that costs nothing. Upstream's own `9282` listener fails to bind the same
+/// way for the same reason (`.fork/runs/egress-windows-2026-09-05/`); that one
+/// is upstream's to clear.
+///
+/// The loopback listener gets the same treatment: an ephemeral port does not
+/// collide on the next launch, but a dead instance's listener answering on it
+/// is still a socket nothing serves, and `warpctrl` finds instances by their
+/// record, not by probing ports, so it has never been noticed. On any other
+/// platform this does nothing; Unix children get `CLOEXEC` sockets from every
+/// crate in the graph.
+fn keep_from_children(listener: &tokio::net::TcpListener) {
+    #[cfg(windows)]
+    {
+        use std::os::windows::io::AsRawSocket as _;
+
+        use windows::Win32::Foundation::{HANDLE, HANDLE_FLAG_INHERIT, SetHandleInformation};
+        let handle = HANDLE(listener.as_raw_socket() as usize as *mut core::ffi::c_void);
+        // SAFETY: the handle is a live socket owned by `listener` for the whole
+        // call, and clearing the inherit flag changes nothing about how this
+        // process uses it.
+        if let Err(err) = unsafe {
+            SetHandleInformation(
+                handle,
+                HANDLE_FLAG_INHERIT.0,
+                windows::Win32::Foundation::HANDLE_FLAGS(0),
+            )
+        } {
+            log::warn!("local-control listener could not be marked non-inheritable: {err:#}");
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = listener;
     }
 }
 

@@ -1,0 +1,237 @@
+{
+  "header": {
+    "kind": "trace",
+    "conversation_id": "2b116d3d-fed4-4f1e-91b9-f8b0a861cb64",
+    "events_file": "C:\\Users\\onemind\\AppData\\Local\\warp\\WarpOss\\data\\fork\\events\\2b116d3d-fed4-4f1e-91b9-f8b0a861cb64.jsonl",
+    "warp_lines": 5,
+    "linked_session_id": "46fd7eb8-832d-4bad-bb7f-df63823c997c",
+    "harness": "claude-code",
+    "harness_file": "\\\\wsl$\\ubuntu\\home\\effatha\\.claude\\projects\\-home-effatha-git-warp\\46fd7eb8-832d-4bad-bb7f-df63823c997c.jsonl",
+    "harness_versions": [
+      "2.1.257"
+    ],
+    "harness_lines": 13,
+    "harness_lines_skipped": 11,
+    "joined_calls": 0
+  },
+  "rows": [
+    {
+      "ts": "2026-09-06T02:23:09.362Z",
+      "who": "person",
+      "from": "warp",
+      "kind": "session_start",
+      "text": "Say the single word ready and nothing else.",
+      "raw": {
+        "ts": "2026-09-06T02:23:09.362Z",
+        "seq": 0,
+        "agent": "warp",
+        "event": "session_start",
+        "source": "in_process",
+        "session_id": "2b116d3d-fed4-4f1e-91b9-f8b0a861cb64",
+        "cwd": "/home/effatha/git/warp",
+        "project": "warp",
+        "summary": "Say the single word ready and nothing else.",
+        "applied": true
+      }
+    },
+    {
+      "ts": "2026-09-06T02:23:10.881Z",
+      "who": "warp",
+      "from": "warp",
+      "kind": "session_agent",
+      "text": "@agentclientprotocol/claude-agent-acp 0.73.0 “Claude Agent”",
+      "raw": {
+        "ts": "2026-09-06T02:23:10.881Z",
+        "seq": 1,
+        "agent": "wsl.exe",
+        "event": "session_agent",
+        "source": "acp_agent",
+        "session_id": "2b116d3d-fed4-4f1e-91b9-f8b0a861cb64",
+        "cwd": "/home/effatha/git/warp",
+        "project": "warp",
+        "summary": "@agentclientprotocol/claude-agent-acp 0.73.0 “Claude Agent”",
+        "applied": true
+      }
+    },
+    {
+      "ts": "2026-09-06T02:23:11.911Z",
+      "who": "warp",
+      "from": "warp",
+      "kind": "session_mode",
+      "text": "current `auto`; offered `default` (“Always ask before making changes”); `acceptEdits` (“Automatically accept all file edits”); `plan` (“Create a plan before making changes”); `auto` (“Claude handles permission decisions”); `bypassPermissions` (“Accepts all permissions”)",
+      "raw": {
+        "ts": "2026-09-06T02:23:11.911Z",
+        "seq": 2,
+        "agent": "wsl.exe",
+        "event": "session_mode",
+        "source": "acp_agent",
+        "session_id": "2b116d3d-fed4-4f1e-91b9-f8b0a861cb64",
+        "linked_session_id": "46fd7eb8-832d-4bad-bb7f-df63823c997c",
+        "cwd": "/home/effatha/git/warp",
+        "project": "warp",
+        "summary": "current `auto`; offered `default` (“Always ask before making changes”); `acceptEdits` (“Automatically accept all file edits”); `plan` (“Create a plan before making changes”); `auto` (“Claude handles permission decisions”); `bypassPermissions` (“Accepts all permissions”)",
+        "applied": true
+      }
+    },
+    {
+      "ts": "2026-09-06T02:23:11.911Z",
+      "who": "warp",
+      "from": "warp",
+      "kind": "session_model",
+      "text": "`model` “Model”, current `fable`",
+      "raw": {
+        "ts": "2026-09-06T02:23:11.911Z",
+        "seq": 3,
+        "agent": "wsl.exe",
+        "event": "session_model",
+        "source": "acp_agent",
+        "session_id": "2b116d3d-fed4-4f1e-91b9-f8b0a861cb64",
+        "linked_session_id": "46fd7eb8-832d-4bad-bb7f-df63823c997c",
+        "cwd": "/home/effatha/git/warp",
+        "project": "warp",
+        "summary": "`model` “Model”, current `fable`",
+        "applied": true
+      }
+    },
+    {
+      "ts": "2026-09-06T02:23:15.269Z",
+      "who": "person",
+      "from": "harness",
+      "kind": "prompt",
+      "text": "Say the single word ready and nothing else.",
+      "raw": {
+        "parentUuid": null,
+        "isSidechain": false,
+        "promptId": "d3ba2917-0843-4871-a58f-c678de6cd40e",
+        "type": "user",
+        "message": {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "Say the single word ready and nothing else."
+            }
+          ]
+        },
+        "uuid": "d67e788c-d91d-4584-a976-565ac7e0faf6",
+        "timestamp": "2026-09-06T02:23:15.269Z",
+        "permissionMode": "auto",
+        "origin": {
+          "kind": "human"
+        },
+        "promptSource": "sdk",
+        "userType": "external",
+        "entrypoint": "sdk-ts",
+        "cwd": "/home/effatha/git/warp",
+        "sessionId": "46fd7eb8-832d-4bad-bb7f-df63823c997c",
+        "version": "2.1.257",
+        "gitBranch": "dev"
+      }
+    },
+    {
+      "ts": "2026-09-06T02:23:16.547Z",
+      "who": "warp",
+      "from": "warp",
+      "kind": "stop",
+      "text": "Say the single word ready and nothing else.",
+      "raw": {
+        "ts": "2026-09-06T02:23:16.547Z",
+        "seq": 4,
+        "agent": "warp",
+        "event": "stop",
+        "source": "in_process",
+        "session_id": "2b116d3d-fed4-4f1e-91b9-f8b0a861cb64",
+        "cwd": "/home/effatha/git/warp",
+        "project": "warp",
+        "summary": "Say the single word ready and nothing else.",
+        "applied": true
+      }
+    },
+    {
+      "ts": "2026-09-06T02:23:22.350Z",
+      "who": "agent",
+      "from": "harness",
+      "kind": "text",
+      "text": "ready",
+      "raw": {
+        "parentUuid": "9f1c3383-9cbd-440b-88b8-5e88c6155867",
+        "isSidechain": false,
+        "message": {
+          "model": "claude-fable-5-1",
+          "id": "msg_011CemPb6aSGvFpHv6DVPof8",
+          "type": "message",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "ready"
+            }
+          ],
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "stop_details": null,
+          "usage": {
+            "input_tokens": 2,
+            "cache_creation_input_tokens": 61980,
+            "cache_read_input_tokens": 9922,
+            "output_tokens": 4,
+            "output_tokens_details": {
+              "thinking_tokens": 0
+            },
+            "server_tool_use": {
+              "web_search_requests": 0,
+              "web_fetch_requests": 0
+            },
+            "service_tier": "standard",
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 61980,
+              "ephemeral_5m_input_tokens": 0
+            },
+            "inference_geo": "not_available",
+            "iterations": [
+              {
+                "input_tokens": 2,
+                "output_tokens": 4,
+                "cache_read_input_tokens": 9922,
+                "cache_creation_input_tokens": 61980,
+                "cache_creation": {
+                  "ephemeral_5m_input_tokens": 0,
+                  "ephemeral_1h_input_tokens": 61980
+                },
+                "type": "message"
+              }
+            ],
+            "speed": "standard"
+          },
+          "diagnostics": null
+        },
+        "apiBlockIndex": 0,
+        "requestId": "req_011CemPb4kZ2SSnEut5UK6GN",
+        "type": "assistant",
+        "uuid": "10f26c02-28cd-4937-ac52-e0d6f2a35f4b",
+        "timestamp": "2026-09-06T02:23:22.350Z",
+        "effort": "high",
+        "userType": "external",
+        "entrypoint": "sdk-ts",
+        "cwd": "/home/effatha/git/warp",
+        "sessionId": "46fd7eb8-832d-4bad-bb7f-df63823c997c",
+        "version": "2.1.257",
+        "gitBranch": "dev"
+      }
+    },
+    {
+      "ts": "2026-09-06T02:23:22.350Z",
+      "who": "harness",
+      "from": "harness",
+      "kind": "usage",
+      "text": "1 assistant messages, 2 input, 4 output, 9922 cache read, 61980 cache created",
+      "raw": {
+        "assistant_messages": 1,
+        "input_tokens": 2,
+        "output_tokens": 4,
+        "cache_read_input_tokens": 9922,
+        "cache_creation_input_tokens": 61980
+      }
+    }
+  ]
+}
