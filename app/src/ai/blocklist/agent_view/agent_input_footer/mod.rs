@@ -254,6 +254,13 @@ pub struct AgentInputFooter {
     /// Pending one-shot timer that refreshes the context-window button at the
     /// prompt-cache expiry instant so the notification dot appears while idle.
     prompt_cache_expiry_timer_handle: Option<SpawnedFutureHandle>,
+    /// Fork: redraws the remote-control chip while a pairing code is
+    /// outstanding, so it flips back from *Stop sharing* when the code dies
+    /// unscanned. Which chip is drawn is decided at render from the pairing
+    /// map, and nothing else re-renders the footer at that moment: measured
+    /// 2026-09-06, the chip read *Stop sharing* over an expired code
+    /// (`.fork/runs/pairing-2026-09-06/state-expired.png`).
+    fork_remote_control_tick: Option<SpawnedFutureHandle>,
 
     /// Whether the active conversation's prompt cache has expired. Drives the
     /// yellow notification dot on the context-window chip when the
@@ -941,6 +948,7 @@ impl AgentInputFooter {
             v2_model_selector,
             prompt_cache_expiry_timer_handle: None,
             prompt_cache_expired: false,
+            fork_remote_control_tick: None,
         };
         me.sync_fast_forward_button(ctx);
         me.sync_remote_control_button(ctx);
@@ -2150,6 +2158,35 @@ impl AgentInputFooter {
         });
     }
 
+    /// Fork: re-renders every two seconds while a code for the pane's
+    /// conversation is waiting to be scanned, and once more when it stops
+    /// waiting. Paired and idle need no tick: from there only a click on the
+    /// chip changes the state, and the click handler notifies.
+    fn schedule_fork_remote_control_tick(&mut self, ctx: &mut ViewContext<Self>) {
+        self.fork_remote_control_tick = Some(ctx.spawn_abortable(
+            Timer::after(std::time::Duration::from_secs(2)),
+            |me, _, ctx| {
+                me.fork_remote_control_tick = None;
+                ctx.notify();
+                let waiting = BlocklistAIHistoryModel::as_ref(ctx)
+                    .active_conversation(me.terminal_view_id)
+                    .is_some_and(|conversation| {
+                        matches!(
+                            crate::local_control::remote_control::state_of(
+                                &conversation.id().to_string(),
+                                ctx
+                            ),
+                            crate::local_control::remote_control::ControlState::Waiting { .. }
+                        )
+                    });
+                if waiting {
+                    me.schedule_fork_remote_control_tick(ctx);
+                }
+            },
+            |_, _| {},
+        ));
+    }
+
     /// Fork: which of the two remote-control chips to draw. Upstream reads
     /// the shared-session status; the fork's remote control is a pairing
     /// scoped to the pane's conversation, so it reads that instead.
@@ -2720,11 +2757,14 @@ impl TypedActionView for AgentInputFooter {
             AgentInputFooterAction::StartRemoteControl => {
                 ctx.emit(AgentInputFooterEvent::StartRemoteControl);
                 // Fork: the chip reads the pairing state at render, and the
-                // event above is what changes it; ask for a render after it.
+                // event above is what changes it; ask for a render after it,
+                // and keep asking while the code can still die on its own.
                 ctx.notify();
+                self.schedule_fork_remote_control_tick(ctx);
             }
             AgentInputFooterAction::StopRemoteControl => {
                 ctx.emit(AgentInputFooterEvent::StopRemoteControl);
+                self.fork_remote_control_tick = None;
                 ctx.notify();
             }
             AgentInputFooterAction::OpenCodingAgentSettings => {
