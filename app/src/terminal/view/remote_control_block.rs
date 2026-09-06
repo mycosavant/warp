@@ -12,9 +12,9 @@ use pathfinder_geometry::vector::vec2f;
 use warpui::clipboard::ClipboardContent;
 use warpui::color::ColorU;
 use warpui::elements::{
-    Align, Border, ChildAnchor, ChildView, ConstrainedBox, Container, CornerRadius,
-    CrossAxisAlignment, Empty, Flex, MainAxisSize, OffsetPositioning, ParentAnchor, ParentElement,
-    ParentOffsetBounds, Radius, Stack, Text,
+    Border, ChildAnchor, ChildView, ConstrainedBox, Container, CornerRadius, CrossAxisAlignment,
+    Empty, Expanded, Flex, MainAxisSize, OffsetPositioning, ParentAnchor, ParentElement,
+    ParentOffsetBounds, Radius, SizeConstraintCondition, SizeConstraintSwitch, Stack, Text,
 };
 use warpui::fonts::{Properties, Weight};
 use warpui::{
@@ -32,8 +32,20 @@ use crate::workspace::ToastStack;
 /// a desk; the sharing dialog uses 160 and that scanned.
 const QR_SIZE: f32 = 176.;
 
+/// Below this width the text goes under the QR instead of beside it. The QR,
+/// the gap and the padding take about 240 points, and a text column narrower
+/// than the remaining 240 wraps a URL to five lines and a sentence to a word
+/// a line. Measured in a 300-pixel pane on 2026-09-05
+/// (`.fork/runs/remote-control-2026-09-05/rc-before.png`): drawn as a row,
+/// the text ran off the right edge, because it sat in an `Align`, which hands
+/// its child unbounded width.
+const STACK_BELOW_WIDTH: f32 = 480.;
+
 pub(crate) struct RemoteControlBlock {
     url: String,
+    /// Where a phone that has not installed the console's certificate
+    /// authority yet fetches it, in the clear (T19). Once per phone.
+    ca_url: Option<String>,
     matrix: Option<QrMatrix>,
     expires_at: String,
     actions: Vec<String>,
@@ -67,6 +79,7 @@ impl RemoteControlBlock {
         Self {
             matrix: qr_matrix_for_url(&result.url).ok(),
             url: result.url.clone(),
+            ca_url: result.ca_url.clone(),
             expires_at: result.expires_at.format("%H:%M:%S UTC").to_string(),
             actions: result.actions.clone(),
             close_button,
@@ -117,30 +130,19 @@ impl RemoteControlBlock {
         .with_corner_radius(CornerRadius::with_all(Radius::Pixels(8.)))
         .finish()
     }
-}
 
-impl Entity for RemoteControlBlock {
-    type Event = RemoteControlBlockEvent;
-}
-
-impl View for RemoteControlBlock {
-    fn ui_name() -> &'static str {
-        "RemoteControlBlock"
-    }
-
-    fn render(&self, app: &AppContext) -> Box<dyn Element> {
-        if self.should_hide {
-            return Empty::new().finish();
-        }
-        let appearance = Appearance::handle(app).as_ref(app);
-        let theme = appearance.theme();
+    /// The title, the sentences, the link and the copy button, as one column.
+    fn render_text(
+        &self,
+        appearance: &Appearance,
+        theme: &warp_core::ui::theme::WarpTheme,
+    ) -> Box<dyn Element> {
         let dim = theme.nonactive_ui_text_color().into_solid();
         let line = |text: String| {
             Text::new(text, appearance.ui_font_family(), 14.)
                 .with_color(dim)
                 .finish()
         };
-
         let title = Text::new(
             "Remote control".to_owned(),
             appearance.ui_font_family(),
@@ -170,19 +172,77 @@ impl View for RemoteControlBlock {
              footer cuts the phone off.",
             self.expires_at
         )));
+        if let Some(ca_url) = &self.ca_url {
+            // The link is https:// and the phone trusts nothing yet, so the
+            // first scan on a phone is a warning page unless this is done
+            // first. Said here, where the person is, rather than on the page
+            // the warning stands in front of.
+            text.add_child(line(format!(
+                "First time on this phone: open {ca_url} in its browser and install the \
+                 certificate, then scan."
+            )));
+        }
         text.add_child(line(format!("The phone may: {}", self.actions.join(", "))));
         text.add_child(ChildView::new(&self.copy_button).finish());
+        text.finish()
+    }
+}
 
-        let mut row = Flex::row()
-            .with_spacing(24.)
-            .with_cross_axis_alignment(CrossAxisAlignment::Start);
-        match &self.matrix {
-            Some(matrix) => row.add_child(self.render_qr(matrix)),
-            None => row.add_child(line("The QR could not be drawn; use the link.".to_owned())),
+impl Entity for RemoteControlBlock {
+    type Event = RemoteControlBlockEvent;
+}
+
+impl View for RemoteControlBlock {
+    fn ui_name() -> &'static str {
+        "RemoteControlBlock"
+    }
+
+    fn render(&self, app: &AppContext) -> Box<dyn Element> {
+        if self.should_hide {
+            return Empty::new().finish();
         }
-        row.add_child(Align::new(text.finish()).finish());
+        let appearance = Appearance::handle(app).as_ref(app);
+        let theme = appearance.theme();
 
-        let body = Container::new(row.finish())
+        // Built twice because an element is consumed by the tree it joins, and
+        // the switch below needs one for each layout.
+        let qr = |view: &Self| -> Box<dyn Element> {
+            match &view.matrix {
+                Some(matrix) => view.render_qr(matrix),
+                None => Text::new(
+                    "The QR could not be drawn; use the link.".to_owned(),
+                    appearance.ui_font_family(),
+                    14.,
+                )
+                .with_color(theme.nonactive_ui_text_color().into_solid())
+                .finish(),
+            }
+        };
+        let beside = Flex::row()
+            .with_spacing(24.)
+            .with_cross_axis_alignment(CrossAxisAlignment::Start)
+            .with_child(qr(self))
+            // `Expanded`, not `Align`: the text takes what the QR leaves and
+            // wraps inside it, which is what the plugin-instructions block
+            // does for the same shape.
+            .with_child(Expanded::new(1., self.render_text(appearance, theme)).finish())
+            .finish();
+        let below = Flex::column()
+            .with_spacing(16.)
+            .with_cross_axis_alignment(CrossAxisAlignment::Start)
+            .with_child(qr(self))
+            .with_child(self.render_text(appearance, theme))
+            .finish();
+        let content = SizeConstraintSwitch::new(
+            beside,
+            [(
+                SizeConstraintCondition::WidthLessThan(STACK_BELOW_WIDTH),
+                below,
+            )],
+        )
+        .finish();
+
+        let body = Container::new(content)
             .with_horizontal_padding(*super::PADDING_LEFT)
             .with_vertical_padding(16.)
             .with_border(
