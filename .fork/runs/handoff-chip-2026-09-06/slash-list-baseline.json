@@ -1,0 +1,391 @@
+{
+  "action": "slash.list",
+  "ok": true,
+  "instance_id": "inst_7e0e10800afe45d498e435b5a9e7390a",
+  "commands": [
+    {
+      "name": "/add-mcp",
+      "is_orchestration": false,
+      "submits_prompt": false,
+      "is_available": true
+    },
+    {
+      "name": "/add-prompt",
+      "is_orchestration": false,
+      "submits_prompt": false,
+      "is_available": true
+    },
+    {
+      "name": "/add-rule",
+      "is_orchestration": false,
+      "submits_prompt": false,
+      "is_available": true
+    },
+    {
+      "name": "/agent",
+      "is_orchestration": true,
+      "submits_prompt": false,
+      "is_available": true
+    },
+    {
+      "name": "/api-keys",
+      "is_orchestration": false,
+      "submits_prompt": false,
+      "is_available": false
+    },
+    {
+      "name": "/auto-approve",
+      "is_orchestration": false,
+      "submits_prompt": false,
+      "is_available": false
+    },
+    {
+      "name": "/clear",
+      "is_orchestration": false,
+      "submits_prompt": false,
+      "is_available": false
+    },
+    {
+      "name": "/cloud-agent",
+      "is_orchestration": true,
+      "submits_prompt": false,
+      "is_available": true
+    },
+    {
+      "name": "/compact",
+      "is_orchestration": true,
+      "submits_prompt": true,
+      "is_available": false
+    },
+    {
+      "name": "/compact-and",
+      "is_orchestration": true,
+      "submits_prompt": false,
+      "is_available": false
+    },
+    {
+      "name": "/connect-grok",
+      "is_orchestration": false,
+      "submits_prompt": false,
+      "is_available": false
+    },
+    {
+      "name": "/continue-locally",
+      "is_orchestration": true,
+      "submits_prompt": false,
+      "is_available": false
+    },
+    {
+      "name": "/conversations",
+      "is_orchestration": true,
+      "submits_prompt": false,
+      "is_available": true
+    },
+    {
+      "name": "/copy-debugging-id",
+      "is_orchestration": false,
+      "submits_prompt": false,
+      "is_available": false
+    },
+    {
+      "name": "/cost",
+      "is_orchestration": true,
+      "submits_prompt": false,
+      "is_available": false
+    },
+    {
+      "name": "/create-environment",
+      "is_orchestration": false,
+      "submits_prompt": false,
+      "is_available": true
+    },
+    {
+      "name": "/create-new-project",
+      "is_orchestration": false,
+      "submits_prompt": false,
+      "is_available": true
+    },
+    {
+      "name": "/environment",
+      "is_orchestration": true,
+      "submits_prompt": false,
+      "is_available": false
+    },
+    {
+      "name": "/exit",
+      "is_orchestration": false,
+      "submits_prompt": false,
+      "is_available": false
+    },
+    {
+      "name": "/export-to-clipboard",
+      "is_orchestration": true,
+      "submits_prompt": false,
+      "is_available": false
+    },
+    {
+      "name": "/export-to-file",
+      "is_orchestration": true,
+      "submits_prompt": false,
+      "is_available": false
+    },
+    {
+      "name": "/feedback",
+      "is_orchestration": false,
+      "submits_prompt": false,
+      "is_available": true
+    },
+    {
+      "name": "/fork",
+      "is_orchestration": true,
+      "submits_prompt": false,
+      "is_available": false
+    },
+    {
+      "name": "/fork-and-compact",
+      "is_orchestration": true,
+      "submits_prompt": false,
+      "is_available": false
+    },
+    {
+      "name": "/fork-from",
+      "is_orchestration": true,
+      "submits_prompt": false,
+      "is_available": false
+    },
+    {
+      "name": "/handoff",
+      "is_orchestration": true,
+      "submits_prompt": false,
+      "is_available": false
+    },
+    {
+      "name": "/harness",
+      "is_orchestration": true,
+      "submits_prompt": false,
+      "is_available": false
+    },
+    {
+      "name": "/host",
+      "is_orchestration": true,
+      "submits_prompt": false,
+      "is_available": false
+    },
+    {
+      "name": "/index",
+      "is_orchestration": true,
+      "submits_prompt": false,
+      "is_available": false
+    },
+    {
+      "name": "/init",
+      "is_orchestration": true,
+      "submits_prompt": false,
+      "is_available": false
+    },
+    {
+      "name": "/logout",
+      "is_orchestration": false,
+      "submits_prompt": false,
+      "is_available": false
+    },
+    {
+      "name": "/manage-billing",
+      "is_orchestration": false,
+      "submits_prompt": false,
+      "is_available": false
+    },
+    {
+      "name": "/mcp",
+      "is_orchestration": false,
+      "submits_prompt": false,
+      "is_available": false
+    },
+    {
+      "name": "/model",
+      "is_orchestration": true,
+      "submits_prompt": false,
+      "is_available": false
+    },
+    {
+      "name": "/natural-language-detection",
+      "is_orchestration": false,
+      "submits_prompt": false,
+      "is_available": false
+    },
+    {
+      "name": "/new",
+      "is_orchestration": true,
+      "submits_prompt": false,
+      "is_available": true
+    },
+    {
+      "name": "/open-code-review",
+      "is_orchestration": false,
+      "submits_prompt": false,
+      "is_available": true
+    },
+    {
+      "name": "/open-file",
+      "is_orchestration": false,
+      "submits_prompt": false,
+      "is_available": true
+    },
+    {
+      "name": "/open-mcp-servers",
+      "is_orchestration": false,
+      "submits_prompt": false,
+      "is_available": true
+    },
+    {
+      "name": "/open-project-rules",
+      "is_orchestration": false,
+      "submits_prompt": false,
+      "is_available": true
+    },
+    {
+      "name": "/open-repo",
+      "is_orchestration": false,
+      "submits_prompt": false,
+      "is_available": true
+    },
+    {
+      "name": "/open-rules",
+      "is_orchestration": false,
+      "submits_prompt": false,
+      "is_available": true
+    },
+    {
+      "name": "/open-settings-file",
+      "is_orchestration": false,
+      "submits_prompt": false,
+      "is_available": true
+    },
+    {
+      "name": "/open-skill",
+      "is_orchestration": false,
+      "submits_prompt": false,
+      "is_available": true
+    },
+    {
+      "name": "/orchestrate",
+      "is_orchestration": true,
+      "submits_prompt": true,
+      "is_available": true
+    },
+    {
+      "name": "/plan",
+      "is_orchestration": true,
+      "submits_prompt": true,
+      "is_available": true
+    },
+    {
+      "name": "/profile",
+      "is_orchestration": true,
+      "submits_prompt": false,
+      "is_available": false
+    },
+    {
+      "name": "/prompts",
+      "is_orchestration": false,
+      "submits_prompt": false,
+      "is_available": true
+    },
+    {
+      "name": "/queue",
+      "is_orchestration": true,
+      "submits_prompt": false,
+      "is_available": false
+    },
+    {
+      "name": "/rename-conversation",
+      "is_orchestration": true,
+      "submits_prompt": false,
+      "is_available": false
+    },
+    {
+      "name": "/rename-tab",
+      "is_orchestration": false,
+      "submits_prompt": false,
+      "is_available": true
+    },
+    {
+      "name": "/reset-statusline",
+      "is_orchestration": false,
+      "submits_prompt": false,
+      "is_available": false
+    },
+    {
+      "name": "/rewind",
+      "is_orchestration": true,
+      "submits_prompt": false,
+      "is_available": false
+    },
+    {
+      "name": "/set-tab-color",
+      "is_orchestration": false,
+      "submits_prompt": false,
+      "is_available": true
+    },
+    {
+      "name": "/skills",
+      "is_orchestration": true,
+      "submits_prompt": false,
+      "is_available": true
+    },
+    {
+      "name": "/status",
+      "is_orchestration": true,
+      "submits_prompt": false,
+      "is_available": false
+    },
+    {
+      "name": "/statusline",
+      "is_orchestration": false,
+      "submits_prompt": false,
+      "is_available": false
+    },
+    {
+      "name": "/team",
+      "is_orchestration": false,
+      "submits_prompt": false,
+      "is_available": false
+    },
+    {
+      "name": "/theme",
+      "is_orchestration": false,
+      "submits_prompt": false,
+      "is_available": false
+    },
+    {
+      "name": "/upgrade",
+      "is_orchestration": false,
+      "submits_prompt": false,
+      "is_available": false
+    },
+    {
+      "name": "/usage",
+      "is_orchestration": true,
+      "submits_prompt": false,
+      "is_available": true
+    },
+    {
+      "name": "/view-logs",
+      "is_orchestration": false,
+      "submits_prompt": false,
+      "is_available": false
+    },
+    {
+      "name": "/vim-mode",
+      "is_orchestration": false,
+      "submits_prompt": false,
+      "is_available": false
+    },
+    {
+      "name": "/voice",
+      "is_orchestration": false,
+      "submits_prompt": false,
+      "is_available": false
+    }
+  ]
+}

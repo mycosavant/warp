@@ -12,6 +12,12 @@ outranks everything else here while it stands.
 self-contained, status chips remembered per browser. Open it, do not publish
 it; the maintainer asks for a cloud copy when one is wanted.
 
+**`mobile.html` is the spec for the phone surface**, drafted 2026-09-06 in the
+same shape: what `/remote-control` does today against Claude Code's, seven gaps
+ranked, and four decisions marked as the maintainer's with a recommendation
+each. A spec for discussion, not a record; `docs/remote-control.md` is what is
+built.
+
 ## docs/ — one page per surface, current truth
 
 Each opens with *as of <date>* and a state table, then how to use the thing,

@@ -167,6 +167,12 @@ egress deny-list's blind spot is unreachable without an account.
       in `default`, so the runtime force is the removal and not a backstop;
       `the_footer_does_not_offer_to_hand_a_conversation_to_a_cloud_it_cannot_reach`
       pins both halves.
+      Measured the same day on the Windows release build
+      (`.fork/runs/handoff-chip-2026-09-06/`): the `&` hint above the agent
+      input and the `/handoff` registry entry both went; the chip itself was
+      not in this footer on either binary, because the toolbar layout here
+      does not include it. The first attempt screenshotted last night's
+      release binary, which the launcher had said in its own output.
 - [x] **Re-run the whole ticket before building.** The one empirical claim,
       that the chip renders, held; the rest was built against the code as
       read and then run on Windows (`.fork/runs/remote-control-2026-09-05/`).

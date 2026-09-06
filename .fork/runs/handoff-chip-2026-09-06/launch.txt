@@ -1,0 +1,12 @@
+warpdev: ~/.warpdev is no longer read (profiles are per launch); delete it when convenient.
+warpdev: profile PRODUCT
+  WARP_FORK_ACP_COMMAND    = wsl.exe -d Ubuntu -- npx -y @agentclientprotocol/claude-agent-acp@0.73.0
+                             the agent panel answers from this agent, started inside WSL so a pane cwd resolves
+  WARP_FORK_EVENT_LOG      = on
+                             one JSONL per conversation, the record the console draws a run from
+  cleared: WARP_FORK_ACP_MODE, WARP_FORK_TRANSCRIPT, WARP_FORK_CONTROL_BIND
+  note: a Warp started any other way gets none of this.
+warpdev: binary C:\dev\warp\target\release\warp-oss.exe
+warpdev: tree at 80b4b861b fork: the footer no longer offers a cloud it cannot reach (T19)
+warpdev: launching PRODUCT
+warpdev: up - inst_5ffeb4480b6a4c0398ac0947b6e02187 (pid 28860, channel warp-oss, app dev.warp.WarpOss, protocol 1)

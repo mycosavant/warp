@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>A Conversation in Your Pocket</title>
+<!--
+  Local-first, self-contained, like board.html. No external fonts, scripts or
+  fetches. This is a spec for discussion, drafted 2026-09-06 from what is
+  built and measured (.fork/docs/remote-control.md, .fork/runs/remote-control-
+  2026-09-05/) and from Claude Code's published description of its own
+  /remote-control. Decisions marked "yours" are open until the maintainer
+  answers them; each carries a recommendation so a silence is not a blocker.
+-->
+<style>
+  :root {
+    --paper: #f6f5f1; --paper-2: #edebe4; --ink: #1c1f24; --ink-2: #4a4f58; --ink-3: #7a7f88;
+    --rule: #d9d6cd; --accent: #0f6e6a; --accent-ink: #0a4f4c; --accent-wash: #dcecea;
+    --done: #3f7d3a; --done-wash: #dfeadb; --active: #a86a12; --active-wash: #f3e6cf;
+    --no: #9a3b32; --no-wash: #f1dcd9; --park: #8a8f98; --code-bg: #ecebe5;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif;
+    --cond: "Arial Narrow", "Roboto Condensed", "Segoe UI", system-ui, sans-serif;
+    --mono: ui-monospace, "Cascadia Mono", Consolas, "SF Mono", Menlo, "DejaVu Sans Mono", monospace;
+    color-scheme: light dark;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #17191d; --paper-2: #1f2227; --ink: #e8e6df; --ink-2: #b4b2aa; --ink-3: #7f7e78;
+      --rule: #33373e; --accent: #5fb8b2; --accent-ink: #8fd4cf; --accent-wash: #173634;
+      --done: #86c07a; --done-wash: #1f3320; --active: #d9a052; --active-wash: #3a2c14;
+      --no: #d98a80; --no-wash: #3a2220; --park: #767b84; --code-bg: #20232a;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--paper); color: var(--ink); font-family: var(--sans); font-size: 16px; line-height: 1.55; margin: 0; }
+  .wrap { max-width: 800px; margin: 0 auto; padding: 48px 24px 96px; }
+  header { display: grid; gap: 14px; margin-bottom: 40px; }
+  .eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); display: flex; gap: 16px; flex-wrap: wrap; }
+  h1 { font-family: var(--serif); font-weight: 600; font-size: 42px; line-height: 1.05; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+  .lede { font-size: 18px; color: var(--ink-2); margin: 0; max-width: 62ch; }
+  h2 { font-family: var(--serif); font-weight: 600; font-size: 24px; margin: 48px 0 12px; line-height: 1.2; text-wrap: balance; }
+  h2:first-of-type { margin-top: 0; }
+  h3 { font-family: var(--cond); font-weight: 600; font-size: 19px; margin: 28px 0 6px; }
+  p { margin: 0 0 12px; max-width: 70ch; }
+  .k { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); }
+  .callout { border-left: 3px solid var(--accent); background: var(--accent-wash); padding: 16px 20px; margin: 0 0 32px; display: grid; gap: 8px; }
+  .callout .k { color: var(--accent-ink); }
+  .callout p { margin: 0; }
+  .facts { overflow-x: auto; margin-bottom: 16px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { text-align: left; padding: 8px 14px 8px 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  th { font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); font-weight: 500; }
+  td:first-child { font-family: var(--cond); font-weight: 500; white-space: nowrap; }
+  .yes { color: var(--done); font-weight: 600; }
+  .no { color: var(--no); font-weight: 600; }
+  .part { color: var(--active); font-weight: 600; }
+  .gap { border-top: 1px solid var(--rule); padding: 24px 0 28px; display: grid; grid-template-columns: 44px 1fr; gap: 0 18px; }
+  .gap .rank { font-family: var(--cond); font-weight: 600; font-size: 34px; line-height: 1; color: var(--ink-3); }
+  .gap .body { display: grid; gap: 10px; min-width: 0; }
+  .gap h3 { margin: 0; }
+  .meta { font-family: var(--mono); font-size: 12px; color: var(--ink-3); display: flex; gap: 14px; flex-wrap: wrap; }
+  .rec { display: grid; grid-template-columns: 110px 1fr; gap: 12px; font-size: 14.5px; }
+  .rec .k { padding-top: 3px; }
+  .rec.yours .k { color: var(--active); }
+  .rec p { margin: 0; }
+  .opts { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+  .opts li { padding: 8px 12px; border: 1px solid var(--rule); border-radius: 4px; font-size: 14px; color: var(--ink-2); }
+  .opts li.pick { border-color: var(--accent); background: var(--accent-wash); color: var(--ink); }
+  .opts li b { font-weight: 600; color: var(--ink); font-family: var(--cond); font-size: 15px; margin-right: 6px; }
+  .seq ol { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+  .seq li { border-top: 2px solid var(--rule); padding-top: 8px; font-family: var(--cond); font-weight: 500; font-size: 15px; line-height: 1.25; }
+  .seq li small { display: block; font-family: var(--mono); font-size: 11px; color: var(--ink-3); margin-bottom: 4px; }
+  @media (max-width: 620px) { .seq ol { grid-template-columns: repeat(2, 1fr); } .rec { grid-template-columns: 1fr; gap: 4px; } }
+  .refused ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+  .refused li { display: grid; grid-template-columns: 210px 1fr; gap: 16px; font-size: 14px; }
+  .refused li b { font-weight: 500; color: var(--park); font-family: var(--cond); font-size: 15px; }
+  .refused li span { color: var(--ink-2); }
+  @media (max-width: 620px) { .refused li { grid-template-columns: 1fr; gap: 2px; } }
+  code { font-family: var(--mono); font-size: 0.88em; background: var(--code-bg); padding: 1px 5px; border-radius: 3px; }
+  pre { font-family: var(--mono); font-size: 13px; line-height: 1.5; background: var(--code-bg); padding: 12px 14px; border-radius: 4px; overflow-x: auto; margin: 0 0 12px; }
+  footer { margin-top: 48px; font-family: var(--mono); font-size: 12px; color: var(--ink-3); border-top: 1px solid var(--rule); padding-top: 16px; }
+  footer p { margin: 0 0 6px; max-width: 76ch; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">
+      <span>warp fork &middot; dev</span>
+      <span>drafted 2026-09-06</span>
+      <span>spec, for decisions</span>
+    </div>
+    <h1>A Conversation in Your Pocket</h1>
+    <p class="lede">What the fork's <code>/remote-control</code> is today, what Claude Code's does that ours does not, and the smallest set of changes that closes the gaps worth closing. Four decisions are yours; each has a recommendation, and one of them turns out to gate two of the others.</p>
+  </header>
+
+  <section class="callout">
+    <span class="k">The shape, unchanged</span>
+    <p>A person at the keyboard points at one conversation and hands it to a phone. The phone gets that conversation and nothing else: it watches the record live, answers its permission requests, stops a turn, and sends the next prompt. Everything below is either a way to make that one gesture better or is refused because it would change what the gesture means.</p>
+  </section>
+
+  <h2>What exists, measured 2026-09-05</h2>
+  <p>Ours is the Windows build with the console on the LAN bind. Claude Code's column is from its published documentation for the same feature, as of today; "not documented" means the page does not say.</p>
+  <div class="facts">
+  <table>
+    <tr><th>capability</th><th>ours</th><th>Claude Code's</th></tr>
+    <tr><td>read the record live</td><td class="yes">yes</td><td>yes</td></tr>
+    <tr><td>tool calls, inputs, outcomes</td><td class="yes">yes</td><td>yes, "tool activity"</td></tr>
+    <tr><td>diffs of edits</td><td class="no">no, the edit's input as text</td><td>yes, a diff pane</td></tr>
+    <tr><td>send the next prompt</td><td class="yes">yes</td><td>yes</td></tr>
+    <tr><td>answer a permission request</td><td class="yes">yes, two taps in four seconds</td><td>not documented</td></tr>
+    <tr><td>stop a turn</td><td class="yes">yes</td><td>yes</td></tr>
+    <tr><td>be told when the agent needs you</td><td class="no">no, the page must be open</td><td>yes, push notifications</td></tr>
+    <tr><td>see the mode and model in force</td><td class="part">in the record, not the header</td><td>model and effort shown</td></tr>
+    <tr><td>see the working directory</td><td class="part">in the record's first line</td><td>not documented</td></tr>
+    <tr><td>switch conversations</td><td class="no">one per code; a second scan replaces</td><td>no, <code>/resume</code> is local only</td></tr>
+    <tr><td>change permission mode</td><td class="no">no, by design</td><td>not documented</td></tr>
+    <tr><td>end it from the desk</td><td class="yes">Stop sharing; closing Warp</td><td><code>/remote-control</code> again; closing the terminal</td></tr>
+    <tr><td>end it from the phone</td><td class="part">forgets its token locally; the server does not know</td><td>not documented</td></tr>
+    <tr><td>the desk sees the phone act</td><td class="part">chip reads Stop sharing; a phone's prompt looks like yours</td><td>connection status, tool activity, <code>/rc active</code></td></tr>
+    <tr><td>transport</td><td class="no">plaintext HTTP on the LAN; not a secure context, so the browser withholds notifications, service workers and push</td><td>HTTPS to Anthropic; transcript stored there</td></tr>
+    <tr><td>where the words go</td><td class="yes">nowhere; the phone talks to the machine</td><td>Anthropic's servers</td></tr>
+    <tr><td>lifetimes</td><td>code 2 min; device 12 h; credential 5 min</td><td>session outlives the server by about 4 h</td></tr>
+    <tr><td>how many</td><td>8 devices per instance, any conversations</td><td>one remote session per interactive process</td></tr>
+  </table>
+  </div>
+  <p>The last two rows of "yes" are the argument for the whole thing. Claude Code's remote control works by putting the transcript on Anthropic's servers and routing both ends through them. Ours has no relay at all, and that is why the transport row is red: the relay is also what gives them TLS for free.</p>
+
+  <h2>The gaps, ranked by what a day with it would hit first</h2>
+
+  <article class="gap">
+    <div class="rank">1</div>
+    <div class="body">
+      <h3>A real phone, once</h3>
+      <div class="meta"><span>measure</span><span>no code</span><span>remote-control.md, "Unverified"</span></div>
+      <p>Every measurement so far had Brave on the Windows side standing in for the phone. Scan the block with a phone, install the page from the browser's menu (the manifest already says <code>standalone</code>), lock the phone mid-turn, unlock it, answer a request. The reconnect path and the 5-minute credential turnover have only been exercised by a browser that never sleeps.</p>
+      <div class="rec"><span class="k">expect</span><p>the QR block's text column clipped on a narrow pane (seen), and Chrome offering "add to home screen" as a shortcut rather than an install, because over plain HTTP the page does not meet its install criteria. iOS adds it either way, and gives it nothing a shortcut lacks.</p></div>
+    </div>
+  </article>
+  <article class="gap">
+    <div class="rank">2</div>
+    <div class="body">
+      <h3>Being told</h3>
+      <div class="meta"><span>console.js</span><span>page only, first half</span></div>
+      <p>The reason to have a phone in the loop is to be somewhere else while the agent works, and a page that has to be open and looked at gives up most of that. Two halves with very different costs.</p>
+      <p><b>The precondition is item 3.</b> Every browser withholds the Notification API, service workers and push from a page that is not a secure context, and a secure context is <code>https://</code> or the browser's own machine; <code>http://192.168.254.3</code> is neither, and a tailnet address over plain HTTP is not either, however encrypted the tunnel under it. So nothing in this item can be built until the phone trusts the console's certificate. Vibration is the one thing not withheld.</p>
+      <p><b>Foreground.</b> With that in place: while the page is open or installed and in the background of a phone that is awake, the Notification API and vibration fire on a new permission request and on a turn ending. No relay, no new server code: the events stream already carries both. Android Chrome does this from an installed page; iOS does it only from an installed page and only on 16.4 or later.</p>
+      <p><b>Background.</b> A locked phone needs Web Push, and Web Push means the phone's browser subscribes at Google's or Apple's push service and Warp posts a nudge there. The payload is encrypted end to end by the standard, so the relay sees an opaque blob, an endpoint, and a timestamp. That is not nothing: it is a third party learning that this machine had something to say at 03:12. It is also the only way a locked phone buzzes.</p>
+      <div class="rec yours"><span class="k">yours</span>
+        <ul class="opts">
+          <li class="pick"><b>Foreground now, push never by default.</b> Build the first half. Record the second as an opt-in behind its own variable, off, with the disclosure above beside it, and build it only if a week of use says the foreground half is not enough.</li>
+          <li><b>Both now.</b> Push as opt-in from the start. Costs a VAPID key pair on disk, a subscription store, one more egress host to allow, and the first hole in "nothing leaves the machine" that is not a vendor deny-list.</li>
+          <li><b>Neither.</b> SSH from Termux and a watcher script is the pure route and already works; accept that the console is for when you are looking at it.</li>
+        </ul>
+      </div>
+    </div>
+  </article>
+  <article class="gap">
+    <div class="rank">3</div>
+    <div class="body">
+      <h3>The wire, twice: trust and reach</h3>
+      <div class="meta"><span>mod.rs, console.rs</span><span>rustls, rcgen</span><span>manual.md, "Reaching this machine from a phone"</span></div>
+      <p>Two different problems that one sentence used to cover. <b>Trust</b> is whether the phone's browser believes the console is who it says, and it decides more than confidentiality: without it there is no secure context, so no notifications, no install, no service worker, and the token and every approval payload are readable on the wire. <b>Reach</b> is whether the phone can find the machine from outside the LAN at all.</p>
+      <p><b>Trust needs a certificate the phone accepts, and the fork can mint its own.</b> A self-signed server certificate is a warning page and a tap-through, and nothing a QR carries can pin it. A fork-minted <em>CA</em> is different: Warp mints a CA key once, keeps it private in <code>state_dir</code> like the discovery record, signs a certificate for the bind address with it, and serves the CA's public half at one more constant route. The phone installs that CA once, from a link the pairing page shows, and from then on <code>https://192.168.254.3:41234</code> is a secure context with no warning. Android installs a user CA from settings and Chrome honours it; iOS installs it as a profile and asks once more under certificate trust settings. It is the shape of a home router or a self-hosted service, nothing leaves the machine, and it is the only route that does not put a public DNS name in the loop. Cost: TLS on the axum listener (<code>rustls</code>), key and certificate minting (<code>rcgen</code>), the route, and a first-run step on each phone. The loopback listener stays plain, because <code>warpctrl</code> is not a browser and localhost is already a secure context.</p>
+      <p><b>Reach is the mesh, unchanged from the manual.</b> A tailnet address is one literal IP that fits <code>WARP_FORK_CONTROL_BIND</code>, opens no inbound port and retires the firewall rule; Tailscale's coordination server is an account, so <code>headscale</code> on a small VPS replaces exactly that part. It does not give the browser a secure context, which is why it is the second half and not the whole.</p>
+      <div class="rec yours"><span class="k">yours</span>
+        <ul class="opts">
+          <li class="pick"><b>A fork-minted CA now; headscale when you have an evening.</b> Trust is code and unblocks items 2 and 1's install; reach is ops and unblocks leaving the house. They do not wait on each other.</li>
+          <li><b>headscale first, CA later.</b> Encrypts the wire sooner, notifications later; the phone stays a couch device that cannot be told anything meanwhile.</li>
+          <li><b>Stay on the LAN, plain.</b> Honest and free. It means the console is for when you are looking at it, and item 2 is off the table.</li>
+        </ul>
+      </div>
+    </div>
+  </article>
+  <article class="gap">
+    <div class="rank">4</div>
+    <div class="body">
+      <h3>How long a handed conversation stays handed</h3>
+      <div class="meta"><span>pairing.rs</span><span>one constant and a rule</span></div>
+      <p>A device paired by <code>pair show</code> dies after 12 hours, which is the right lifetime for a weak credential minted by a variable. A device paired by the chip was minted by a person pointing at a conversation, and 12 hours means a run started at breakfast asks you to walk back to the machine at dinner to keep watching it. Meanwhile the credential map already voids everything confined to a conversation the moment you click Stop sharing, so the clock is not what bounds a leak; the confinement is.</p>
+      <div class="rec yours"><span class="k">yours</span>
+        <ul class="opts">
+          <li class="pick"><b>A control pairing lives as long as the conversation.</b> It ends on Stop sharing, on the conversation being deleted, or on Warp closing, and on no clock. The watch pairing keeps its 12 hours. This is the reading that makes the gesture mean what it says.</li>
+          <li><b>Keep 12 hours everywhere.</b> Simplest; the cost is the walk to the machine, once a day, for a run that is still going.</li>
+          <li><b>A longer clock, say 72 hours, for control only.</b> A middle that has to be explained; it bounds nothing the confinement does not already bound.</li>
+        </ul>
+      </div>
+    </div>
+  </article>
+  <article class="gap">
+    <div class="rank">5</div>
+    <div class="body">
+      <h3>The desk should know what the phone did</h3>
+      <div class="meta"><span>remote_control_block.rs</span><span>event_log</span><span>small</span></div>
+      <p>Today the block shows a QR and the chip reads Stop sharing from the moment a code exists, whether or not anyone ever scanned it. Three things it should say and does not: <em>paired at 14:02</em> when the code is spent, <em>expired, click again</em> when two minutes pass unscanned (the chip already flips back; the block keeps showing a dead code), and which prompts and answers came from the phone.</p>
+      <p>Where the provenance goes is a choice. Claude Code shows phone-sent messages in the local conversation as ordinary messages, and that is right for the conversation: they are your words. The <em>record</em> is where the origin belongs, and the event log already has an <code>answered_by</code> on permission replies that the console could fill; a prompt line wants the same field.</p>
+      <div class="rec yours"><span class="k">yours</span>
+        <ul class="opts">
+          <li class="pick"><b>Record it, do not mark it.</b> <code>prompt_submit</code> and <code>permission_replied</code> carry <code>via: paired_device</code> in the event log; the conversation shows the prompt as yours; the block in the pane shows paired and expired states. The trace view then shows a small "from the phone" stamp on those rows, which is the record drawn, not the conversation edited.</li>
+          <li><b>Mark it in the conversation too.</b> A prefix on the prompt in the panel. Cheap, but it puts a Warp aside in the agent's context, which the transcript work went to some trouble to avoid.</li>
+        </ul>
+      </div>
+    </div>
+  </article>
+  <article class="gap">
+    <div class="rank">6</div>
+    <div class="body">
+      <h3>What the record shows</h3>
+      <div class="meta"><span>console.js</span><span>trace_render.rs</span><span>page only</span></div>
+      <p>Three things the phone has in hand and does not draw. The mode and model in force are on the record's <code>session_mode</code> and <code>session_model</code> lines and belong in the conversation header, since "is the agent asking me or its classifier" is the first thing a phone wants to know. The working directory is on the first line. And an edit tool's input holds old and new text, which is a diff that is currently drawn as two strings; drawing it as a diff is the one thing Claude Code's phone view has that ours would visibly lack, and it is a render change on rows the page already has.</p>
+      <div class="rec"><span class="k">recommend</span><p>Build all three, in that order; none needs the desk to change. Header first, because it is an hour and it answers the question the trace's zero-request case already warns about.</p></div>
+    </div>
+  </article>
+  <article class="gap">
+    <div class="rank">7</div>
+    <div class="body">
+      <h3>More than one conversation on one phone</h3>
+      <div class="meta"><span>console.js</span><span>later</span></div>
+      <p>A phone that scans two codes holds the second and forgets the first, because the page stores one device. Holding several is a page change: a map of pairings keyed by conversation, a list to pick from, each with its own token and scope. The server side needs nothing; it already allows eight devices. Not urgent, because the honest use is one long run at a time, and the watch pairing from <code>pair show</code> already gives the overview for free.</p>
+    </div>
+  </article>
+
+  <h2>Refused, and why</h2>
+  <section class="refused">
+    <ul>
+      <li><b>Start a new conversation from the phone</b><span>The code was minted for one conversation by someone pointing at it. A new one was pointed at by nobody. The watch pairing does not get it either, for the same reason it never got <code>agent.prompt</code>.</span></li>
+      <li><b>Change the agent's permission mode from the phone</b><span>The mode is the agent's, and the fork discloses it rather than choosing it (<code>WARP_FORK_ACP_MODE</code> has no default on purpose). Widening what the agent may do unasked is a policy change, and a QR code is the weakest credential in the system. Claude Code's phone does not document this either.</span></li>
+      <li><b>Answer for every agent from a control pairing</b><span>That is <code>WARP_FORK_REMOTE_APPROVE</code>, a different claim with its own switch. A control pairing answers its conversation's requests and no other's; this is what the pinned test holds.</span></li>
+      <li><b>A self-signed server certificate without a CA</b><span>A warning page and a tap-through on the phone, which teaches the habit that lets a real attacker through, and nothing a QR carries can pin it. A CA the phone installs once is the version that works, and it is item 3.</span></li>
+      <li><b>A public certificate</b><span>ACME needs a DNS name the world can resolve pointing at this machine, or a DNS-01 challenge through a provider's API: a public name and an account for a console that is meant to be findable by one phone. The fork-minted CA is smaller and stays home.</span></li>
+      <li><b>Push by default</b><span>See item 2. An opaque nudge to a third party is still a third party learning when this machine had something to say.</span></li>
+    </ul>
+  </section>
+
+  <h2>Sequence, if the recommendations stand</h2>
+  <section class="seq">
+    <ol>
+      <li><small>first</small>A real phone; fix the block's layout; note what iOS refuses.</li>
+      <li><small>then</small>The fork-minted CA and TLS on the wide listener; block states; provenance in the record; control pairing without a clock.</li>
+      <li><small>then</small>Foreground notifications; header with mode, model, cwd; edits as diffs.</li>
+      <li><small>ops</small>headscale on a VPS; bind the tailnet address; retire the firewall rule.</li>
+      <li><small>later</small>Several pairings on one phone; push as a disclosed opt-in if a week says so.</li>
+    </ol>
+  </section>
+  <p>Step 2 is two days with the certificate work, step 3 a day, and each is measured the way the last two runs were: the phone's side from <code>curl.exe</code>, the desk's side from screenshots, and a run directory that keeps the driver.</p>
+
+  <footer>
+    <p>Sources: <code>.fork/docs/remote-control.md</code> (as built, 2026-09-05); <code>.fork/runs/remote-control-2026-09-05/</code> (two measured runs); <code>.fork/decisions/2026-09-05-remote-control-is-one-conversation-handed-over.md</code>; Claude Code's documentation of <code>/remote-control</code> at code.claude.com, read 2026-09-06 and quoted only where it says a thing plainly.</p>
+    <p>Lifetimes are read off <code>pairing.rs</code> (<code>CODE_LIFETIME</code>, <code>DEVICE_LIFETIME</code>, <code>MAX_PAIRED_DEVICES</code>) and <code>mod.rs</code>'s credential issue, not off this page.</p>
+  </footer>
+</div>
+</body>
+</html>
