@@ -228,6 +228,21 @@ async fn plain_http_on_the_wide_port_gets_the_certificate_and_nothing_else() {
     );
 }
 
+/// HTTP/1.1 only over TLS. Over HTTP/2 a browser sends the authority as the
+/// `:authority` pseudo-header and no `Host`, and the `Host` check refuses every
+/// request: measured with Brave on 2026-09-06, the first browser to reach the
+/// listener after `h2` had been advertised. Pinned so a later "why not h2"
+/// finds this sentence before the phone finds the 403.
+#[test]
+fn the_listener_offers_http1_only_because_the_host_check_reads_the_host_header() {
+    let dir = tempfile::tempdir().expect("a scratch state directory");
+    let tls = for_address_in(dir.path(), IpAddr::V4(Ipv4Addr::LOCALHOST), now()).expect("mints");
+    assert_eq!(
+        tls.acceptor.config().alpn_protocols,
+        vec![b"http/1.1".to_vec()]
+    );
+}
+
 /// The install page is a constant with no script, served with the console's
 /// headers, and it links the certificate by a relative path so it works from
 /// whichever address the phone typed.

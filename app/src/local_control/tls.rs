@@ -176,7 +176,16 @@ pub(super) fn for_address_in(
         PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(leaf_key.serialize_der())),
     )
     .context("building the server configuration")?;
-    config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
+    // HTTP/1.1 only, and this line said `h2` first until the first browser
+    // arrived. Measured 2026-09-06: Brave negotiated HTTP/2 and every request
+    // it made was refused with *Host header is required*, because over h2
+    // the authority travels as the `:authority` pseudo-header and the `Host`
+    // check in `validate_endpoint_headers` reads the header by that name and
+    // nothing else. `curl.exe` offers only HTTP/1.1, which is why the whole
+    // flow had passed under it. Everything the console does is fine over
+    // HTTP/1.1, the SSE stream included, so the listener speaks that and the
+    // check stays as it is rather than growing a second path.
+    config.alpn_protocols = vec![b"http/1.1".to_vec()];
     Ok(ConsoleTls {
         acceptor: TlsAcceptor::from(Arc::new(config)),
         ca_certificate_pem: Arc::from(authority.certificate_pem),
