@@ -18,6 +18,11 @@ ranked, and four decisions marked as the maintainer's with a recommendation
 each. A spec for discussion, not a record; `docs/remote-control.md` is what is
 built.
 
+**`HANDOFF-MOBILE.md` is the handoff for that work**, written 2026-09-06 for a
+fresh session after the maintainer answered the spec's four decisions
+(`decisions/2026-09-06-the-phone-surface-four-decisions.md`). Live while the
+work is open; it moves to `archive/` when the last step is measured.
+
 ## docs/ — one page per surface, current truth
 
 Each opens with *as of <date>* and a state table, then how to use the thing,

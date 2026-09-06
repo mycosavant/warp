@@ -89,10 +89,10 @@
     <div class="eyebrow">
       <span>warp fork &middot; dev</span>
       <span>drafted 2026-09-06</span>
-      <span>spec, for decisions</span>
+      <span>decided 2026-09-06</span>
     </div>
     <h1>A Conversation in Your Pocket</h1>
-    <p class="lede">What the fork's <code>/remote-control</code> is today, what Claude Code's does that ours does not, and the smallest set of changes that closes the gaps worth closing. Four decisions are yours; each has a recommendation, and one of them turns out to gate two of the others.</p>
+    <p class="lede">What the fork's <code>/remote-control</code> is today, what Claude Code's does that ours does not, and the smallest set of changes that closes the gaps worth closing. Four decisions were the maintainer's; each was answered with its recommendation on 2026-09-06 (<code>.fork/decisions/2026-09-06-the-phone-surface-four-decisions.md</code>), and one of them gates two of the others. The work is handed off in <code>.fork/HANDOFF-MOBILE.md</code>.</p>
   </header>
 
   <section class="callout">
@@ -147,7 +147,7 @@
       <p><b>The precondition is item 3.</b> Every browser withholds the Notification API, service workers and push from a page that is not a secure context, and a secure context is <code>https://</code> or the browser's own machine; <code>http://192.168.254.3</code> is neither, and a tailnet address over plain HTTP is not either, however encrypted the tunnel under it. So nothing in this item can be built until the phone trusts the console's certificate. Vibration is the one thing not withheld.</p>
       <p><b>Foreground.</b> With that in place: while the page is open or installed and in the background of a phone that is awake, the Notification API and vibration fire on a new permission request and on a turn ending. No relay, no new server code: the events stream already carries both. Android Chrome does this from an installed page; iOS does it only from an installed page and only on 16.4 or later.</p>
       <p><b>Background.</b> A locked phone needs Web Push, and Web Push means the phone's browser subscribes at Google's or Apple's push service and Warp posts a nudge there. The payload is encrypted end to end by the standard, so the relay sees an opaque blob, an endpoint, and a timestamp. That is not nothing: it is a third party learning that this machine had something to say at 03:12. It is also the only way a locked phone buzzes.</p>
-      <div class="rec yours"><span class="k">yours</span>
+      <div class="rec yours"><span class="k">decided</span>
         <ul class="opts">
           <li class="pick"><b>Foreground now, push never by default.</b> Build the first half. Record the second as an opt-in behind its own variable, off, with the disclosure above beside it, and build it only if a week of use says the foreground half is not enough.</li>
           <li><b>Both now.</b> Push as opt-in from the start. Costs a VAPID key pair on disk, a subscription store, one more egress host to allow, and the first hole in "nothing leaves the machine" that is not a vendor deny-list.</li>
@@ -164,7 +164,7 @@
       <p>Two different problems that one sentence used to cover. <b>Trust</b> is whether the phone's browser believes the console is who it says, and it decides more than confidentiality: without it there is no secure context, so no notifications, no install, no service worker, and the token and every approval payload are readable on the wire. <b>Reach</b> is whether the phone can find the machine from outside the LAN at all.</p>
       <p><b>Trust needs a certificate the phone accepts, and the fork can mint its own.</b> A self-signed server certificate is a warning page and a tap-through, and nothing a QR carries can pin it. A fork-minted <em>CA</em> is different: Warp mints a CA key once, keeps it private in <code>state_dir</code> like the discovery record, signs a certificate for the bind address with it, and serves the CA's public half at one more constant route. The phone installs that CA once, from a link the pairing page shows, and from then on <code>https://192.168.254.3:41234</code> is a secure context with no warning. Android installs a user CA from settings and Chrome honours it; iOS installs it as a profile and asks once more under certificate trust settings. It is the shape of a home router or a self-hosted service, nothing leaves the machine, and it is the only route that does not put a public DNS name in the loop. Cost: TLS on the axum listener (<code>rustls</code>), key and certificate minting (<code>rcgen</code>), the route, and a first-run step on each phone. The loopback listener stays plain, because <code>warpctrl</code> is not a browser and localhost is already a secure context.</p>
       <p><b>Reach is the mesh, unchanged from the manual.</b> A tailnet address is one literal IP that fits <code>WARP_FORK_CONTROL_BIND</code>, opens no inbound port and retires the firewall rule; Tailscale's coordination server is an account, so <code>headscale</code> on a small VPS replaces exactly that part. It does not give the browser a secure context, which is why it is the second half and not the whole.</p>
-      <div class="rec yours"><span class="k">yours</span>
+      <div class="rec yours"><span class="k">decided</span>
         <ul class="opts">
           <li class="pick"><b>A fork-minted CA now; headscale when you have an evening.</b> Trust is code and unblocks items 2 and 1's install; reach is ops and unblocks leaving the house. They do not wait on each other.</li>
           <li><b>headscale first, CA later.</b> Encrypts the wire sooner, notifications later; the phone stays a couch device that cannot be told anything meanwhile.</li>
@@ -179,7 +179,7 @@
       <h3>How long a handed conversation stays handed</h3>
       <div class="meta"><span>pairing.rs</span><span>one constant and a rule</span></div>
       <p>A device paired by <code>pair show</code> dies after 12 hours, which is the right lifetime for a weak credential minted by a variable. A device paired by the chip was minted by a person pointing at a conversation, and 12 hours means a run started at breakfast asks you to walk back to the machine at dinner to keep watching it. Meanwhile the credential map already voids everything confined to a conversation the moment you click Stop sharing, so the clock is not what bounds a leak; the confinement is.</p>
-      <div class="rec yours"><span class="k">yours</span>
+      <div class="rec yours"><span class="k">decided</span>
         <ul class="opts">
           <li class="pick"><b>A control pairing lives as long as the conversation.</b> It ends on Stop sharing, on the conversation being deleted, or on Warp closing, and on no clock. The watch pairing keeps its 12 hours. This is the reading that makes the gesture mean what it says.</li>
           <li><b>Keep 12 hours everywhere.</b> Simplest; the cost is the walk to the machine, once a day, for a run that is still going.</li>
@@ -195,7 +195,7 @@
       <div class="meta"><span>remote_control_block.rs</span><span>event_log</span><span>small</span></div>
       <p>Today the block shows a QR and the chip reads Stop sharing from the moment a code exists, whether or not anyone ever scanned it. Three things it should say and does not: <em>paired at 14:02</em> when the code is spent, <em>expired, click again</em> when two minutes pass unscanned (the chip already flips back; the block keeps showing a dead code), and which prompts and answers came from the phone.</p>
       <p>Where the provenance goes is a choice. Claude Code shows phone-sent messages in the local conversation as ordinary messages, and that is right for the conversation: they are your words. The <em>record</em> is where the origin belongs, and the event log already has an <code>answered_by</code> on permission replies that the console could fill; a prompt line wants the same field.</p>
-      <div class="rec yours"><span class="k">yours</span>
+      <div class="rec yours"><span class="k">decided</span>
         <ul class="opts">
           <li class="pick"><b>Record it, do not mark it.</b> <code>prompt_submit</code> and <code>permission_replied</code> carry <code>via: paired_device</code> in the event log; the conversation shows the prompt as yours; the block in the pane shows paired and expired states. The trace view then shows a small "from the phone" stamp on those rows, which is the record drawn, not the conversation edited.</li>
           <li><b>Mark it in the conversation too.</b> A prefix on the prompt in the panel. Cheap, but it puts a Warp aside in the agent's context, which the transcript work went to some trouble to avoid.</li>
