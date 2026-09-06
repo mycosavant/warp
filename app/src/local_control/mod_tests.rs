@@ -163,15 +163,16 @@ fn capabilities_advertises_the_complete_catalog() {
     // the three that read and set a tab's main pane (`pane.main.get`, `.set`
     // and `.clear`, T8.5), the two that drive the dedicated hotkey window
     // (`window.visor.toggle` and `.status`, T8.1), `tab.merge` (T8.2), and
-    // `events.subscribe`, the read surface's own authority (T11.2).
+    // `events.subscribe`, the read surface's own authority (T11.2), and
+    // `agent.trace`, the record of a conversation for a phone (item 6).
     //
     // **This is the second count pin, and it is easy to miss.** Its twin is
-    // `catalog_has_exactly_114_retained_actions` in
+    // `catalog_has_exactly_115_retained_actions` in
     // `crates/local_control/src/protocol_tests.rs`, which asserts the same
     // number about `ActionKind::ALL`. T8.6 updated that one and left this one
     // red, because `cargo test -p local_control` is quick and this lives in the
     // app crate. Change both together, and run `-p warp --lib local_control`.
-    assert_eq!(capabilities().len(), 114);
+    assert_eq!(capabilities().len(), 115);
 }
 
 #[test]

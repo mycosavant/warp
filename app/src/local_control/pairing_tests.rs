@@ -137,6 +137,13 @@ fn a_paired_device_cannot_reach_the_actions_that_execute() {
 /// `quiet_for_seconds` — was already granted, and its honest delta from deny is
 /// that it can land mid-side-effect; the module docs carry that argument in
 /// full.
+///
+/// Board item 6 grew it by one, and it is the widest read on the list:
+/// `agent.trace` returns the conversation's record -- prompts, full tool
+/// inputs, results, the agent's thinking where recorded. Asked for by the
+/// maintainer on 2026-09-05 so a phone can watch a run; argued in the module
+/// docs against what `events.subscribe` already grants. A read, still: a
+/// stolen token learns and cannot act.
 #[test]
 fn a_paired_device_gets_the_read_surface_and_the_safe_half_of_answering() {
     assert_eq!(
@@ -148,6 +155,7 @@ fn a_paired_device_gets_the_read_surface_and_the_safe_half_of_answering() {
             ActionKind::AgentApprovals,
             ActionKind::AgentDeny,
             ActionKind::AgentCancel,
+            ActionKind::AgentTrace,
         ]
         .as_slice()
     );

@@ -17,7 +17,7 @@ mod graph;
 mod mcp;
 mod output;
 mod selectors;
-mod trace;
+pub mod trace;
 mod trace_render;
 use std::ffi::OsString;
 use std::path::PathBuf;
@@ -988,6 +988,20 @@ pub struct AgentTraceArgs {
     /// owner-only where the filesystem has modes.
     #[arg(long = "html", value_name = "FILE")]
     pub html: Option<PathBuf>,
+
+    /// Ask the running instance for the trace (`agent.trace`) instead of
+    /// reading the files here.
+    ///
+    /// The instance has the conversation's session and finds the harness's
+    /// file itself, including inside a WSL distribution on Windows, so this
+    /// needs none of the path flags above and ignores them. It is what the
+    /// console asks; the rendering is the same. Needs a running Warp with
+    /// `WARP_FORK_EVENT_LOG` on.
+    #[arg(long = "live", conflicts_with_all = ["events_dir", "events_file", "harness_dir", "harness_file"])]
+    pub live: bool,
+
+    #[command(flatten)]
+    pub target: TargetArgs,
 }
 
 /// `warpctrl graph …` — run several agents in a declared order.

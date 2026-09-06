@@ -462,3 +462,78 @@ fn a_refresh_does_not_disarm_a_control_mid_answer() {
         "exactly one place disarms, and it is `disarm` itself"
     );
 }
+
+/// The conversation view (board item 6, phase 3) asks for the *tail* of the
+/// record and carries the cursors the last reply gave it, so a phone watching
+/// a long run pays for the new rows and not the whole file on every poll.
+///
+/// Pinned on the one place the request is composed and on the two places the
+/// cursors advance, because the cheap mistake is to advance them from the
+/// request rather than from the reply -- which would skip rows whenever a
+/// poll raced a write.
+#[test]
+fn the_conversation_view_polls_for_the_tail_with_the_replys_cursors() {
+    assert_eq!(
+        executable_lines_mentioning(CONSOLE_SCRIPT, "control(TRACE,"),
+        vec![
+            "    control(TRACE, { conversation_id: mine.id, warp_after: mine.warpAfter, harness_after: mine.harnessAfter })"
+        ],
+        "one place asks for the record, and it sends both cursors"
+    );
+    assert!(
+        CONSOLE_SCRIPT.contains(
+            "if (typeof header.warp_lines === 'number') mine.warpAfter = header.warp_lines;"
+        ),
+        "Warp's cursor advances from the reply's total"
+    );
+    assert!(
+        CONSOLE_SCRIPT.contains("if (typeof header.harness_lines === 'number') mine.harnessAfter = header.harness_lines;"),
+        "the harness's cursor advances from the reply's total"
+    );
+}
+
+/// A row in the conversation list opens the record only when this device may
+/// read it. Drawn from the action list `/v1/pair` returned, the same way the
+/// Yes button is: a row that opens onto a 403 teaches that the feature is
+/// unreliable rather than that it is off.
+#[test]
+fn a_conversation_opens_only_when_this_device_may_read_its_record() {
+    assert!(
+        CONSOLE_SCRIPT.contains("if (can(TRACE)) {"),
+        "the row is openable behind the device's capability"
+    );
+    assert!(
+        CONSOLE_SCRIPT
+            .contains("row.addEventListener('click', function () { openConversation(c); });"),
+        "…and that is the one place a row opens"
+    );
+    // The view is reached through history, never through the fragment: the
+    // fragment is where a pairing code arrives, and a reload landing on
+    // `#something` would try to spend it.
+    assert!(
+        CONSOLE_SCRIPT.contains(
+            "history.pushState({ conversation: c.conversation_id }, '', location.pathname);"
+        ),
+        "opening pushes a history entry on the bare path"
+    );
+    assert!(
+        executable_lines_mentioning(CONSOLE_SCRIPT, "location.hash =").is_empty(),
+        "the view must never be written into the fragment"
+    );
+}
+
+/// The record is agent-authored text three ways -- prompts, tool inputs, tool
+/// results -- and the conversation view draws all of it. The sink tests above
+/// already forbid markup; this pins that the one fold the view makes builds its
+/// `<details>` from elements and puts the text in a text node.
+#[test]
+fn the_record_is_folded_with_elements_and_never_parsed_as_markup() {
+    assert!(
+        CONSOLE_SCRIPT.contains("var details = document.createElement('details');"),
+        "the fold is an element the page creates"
+    );
+    assert!(
+        CONSOLE_SCRIPT.contains("var pre = text('pre', null, content);"),
+        "…and the folded text is a text node"
+    );
+}

@@ -62,6 +62,7 @@ pub enum ActionParameterSpec {
     ThemeName,
     AgentPrompt,
     AgentRead,
+    AgentTrace,
     AgentSpawn,
     AgentCancel,
     AgentSettle,
@@ -101,6 +102,7 @@ pub enum ActionResultSpec {
     AgentConversationList,
     AgentConversation,
     AgentTranscript,
+    AgentTrace,
     AgentSpawnedChild,
     AgentCancellation,
     AgentSettled,
@@ -378,6 +380,14 @@ define_action_catalog! {
         // `Instance` rather than `Agent`: a conversation id addresses this on
         // its own, and it outlives the pane that showed it.
         AgentRead => { name: "agent.read", status: Implemented, target: Instance, params: AgentRead, result: AgentTranscript },
+        // Fork-local (board item 6, phase 3). `agent.read` reports what Warp's
+        // own model holds; this reports the *record*: the agent's own session
+        // file joined with Warp's event log on the `toolu_…` id, every row
+        // labelled by who wrote it. The same merge `warpctrl agent trace` does
+        // on the CLI, run inside the instance so a device with no filesystem
+        // -- a phone -- can watch a run live. `Instance`, like `agent.read`: a
+        // conversation id addresses it, and it outlives the pane.
+        AgentTrace => { name: "agent.trace", status: Implemented, target: Instance, params: AgentTrace, result: AgentTrace },
         // `Agent`: the targeted pane supplies the default parent conversation.
         AgentSpawn => { name: "agent.spawn", status: Implemented, target: Agent, params: AgentSpawn, result: AgentSpawnedChild },
         AgentCancel => { name: "agent.cancel", status: Implemented, target: Instance, params: AgentCancel, result: AgentCancellation },

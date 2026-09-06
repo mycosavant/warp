@@ -11,7 +11,7 @@ use warpui::{Entity, ModelContext, SingletonEntity};
 
 use crate::local_control::handlers::{
     agent, app_state, approvals, close, drive_objects, drive_sync, events, main_pane, metadata,
-    metadata_config, pairing, remote_wsl, settings_surfaces, visor,
+    metadata_config, pairing, remote_wsl, settings_surfaces, trace, visor,
 };
 use crate::local_control::permissions::{
     ensure_action_allowed, ensure_feature_enabled, ensure_protocol_version,
@@ -202,6 +202,12 @@ impl LocalControlBridge {
             ),
             ActionKind::AgentRead => {
                 agent::agent_read(&self.instance_id, &request.action.params, ctx)
+            }
+            // Fork-local: the record of a conversation for a device with no
+            // filesystem (board item 6, phase 3). The same merge as
+            // `warpctrl agent trace`, run where both files are.
+            ActionKind::AgentTrace => {
+                trace::agent_trace(&self.instance_id, &request.action.params, ctx)
             }
             ActionKind::AgentSpawn => agent::agent_spawn(
                 &self.instance_id,

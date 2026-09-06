@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use super::*;
-use crate::local_control::trace::{build, harness_rows, warp_rows};
+use crate::local_control::trace::{build, warp_rows};
 
 const CLAUDE_CODE_2_1_257: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),

@@ -32,7 +32,7 @@ then each capability the fork opened.
 * [**Warp's remote server, in a WSL distribution**](#warps-remote-server-in-a-wsl-distribution) — the Zed-style split, and how to run it
 
 **What the fork opened**
-* [Driving Warp from an agent (`warpctrl`)](#driving-warp-from-an-agent-warpctrl) — 114 actions, the orchestration surface. The largest section; has its own sub-index.
+* [Driving Warp from an agent (`warpctrl`)](#driving-warp-from-an-agent-warpctrl) — 115 actions, the orchestration surface. The largest section; has its own sub-index.
 * [Warp Drive without an account](#warp-drive-without-an-account) · [Your drive as a git repository](#your-drive-as-a-git-repository)
 * [The agent, answered by your own Claude](#the-agent-answered-by-your-own-claude-experimental)
 * [Voice input, transcribed on this machine](#voice-input-transcribed-on-this-machine)
@@ -377,12 +377,21 @@ environment**; the variables are set inside the launcher process and die with
 it. The old `~/.warpdev` state file is no longer read.
 
 ```bash
-ggwarpdev                 # PRODUCT: the fork's agent, its own shipped permission mode, no instruments
-ggwarpdev instrumented    # THE RIG: product + WARP_FORK_ACP_MODE=default, event log, transcript
-ggwarpdev eventlog        # PRODUCT + WARP_FORK_EVENT_LOG=on, nothing else: the agent still in its own mode
-ggwarpdev stock           # UPSTREAM: all four WARP_FORK_* variables cleared, for A/B-ing a regression
+ggwarpdev                 # PRODUCT: the fork's agent, its own shipped permission mode, the event log
+ggwarpdev instrumented    # THE RIG: product + WARP_FORK_ACP_MODE=default and the transcript
+ggwarpdev console         # PRODUCT + the wide listener (WARP_FORK_CONTROL_BIND), so a phone can pair and watch
+ggwarpdev eventlog        # accepted; the same as the default since 2026-09-05
+ggwarpdev stock           # UPSTREAM: every WARP_FORK_* variable cleared, for A/B-ing a regression
 ggwarpdev status          # print what a launch would set, and the tree state, without launching
 ```
+
+**The event log is part of the product since 2026-09-05**, because it got a
+reader: the console's conversation view joins it with the agent's own session
+file, and with the log off a phone has nothing to watch. It was an instrument
+while nothing read it. Owner-only files under the state directory; nothing
+leaves the machine. `console` adds the one variable that does reach off the
+machine, the wide bind, at the address the firewall rule names
+(`-Bind` to change it).
 
 Until 2026-09-04 the script had two states and neither was the build you would
 live in: "on" was the rig, "off" was stock upstream with no fork agent at all.
@@ -964,12 +973,12 @@ In this section: [what it can do](#what-it-can-do) ·
 
 ### What it can do
 
-**114 actions, 109 of them run against a live build — the first 92 on
+**115 actions, 110 of them run against a live build — the first 92 on
 Windows, then T6.6's four `agent` verbs and T1.12's four `drive object` verbs
-on Linux, I16's two `remote wsl` verbs back on Windows, and T8.5's three
+on Linux, I16's two `remote wsl` verbs back on Windows, T8.5's three
 `pane main`, T8.1's two `window visor` verbs, T8.2's `tab merge` and T8.3's
-`agent settle` on Linux again. So this list is
-the verified surface rather than the catalog's own claim about itself.**
+`agent settle` on Linux again, and item 6's `agent.trace` on Windows. So this
+list is the verified surface rather than the catalog's own claim about itself.**
 **The five since that campaign were each verified in their own task rather than
 in this sweep**: `events.subscribe` (T11.2), `control.pair` (T11.4), and
 `agent.approvals`, `agent.approve` and `agent.deny` (T11.5). The count above
@@ -1518,9 +1527,19 @@ files as approximate.
 
 **On Windows, the harness file is inside the distribution the agent ran in,
 and this verb has no session to ask for the native spelling.** Pass
-`--harness-dir` with the `\\wsl.localhost\…` path, or run the verb from WSL
-with `--events-dir /mnt/c/Users/<you>/AppData/Local/warp/WarpOss/data/fork/events`.
-Run from WSL is the easier direction: the harness file is local there.
+`--harness-dir` with the `\\wsl.localhost\…` path, run the verb from WSL
+with `--events-dir /mnt/c/Users/<you>/AppData/Local/warp/WarpOss/data/fork/events`,
+or pass `--live` and let the instance find it.
+
+**`--live` asks the running Warp instead (`agent.trace`, board item 6 phase
+3).** The instance has the conversation's session, so it resolves the
+harness's file itself: `WARP_FORK_HARNESS_DIR` if set, then this machine's
+`~/.claude/projects`, then for a WSL session the guest's home directories
+through the session's own path conversion, the session directory's user
+first. The rendering is the same; the path flags are refused beside it. It is
+what the console's conversation view asks for, so `--live` on the CLI and the
+page on a phone show one record. Needs `WARP_FORK_EVENT_LOG` on in the
+running instance, which the product profile sets.
 
 ### Putting a third-party agent in the agent panel: `WARP_FORK_ACP_COMMAND`
 
@@ -2682,11 +2701,19 @@ minutes.
 **What a scan buys:**
 
 ```
-app.ping   agent.list   events.subscribe   agent.approvals   agent.deny
+app.ping   agent.list   events.subscribe   agent.approvals   agent.deny   agent.cancel   agent.trace
 ```
 
 …plus `agent.approve`, but only if this machine's owner set
-`WARP_FORK_REMOTE_APPROVE` (see *Answering from the couch* below).
+`WARP_FORK_REMOTE_APPROVE` (see *Answering from the couch* below). `agent.trace`
+(2026-09-05) is the widest read on the list -- the conversation's record, with
+the prompts, the full tool inputs and results, and the agent's thinking where
+its harness writes it -- and `pairing.rs` carries the argument for it beside
+the entry: the event stream already grants the same material at a lower
+resolution, and what the trace adds is what lets a phone answer *what is it
+doing* rather than *is it doing something*. A read, still: a stolen device
+token learns and cannot act. This sentence read five names for a day after
+T14.21 made it six; read the list off `PAIRABLE_ACTIONS`.
 
 This is an allowlist, not a denylist, and it is the security boundary of the
 feature. The catalog next to it contains `input.insert`, `input.submit`,
@@ -2787,6 +2814,32 @@ live events         4
 
 `agent.approvals` is the half that sees the rest, and it is on the page — the
 next section.
+
+#### Watching one conversation
+
+Tap a row under *Warp conversations* and the page becomes that conversation's
+record: the same trace `warpctrl agent trace` prints, drawn live (board item
+6, phase 3). The rows come from `agent.trace`, which runs the merge inside
+the instance because a phone has neither file, and they arrive as *tails*:
+the page sends the line counts the last reply gave it and gets the rows after
+them, so a long run costs the new rows per poll and not the file. Every two
+seconds while the turn runs, every ten once it has stopped, and on any event
+for that conversation. The folding is `trace_render.rs`'s: a tool call is one
+row built from up to six lines across the two files, with its state badge
+(done, failed, denied, asked and never answered) and both files' clocks; a
+compaction is a rule with the summary folded under it; usage is the footer.
+This conversation's own permission requests are drawn above the record with
+the same buttons as the home page, so an answer here is the same answer; a
+Stop button when the turn is running and the device may cancel. *Back*, or
+the phone's own back gesture, returns to the home page: the view is a history
+entry, never a fragment, because the fragment is where a pairing code arrives
+and a reload landing on one would try to spend it.
+
+The row is tappable only when this device may read the record, read off the
+action list the server returned at pairing, the same way the Yes button is.
+The header line under the title says what the record is made of: the harness
+and its version, the line counts, and the clock skew between the two files,
+disclosed and not applied.
 
 #### Answering from the page
 

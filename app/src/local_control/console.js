@@ -33,6 +33,19 @@
   // same reason: it can only prevent what was proposed, never destroy what
   // exists. See `pairing.rs` for the full argument and its honest delta.
   var CANCEL = 'agent.cancel';
+  // The record of one conversation (board item 6, phase 3): the agent's own
+  // session file joined with Warp's event log, the same merge `warpctrl agent
+  // trace` prints, run inside the instance because this device has neither
+  // file. Pairable on the argument in `pairing.rs`: a read, wider than the
+  // event stream, asked for so a phone can answer "what is it doing".
+  var TRACE = 'agent.trace';
+
+  // How often the conversation view asks for the tail of the record. Fast
+  // while the turn runs, because that is what watching means; slow once it
+  // has stopped, because nothing changes but a late compaction. Any event
+  // for the open conversation also schedules one, so these are the floor.
+  var TRACE_BUSY_MS = 2000;
+  var TRACE_IDLE_MS = 10000;
 
   // How long an armed Yes stays armed. Long enough to be a deliberate second
   // tap, short enough that an armed button left on screen disarms itself rather
@@ -101,13 +114,33 @@
     events: document.getElementById('events'),
     eventsCount: document.getElementById('events-count'),
     eventsNote: document.getElementById('events-note'),
-    unpair: document.getElementById('unpair')
+    unpair: document.getElementById('unpair'),
+    back: document.getElementById('back'),
+    main: document.querySelector('main'),
+    home: Array.prototype.slice.call(document.querySelectorAll('section.home')),
+    conversation: document.getElementById('conversation'),
+    convTitle: document.getElementById('conv-title'),
+    convMeta: document.getElementById('conv-meta'),
+    convApprovals: document.getElementById('conv-approvals'),
+    convControls: document.getElementById('conv-controls'),
+    convNote: document.getElementById('conv-note'),
+    convError: document.getElementById('conv-error'),
+    trace: document.getElementById('trace'),
+    traceFoot: document.getElementById('trace-foot')
   };
 
   var device = null;
   var credentials = {};
   var eventCount = 0;
   var approvalRefresh = null;
+  // What the last two polls said, kept so the conversation view can be drawn
+  // from them when it opens rather than waiting for the next poll.
+  var lastApprovals = [];
+  var lastConversations = [];
+  // The conversation view's state, or null on the home page. See `openConversation`.
+  // Named `viewing` rather than `open` so it never reads as `window.open`,
+  // which this file must not call.
+  var viewing = null;
 
   // ---------------------------------------------------------------- utilities
 
@@ -467,6 +500,8 @@
   }
 
   function renderApprovals(approvals) {
+    lastApprovals = approvals;
+    renderConversationApprovals();
     clear(el.approvals);
     el.waitingCount.textContent = String(approvals.length);
     el.waitingCount.className = 'badge' + (approvals.length ? ' waiting' : '');
@@ -524,10 +559,26 @@
   }
 
   function renderAgents(conversations) {
+    lastConversations = conversations;
+    if (viewing) {
+      conversations.forEach(function (c) {
+        if (c.conversation_id === viewing.id) {
+          viewing.summary = c;
+          renderConversationHead();
+        }
+      });
+    }
     clear(el.agents);
     el.agentsCount.textContent = String(conversations.length);
     conversations.forEach(function (c) {
       var row = document.createElement('li');
+      // Tapping the row opens the conversation's record. Only when this
+      // device may read it: a row that opens onto a refusal teaches that the
+      // feature is unreliable rather than that it is off.
+      if (can(TRACE)) {
+        row.className = 'openable';
+        row.addEventListener('click', function () { openConversation(c); });
+      }
       var title = text('div', 'title');
       title.appendChild(text('span', 'dot ' + statusKind(c.status)));
       title.appendChild(document.createTextNode(c.title || '(untitled)'));
@@ -552,7 +603,9 @@
       if (can(CANCEL) && c.is_busy) {
         var stopRow = text('div', 'answers');
         var stop = text('button', 'deny', 'Stop');
-        stop.addEventListener('click', function () {
+        stop.addEventListener('click', function (click) {
+          // The row underneath opens the conversation; a Stop is not that.
+          click.stopPropagation();
           stop.disabled = true;
           control(CANCEL, { conversation_id: c.conversation_id })
             .then(answerSucceeded)
@@ -635,6 +688,10 @@
     el.eventsNote.className = 'note';
     el.eventsNote.textContent = '';
     scheduleApprovalRefresh();
+    // `session_id` on a Warp event is Warp's conversation id, which is what
+    // the view is keyed by. The harness writes its line before Warp hears of
+    // the call, so by the time this fires the tail is already on disk.
+    if (viewing && record.session_id === viewing.id) scheduleTracePoll(300);
   }
 
   // One SSE frame, as the wire delivers it: `event:` and `data:` lines, with a
@@ -715,6 +772,391 @@
       });
   }
 
+  // ------------------------------------------------------------- conversation
+  //
+  // One conversation's record, live (board item 6, phase 3). The rows come
+  // from `agent.trace`, which returns the tail of both files after the line
+  // counts of the last call; the page keeps every row it has been sent, orders
+  // them by time and redraws. The folding rules are `trace_render.rs`'s: a
+  // tool call is one row built from up to six lines across the two files, a
+  // compaction is a rule with the summary folded under it, usage is the
+  // footer. Redrawing from scratch on every poll is cheaper than it sounds --
+  // a long session is a few hundred rows -- and it is what keeps the ordering
+  // right when a tail from one file lands before rows already drawn from the
+  // other, which the two clocks guarantee will happen.
+
+  function openConversation(c) {
+    if (viewing && viewing.id === c.conversation_id) return;
+    viewing = {
+      id: c.conversation_id,
+      summary: c,
+      warpAfter: 0,
+      harnessAfter: 0,
+      rows: [],
+      header: null,
+      timer: null,
+      inflight: false
+    };
+    // A history entry rather than a hash: the fragment is where a pairing code
+    // arrives, and a reload landing on `#something` would try to spend it.
+    history.pushState({ conversation: c.conversation_id }, '', location.pathname);
+    el.home.forEach(function (section) { section.hidden = true; });
+    el.conversation.hidden = false;
+    el.back.hidden = false;
+    clear(el.trace);
+    el.traceFoot.textContent = '';
+    el.convError.hidden = true;
+    el.convNote.className = 'note';
+    el.convNote.textContent = 'reading the record…';
+    renderConversationHead();
+    renderConversationApprovals();
+    pollTrace();
+  }
+
+  function closeConversation() {
+    if (!viewing) return;
+    if (viewing.timer) clearTimeout(viewing.timer);
+    viewing = null;
+    el.conversation.hidden = true;
+    el.back.hidden = true;
+    el.home.forEach(function (section) { section.hidden = false; });
+  }
+
+  function renderConversationHead() {
+    if (!viewing) return;
+    var c = viewing.summary;
+    clear(el.convTitle);
+    el.convTitle.appendChild(text('span', 'dot ' + statusKind(c.status)));
+    el.convTitle.appendChild(document.createTextNode(c.title || '(untitled)'));
+    var meta = [c.status];
+    if (c.blocked_action) meta.push('on ' + c.blocked_action);
+    if (typeof c.quiet_for_seconds === 'number') meta.push('quiet ' + c.quiet_for_seconds + 's');
+    if (c.session_mode) meta.push('mode ' + c.session_mode);
+    meta.push(c.conversation_id);
+    el.convMeta.textContent = meta.join(' · ');
+    clear(el.convControls);
+    if (can(CANCEL) && c.is_busy) {
+      var stop = text('button', 'deny', 'Stop');
+      stop.addEventListener('click', function () {
+        stop.disabled = true;
+        control(CANCEL, { conversation_id: c.conversation_id })
+          .then(answerSucceeded)
+          .catch(function (err) { answerFailed(String(err.message || err)); })
+          .then(refreshState, refreshState);
+      });
+      el.convControls.appendChild(stop);
+    }
+  }
+
+  // The approvals that belong to the open conversation, drawn with the same
+  // rows as the home page so an answer here is the same answer. `conversation_id`
+  // is set by the server for the ACP population; a pane agent has none and
+  // stays on the home page, because a pane is not a conversation.
+  function renderConversationApprovals() {
+    if (!viewing) return;
+    clear(el.convApprovals);
+    lastApprovals.forEach(function (approval) {
+      if (approval.conversation_id === viewing.id) {
+        el.convApprovals.appendChild(approvalRow(approval));
+      }
+    });
+  }
+
+  function scheduleTracePoll(delay) {
+    if (!viewing) return;
+    if (viewing.timer) clearTimeout(viewing.timer);
+    viewing.timer = setTimeout(function () {
+      if (viewing) viewing.timer = null;
+      pollTrace();
+    }, delay);
+  }
+
+  function pollTrace() {
+    if (!viewing || viewing.inflight) return;
+    var mine = viewing;
+    mine.inflight = true;
+    // The bottom of the list is where the new rows land; keep the reader there
+    // if that is where they were, and leave them alone if they scrolled up.
+    var atBottom = el.main.scrollHeight - el.main.scrollTop - el.main.clientHeight < 40;
+    control(TRACE, { conversation_id: mine.id, warp_after: mine.warpAfter, harness_after: mine.harnessAfter })
+      .then(function (data) {
+        if (viewing !== mine) return;
+        mine.inflight = false;
+        var header = (data && data.header) || {};
+        mine.header = header;
+        if (typeof header.warp_lines === 'number') mine.warpAfter = header.warp_lines;
+        if (typeof header.harness_lines === 'number') mine.harnessAfter = header.harness_lines;
+        ((data && data.rows) || []).forEach(function (row) {
+          row.at = row.ts ? Date.parse(row.ts) : NaN;
+          mine.rows.push(row);
+        });
+        renderTrace(mine);
+        if (atBottom) el.main.scrollTop = el.main.scrollHeight;
+        scheduleTracePoll(mine.summary && mine.summary.is_busy ? TRACE_BUSY_MS : TRACE_IDLE_MS);
+      })
+      .catch(function (err) {
+        if (viewing !== mine) return;
+        mine.inflight = false;
+        el.convError.hidden = false;
+        el.convError.textContent = String(err.message || err);
+        scheduleTracePoll(TRACE_IDLE_MS);
+      });
+  }
+
+  // -- the folding rules, as `trace_render.rs` has them
+
+  function byTime(a, b) {
+    var x = isNaN(a.at), y = isNaN(b.at);
+    if (x && y) return 0;
+    if (x) return 1;
+    if (y) return -1;
+    return a.at - b.at;
+  }
+
+  function clockOf(at) {
+    if (isNaN(at)) return '';
+    var d = new Date(at);
+    var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+    return pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+  }
+
+  function toolUseBlock(row, id) {
+    var content = row.raw && row.raw.message && row.raw.message.content;
+    if (!Array.isArray(content)) return null;
+    for (var i = 0; i < content.length; i++) {
+      if (content[i] && content[i].id === id) return content[i];
+    }
+    return null;
+  }
+
+  function callState(call) {
+    if (call.replied && call.replied.raw && call.replied.raw.decision === 'denied') return 'denied';
+    if (call.asked && !call.replied && !call.result) return 'unanswered';
+    if ((call.result && call.result.error === true) || (call.completed && call.completed.error === true)) return 'failed';
+    if (call.result || call.completed) return 'done';
+    return 'open';
+  }
+
+  var STATE_WORDS = {
+    open: 'no result yet',
+    done: 'done',
+    failed: 'failed',
+    denied: 'denied',
+    unanswered: 'asked, never answered'
+  };
+
+  function callName(call) {
+    var block = call.used && toolUseBlock(call.used, call.id);
+    if (block && block.name) return String(block.name);
+    var warp = call.started || call.asked;
+    if (warp && warp.raw && warp.raw.tool_name) return String(warp.raw.tool_name);
+    return 'tool';
+  }
+
+  function callInput(call) {
+    var block = call.used && toolUseBlock(call.used, call.id);
+    if (block && block.input !== undefined) {
+      if (block.input && typeof block.input.command === 'string') return block.input.command;
+      try { return JSON.stringify(block.input); } catch (_) { return null; }
+    }
+    var warp = call.started || call.asked;
+    if (warp && warp.raw && warp.raw.tool_input_preview) return String(warp.raw.tool_input_preview);
+    return null;
+  }
+
+  function callFirst(call) {
+    var first = NaN;
+    [call.used, call.result, call.started, call.completed, call.asked, call.replied].forEach(function (row) {
+      if (row && !isNaN(row.at) && (isNaN(first) || row.at < first)) first = row.at;
+    });
+    return first;
+  }
+
+  function callDecision(call) {
+    if (!call.replied || !call.replied.raw || !call.replied.raw.decision) return null;
+    var by = call.replied.raw.answered_by;
+    return 'Warp: ' + call.replied.raw.decision + (by ? ' by ' + by : '');
+  }
+
+  function callStamps(call) {
+    var span = function (openRow, closeRow) {
+      if (!openRow || isNaN(openRow.at)) return null;
+      var s = clockOf(openRow.at);
+      if (closeRow && !isNaN(closeRow.at)) s += ' → ' + clockOf(closeRow.at);
+      return s;
+    };
+    var parts = [];
+    var w = span(call.started, call.completed);
+    if (w) parts.push('warp ' + w);
+    var h = span(call.used, call.result);
+    if (h) parts.push('harness ' + h);
+    return parts.join(' · ');
+  }
+
+  // The rows folded into items: each call once, at its first appearance, and
+  // the harness's copy of a prompt dropped when Warp's has the same text --
+  // Warp's is kept because it is stamped on Warp's clock, the one the rest of
+  // the page runs on.
+  function foldItems(rows) {
+    var sorted = rows.slice().sort(byTime);
+    var calls = {};
+    var slots = {
+      'harness tool_use': 'used', 'harness tool_result': 'result',
+      'warp tool_start': 'started', 'warp tool_complete': 'completed',
+      'warp permission_request': 'asked', 'warp permission_replied': 'replied'
+    };
+    sorted.forEach(function (row) {
+      if (!row.call_id) return;
+      var slot = slots[row.from + ' ' + row.kind];
+      if (!slot) return;
+      var call = calls[row.call_id] || (calls[row.call_id] = { id: row.call_id });
+      if (!call[slot]) call[slot] = row;
+    });
+    var warpPrompts = {};
+    sorted.forEach(function (row) {
+      if (row.from === 'warp' && (row.kind === 'session_start' || row.kind === 'prompt_submit') && row.text) {
+        warpPrompts[row.text] = true;
+      }
+    });
+    var drawn = {};
+    var items = [];
+    sorted.forEach(function (row) {
+      if (row.call_id) {
+        if (!drawn[row.call_id] && calls[row.call_id]) {
+          drawn[row.call_id] = true;
+          items.push({ call: calls[row.call_id] });
+        }
+        return;
+      }
+      if (row.from === 'harness' && row.kind === 'prompt' && row.text && warpPrompts[row.text]) return;
+      items.push({ row: row });
+    });
+    return items;
+  }
+
+  // What a non-call row says: Warp's frame lines get a label, the harness's
+  // bookkeeping gets its subtype, the rest is the text.
+  function caption(row) {
+    var key = row.from + ' ' + row.kind;
+    var labels = {
+      'warp session_agent': 'agent', 'warp session_mode': 'mode', 'warp session_model': 'model',
+      'warp session_start': '', 'warp prompt_submit': '',
+      'harness prompt': '', 'harness text': '', 'harness thinking': 'thinking',
+      'harness permission_mode': 'permission mode',
+      'harness compact_summary': 'summary the agent continued from', 'harness usage': 'usage'
+    };
+    if (key === 'warp stop') return { label: 'stop', text: row.raw && row.raw.error_type ? String(row.raw.error_type) : null };
+    if (row.kind === 'unparsed') return { label: 'unparsed line', text: row.text };
+    if (labels[key] !== undefined) return { label: labels[key], text: row.text };
+    return { label: row.kind, text: row.text };
+  }
+
+  function compactionCaption(row) {
+    var meta = (row.raw && row.raw.compactMetadata) || {};
+    var parts = ['compaction'];
+    if (meta.trigger) parts.push(String(meta.trigger));
+    if (typeof meta.preTokens === 'number') parts.push(meta.preTokens + ' tokens before');
+    if (typeof meta.durationMs === 'number') parts.push((meta.durationMs / 1000).toFixed(1) + ' s');
+    return parts.join(', ');
+  }
+
+  // A block of text, folded behind a summary when it is long. `<details>` is
+  // markup the page creates, not markup it parses: the text is a text node.
+  function block(content, foldAfter) {
+    var lines = String(content).split('\n');
+    var pre = text('pre', null, content);
+    if (lines.length <= foldAfter) return pre;
+    var details = document.createElement('details');
+    details.appendChild(text('summary', null, lines.length + ' lines'));
+    details.appendChild(pre);
+    return details;
+  }
+
+  function traceItem(item) {
+    var li = document.createElement('li');
+    if (item.row) {
+      var row = item.row;
+      if (row.kind === 'system/compact_boundary') {
+        li.className = 'boundary';
+        li.textContent = '──── ' + compactionCaption(row) + ' · ' + clockOf(row.at) + ' ────';
+        return li;
+      }
+      li.className = 'who-' + row.who + (row.kind === 'thinking' ? ' thinking' : '');
+      li.appendChild(text('span', 't', clockOf(row.at)));
+      var body = text('div', 'body');
+      var cap = caption(row);
+      if (row.kind === 'compact_summary') {
+        body.appendChild(text('span', 'label', cap.label));
+        body.appendChild(block(cap.text || '', 1));
+      } else {
+        if (cap.label) body.appendChild(text('span', 'label', cap.label + (cap.text ? ': ' : '')));
+        if (cap.text) body.appendChild(document.createTextNode(cap.text));
+        else if (!cap.label) body.appendChild(document.createTextNode(row.kind));
+      }
+      li.appendChild(body);
+      return li;
+    }
+    var call = item.call;
+    var state = callState(call);
+    li.className = 'who-agent call state-' + state;
+    li.appendChild(text('span', 't', clockOf(callFirst(call))));
+    var callBody = text('div', 'body');
+    var head = text('div', 'head');
+    head.appendChild(text('b', null, callName(call)));
+    head.appendChild(text('span', 'state', STATE_WORDS[state]));
+    var decision = callDecision(call);
+    if (decision) {
+      head.appendChild(document.createTextNode(' '));
+      head.appendChild(text('span', 'label', decision));
+    }
+    callBody.appendChild(head);
+    var input = callInput(call);
+    if (input) callBody.appendChild(text('code', 'cmd', input));
+    var stamps = callStamps(call);
+    if (stamps) callBody.appendChild(text('div', 'stamps', stamps));
+    if (call.result && call.result.text) callBody.appendChild(block(call.result.text, 6));
+    li.appendChild(callBody);
+    return li;
+  }
+
+  function renderTrace(state) {
+    var header = state.header || {};
+    var note = [];
+    if (header.harness) {
+      note.push(header.harness + ' ' + (header.harness_versions || []).join('/') + ', ' + header.harness_lines + ' lines');
+    } else {
+      note.push('Warp\'s half only');
+    }
+    if (typeof header.clock_offset_ms === 'number') {
+      note.push('harness clock ' + (header.clock_offset_ms > 0 ? '+' : '') + header.clock_offset_ms + ' ms, disclosed and not applied');
+    }
+    if (header.note) note.push(header.note);
+    el.convNote.className = 'note';
+    el.convNote.textContent = note.join(' · ');
+    el.convError.hidden = true;
+
+    // Usage is summed here because each tail carries its own footer row.
+    var usage = { messages: 0, input: 0, output: 0, cache_read: 0, cache_creation: 0 };
+    var rows = state.rows.filter(function (row) {
+      if (row.kind !== 'usage' || !row.raw) return true;
+      usage.messages += row.raw.assistant_messages || 0;
+      usage.input += row.raw.input_tokens || 0;
+      usage.output += row.raw.output_tokens || 0;
+      usage.cache_read += row.raw.cache_read_input_tokens || 0;
+      usage.cache_creation += row.raw.cache_creation_input_tokens || 0;
+      return false;
+    });
+    clear(el.trace);
+    foldItems(rows).forEach(function (item) { el.trace.appendChild(traceItem(item)); });
+    el.traceFoot.textContent = usage.messages
+      ? 'usage: ' + usage.messages + ' assistant messages · ' + usage.input + ' in · ' + usage.output +
+        ' out · ' + usage.cache_read + ' cache read · ' + usage.cache_creation + ' cache written'
+      : '';
+    if (!rows.length) {
+      el.convNote.textContent = (el.convNote.textContent ? el.convNote.textContent + ' · ' : '') + 'nothing recorded yet.';
+    }
+  }
+
   // --------------------------------------------------------------------- boot
 
   function tickClock() {
@@ -741,8 +1183,13 @@
     tickClock();
     setInterval(tickClock, 30000);
     el.unpair.addEventListener('click', function () {
+      closeConversation();
       forgetDevice('unpaired on this device. Run `warpctrl pair show` and scan again to come back.');
     });
+    // Back goes through history so the phone's own gesture and the button are
+    // one path; `popstate` is where the view actually closes.
+    el.back.addEventListener('click', function () { history.back(); });
+    window.addEventListener('popstate', closeConversation);
 
     // Read the fragment once and erase it before anything can render, so the
     // code is never on screen, in history, or in a `Referer`.

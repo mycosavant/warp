@@ -378,7 +378,7 @@ pub(super) fn render_text(trace: &Trace) -> String {
         "trace {} · warp {} lines",
         h.conversation_id, h.warp_lines
     );
-    if let Some(harness) = h.harness {
+    if let Some(harness) = &h.harness {
         let _ = write!(
             out,
             " · {harness} {}, {} lines ({} bookkeeping)",

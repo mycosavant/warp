@@ -226,6 +226,30 @@ pub struct AgentReadParams {
     pub include_tool_results: bool,
 }
 
+/// Parameters for `agent.trace` (board item 6, phase 3).
+///
+/// One field on purpose. The CLI's `agent trace` takes `--events-dir`,
+/// `--harness-dir` and `--harness-file` because it runs on whatever machine
+/// the person is at; this runs *inside* the instance, on behalf of a caller
+/// that may be a paired phone, and a caller naming a directory for the server
+/// to read `<slug>/<session>.jsonl` out of is a file read it was never
+/// granted. The server resolves both files itself.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AgentTraceParams {
+    /// Warp's conversation id, from `agent.list` or the panel.
+    pub conversation_id: String,
+    /// Rows after this many non-empty lines of Warp's log only. The header's
+    /// `warp_lines` from the last call is the value to pass. Zero, the
+    /// default, is the whole file.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub warp_after: usize,
+    /// The same for the harness's session file: pass the last header's
+    /// `harness_lines`.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub harness_after: usize,
+}
+
 /// Parameters for `agent.spawn`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -356,6 +380,14 @@ pub struct PendingApproval {
     /// conversation id so that a turn's tools and its frame share one file.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub session_id: Option<String>,
+    /// Warp's conversation id, for the ACP population (board item 6, phase 3).
+    ///
+    /// A pane agent has none, because a pane is not a conversation. Set by
+    /// the server so the console can draw one conversation's requests beside
+    /// its record; not in the digest, because it is not something the person
+    /// is shown to decide on.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub conversation_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tab_id: Option<String>,
     /// The paths this request said it would touch, as the *agent* named them.

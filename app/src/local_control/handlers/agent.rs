@@ -439,7 +439,7 @@ pub fn resolve_conversation(
     Ok(Some(id))
 }
 
-fn parse_conversation_id(raw: &str) -> Result<AIConversationId, ControlError> {
+pub(super) fn parse_conversation_id(raw: &str) -> Result<AIConversationId, ControlError> {
     AIConversationId::try_from(raw.to_owned()).map_err(|_| {
         ControlError::new(
             ErrorCode::InvalidParams,

@@ -68,7 +68,7 @@ use std::path::PathBuf;
 
 use chrono::{DateTime, Utc};
 use local_control::protocol::{ControlError, ErrorCode};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::agent::OutputFormat;
@@ -76,9 +76,9 @@ use crate::local_control::AgentTraceArgs;
 use crate::local_control::output::{write_json, write_json_line};
 
 /// Who authored a row. The four provenances the rendering rules require.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub(super) enum Who {
+pub enum Who {
     Person,
     Agent,
     Warp,
@@ -86,16 +86,16 @@ pub(super) enum Who {
 }
 
 /// Which file a row was read from.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub(super) enum Record {
+pub enum Record {
     Warp,
     Harness,
 }
 
 /// One merged row.
-#[derive(Debug, Serialize)]
-pub(super) struct Row {
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Row {
     /// The timestamp as the file spelled it.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ts: Option<String>,
@@ -118,16 +118,16 @@ pub(super) struct Row {
 }
 
 /// The first row of every trace.
-#[derive(Debug, Serialize)]
-pub(super) struct Header {
-    pub kind: &'static str,
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Header {
+    pub kind: String,
     pub conversation_id: String,
     pub events_file: PathBuf,
     pub warp_lines: usize,
     /// The agent's own session id, off Warp's lines. `None` means Warp's log
     /// never named one and the trace is Warp's half alone.
     pub linked_session_id: Option<String>,
-    pub harness: Option<&'static str>,
+    pub harness: Option<String>,
     pub harness_file: Option<PathBuf>,
     /// Every distinct `version` seen on the harness's lines. More than one
     /// means the session was resumed under a different Claude Code.
@@ -135,6 +135,15 @@ pub(super) struct Header {
     pub harness_lines: usize,
     /// Lines of bookkeeping kinds this renders as nothing.
     pub harness_lines_skipped: usize,
+    /// How many non-empty lines of each file the rows *skip*, when a caller
+    /// asked for the tail only (`agent.trace` from the console, polling).
+    /// `warp_lines` and `harness_lines` then count the whole file, so the
+    /// pair is the cursor for the next poll. Zero -- the CLI's case -- is not
+    /// written.
+    #[serde(skip_serializing_if = "is_zero")]
+    pub warp_after: usize,
+    #[serde(skip_serializing_if = "is_zero")]
+    pub harness_after: usize,
     /// Tool calls found in both files under one `toolu_…` id.
     pub joined_calls: usize,
     /// The harness's clock minus Warp's, the median over the joined calls, in
@@ -151,13 +160,16 @@ pub(super) struct Header {
     pub note: Option<String>,
 }
 
-#[derive(Debug, Serialize)]
-pub(super) struct Trace {
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Trace {
     pub header: Header,
     pub rows: Vec<Row>,
 }
 
 pub(super) fn run(args: AgentTraceArgs, output_format: OutputFormat) -> Result<(), ControlError> {
+    if args.live {
+        return run_live(args, output_format);
+    }
     let events_file = match args.events_file {
         Some(path) => path,
         None => events_dir(args.events_dir).join(format!("{}.jsonl", args.conversation)),
@@ -255,6 +267,55 @@ pub(super) fn run(args: AgentTraceArgs, output_format: OutputFormat) -> Result<(
     }
 }
 
+/// `--live`: the instance runs the merge (`agent.trace`) and this renders
+/// what it sends, so the console and the CLI show one record. The instance's
+/// reply is the same `Trace` shape with the action envelope's `action`, `ok`
+/// and `instance_id` beside it; those are dropped here because the header
+/// already names the conversation.
+fn run_live(args: AgentTraceArgs, output_format: OutputFormat) -> Result<(), ControlError> {
+    let data = super::commands::send_action(
+        &args.target,
+        local_control::ActionKind::AgentTrace,
+        local_control::protocol::AgentTraceParams {
+            conversation_id: args.conversation,
+            warp_after: 0,
+            harness_after: 0,
+        },
+    )?;
+    let trace: Trace = serde_json::from_value(data).map_err(|err| {
+        ControlError::with_details(
+            ErrorCode::Internal,
+            "the instance's agent.trace reply did not parse as a trace",
+            err.to_string(),
+        )
+    })?;
+    if let Some(path) = &args.html {
+        write_private(path, &super::trace_render::render_html(&trace)).map_err(|err| {
+            ControlError::new(
+                ErrorCode::InvalidParams,
+                format!("could not write {}: {err}", path.display()),
+            )
+        })?;
+    }
+    match output_format {
+        OutputFormat::Json => write_json(&trace),
+        OutputFormat::Ndjson => {
+            write_json_line(&trace.header)?;
+            for row in &trace.rows {
+                write_json_line(row)?;
+            }
+            Ok(())
+        }
+        OutputFormat::Pretty | OutputFormat::Text => {
+            print!("{}", super::trace_render::render_text(&trace));
+            if let Some(path) = &args.html {
+                println!("wrote {}", path.display());
+            }
+            Ok(())
+        }
+    }
+}
+
 /// Writes the page owner-only from the first byte, the way the fork's
 /// transcript and event log are written: the mode goes on the `open`, not on
 /// a `chmod` after it, because the window between the two is exactly when the
@@ -273,7 +334,7 @@ fn write_private(path: &std::path::Path, contents: &str) -> std::io::Result<()> 
 
 /// Everything after the files are in hand, split out so a test can run the
 /// whole merge on fixture text without a filesystem.
-pub(super) fn build(
+pub fn build(
     conversation_id: String,
     events_file: PathBuf,
     warp_rows: Vec<Row>,
@@ -291,22 +352,57 @@ pub(super) fn build(
     let rows = merge(warp_rows, harness_rows);
     Trace {
         header: Header {
-            kind: "trace",
+            kind: "trace".to_owned(),
             conversation_id,
             events_file,
             warp_lines,
             linked_session_id: facts.linked_session_id,
-            harness: harness.map(|_| "claude-code"),
+            harness: harness.map(|_| "claude-code".to_owned()),
             harness_file,
             harness_versions: harness_facts.versions.into_iter().collect(),
             harness_lines: harness_facts.lines,
             harness_lines_skipped: harness_facts.skipped,
             joined_calls,
             clock_offset_ms,
+            warp_after: 0,
+            harness_after: 0,
             note,
         },
         rows,
     }
+}
+
+fn is_zero(n: &usize) -> bool {
+    *n == 0
+}
+
+impl Trace {
+    /// Marks a trace built from the tails of both files as such: the rows are
+    /// what came after `warp_after` and `harness_after` non-empty lines, and
+    /// the line counts become totals over the whole file.
+    pub fn after(mut self, warp_after: usize, harness_after: usize) -> Self {
+        self.header.warp_after = warp_after;
+        self.header.harness_after = harness_after;
+        self.header.warp_lines += warp_after;
+        self.header.harness_lines += harness_after;
+        self
+    }
+}
+
+/// The text after its first `after` non-empty lines. Both files are
+/// append-only and both parsers count non-empty lines, so a count is an exact
+/// cursor into either.
+pub fn tail(text: &str, after: usize) -> String {
+    let mut out = String::new();
+    for line in text
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .skip(after)
+    {
+        out.push_str(line);
+        out.push('\n');
+    }
+    out
 }
 
 /// Where Warp's log is, by the same rule the app uses for `WARP_FORK_EVENT_LOG`.
@@ -350,7 +446,7 @@ fn harness_dir(flag: Option<PathBuf>) -> PathBuf {
 /// `/home/effatha/git/warp` is `-home-effatha-git-warp`; a directory named
 /// `slug probe/a_b.c` ends `-slug-probe-a-b-c`. Non-ASCII letters were not
 /// tried, so they are mapped like punctuation here and that is a guess.
-pub(super) fn slug(cwd: &str) -> String {
+pub fn slug(cwd: &str) -> String {
     cwd.chars()
         .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
         .collect()
@@ -358,13 +454,13 @@ pub(super) fn slug(cwd: &str) -> String {
 
 /// What Warp's lines say about where the other file is.
 #[derive(Debug, Default)]
-pub(super) struct WarpFacts {
+pub struct WarpFacts {
     pub linked_session_id: Option<String>,
     pub cwd: Option<String>,
 }
 
 /// One row per line of Warp's event log.
-pub(super) fn warp_rows(text: &str) -> (Vec<Row>, WarpFacts) {
+pub fn warp_rows(text: &str) -> (Vec<Row>, WarpFacts) {
     let mut rows = Vec::new();
     let mut facts = WarpFacts::default();
     for line in text.lines().filter(|line| !line.trim().is_empty()) {
@@ -434,7 +530,7 @@ pub(super) fn warp_rows(text: &str) -> (Vec<Row>, WarpFacts) {
 }
 
 #[derive(Debug, Default)]
-pub(super) struct HarnessFacts {
+pub struct HarnessFacts {
     pub versions: BTreeSet<String>,
     pub lines: usize,
     pub skipped: usize,
@@ -446,7 +542,7 @@ pub(super) struct HarnessFacts {
 /// lines become one row each; `permission-mode` is kept because it is the one
 /// bookkeeping kind that says something about consent. Everything else is
 /// counted and dropped. The usage footer is the last row.
-pub(super) fn harness_rows(text: &str) -> (Vec<Row>, HarnessFacts) {
+pub fn harness_rows(text: &str) -> (Vec<Row>, HarnessFacts) {
     let mut rows = Vec::new();
     let mut facts = HarnessFacts::default();
     let mut usage = Usage::default();
@@ -654,7 +750,7 @@ fn clock_offset(warp: &[Row], harness: &[Row]) -> (usize, Option<i64>) {
 
 /// Stable by timestamp: Warp's row first when two share one, and rows without
 /// a timestamp keep their file order at the end.
-pub(super) fn merge(warp: Vec<Row>, harness: Vec<Row>) -> Vec<Row> {
+pub fn merge(warp: Vec<Row>, harness: Vec<Row>) -> Vec<Row> {
     let mut rows: Vec<Row> = warp.into_iter().chain(harness).collect();
     rows.sort_by_key(|row| match row.at {
         Some(at) => (0, at),

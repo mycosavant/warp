@@ -200,7 +200,7 @@ fn the_drive_object_actions_this_fork_implements_do_parse() {
 }
 
 #[test]
-fn catalog_has_exactly_114_retained_actions() {
+fn catalog_has_exactly_115_retained_actions() {
     // 84 upstream actions, plus the fork's `input.submit`, the three
     // `drive.sync.*` actions, the eight that let an agent drive an agent
     // (`agent.list`, `agent.prompt`, `slash.list` and `slash.run` from T6.5,
@@ -224,8 +224,11 @@ fn catalog_has_exactly_114_retained_actions() {
     // `control.pair`, which mints the short-lived code a device off this machine
     // scans to let itself in — an action rather than a route because asking for
     // one is privileged, while *redeeming* one cannot be an action at all, since
-    // the caller has no credential yet (T11.4).
-    assert_eq!(ActionKind::ALL.len(), 114);
+    // the caller has no credential yet (T11.4), and `agent.trace`, the
+    // record of a conversation -- the agent's own session file joined with
+    // Warp's event log -- run inside the instance so a paired phone can watch
+    // a run without a filesystem (board item 6, phase 3).
+    assert_eq!(ActionKind::ALL.len(), 115);
 }
 
 #[test]

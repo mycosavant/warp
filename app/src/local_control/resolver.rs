@@ -2,7 +2,7 @@
 use ::local_control::protocol::{
     ActionNameParams, ActionParameterSpec, AgentApproveParams, AgentCancelParams,
     AgentPromptParams, AgentReadParams, AgentRevealParams, AgentSettleParams, AgentSpawnParams,
-    BindingNameParams, BooleanValueParams, ColorValueParams, DirectionParams,
+    AgentTraceParams, BindingNameParams, BooleanValueParams, ColorValueParams, DirectionParams,
     DriveObjectCreateParams, DriveObjectGetParams, DriveObjectListParams, DriveObjectTrashParams,
     EmptyParams, FileOpenParams, KeyParams, KeyValueParams, NamespaceParams, PageQueryParams,
     PaneTarget, QueryParams, RemoteWslConnectParams, RenameParams, ResizeParams, SessionTarget,
@@ -56,6 +56,7 @@ pub(crate) fn validate_action_params(action: &::local_control::Action) -> Result
         ActionParameterSpec::ThemeName => parse_params::<ThemeNameParams>(action),
         ActionParameterSpec::AgentPrompt => parse_params::<AgentPromptParams>(action),
         ActionParameterSpec::AgentRead => parse_params::<AgentReadParams>(action),
+        ActionParameterSpec::AgentTrace => parse_params::<AgentTraceParams>(action),
         ActionParameterSpec::AgentSpawn => parse_params::<AgentSpawnParams>(action),
         ActionParameterSpec::AgentCancel => parse_params::<AgentCancelParams>(action),
         ActionParameterSpec::AgentSettle => parse_params::<AgentSettleParams>(action),

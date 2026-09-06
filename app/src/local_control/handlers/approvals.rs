@@ -450,6 +450,7 @@ fn acp_approvals() -> Vec<PendingApproval> {
                 cwd: parked.session_directory,
                 project: None,
                 session_id: parked.session_id,
+                conversation_id: Some(parked.conversation_id),
                 tab_id: None,
                 // The agent's own claim about where this call acts, recovered by
                 // the `toolCallId` join — and left empty rather than defaulted to
@@ -535,6 +536,7 @@ fn approval_for(session: &CLIAgentSession, pane_id: &str, tab_id: &str) -> Optio
         cwd: context.cwd.clone(),
         project: context.project.clone(),
         session_id: context.session_id.clone(),
+        conversation_id: None,
         tab_id: Some(tab_id.to_owned()),
         // An OSC notification carries a tool name and a command preview and
         // never a location list, so there is nothing to report here.

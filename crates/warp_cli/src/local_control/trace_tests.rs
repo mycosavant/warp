@@ -127,7 +127,7 @@ fn the_join_holds_on_the_phase_0_fixtures() {
     );
 
     assert_eq!(trace.header.linked_session_id.as_deref(), Some(LINKED));
-    assert_eq!(trace.header.harness, Some("claude-code"));
+    assert_eq!(trace.header.harness.as_deref(), Some("claude-code"));
     assert_eq!(trace.header.harness_versions, vec!["2.1.257"]);
     assert_eq!(trace.header.warp_lines, 9);
 

@@ -321,7 +321,7 @@ upstream and rebasable.
 | `app/src/ai/mcp/tool_digest.rs` | what each MCP server's tools claimed to be, hashed at connect. The tool rug-pull warning rests on this. |
 | `app/src/local_control/console.*` | the console (T12) — the fork's **only** browser-reachable surface. Four unauthenticated routes serving four constants (page, script, manifest, icon), under `default-src 'none'; script-src 'self'`. The script never assigns `innerHTML` and a test pins that — **and since 2026-08-31 a second test pins the sinks that parse no markup at all**: `setAttribute`, `.href`, `.src`, `.style`, `window.open`, `location.assign`. `script-src 'self'` stops an injected `<script>`; it does not stop a `javascript:` href and it does not govern navigation. The guard was narrower than the rule it guards, which is how a rule stops being true without a diff looking wrong. Both tests are calibrated by making them fail, not by watching them pass. Keep it that way, because everything it draws was authored by an agent. **What the CSP does not cover, stated so nobody credits it with more than it does:** `connect-src 'self'` cannot tell the page's own fetch from a hostile one to the same origin, and no directive governs top-level navigation — so the page's safety rests on the `textContent`-only discipline, and the CSP is what stops that discipline's failure from becoming remote code. **After editing it run `node --check app/src/local_control/console.js`** — it is `include_str!`d, so a syntax error compiles fine, passes every Rust test, and breaks the whole page at runtime. And remember the page draws from `PendingApproval`: a control there must be gated on what the *entry* permits, not only on what the device may do (T14.6). |
 | `app/src/terminal/model/session/filesystem.rs` | **where a session's files actually live**, as one answer. `SessionType` is a *bootstrap* fact and a WSL session's is `Local` — `determine_session_type` compares hostnames and WSL2 inherits the Windows machine name — while its files are inside the distribution. Every call site that asked `session_type()` about a *file* therefore reached back across the 9p redirector, at roughly 20 ms per directory entry, past a server sitting idle beside those files. `session_filesystem` returns `Local`, `Host(id)` or `Unreachable`; the rule is a pure `classify(session_type, is_wsl, connected_host)` with unit tests, the lookups around it are not. **`Unreachable` is a third state on purpose**: a remote session with no server attached is not local, and a caller that treats it as local reads *this* machine's filesystem for another machine's paths — which succeeds often enough to be worse than failing. Two places keep `session_type()` deliberately and say why: the orchestration gate (about where *commands* run, and a WSL shell is already native Linux) and the completer (which had already solved this upstream in `wsl_guest_listing`, APP-3993 — **upstream independently found that enumerating a WSL directory from Windows is wrong, and asks the guest**). A new reader is caught by `every_file_that_reads_session_type_has_been_classified`, which requires every live `session_type()` read in `app/src` to appear in a list with a reason. |
-| `app/src/local_control/`, `crates/local_control/`, `crates/warp_cli/src/local_control/` | the `warpctrl` control plane, 114 actions. The count is pinned by **two** tests in different crates — update both, and never loosen either. **This line said 109 for two phases**: T11.2 took it to 110, T11.4 to 111 and T11.5 to 114, and each updated the pins without updating this table. Read the count off the test, never off prose — and grep for `fn catalog_has_exactly`, because the test's own name embeds the number and so goes stale on exactly the schedule this warning is about. |
+| `app/src/local_control/`, `crates/local_control/`, `crates/warp_cli/src/local_control/` | the `warpctrl` control plane, 115 actions. The count is pinned by **two** tests in different crates — update both, and never loosen either. **This line said 109 for two phases**: T11.2 took it to 110, T11.4 to 111, T11.5 to 114 and item 6's `agent.trace` to 115, and each updated the pins without updating this table. Read the count off the test, never off prose — and grep for `fn catalog_has_exactly`, because the test's own name embeds the number and so goes stale on exactly the schedule this warning is about. |
 | `app/src/remote_server/wsl_transport.rs`, `crates/remote_server/src/wsl.rs` | the second `RemoteTransport`: Warp's remote-development server, in a WSL distro instead of over SSH. |
 
 **The fork no longer talks to Warp's servers at all, and the two things that
@@ -551,7 +551,10 @@ fork regression), `WARP_FORK_ACP_MODE` (**the session mode to ask the ACP agent 
 first-party block only** — `warp.dev` and its subdomains. Separate from the
 telemetry switch on purpose, and needed because `WARP_FORK_POLICY=0` cannot
 reach `http_client`: without it, the documented way to A/B a suspected fork
-regression would fail at the socket with no clue why), `WARP_FORK_QUAKE_VISOR` (the one that
+regression would fail at the socket with no clue why), `WARP_FORK_HARNESS_DIR` (the agent's
+`.claude/projects` directory for `agent.trace`, when the instance's own search
+-- this home, then a WSL session's guest homes -- does not find it; unset by
+default), `WARP_FORK_QUAKE_VISOR` (the one that
 defaults **on** — set it off to get upstream's terminal in the hotkey window),
 `WARP_FORK_WSL_AUTO_CONNECT` (**also defaults on**, same parser: a WSL pane
 attaches Warp's remote-development server to its own distribution when its
@@ -1658,10 +1661,13 @@ time 2026-08-30; nothing in this repo's docs had mentioned it.
 
 **The real remote backstop is SSH, not the console — and it is set up as of
 2026-08-30.** A phone in Termux runs `ssh warp` and gets a shell, key-only, no
-prompt. That reaches **all 114 `warpctrl` actions**, against **six** through a
-paired console — seven if `WARP_FORK_REMOTE_APPROVE` is set, which adds
+prompt. That reaches **all 115 `warpctrl` actions**, against **seven** through a
+paired console — eight if `WARP_FORK_REMOTE_APPROVE` is set, which adds
 `agent.approve`. This line said "five" until 2026-09-01: T14.21 added
 `agent.cancel` and updated the module's own docs without updating this file.
+The seventh is `agent.trace` (2026-09-05), the conversation's record for the
+console's live view, and the widest read a phone gets; the argument is beside
+the entry in `pairing.rs`.
 **Read the count off `PAIRABLE_ACTIONS` in `app/src/local_control/pairing.rs`,
 never off this sentence** — the same rule this file already states for the 114,
 and for the same reason.

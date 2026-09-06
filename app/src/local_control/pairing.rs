@@ -104,6 +104,24 @@ use chrono::{DateTime, Duration, Utc};
 /// be pairable. A phone can stop a runaway; picking the work back up happens at
 /// the machine.
 ///
+/// * `agent.trace` (board item 6, phase 3) is a read, and it is the widest
+///   one here: the agent's own session file joined with Warp's log -- every
+///   prompt, every tool input in full, every result, the agent's thinking
+///   where its harness records it. `.fork/docs/observability.md` kept it off
+///   this list on purpose in phase 1, on the argument that a full transcript
+///   is a disclosure the pairing credential was never sized for. The
+///   maintainer asked for it on 2026-09-05 -- *observing runs remotely* is
+///   what the phone is for -- and the argument that makes it fit rather than
+///   merely wanted is what `events.subscribe` already grants: tool names,
+///   input previews and working directories for every agent, live, which is
+///   the same material at a lower resolution. What the trace adds is the
+///   agent's words and the full inputs. That is a real widening, and it is
+///   taken as the cost of a phone being able to answer "what is it doing"
+///   rather than "is it doing something". Still a read: a stolen device token
+///   holding it learns, and cannot act. The residual the console's own docs
+///   already name applies in full -- the transport is plaintext HTTP on the
+///   LAN, so bind a Tailscale address if that matters where you are.
+///
 /// **What it does not fix**, so it is not sold as a general recovery verb: a
 /// CLI agent running in a *pane* is not a conversation, so cancel cannot reach
 /// it, and the remedy there is keystrokes into a PTY — which is the boundary
@@ -116,6 +134,7 @@ pub(super) const PAIRABLE_ACTIONS: &[ActionKind] = &[
     ActionKind::AgentApprovals,
     ActionKind::AgentDeny,
     ActionKind::AgentCancel,
+    ActionKind::AgentTrace,
 ];
 
 /// What a paired device may obtain a credential for only when the machine's

@@ -16,32 +16,40 @@
   Three profiles now, chosen per launch and never persisted:
 
     (default)       PRODUCT. `WARP_FORK_ACP_COMMAND` names the agent, started
-                    inside the WSL distribution so a pane's Unix cwd resolves.
-                    Nothing else is set: the agent runs in its own shipped
-                    permission mode (`auto` for claude-agent-acp, where Claude
-                    Code's classifier answers the easy asks on this machine, on
-                    your subscription). No event log, no transcript. This is
-                    thesis-compliant: nothing about where data goes or whose
-                    credential pays is changed by it. What it costs is Warp's
-                    visibility into permissions, and that is a measurement
-                    loss, not a safety loss (T14.18).
+                    inside the WSL distribution so a pane's Unix cwd resolves,
+                    and `WARP_FORK_EVENT_LOG=on` writes one JSONL per
+                    conversation under the state directory. The agent runs in
+                    its own shipped permission mode (`auto` for
+                    claude-agent-acp, where Claude Code's classifier answers
+                    the easy asks on this machine, on your subscription). No
+                    transcript. Thesis-compliant: nothing about where data
+                    goes or whose credential pays is changed by it. What it
+                    costs is Warp's visibility into permissions, and that is a
+                    measurement loss, not a safety loss (T14.18).
 
-    -Instrumented   THE RIG. Product plus `WARP_FORK_ACP_MODE=default`,
-                    `WARP_FORK_EVENT_LOG=on`, `WARP_FORK_TRANSCRIPT=on`. The
-                    agent asks about everything not on your allow list, and
-                    every ask and answer is written down. Use it when you want
-                    Warp in the loop and are prepared to answer for it.
+                    The log moved into this profile on 2026-09-05, when it got
+                    a reader: the console's conversation view (`agent.trace`)
+                    joins it with the agent's own session file, and without it
+                    a phone has nothing to watch. Before that it was an
+                    instrument, off because a log with no reader is a cost.
 
-    -EventLog       PRODUCT + THE LOG. The product profile plus
-                    `WARP_FORK_EVENT_LOG=on` and nothing else: the agent stays
-                    in its shipped mode, so Warp is still never asked, and what
-                    the log gains is the tool calls and the join key to the
-                    agent's own session file (`linked_session_id`). Added for
-                    viewer phase 0 (`.fork/docs/observability.md`), whose
-                    question is whether that join holds under `auto`; the rig
-                    could not answer it because it forces `default`.
+    -Instrumented   THE RIG. Product plus `WARP_FORK_ACP_MODE=default` and
+                    `WARP_FORK_TRANSCRIPT=on`. The agent asks about everything
+                    not on your allow list, and every ask and answer is written
+                    down. Use it when you want Warp in the loop and are
+                    prepared to answer for it.
 
-    -Stock          UPSTREAM. All four variables cleared. For A/B-ing a
+    -EventLog       Accepted and means PRODUCT, which carries the log now.
+
+    -Console        Also open the wide listener (`WARP_FORK_CONTROL_BIND`) so
+                    a phone on the LAN can pair and watch: `warpctrl pair show`
+                    prints the QR. The address is `-Bind`, default
+                    192.168.254.3:41234 -- the one the Windows firewall rule
+                    names (`.fork/docs/manual.md`, "Reaching the console from
+                    a phone"). Off unless asked for, because it is the one
+                    variable that reaches off the machine.
+
+    -Stock          UPSTREAM. Every WARP_FORK_* variable here cleared. For A/B-ing a
                     suspected fork regression. Plan the shutdown first: with
                     `WARP_FORK_POLICY` untouched this still publishes a
                     discovery record, but the agent panel is upstream's.
@@ -74,7 +82,7 @@
 .EXAMPLE
   warpdev.ps1 -Instrumented   # launch the rig, for one session
 .EXAMPLE
-  warpdev.ps1 -EventLog       # the product, with the event log and nothing else
+  warpdev.ps1 -Console        # the product, reachable from a phone on the LAN
 .EXAMPLE
   warpdev.ps1 -Status         # print what a launch would set, and the tree state
 #>
@@ -82,6 +90,8 @@
 param(
     [switch]$Instrumented,
     [switch]$EventLog,
+    [switch]$Console,
+    [string]$Bind = '192.168.254.3:41234',
     [switch]$Stock,
     [switch]$Status,
     [switch]$Force,
@@ -132,19 +142,29 @@ $Product = @(
        # giving opposite answers to the same question.
        Value = 'wsl.exe -d Ubuntu -- npx -y @agentclientprotocol/claude-agent-acp@0.73.0'
        Why = 'the agent panel answers from this agent, started inside WSL so a pane cwd resolves' }
+    # Product since 2026-09-05, not an instrument: the console's conversation
+    # view (`agent.trace`) reads this log for the join to the agent's own
+    # session file, so without it a phone has nothing to watch. It was off by
+    # default while it had no reader; it has one now. Owner-only files under
+    # the state directory, nothing leaves the machine.
+    @{ Name = 'WARP_FORK_EVENT_LOG'
+       Value = 'on'
+       Why = 'one JSONL per conversation, the record the console draws a run from' }
 )
 $Instruments = @(
     @{ Name = 'WARP_FORK_ACP_MODE'
        Value = 'default'
        Why = 'makes the agent ask; without it its own classifier answers and Warp is never in the loop' }
-    @{ Name = 'WARP_FORK_EVENT_LOG'
-       Value = 'on'
-       Why = 'one JSONL per conversation: tool calls, permission asks, what was decided' }
     @{ Name = 'WARP_FORK_TRANSCRIPT'
        Value = 'on'
        Why = 'the conversation on disk under the pane directory, for grepping back what compaction dropped' }
 )
-$AllVars = @($Product + $Instruments | ForEach-Object { $_.Name })
+$Wide = @(
+    @{ Name = 'WARP_FORK_CONTROL_BIND'
+       Value = $Bind
+       Why = 'the wide listener, so a phone on the LAN can pair; the only variable that reaches off the machine' }
+)
+$AllVars = @($Product + $Instruments + $Wide | ForEach-Object { $_.Name })
 
 if ($Stock) {
     $ProfileName = 'STOCK (upstream; no fork agent)'
@@ -153,11 +173,22 @@ if ($Stock) {
     $ProfileName = 'INSTRUMENTED (the rig)'
     $ToSet = @($Product + $Instruments)
 } elseif ($EventLog) {
-    $ProfileName = 'PRODUCT + EVENT LOG'
-    $ToSet = @($Product + ($Instruments | Where-Object { $_.Name -eq 'WARP_FORK_EVENT_LOG' }))
+    # Kept as a name people typed for a week; the product profile carries the
+    # log itself now, so this is the product.
+    Write-Host "warpdev: the product profile includes the event log since 2026-09-05; -EventLog is the default" -ForegroundColor DarkGray
+    $ProfileName = 'PRODUCT'
+    $ToSet = @($Product)
 } else {
     $ProfileName = 'PRODUCT'
     $ToSet = @($Product)
+}
+if ($Console) {
+    if ($Stock) {
+        Write-Host "warpdev: -Console needs the fork's listener; -Stock has none." -ForegroundColor Red
+        exit 2
+    }
+    $ProfileName = "$ProfileName + CONSOLE"
+    $ToSet = @($ToSet + $Wide)
 }
 
 function Show-Plan {

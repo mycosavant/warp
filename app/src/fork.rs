@@ -555,6 +555,29 @@ fn event_log_dir_from(value: Option<&str>) -> Option<std::path::PathBuf> {
     }
 }
 
+const HARNESS_DIR_ENV_VAR: &str = "WARP_FORK_HARNESS_DIR";
+
+/// Where the agent's own session files are, if the person said (board item 6,
+/// phase 3).
+///
+/// `agent.trace` joins Warp's event log with Claude Code's session file, and
+/// finds the file itself: this process's `~/.claude/projects`, or for a WSL
+/// session the guest's home directories through the session's path
+/// conversion. This variable names the `.claude/projects` directory to read
+/// instead, for the case the search does not cover -- an agent whose home is
+/// somewhere the guess cannot reach. Unset by default, because the search is
+/// right on every machine this fork has run on.
+pub fn harness_projects_dir() -> Option<std::path::PathBuf> {
+    if !is_active() {
+        return None;
+    }
+    std::env::var(HARNESS_DIR_ENV_VAR)
+        .ok()
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+        .map(std::path::PathBuf::from)
+}
+
 const TRANSCRIPT_ENV_VAR: &str = "WARP_FORK_TRANSCRIPT";
 
 /// Where a conversation's transcript is written so the agent can grep its own

@@ -93,8 +93,9 @@ goes here and the failing test is the calibration.
 
 ## tools/ — scripts
 
-`build.sh`, `warpdev.ps1` (the Windows launcher; product by default,
-`-Instrumented` for the rig, `-EventLog` for the product plus the log), `drift-check.sh`, `memsample.sh`, three
+`build.sh`, `warpdev.ps1` (the Windows launcher; product by default, with the
+event log since 2026-09-05; `-Instrumented` for the rig, `-Console` for the
+wide listener so a phone can pair), `drift-check.sh`, `memsample.sh`, three
 measurement scripts, and `reorg-2026-09-05.py`, which produced this layout and
 is kept as its record. `launch.sh` beside this file is the Linux daily driver.
 

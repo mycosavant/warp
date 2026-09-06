@@ -136,11 +136,16 @@ generation time, so it takes on none of the console's DOM-sink discipline and
 adds no route. Open it in the browser that is already on the Windows side.
 That is the UI, and it is a file.
 
-A live view in the console (T12) is deliberately **not** in this version. The
-console is served to paired devices, and a full transcript on a phone is a
-disclosure the pairing credential was never sized for (`PAIRABLE_ACTIONS` is
-narrow because a QR code is weak). If it is ever wanted, it is a new pairable
-action and therefore a posture question, which is frozen.
+A live view in the console (T12) was deliberately **not** in this version,
+on the argument that a full transcript on a phone is a disclosure the pairing
+credential was never sized for. **It is in phase 3, built 2026-09-05 at the
+maintainer's ask**, as the new pairable action that paragraph predicted;
+`pairing.rs` carries the argument beside the entry and the decision is in
+`.fork/decisions/`. Short form: the event stream a phone already holds carries
+tool names, input previews and directories for every agent, live, so the
+trace is the same material at full resolution rather than a new kind of
+disclosure; it is a read; and *observing runs remotely* is what the phone is
+for.
 
 ## Rendering rules
 
@@ -258,7 +263,19 @@ clocks disagree around it.
 2. **Done 2026-09-05.** Text for the default output format, `--html FILE` for
    the page; sixteen tests across the two modules. The page is the deliverable
    the frame asked for, and it is a file.
-3. **Only if a friction log asks:** opencode's database, and a live view.
+3. **Done 2026-09-05, the live view.** `agent.trace`, a catalog action (115
+   now; both pins) and the seventh pairable one, running phase 1's merge
+   inside the instance -- `app/src/local_control/handlers/trace.rs` calls
+   `warp_cli::local_control::trace` unchanged. The console's conversation
+   view polls it for the *tail* of both files (line-count cursors, exact
+   because both files are append-only) and redraws with the phase 2 folding
+   rules ported to `console.js`, still through `textContent` only. The
+   instance finds the harness's file itself, including inside the
+   distribution for a WSL session; `WARP_FORK_HARNESS_DIR` overrides. The
+   launcher's product profile carries `WARP_FORK_EVENT_LOG=on` since this,
+   because the log has a reader. `warpctrl agent trace --live` asks the
+   instance the same way. opencode's database stays where it was: only if a
+   friction log asks.
 
 ## Unverified, as of filing
 

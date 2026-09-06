@@ -556,6 +556,13 @@ fn add_parameter_properties(
                 }),
             );
         }
+        ActionParameterSpec::AgentTrace => require(
+            "conversation_id",
+            json!({
+                "type": "string",
+                "description": "Conversation whose record to return: the agent's own session file joined with Warp's event log, one row per thing said or done, labelled by who wrote it.",
+            }),
+        ),
         ActionParameterSpec::AgentRead => {
             require(
                 "conversation_id",

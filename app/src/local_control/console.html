@@ -73,10 +73,42 @@
   #events .d { color:var(--dim); word-break:break-word; }
   #events li.blocked .k { color:var(--block); }
   code { color:var(--fg); }
+  /* The conversation view (board item 6, phase 3): one run, drawn from the
+     record the agent keeps and the one Warp keeps, as `warpctrl agent trace`
+     draws it. A row per thing said or done, a call folded into one row. */
+  #agents li.openable { cursor:pointer; }
+  #agents li.openable .title::after { content:" ›"; color:var(--dim); }
+  #conversation h2 { text-transform:none; letter-spacing:0; font-size:13px; color:var(--hi); word-break:break-word; }
+  #conv-controls { margin:.4rem 0 .2rem; }
+  #conv-controls:empty { display:none; }
+  #conv-controls button { flex:0 1 8rem; }
+  #trace { list-style:none; margin:.5rem 0 0; padding:0; }
+  #trace li { display:grid; grid-template-columns:3.4rem 1fr; gap:.5rem; padding:.35rem 0; border-top:1px solid var(--line); font-size:12px; }
+  #trace li:first-child { border-top:0; }
+  #trace .t { color:var(--dim); font-variant-numeric:tabular-nums; font-size:11px; padding-top:.1rem; }
+  #trace .body { min-width:0; white-space:pre-wrap; word-break:break-word; }
+  #trace li.who-person .body { color:var(--hi); }
+  #trace li.who-warp .body, #trace li.who-harness .body { color:var(--dim); }
+  #trace li.thinking .body { font-style:italic; color:var(--dim); }
+  #trace li.boundary { display:block; text-align:center; color:var(--dim); font-size:11px; padding:.6rem 0; }
+  #trace .label { color:var(--dim); }
+  #trace .call .head b { color:var(--hi); }
+  #trace .call .cmd { margin-top:.3rem; }
+  #trace .state { display:inline-block; font-size:11px; border:1px solid #30363d; border-radius:999px; padding:0 .45rem; margin-left:.35rem; color:var(--dim); white-space:nowrap; }
+  #trace .call.state-done .state { color:var(--ok); border-color:#238636; }
+  #trace .call.state-failed .state, #trace .call.state-denied .state { color:var(--block); border-color:#762a26; }
+  #trace .call.state-open .state, #trace .call.state-unanswered .state { color:var(--busy); border-color:#9e6a03; }
+  #trace .stamps { color:var(--dim); font-size:11px; margin-top:.2rem; }
+  #trace pre { margin:.3rem 0 0; white-space:pre-wrap; word-break:break-word; font:inherit; color:var(--fg); }
+  #trace details > summary { color:var(--dim); cursor:pointer; font-size:11px; }
+  #trace-foot { margin:.6rem 0 0; }
 </style>
 </head>
 <body>
 <header>
+  <!-- Drawn only inside a conversation. Goes back through history, so the
+       phone's own back gesture and this button do the same thing. -->
+  <button class="badge" id="back" hidden>‹ back</button>
   <h1>warp</h1>
   <span class="badge" id="link">connecting</span>
   <span class="spacer"></span>
@@ -92,7 +124,22 @@
     <p class="note" id="pairing-note"></p>
   </section>
 
-  <section id="waiting">
+  <!-- One conversation, live (board item 6, phase 3). Opened by tapping a row
+       in the list below; the trace is `agent.trace`, polled for its tail while
+       the turn runs. The approvals shown here are this conversation's only;
+       the ones on the home page are everything waiting. -->
+  <section id="conversation" hidden>
+    <h2 id="conv-title"></h2>
+    <p class="meta" id="conv-meta"></p>
+    <ul id="conv-approvals"></ul>
+    <div class="answers" id="conv-controls"></div>
+    <p class="note" id="conv-note"></p>
+    <p class="note bad" id="conv-error" hidden></p>
+    <ol id="trace"></ol>
+    <p class="meta" id="trace-foot"></p>
+  </section>
+
+  <section id="waiting" class="home">
     <h2>waiting on you <span class="badge" id="waiting-count">0</span></h2>
     <ul id="approvals"></ul>
     <p class="note" id="waiting-note">checking…</p>
@@ -102,13 +149,13 @@
     <p class="note bad" id="waiting-error" hidden></p>
   </section>
 
-  <section>
+  <section class="home">
     <h2>Warp conversations <span class="badge" id="agents-count">0</span></h2>
     <ul id="agents"></ul>
     <p class="note" id="agents-note"></p>
   </section>
 
-  <section>
+  <section class="home">
     <h2>live events <span class="badge" id="events-count">0</span></h2>
     <ul id="events"></ul>
     <p class="note" id="events-note">waiting for the first event…</p>

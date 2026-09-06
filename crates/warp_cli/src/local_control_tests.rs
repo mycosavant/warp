@@ -897,6 +897,16 @@ fn retained_action_examples() -> Vec<(ActionKind, Vec<&'static str>)> {
         ),
         (ActionKind::ControlPair, vec!["warpctrl", "pair", "show"]),
         (
+            ActionKind::AgentTrace,
+            vec![
+                "warpctrl",
+                "agent",
+                "trace",
+                "3f2f0e6a-0000-4000-8000-000000000000",
+                "--live",
+            ],
+        ),
+        (
             ActionKind::AgentApprovals,
             vec!["warpctrl", "agent", "approvals"],
         ),
@@ -1098,10 +1108,11 @@ fn parsed_action_kind(command: &ControlCommand) -> Option<ActionKind> {
             AgentCommand::Approvals(_) => Some(ActionKind::AgentApprovals),
             AgentCommand::Approve(_) => Some(ActionKind::AgentApprove),
             AgentCommand::Deny(_) => Some(ActionKind::AgentDeny),
-            // Not an action: `trace` reads two files and asks nothing of an
-            // instance, so there is nothing in the catalog for it to be, the
-            // same reason `graph` is a loop over verbs rather than a verb.
-            AgentCommand::Trace(_) => None,
+            // An action only with `--live`: without it `trace` reads two files
+            // and asks nothing of an instance, the same reason `graph` is a
+            // loop over verbs rather than a verb. With it, the instance runs
+            // the same merge where both files are (`agent.trace`, item 6).
+            AgentCommand::Trace(args) => args.live.then_some(ActionKind::AgentTrace),
         },
         ControlCommand::Slash(command) => match command {
             SlashCommand::List(_) => Some(ActionKind::SlashList),
