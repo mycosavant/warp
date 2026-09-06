@@ -1,0 +1,32 @@
+[01:25:04] launching PRODUCT + CONSOLE
+[01:36:19] instance already up; continuing
+[01:36:19] cd the pane
+[01:36:24] pairing
+[01:36:24] origin 192.168.254.3:41234, code Pe0-F6…
+[01:36:24] prompt
+[01:36:24] conversation 3652adce-a0aa-490b-b6e8-ab9c5abec77e
+[01:36:29] trace #1 from the paired device, mid-turn
+[01:36:36] turn over after ~6s, is_busy=False
+[01:36:36] trace #2, the tail after warp  / harness 
+[01:36:37] trace --live from the CLI (text)
+error: internal: the instance's agent.trace reply did not parse as a trace
+details: missing field `warp_after`
+[01:36:37] the console in Brave, on the conversation
+[01:37:15] instance already up; continuing
+[01:37:15] cd the pane
+[01:37:20] pairing
+[01:37:20] origin 192.168.254.3:41234, code oHYShO…
+actions: app.ping agent.list events.subscribe agent.approvals agent.deny agent.cancel agent.trace
+[01:37:20] prompt
+[01:37:20] conversation 7f178839-c751-4d19-bdf0-7ea96cc7abe5
+[01:37:28] trace #1 from the paired device, mid-turn
+header: {'warp_lines': 4, 'harness': None, 'harness_file': None, 'harness_lines': 0, 'joined_calls': 0, 'clock_offset_ms': None, 'note': "Warp's log names no linked session, so there is no harness file to join: this is Warp's half alone."}
+rows: 4 [('warp', 'session_start'), ('warp', 'session_agent'), ('warp', 'session_mode'), ('warp', 'session_model')]
+[01:37:35] turn over after ~6s, is_busy=False
+[01:37:35] trace #2, the tail after warp 4 / harness 0
+header: {'warp_after': 4, 'harness_after': None, 'warp_lines': 9, 'harness_lines': 24, 'joined_calls': 2, 'note': None}
+rows: 13 [('warp', 'tool_start'), ('warp', 'tool_start'), ('warp', 'tool_complete'), ('warp', 'tool_complete'), ('harness', 'prompt'), ('warp', 'stop'), ('harness', 'text'), ('harness', 'tool_use'), ('harness', 'tool_result'), ('harness', 'tool_use'), ('harness', 'tool_result'), ('harness', 'text'), ('harness', 'usage')]
+[01:37:35] trace --live from the CLI (text)
+error: internal: the instance's agent.trace reply did not parse as a trace
+details: missing field `warp_after`
+[01:37:36] the console in Brave, on the conversation

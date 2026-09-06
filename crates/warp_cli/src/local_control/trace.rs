@@ -140,9 +140,9 @@ pub struct Header {
     /// `warp_lines` and `harness_lines` then count the whole file, so the
     /// pair is the cursor for the next poll. Zero -- the CLI's case -- is not
     /// written.
-    #[serde(skip_serializing_if = "is_zero")]
+    #[serde(default, skip_serializing_if = "is_zero")]
     pub warp_after: usize,
-    #[serde(skip_serializing_if = "is_zero")]
+    #[serde(default, skip_serializing_if = "is_zero")]
     pub harness_after: usize,
     /// Tool calls found in both files under one `toolu_…` id.
     pub joined_calls: usize,

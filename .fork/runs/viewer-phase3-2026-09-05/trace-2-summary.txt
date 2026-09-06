@@ -1,0 +1,29 @@
+{
+ "conversation_id": "7f178839-c751-4d19-bdf0-7ea96cc7abe5",
+ "events_file": "C:\\Users\\onemind\\AppData\\Local\\warp\\WarpOss\\data\\fork\\events\\7f178839-c751-4d19-bdf0-7ea96cc7abe5.jsonl",
+ "warp_lines": 9,
+ "linked_session_id": "cd581153-74b1-4bad-bcad-5b979ad7d7bd",
+ "harness": "claude-code",
+ "harness_file": "\\\\wsl$\\ubuntu\\home\\effatha\\.claude\\projects\\-home-effatha-git-warp\\cd581153-74b1-4bad-bcad-5b979ad7d7bd.jsonl",
+ "harness_versions": [
+  "2.1.257"
+ ],
+ "harness_lines": 24,
+ "harness_lines_skipped": 17,
+ "warp_after": 4,
+ "joined_calls": 2,
+ "clock_offset_ms": 6348
+}
+warp tool_start toolu_01P42kmp read
+warp tool_start toolu_01LR9fdi execute
+warp tool_complete toolu_01P42kmp 
+warp tool_complete toolu_01LR9fdi 
+harness prompt  Use your Read tool to read the first line of CLAUDE.md and quote it ex
+warp stop  Use your Read tool to read the first line of CLAUDE.md and quote it ex
+harness text  I'll read the first line of CLAUDE.md and check the latest commit.
+harness tool_use toolu_01P42kmp Read {"file_path":"/home/effatha/git/warp/CLAUDE.md","limit":1}
+harness tool_result toolu_01P42kmp 1	# Working in this fork
+harness tool_use toolu_01LR9fdi Bash {"command":"git log --oneline -1","description":"Show the latest 
+harness tool_result toolu_01LR9fdi 9ed773dc3 fork: the record of a conversation, served to a phone (VIEWE
+harness text  First line of CLAUDE.md: `# Working in this fork` Latest commit: `9ed7
+harness usage  4 assistant messages, 62 input, 639 output, 101563 cache read, 185912 

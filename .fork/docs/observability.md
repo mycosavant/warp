@@ -275,7 +275,12 @@ clocks disagree around it.
    launcher's product profile carries `WARP_FORK_EVENT_LOG=on` since this,
    because the log has a reader. `warpctrl agent trace --live` asks the
    instance the same way. opencode's database stays where it was: only if a
-   friction log asks.
+   friction log asks. **Measured 2026-09-05 on the Windows build**
+   (`.fork/runs/viewer-phase3-2026-09-05/`): a device paired the way a phone
+   does got the seven actions, asked for the record mid-turn and as a tail
+   after it, and the instance found the harness's file inside the
+   distribution on its own (`\\wsl$\ubuntu\home\effatha\.claude\…`);
+   the page drew both calls with both clocks, 6.3 s apart.
 
 ## Unverified, as of filing
 

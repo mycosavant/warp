@@ -1,0 +1,2 @@
+error: internal: the instance's agent.trace reply did not parse as a trace
+details: missing field `warp_after`

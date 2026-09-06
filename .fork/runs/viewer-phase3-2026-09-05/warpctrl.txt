@@ -1,0 +1,30 @@
+{
+  "action": "input.submit",
+  "ok": true,
+  "instance_id": "inst_86a7cb943c6a452fb097d8242117e893",
+  "executed": true,
+  "queued": false
+}
+
+{
+  "action": "agent.prompt",
+  "ok": true,
+  "instance_id": "inst_86a7cb943c6a452fb097d8242117e893",
+  "conversation_id": "3652adce-a0aa-490b-b6e8-ab9c5abec77e",
+  "created": true
+}
+{
+  "action": "input.submit",
+  "ok": true,
+  "instance_id": "inst_86a7cb943c6a452fb097d8242117e893",
+  "executed": true,
+  "queued": false
+}
+
+{
+  "action": "agent.prompt",
+  "ok": true,
+  "instance_id": "inst_86a7cb943c6a452fb097d8242117e893",
+  "conversation_id": "7f178839-c751-4d19-bdf0-7ea96cc7abe5",
+  "created": true
+}

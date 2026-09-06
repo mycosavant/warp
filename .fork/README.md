@@ -82,6 +82,7 @@ undated in the source and say so in their filename. Later decisions live in
 | `runs/run-selfhost-2026-09-01/` | the self-hosting weekend |
 | `runs/classifier/` | the permission-classifier eval set, probes and their README |
 | `runs/viewer-phase0-2026-09-05/` | the viewer's phase 0: the join between Warp's log and the agent's session file, measured live under `auto` |
+| `runs/viewer-phase3-2026-09-05/` | the viewer's phase 3: the record served to a paired device on the Windows build, the harness file found inside the distribution, the page photographed |
 
 ## viewer/ — fixtures the trace is pinned against
 
