@@ -8,6 +8,8 @@ license.workspace = true
 
 [dependencies]
 chrono.workspace = true
+# An edit tool's input drawn as a diff in the trace (2026-09-06).
+similar.workspace = true
 clap = { workspace = true, features = ["derive", "env"] }
 cfg-if = { workspace = true }
 humantime.workspace = true

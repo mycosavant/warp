@@ -119,6 +119,53 @@ fn text_marks_a_denial_and_a_failure_differently() {
     assert_eq!(text.matches("▸ ").count(), 3);
 }
 
+/// An edit's input is a diff, in both forms (2026-09-06): the file on the
+/// input line, `-`/`+` lines under it, and in the page every line escaped.
+#[test]
+fn an_edit_is_drawn_as_a_diff_not_as_two_strings() {
+    let harness = concat!(
+        r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_edit","name":"Edit","input":{"file_path":"/tmp/a.rs","old_string":"fn a() {}\nfn b() {}\n","new_string":"fn a() {}\nfn c() -> u8 { 1 }\n"}}],"usage":{"input_tokens":1,"output_tokens":1}},"timestamp":"2026-09-06T02:33:00.000Z","version":"2.1.257"}"#,
+        "\n",
+        r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_edit","content":"ok"}]},"timestamp":"2026-09-06T02:33:01.000Z","version":"2.1.257"}"#,
+        "\n",
+        r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_write","name":"Write","input":{"file_path":"/tmp/b.html","content":"<b>x</b>\n"}}],"usage":{"input_tokens":1,"output_tokens":1}},"timestamp":"2026-09-06T02:34:00.000Z","version":"2.1.257"}"#,
+        "\n",
+    );
+    let trace = from_lines("", harness);
+    let text = render_text(&trace);
+    assert!(
+        text.contains("▸ Edit /tmp/a.rs\n"),
+        "the input line is the file:\n{text}"
+    );
+    for line in ["  fn a() {}\n", "- fn b() {}\n", "+ fn c() -> u8 { 1 }\n"] {
+        assert!(text.contains(line), "{line:?} in:\n{text}");
+    }
+    assert!(
+        !text.contains("old_string"),
+        "the JSON is not dumped beside the diff:\n{text}"
+    );
+    assert!(text.contains("▸ Write /tmp/b.html\n"), "{text}");
+    assert!(
+        text.contains("+ <b>x</b>\n"),
+        "a Write is all additions:\n{text}"
+    );
+
+    let html = render_html(&trace);
+    assert!(html.contains("<pre class=\"diff\">"));
+    assert!(
+        html.contains("<span class=\"del\">- fn b() {}</span>"),
+        "{html}"
+    );
+    assert!(
+        html.contains("<span class=\"add\">+ &lt;b&gt;x&lt;/b&gt;</span>"),
+        "escaped:\n{html}"
+    );
+    assert!(
+        !html.contains("<b>x</b>"),
+        "the agent's markup never reaches the page as markup"
+    );
+}
+
 #[test]
 fn text_draws_a_compaction_as_a_rule_with_the_summary_folded_under_it() {
     let harness = concat!(

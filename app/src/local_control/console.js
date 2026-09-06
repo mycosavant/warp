@@ -123,6 +123,7 @@
     eventsCount: document.getElementById('events-count'),
     eventsNote: document.getElementById('events-note'),
     unpair: document.getElementById('unpair'),
+    notify: document.getElementById('notify'),
     back: document.getElementById('back'),
     main: document.querySelector('main'),
     home: Array.prototype.slice.call(document.querySelectorAll('section.home')),
@@ -711,6 +712,65 @@
     // the view is keyed by. The harness writes its line before Warp hears of
     // the call, so by the time this fires the tail is already on disk.
     if (viewing && record.session_id === viewing.id) scheduleTracePoll(300);
+    maybeNotify(record);
+  }
+
+  // ---------------------------------------------------------- being told
+  //
+  // Foreground only (the second decision of 2026-09-06). While the page is
+  // open, installed or in a background tab of an awake phone, a permission
+  // request or the end of a turn on the conversation this device is on posts
+  // a notification and buzzes. Nothing server-side and nothing leaves the
+  // machine: the events stream already carries both, and the Notification API
+  // talks to the phone's own shade. It is withheld outside a secure context,
+  // which is why the wide listener speaks TLS. A locked phone needs Web Push,
+  // a nudge through Google's or Apple's relay, and that is not built.
+
+  function notificationsPossible() {
+    return !!(window.isSecureContext && typeof Notification === 'function');
+  }
+
+  function syncNotifyButton() {
+    el.notify.hidden = !(notificationsPossible() && Notification.permission === 'default');
+  }
+
+  // Asked from a tap, never on load: a permission prompt that appears unasked
+  // is the one browsers have learned to bury.
+  function askToNotify() {
+    if (!notificationsPossible()) return;
+    Notification.requestPermission().then(syncNotifyButton, syncNotifyButton);
+  }
+
+  function conversationOfInterest() {
+    if (viewing) return viewing.id;
+    if (device && device.conversation_id) return device.conversation_id;
+    return null;
+  }
+
+  function maybeNotify(record) {
+    if (!notificationsPossible() || Notification.permission !== 'granted') return;
+    if (!document.hidden) return;
+    if (!record || record.session_id !== conversationOfInterest()) return;
+    var body = null;
+    if (record.event === 'permission_request') {
+      body = 'asks: ' + (record.summary || record.tool_input_preview || record.tool_name || 'a permission');
+    } else if (record.event === 'stop') {
+      body = 'the turn ended';
+    } else if (record.event === 'stop_failure') {
+      body = 'the turn ended: ' + (record.error_type || 'error');
+    }
+    if (!body) return;
+    var title = (viewing && viewing.summary && viewing.summary.title) || 'warp';
+    try {
+      if (navigator.vibrate) navigator.vibrate([120, 60, 120]);
+      // `tag` collapses repeats of the same event on the same conversation
+      // into one entry in the shade rather than a stack.
+      var shown = new Notification(title, { body: body, tag: record.session_id + ':' + record.event });
+      shown.addEventListener('click', function () { window.focus(); shown.close(); });
+    } catch (_) {
+      // A browser that refuses the constructor (iOS outside an installed page
+      // does) is a browser that cannot be told; nothing else to do.
+    }
   }
 
   // One SSE frame, as the wire delivers it: `event:` and `data:` lines, with a
@@ -871,16 +931,38 @@
     el.home.forEach(function (section) { section.hidden = false; });
   }
 
+  // What the record says about the session, for the header (2026-09-06):
+  // the mode and model in force, from the latest `session_mode` and
+  // `session_model` lines, and the directory, from any Warp line's `cwd`.
+  // "Is the agent asking me or its classifier" is the first thing a phone
+  // wants to know, and a zero on permission requests means Warp was not in
+  // the loop, never that nothing was decided.
+  function recordFacts(rows) {
+    var facts = {};
+    rows.forEach(function (row) {
+      if (row.from !== 'warp' || !row.raw) return;
+      if (row.kind === 'session_mode' && row.text) facts.mode = row.text;
+      if (row.kind === 'session_model' && row.text) facts.model = row.text;
+      if (row.kind === 'session_agent' && row.text) facts.agent = row.text;
+      if (row.raw.cwd && !facts.cwd) facts.cwd = String(row.raw.cwd);
+    });
+    return facts;
+  }
+
   function renderConversationHead() {
     if (!viewing) return;
     var c = viewing.summary;
+    var facts = viewing.facts || {};
     clear(el.convTitle);
     el.convTitle.appendChild(text('span', 'dot ' + statusKind(c.status)));
     el.convTitle.appendChild(document.createTextNode(c.title || '(untitled)'));
     var meta = [c.status];
     if (c.blocked_action) meta.push('on ' + c.blocked_action);
     if (typeof c.quiet_for_seconds === 'number') meta.push('quiet ' + c.quiet_for_seconds + 's');
-    if (c.session_mode) meta.push('mode ' + c.session_mode);
+    if (facts.mode || c.session_mode) meta.push('mode ' + (facts.mode || c.session_mode));
+    if (facts.model) meta.push('model ' + facts.model);
+    if (facts.agent) meta.push('agent ' + facts.agent);
+    if (facts.cwd) meta.push('in ' + facts.cwd);
     meta.push(c.conversation_id);
     el.convMeta.textContent = meta.join(' · ');
     clear(el.convControls);
@@ -939,6 +1021,8 @@
           row.at = row.ts ? Date.parse(row.ts) : NaN;
           mine.rows.push(row);
         });
+        mine.facts = recordFacts(mine.rows);
+        renderConversationHead();
         renderTrace(mine);
         if (atBottom) el.main.scrollTop = el.main.scrollHeight;
         scheduleTracePoll(mine.summary && mine.summary.is_busy ? TRACE_BUSY_MS : TRACE_IDLE_MS);
@@ -1006,11 +1090,84 @@
     var block = call.used && toolUseBlock(call.used, call.id);
     if (block && block.input !== undefined) {
       if (block.input && typeof block.input.command === 'string') return block.input.command;
+      // An edit is drawn as a diff by `callEdit`; the input line is its file.
+      if (callEdit(call)) return typeof block.input.file_path === 'string' ? block.input.file_path : null;
       try { return JSON.stringify(block.input); } catch (_) { return null; }
     }
     var warp = call.started || call.asked;
     if (warp && warp.raw && warp.raw.tool_input_preview) return String(warp.raw.tool_input_preview);
     return null;
+  }
+
+  // An edit tool's input as hunks (2026-09-06): Claude Code's `Edit` carries
+  // `old_string`/`new_string`, `MultiEdit` a list of them, `Write` the whole
+  // new content. Two strings side by side are a diff drawn badly; this draws
+  // it as one. Only from the harness's own `tool_use` block, since the ACP
+  // path writes no input to Warp's log.
+  function callEdit(call) {
+    var block = call.used && toolUseBlock(call.used, call.id);
+    var input = block && block.input;
+    if (!input || typeof input !== 'object') return null;
+    var hunks = [];
+    if (typeof input.old_string === 'string' && typeof input.new_string === 'string') {
+      hunks.push({ old: input.old_string, now: input.new_string });
+    } else if (Array.isArray(input.edits)) {
+      input.edits.forEach(function (e) {
+        if (e && typeof e.old_string === 'string' && typeof e.new_string === 'string') hunks.push({ old: e.old_string, now: e.new_string });
+      });
+    } else if (typeof input.content === 'string' && typeof input.file_path === 'string') {
+      hunks.push({ old: '', now: input.content });
+    }
+    if (!hunks.length) return null;
+    return { file: typeof input.file_path === 'string' ? input.file_path : '', hunks: hunks };
+  }
+
+  // Lines of `a` and `b` as [op, line] pairs by longest common subsequence.
+  // Quadratic, so past a few hundred lines a side it falls back to "all of a
+  // removed, all of b added", which is still true and still readable.
+  function lineDiff(a, b) {
+    var x = a === '' ? [] : a.split('\n');
+    var y = b === '' ? [] : b.split('\n');
+    var out = [];
+    if (x.length * y.length > 250000) {
+      x.forEach(function (l) { out.push(['del', l]); });
+      y.forEach(function (l) { out.push(['add', l]); });
+      return out;
+    }
+    var n = x.length, m = y.length, i, j;
+    var table = new Array(n + 1);
+    for (i = 0; i <= n; i++) { table[i] = new Array(m + 1); table[i][m] = 0; }
+    for (j = 0; j <= m; j++) table[n][j] = 0;
+    for (i = n - 1; i >= 0; i--) {
+      for (j = m - 1; j >= 0; j--) {
+        table[i][j] = x[i] === y[j] ? table[i + 1][j + 1] + 1 : Math.max(table[i + 1][j], table[i][j + 1]);
+      }
+    }
+    i = 0; j = 0;
+    while (i < n && j < m) {
+      if (x[i] === y[j]) { out.push(['ctx', x[i]]); i++; j++; }
+      else if (table[i + 1][j] >= table[i][j + 1]) { out.push(['del', x[i]]); i++; }
+      else { out.push(['add', y[j]]); j++; }
+    }
+    while (i < n) { out.push(['del', x[i++]]); }
+    while (j < m) { out.push(['add', y[j++]]); }
+    return out;
+  }
+
+  // The diff as a <pre> of spans, text nodes only: the strings are an agent's
+  // and are never parsed as markup.
+  function diffElement(edit) {
+    var pre = document.createElement('pre');
+    pre.className = 'diff';
+    if (edit.file) pre.appendChild(text('span', 'file', edit.file + '\n'));
+    var marks = { del: '- ', add: '+ ', ctx: '  ' };
+    edit.hunks.forEach(function (hunk, index) {
+      if (index > 0) pre.appendChild(text('span', 'file', '…\n'));
+      lineDiff(hunk.old, hunk.now).forEach(function (pair) {
+        pre.appendChild(text('span', pair[0], marks[pair[0]] + pair[1] + '\n'));
+      });
+    });
+    return pre;
   }
 
   function callFirst(call) {
@@ -1171,6 +1328,8 @@
     callBody.appendChild(head);
     var input = callInput(call);
     if (input) callBody.appendChild(text('code', 'cmd', input));
+    var edit = callEdit(call);
+    if (edit) callBody.appendChild(diffElement(edit));
     var stamps = callStamps(call);
     if (stamps) callBody.appendChild(text('div', 'stamps', stamps));
     if (call.result && call.result.text) callBody.appendChild(block(call.result.text, 6));
@@ -1228,6 +1387,7 @@
     badge(el.link, 'connecting');
     el.pairing.hidden = true;
     el.unpair.hidden = false;
+    syncNotifyButton();
     // A device paired by `/remote-control` was handed one conversation, and
     // the server told it which at pairing. Open it straight away; the summary
     // fills in from the first state poll.
@@ -1251,6 +1411,7 @@
       closeConversation();
       forgetDevice('unpaired on this device. Run `warpctrl pair show` and scan again to come back.');
     });
+    el.notify.addEventListener('click', askToNotify);
     // Back goes through history so the phone's own gesture and the button are
     // one path; `popstate` is where the view actually closes.
     el.back.addEventListener('click', function () { history.back(); });

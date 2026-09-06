@@ -145,12 +145,56 @@ impl<'a> Call<'a> {
             if let Some(command) = input.get("command").and_then(Value::as_str) {
                 return Some(command.to_owned());
             }
+            // An edit is drawn as a diff by `edit`; its input line is the file.
+            if self.edit().is_some() {
+                return input
+                    .get("file_path")
+                    .and_then(Value::as_str)
+                    .map(str::to_owned);
+            }
             return serde_json::to_string(input).ok();
         }
         self.started
             .or(self.asked)
             .and_then(|row| row.raw.get("tool_input_preview").and_then(Value::as_str))
             .map(str::to_owned)
+    }
+
+    /// An edit tool's input as hunks (2026-09-06): Claude Code's `Edit`
+    /// carries `old_string`/`new_string`, `MultiEdit` a list of them, `Write`
+    /// the whole new content. Two strings side by side are a diff drawn
+    /// badly; this draws it as one. Only from the harness's own `tool_use`
+    /// block, since the ACP path writes no input to Warp's log.
+    fn edit(&self) -> Option<Edit> {
+        let input = self
+            .used
+            .and_then(|row| tool_use_block(row, self.id))?
+            .get("input")?;
+        let string =
+            |value: &Value, key: &str| value.get(key).and_then(Value::as_str).map(str::to_owned);
+        let mut hunks = Vec::new();
+        if let (Some(old), Some(new)) = (string(input, "old_string"), string(input, "new_string")) {
+            hunks.push((old, new));
+        } else if let Some(edits) = input.get("edits").and_then(Value::as_array) {
+            for edit in edits {
+                if let (Some(old), Some(new)) =
+                    (string(edit, "old_string"), string(edit, "new_string"))
+                {
+                    hunks.push((old, new));
+                }
+            }
+        } else if let (Some(content), Some(_)) =
+            (string(input, "content"), string(input, "file_path"))
+        {
+            hunks.push((String::new(), content));
+        }
+        if hunks.is_empty() {
+            return None;
+        }
+        Some(Edit {
+            file: string(input, "file_path").unwrap_or_default(),
+            hunks,
+        })
     }
 
     /// The call's earliest stamp, which is where it is drawn.
@@ -175,6 +219,79 @@ impl<'a> Call<'a> {
 }
 
 /// The `tool_use` block with this id inside an assistant line.
+/// An edit's input: the file and its (old, new) pairs.
+struct Edit {
+    file: String,
+    hunks: Vec<(String, String)>,
+}
+
+/// One diff line: the mark, and the line without its newline.
+enum DiffLine {
+    Removed(String),
+    Added(String),
+    Kept(String),
+}
+
+impl Edit {
+    /// Line by line, in order, hunks separated by `None`.
+    fn lines(&self) -> Vec<Option<DiffLine>> {
+        let mut out = Vec::new();
+        for (index, (old, new)) in self.hunks.iter().enumerate() {
+            if index > 0 {
+                out.push(None);
+            }
+            let diff = similar::TextDiff::from_lines(old.as_str(), new.as_str());
+            for change in diff.iter_all_changes() {
+                let line = change.value().trim_end_matches('\n').to_owned();
+                out.push(Some(match change.tag() {
+                    similar::ChangeTag::Delete => DiffLine::Removed(line),
+                    similar::ChangeTag::Insert => DiffLine::Added(line),
+                    similar::ChangeTag::Equal => DiffLine::Kept(line),
+                }));
+            }
+        }
+        out
+    }
+
+    /// The text form: `-`/`+`/space marks, one line each.
+    fn text(&self) -> String {
+        let mut out = String::new();
+        for line in self.lines() {
+            let _ = match line {
+                None => writeln!(out, "  …"),
+                Some(DiffLine::Removed(line)) => writeln!(out, "- {line}"),
+                Some(DiffLine::Added(line)) => writeln!(out, "+ {line}"),
+                Some(DiffLine::Kept(line)) => writeln!(out, "  {line}"),
+            };
+        }
+        out
+    }
+
+    /// The HTML form: a `<pre class="diff">` of spans, everything escaped.
+    fn html(&self) -> String {
+        let mut out = String::from("<pre class=\"diff\">");
+        if !self.file.is_empty() {
+            let _ = write!(out, "<span class=\"file\">{}</span>\n", esc(&self.file));
+        }
+        for line in self.lines() {
+            let _ = match line {
+                None => write!(out, "<span class=\"file\">…</span>\n"),
+                Some(DiffLine::Removed(line)) => {
+                    write!(out, "<span class=\"del\">- {}</span>\n", esc(&line))
+                }
+                Some(DiffLine::Added(line)) => {
+                    write!(out, "<span class=\"add\">+ {}</span>\n", esc(&line))
+                }
+                Some(DiffLine::Kept(line)) => {
+                    write!(out, "<span class=\"ctx\">  {}</span>\n", esc(&line))
+                }
+            };
+        }
+        out.push_str("</pre>");
+        out
+    }
+}
+
 fn tool_use_block<'a>(row: &'a Row, id: &str) -> Option<&'a Value> {
     row.raw
         .pointer("/message/content")?
@@ -458,6 +575,9 @@ pub(super) fn render_text(trace: &Trace) -> String {
                 if let Some(input) = call.input() {
                     let _ = write!(body, " {}", folded(&input, RESULT_LINES));
                 }
+                if let Some(edit) = call.edit() {
+                    let _ = write!(body, "\n{}", edit.text().trim_end_matches('\n'));
+                }
                 let _ = write!(body, "\n{} {}", state_mark(state), state_word(state));
                 if let Some(decision) = decision(&call) {
                     let _ = write!(body, " · {decision}");
@@ -525,6 +645,7 @@ main{margin-top:1.5rem}
 .badge{font:.75rem var(--mono);padding:0 .35rem;border-radius:3px;border:1px solid currentColor;margin-left:.4rem}
 .state-done .badge{color:var(--ok)}.state-failed .badge{color:var(--bad)}.state-denied .badge{color:var(--den)}.state-unanswered .badge,.state-open .badge{color:var(--dim)}
 .stamps{font:.75rem var(--mono);color:var(--dim);margin:.15rem 0}
+.diff .del{color:var(--bad)}.diff .add{color:var(--ok)}.diff .ctx,.diff .file{color:var(--dim)}
 pre{margin:.3rem 0 0;font:.8rem var(--mono);white-space:pre-wrap;word-break:break-word;background:color-mix(in srgb,var(--fg) 5%,transparent);padding:.4rem .6rem;border-radius:4px;max-height:24rem;overflow:auto}
 details summary{cursor:pointer;color:var(--dim);font-size:.85rem}
 .boundary{border-top:2px dashed var(--h);margin:1rem 0 .5rem;padding-top:.3rem;color:var(--h);font-size:.85rem;text-align:center}
@@ -649,6 +770,9 @@ pub(super) fn render_html(trace: &Trace) -> String {
                     let _ = write!(inner, " <span class=\"label\">{}</span>", esc(&decision));
                 }
                 inner.push_str("</div>");
+                if let Some(edit) = call.edit() {
+                    inner.push_str(&edit.html());
+                }
                 let stamps = stamps(&call);
                 if !stamps.is_empty() {
                     let _ = write!(inner, "<div class=\"stamps\">{}</div>", esc(&stamps));

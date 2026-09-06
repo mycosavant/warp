@@ -73,7 +73,9 @@ use rcgen::{
     BasicConstraints, CertificateParams, DistinguishedName, DnType, ExtendedKeyUsagePurpose, IsCa,
     Issuer, KeyPair, KeyUsagePurpose, SanType,
 };
-use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
+#[cfg(test)]
+use rustls::pki_types::CertificateDer;
+use rustls::pki_types::{PrivateKeyDer, PrivatePkcs8KeyDer};
 use time::OffsetDateTime;
 use tokio::net::TcpListener;
 use tokio_rustls::TlsAcceptor;

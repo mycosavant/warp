@@ -96,6 +96,13 @@
   #trace .label { color:var(--dim); }
   #trace .call .head b { color:var(--hi); }
   #trace .call .cmd { margin-top:.3rem; }
+  /* An edit's input drawn as a diff (2026-09-06): one line per span, text
+     nodes only, the file name above it. */
+  #trace .diff { display:block; margin:.35rem 0 0; padding:.4rem .5rem; background:#0d1117; border:1px solid #30363d; border-radius:6px; white-space:pre-wrap; word-break:break-all; font:inherit; color:var(--fg); }
+  #trace .diff .file { color:var(--dim); }
+  #trace .diff .del { color:var(--block); }
+  #trace .diff .add { color:var(--ok); }
+  #trace .diff .ctx { color:var(--dim); }
   #trace .state { display:inline-block; font-size:11px; border:1px solid #30363d; border-radius:999px; padding:0 .45rem; margin-left:.35rem; color:var(--dim); white-space:nowrap; }
   #trace .call.state-done .state { color:var(--ok); border-color:#238636; }
   #trace .call.state-failed .state, #trace .call.state-denied .state { color:var(--block); border-color:#762a26; }
@@ -119,8 +126,17 @@
   <span class="badge" id="link">connecting</span>
   <span class="spacer"></span>
   <span class="badge" id="clock"></span>
+  <!-- Being told (2026-09-06, foreground only): the Notification API needs a
+       secure context and a permission asked from a tap, so this button is
+       drawn only where both are possible and hidden once granted. Nothing is
+       sent anywhere: the page already holds the events stream, and it posts a
+       notification to the phone's own shade when it is in the background.
+       Web Push, which would reach a locked phone through Google's or Apple's
+       relay, is deliberately not built; remote-control.md records it as an
+       opt-in that does not exist yet. -->
+  <button class="badge" id="notify" hidden>notify me</button>
   <!-- The device token now outlives the tab, so there has to be a way to end it
-       from the device holding it, not only by waiting twelve hours. -->
+       from the device holding it. A control pairing has no clock at all. -->
   <button class="badge" id="unpair" hidden>unpair</button>
 </header>
 
