@@ -198,6 +198,7 @@ pub fn agent_answer(
     instance_id: &Option<InstanceId>,
     decision: Decision,
     params: &serde_json::Value,
+    via: Option<&'static str>,
     ctx: &mut ModelContext<LocalControlBridge>,
 ) -> Result<serde_json::Value, ControlError> {
     let params: AgentApproveParams = serde_json::from_value(params.clone())
@@ -207,7 +208,7 @@ pub fn agent_answer(
     // would never match a pane — so a miss here costs one map lookup and falling
     // through is correct, while the other order would report `no_such_approval`
     // for a request that is sitting right there.
-    if let Some(answered) = answer_acp(instance_id, decision, &params, ctx)? {
+    if let Some(answered) = answer_acp(instance_id, decision, &params, via, ctx)? {
         return Ok(answered);
     }
 
@@ -310,6 +311,7 @@ fn answer_acp(
     instance_id: &Option<InstanceId>,
     decision: Decision,
     params: &AgentApproveParams,
+    via: Option<&'static str>,
     ctx: &mut ModelContext<LocalControlBridge>,
 ) -> Result<Option<serde_json::Value>, ControlError> {
     let _ = ctx;
@@ -357,10 +359,13 @@ fn answer_acp(
             Decision::Deny => crate::ai::acp_agent::registry::Decision::Deny,
         },
         // One door with three things behind it — a local `warpctrl`, the
-        // console, a paired phone — and this handler cannot tell them apart,
-        // because authentication happens upstream and is not threaded here.
-        // Naming the door is the most it can honestly say; see `Surface`.
+        // console, a paired phone — and `Surface` names the door. Since T19
+        // the bridge threads one more fact through: whether the grant was
+        // confined to a conversation, which only a phone paired by
+        // `/remote-control` holds. That goes on the record as `via`, and it
+        // is the most this handler can honestly say about who was there.
         crate::ai::acp_agent::registry::Surface::ControlPlane,
+        via,
     ) {
         // Between the read above and here the turn ended — cancelled, or the
         // agent went away. The question is gone rather than unanswered.
@@ -399,6 +404,7 @@ fn answer_acp(
     _instance_id: &Option<InstanceId>,
     _decision: Decision,
     _params: &AgentApproveParams,
+    _via: Option<&'static str>,
     _ctx: &mut ModelContext<LocalControlBridge>,
 ) -> Result<Option<serde_json::Value>, ControlError> {
     Ok(None)

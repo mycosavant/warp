@@ -79,6 +79,7 @@ fn answered_on_the_panel(decision: registry::Decision) -> registry::Answer {
     registry::Answer {
         decision,
         surface: registry::Surface::Panel,
+        via: None,
     }
 }
 

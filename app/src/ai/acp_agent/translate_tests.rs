@@ -505,7 +505,7 @@ fn a_call_warp_refused_is_drawn_as_denied_not_failed() {
             .kind(ToolKind::Execute)
             .raw_input(serde_json::json!({"command": "rm -rf build"})),
     ));
-    translator.log_permission_replied("approval-1", "call_1", "denied", Some("console"));
+    translator.log_permission_replied("approval-1", "call_1", "denied", Some("console"), None);
     let events = translator.on_update(&SessionUpdate::ToolCallUpdate(ToolCallUpdate::new(
         "call_1",
         ToolCallUpdateFields::new().status(ToolCallStatus::Failed),
@@ -636,7 +636,7 @@ fn a_row_warp_refused_is_swept_to_denied_and_not_to_interrupted() {
             .kind(ToolKind::Execute)
             .raw_input(serde_json::json!({"command": "rm -rf build"})),
     ));
-    translator.log_permission_replied("approval-1", "call_1", "denied", Some("console"));
+    translator.log_permission_replied("approval-1", "call_1", "denied", Some("console"), None);
 
     let rewrites = updates(&translator.end_of_turn());
 
@@ -1313,7 +1313,7 @@ fn every_way_a_permission_question_can_end_is_a_value_on_the_line() {
         translator.open("ses_abc".to_owned());
 
         let call_id = format!("call_p3_{decision}");
-        translator.log_permission_replied("req-1:7", &call_id, decision, answered_by);
+        translator.log_permission_replied("req-1:7", &call_id, decision, answered_by, None);
 
         let line = lines_for(&mut events)
             .into_iter()

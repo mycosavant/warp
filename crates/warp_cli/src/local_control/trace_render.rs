@@ -256,7 +256,12 @@ fn caption(row: &Row) -> (String, Option<&str>) {
         (Record::Warp, "session_agent") => ("agent".to_owned(), text),
         (Record::Warp, "session_mode") => ("mode".to_owned(), text),
         (Record::Warp, "session_model") => ("model".to_owned(), text),
-        (Record::Warp, "session_start" | "prompt_submit") => (String::new(), text),
+        // A prompt from a phone (T19) is labelled so; the words are the
+        // person's own either way.
+        (Record::Warp, "session_start" | "prompt_submit") => (
+            via_label(&row.raw).map(str::to_owned).unwrap_or_default(),
+            text,
+        ),
         // `stop` repeats the prompt as its summary; the state is what matters.
         (Record::Warp, "stop") => (
             "stop".to_owned(),
@@ -313,14 +318,31 @@ fn state_mark(state: State) -> char {
 }
 
 /// Warp's decision on a call, in Warp's words, or nothing.
+///
+/// `via: paired_device` on the line (T19) becomes "from the phone": the door
+/// was the control plane either way, and this is the record saying who was
+/// at it.
 fn decision(call: &Call<'_>) -> Option<String> {
     let replied = call.replied?;
     let decision = replied.raw.get("decision").and_then(Value::as_str)?;
     let by = replied.raw.get("answered_by").and_then(Value::as_str);
-    Some(match by {
+    let mut text = match by {
         Some(by) => format!("Warp: {decision} by {by}"),
         None => format!("Warp: {decision}"),
-    })
+    };
+    if let Some(via) = via_label(&replied.raw) {
+        text.push(' ');
+        text.push_str(via);
+    }
+    Some(text)
+}
+
+/// The stamp for a line that came from a paired phone, or nothing.
+pub(crate) fn via_label(raw: &Value) -> Option<&'static str> {
+    match raw.get("via").and_then(Value::as_str)? {
+        "paired_device" => Some("from the phone"),
+        _ => Some("from another device"),
+    }
 }
 
 /// The stamps from each file, so a reader sees the two clocks side by side.

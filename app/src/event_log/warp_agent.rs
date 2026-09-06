@@ -219,6 +219,7 @@ fn record_action_event(
         plugin_version: None,
         decision: None,
         answered_by: None,
+        via: None,
         can_approve: None,
         applied: true,
     });
@@ -295,6 +296,11 @@ fn record_history_event(
         .current_working_directory()
         .cloned();
     let session_id = conversation_id.to_string();
+    // Left by `agent.prompt` when the prompt came through a grant confined to
+    // this conversation (a phone); see `event_log::set_prompt_origin`.
+    let via = (event_name == "prompt_submit")
+        .then(|| super::take_prompt_origin(&session_id))
+        .flatten();
     super::record(Entry {
         v: None,
         agent: AGENT,
@@ -314,6 +320,7 @@ fn record_history_event(
         plugin_version: None,
         decision: None,
         answered_by: None,
+        via,
         can_approve: None,
         applied: true,
     });

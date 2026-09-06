@@ -45,14 +45,15 @@ fn a_parked_request_is_listed_until_it_is_answered() {
     );
 
     assert!(
-        answer(id, Decision::Deny, Surface::ControlPlane),
+        answer(id, Decision::Deny, Surface::ControlPlane, None),
         "answering a live request works"
     );
     assert_eq!(
         wait.try_recv().ok().flatten(),
         Some(Answer {
             decision: Decision::Deny,
-            surface: Surface::ControlPlane
+            surface: Surface::ControlPlane,
+            via: None,
         })
     );
     assert!(
@@ -80,7 +81,7 @@ fn dropping_the_waiter_stops_advertising_the_request() {
         "nothing is waiting, so nothing is asked"
     );
     assert!(
-        !answer(id, Decision::Deny, Surface::ControlPlane),
+        !answer(id, Decision::Deny, Surface::ControlPlane, None),
         "and a late answer finds nothing rather than landing somewhere"
     );
 }
@@ -93,7 +94,8 @@ fn answering_an_unknown_request_reports_that_it_is_gone() {
     assert!(!answer(
         "registry-never-existed",
         Decision::Deny,
-        Surface::ControlPlane
+        Surface::ControlPlane,
+        None
     ));
 }
 
@@ -111,14 +113,16 @@ fn an_answer_reaches_only_the_request_it_names() {
     assert!(answer(
         "registry-pair-a",
         Decision::Deny,
-        Surface::ControlPlane
+        Surface::ControlPlane,
+        None
     ));
 
     assert_eq!(
         first.try_recv().ok().flatten(),
         Some(Answer {
             decision: Decision::Deny,
-            surface: Surface::ControlPlane
+            surface: Surface::ControlPlane,
+            via: None,
         })
     );
     assert_eq!(
@@ -193,12 +197,13 @@ fn a_reused_key_cannot_make_one_waiter_answer_another() {
         "and nothing has answered it"
     );
 
-    assert!(answer(id, Decision::Deny, Surface::ControlPlane));
+    assert!(answer(id, Decision::Deny, Surface::ControlPlane, None));
     assert_eq!(
         second.try_recv().ok().flatten(),
         Some(Answer {
             decision: Decision::Deny,
-            surface: Surface::ControlPlane
+            surface: Surface::ControlPlane,
+            via: None,
         })
     );
 }
@@ -250,10 +255,14 @@ fn an_answer_carries_the_surface_it_came_from() {
         let id = format!("registry-surface-{index}");
         let (_waiting, mut wait) = park(request(&id));
 
-        assert!(answer(&id, decision, surface));
+        assert!(answer(&id, decision, surface, None));
         assert_eq!(
             wait.try_recv().ok().flatten(),
-            Some(Answer { decision, surface }),
+            Some(Answer {
+                decision,
+                surface,
+                via: None,
+            }),
             "the answer must carry the surface it was given, unchanged"
         );
     }

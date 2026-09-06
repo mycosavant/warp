@@ -137,6 +137,11 @@ impl Surface {
 pub(crate) struct Answer {
     pub decision: Decision,
     pub surface: Surface,
+    /// Who was at the door, when it was not the person at the machine:
+    /// `event_log::VIA_PAIRED_DEVICE` for a phone holding a grant confined to
+    /// this conversation. `surface` names the door; this names the caller.
+    /// Recorded on the `permission_replied` line and nowhere the agent reads.
+    pub(crate) via: Option<&'static str>,
 }
 
 /// One request an agent is blocked on, as the control plane needs to describe
@@ -355,13 +360,25 @@ pub(crate) fn waiting() -> Vec<ParkedRequest> {
 /// cancelled while they were deciding. Both are "the question is gone", and
 /// distinguishing them would mean keeping a record of answered requests for no
 /// one to read.
-pub(crate) fn answer(approval_id: &str, decision: Decision, surface: Surface) -> bool {
+pub(crate) fn answer(
+    approval_id: &str,
+    decision: Decision,
+    surface: Surface,
+    via: Option<&'static str>,
+) -> bool {
     let Some(parked) = registry().remove(approval_id) else {
         return false;
     };
     // The receiver is gone only if the turn ended between the lookup and here,
     // in which case the request is moot and there is nothing to report.
-    parked.answer.send(Answer { decision, surface }).is_ok()
+    parked
+        .answer
+        .send(Answer {
+            decision,
+            surface,
+            via,
+        })
+        .is_ok()
 }
 
 #[cfg(test)]

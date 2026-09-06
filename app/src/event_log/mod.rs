@@ -226,6 +226,20 @@ pub(crate) struct Entry<'a> {
     /// precisely because the value on the same line explains it: nobody
     /// answered, so no surface carried anything.
     pub answered_by: Option<&'a str>,
+    /// What kind of device the prompt or the answer came from, when it was
+    /// not this machine: [`VIA_PAIRED_DEVICE`] for a phone holding a grant
+    /// confined to one conversation by `/remote-control` (T19, 2026-09-06,
+    /// the fourth decision in
+    /// `.fork/decisions/2026-09-06-the-phone-surface-four-decisions.md`).
+    ///
+    /// Beside `answered_by`, not instead of it: that field names the *door*
+    /// (`control_plane`, `panel`), and the door a phone comes through is the
+    /// control plane, the same one `warpctrl` uses. This says who was at it.
+    /// On `prompt_submit` and `permission_replied`; absent everywhere else,
+    /// and absent on those two when the prompt or answer was the person's at
+    /// the machine. The conversation shows a phone's prompt as the person's
+    /// own words; the record is where the origin belongs.
+    pub via: Option<&'a str>,
     /// Whether Warp could have offered a *yes* at all, on a
     /// `permission_request` line.
     ///
@@ -268,6 +282,39 @@ struct Sink {
 }
 
 static SINK: OnceLock<Option<Sink>> = OnceLock::new();
+
+/// The `via` value for a phone paired for one conversation.
+pub(crate) const VIA_PAIRED_DEVICE: &str = "paired_device";
+
+/// Where the next `prompt_submit` of a conversation came from, when a
+/// handler knows and the writer does not.
+///
+/// `prompt_submit` is derived from a conversation-status transition in
+/// `warp_agent.rs`, which has no request to read a grant off; `agent.prompt`
+/// has the grant and no line to write. So the handler leaves a note keyed by
+/// conversation id and the writer takes it when the status turns over.
+/// Taken, not read: a note nobody consumed (the prompt was refused after the
+/// handler set it, say) must not stamp the person's next prompt.
+static PROMPT_ORIGINS: Mutex<Option<HashMap<String, &'static str>>> = Mutex::new(None);
+
+/// Records that the next `prompt_submit` for `conversation_id` came `via`
+/// something other than the person at the machine.
+pub(crate) fn set_prompt_origin(conversation_id: &str, via: &'static str) {
+    let mut origins = PROMPT_ORIGINS
+        .lock()
+        .expect("fork event log mutex poisoned");
+    origins
+        .get_or_insert_with(HashMap::new)
+        .insert(conversation_id.to_owned(), via);
+}
+
+/// Takes the origin left for `conversation_id`'s next prompt, if any.
+pub(crate) fn take_prompt_origin(conversation_id: &str) -> Option<&'static str> {
+    let mut origins = PROMPT_ORIGINS
+        .lock()
+        .expect("fork event log mutex poisoned");
+    origins.as_mut()?.remove(conversation_id)
+}
 
 /// The sequence source.
 ///
@@ -406,6 +453,7 @@ fn hosted_agent_entry(event: &CLIAgentEvent, applied: bool) -> Entry<'_> {
         plugin_version: payload.plugin_version.as_deref(),
         decision: None,
         answered_by: None,
+        via: None,
         can_approve: None,
         applied,
     }

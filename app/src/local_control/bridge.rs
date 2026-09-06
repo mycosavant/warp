@@ -147,6 +147,15 @@ impl LocalControlBridge {
         }) {
             return ResponseEnvelope::error(request.request_id, error);
         }
+        // Who is at the control plane's door, for the record (T19): a grant
+        // confined to a conversation is held only by a phone paired for it by
+        // `/remote-control`, so its prompts and answers are stamped
+        // `via: paired_device` in the event log. A local `warpctrl` and a
+        // watch-paired console hold unconfined grants and are stamped nothing.
+        let via = grant
+            .conversation
+            .is_some()
+            .then_some(crate::event_log::VIA_PAIRED_DEVICE);
         let result = match request.action.kind {
             ActionKind::InstanceList => metadata::instance(&self.instance_id),
             ActionKind::InstanceInspect => metadata::inspect(&self.instance_id, ctx),
@@ -230,6 +239,7 @@ impl LocalControlBridge {
                 &self.instance_id,
                 &request.action.params,
                 &request.target,
+                via,
                 ctx,
             ),
             ActionKind::AgentRead => {
@@ -266,12 +276,14 @@ impl LocalControlBridge {
                 &self.instance_id,
                 approvals::Decision::Allow,
                 &request.action.params,
+                via,
                 ctx,
             ),
             ActionKind::AgentDeny => approvals::agent_answer(
                 &self.instance_id,
                 approvals::Decision::Deny,
                 &request.action.params,
+                via,
                 ctx,
             ),
             // Fork-local: the read surface (`.fork/tickets/` T11.2). Answers

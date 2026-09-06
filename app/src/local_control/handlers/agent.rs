@@ -460,6 +460,7 @@ pub fn agent_prompt(
     instance_id: &Option<InstanceId>,
     params: &serde_json::Value,
     target: &TargetSelector,
+    via: Option<&'static str>,
     ctx: &mut ModelContext<LocalControlBridge>,
 ) -> Result<serde_json::Value, ControlError> {
     let params: AgentPromptParams = serde_json::from_value(params.clone())
@@ -493,6 +494,13 @@ pub fn agent_prompt(
     };
 
     let created = conversation_id.is_none();
+    // The record, not the conversation: the panel shows a phone's prompt as
+    // the person's own words, and the event log's `prompt_submit` says where
+    // it came from (T19). Left here because that line is written from a
+    // status transition that has no request to read; taken by the writer.
+    if let (Some(via), Some(conversation_id)) = (via, conversation_id.as_ref()) {
+        crate::event_log::set_prompt_origin(&conversation_id.to_string(), via);
+    }
     let started = terminal_view.update(ctx, |terminal_view, ctx| {
         terminal_view.start_agent_conversation_from_local_control(
             params.prompt.clone(),

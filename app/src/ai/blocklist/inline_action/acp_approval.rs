@@ -239,6 +239,7 @@ impl TypedActionView for AcpApprovalView {
                         approval_id,
                         registry::Decision::Allow,
                         registry::Surface::Panel,
+                        None,
                     );
                     self.armed = None;
                     ctx.emit(AcpApprovalViewEvent::Answered);
@@ -249,6 +250,7 @@ impl TypedActionView for AcpApprovalView {
                     approval_id,
                     registry::Decision::Deny,
                     registry::Surface::Panel,
+                    None,
                 );
                 self.armed = None;
                 ctx.emit(AcpApprovalViewEvent::Answered);

@@ -423,6 +423,7 @@ pub(crate) fn log(
         plugin_version: None,
         decision: None,
         answered_by: None,
+        via: None,
         can_approve: None,
         applied: true,
     });

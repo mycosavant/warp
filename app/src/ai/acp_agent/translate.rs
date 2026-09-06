@@ -793,6 +793,7 @@ impl Translator {
             plugin_version: None,
             decision: None,
             answered_by: None,
+            via: None,
             can_approve: None,
             applied: true,
         });
@@ -839,6 +840,7 @@ impl Translator {
             plugin_version: None,
             decision: None,
             answered_by: None,
+            via: None,
             can_approve: None,
             applied: true,
         });
@@ -895,6 +897,7 @@ impl Translator {
             plugin_version: None,
             decision: None,
             answered_by: None,
+            via: None,
             can_approve: Some(request.approve_selects.is_some()),
             applied: true,
         });
@@ -919,6 +922,7 @@ impl Translator {
         tool_call_id: &str,
         decision: &str,
         answered_by: Option<&str>,
+        via: Option<&str>,
     ) {
         // Remembered for the row, not decided here: the answer has already
         // gone to the agent, and this only changes how its failure is drawn.
@@ -949,6 +953,7 @@ impl Translator {
             plugin_version: None,
             decision: Some(decision),
             answered_by,
+            via,
             can_approve: None,
             applied: true,
         });

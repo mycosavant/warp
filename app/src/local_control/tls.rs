@@ -182,7 +182,8 @@ pub(super) fn for_address_in(
 }
 
 /// The authority's DER, for a client that wants to trust it.
-pub(super) fn ca_certificate_der(pem: &str) -> anyhow::Result<CertificateDer<'static>> {
+#[cfg(test)]
+fn ca_certificate_der(pem: &str) -> anyhow::Result<CertificateDer<'static>> {
     let parsed = pem::parse(pem).context("the authority's PEM")?;
     Ok(CertificateDer::from(parsed.into_contents()))
 }

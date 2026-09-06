@@ -136,6 +136,7 @@ pub(crate) fn record(context: &TurnContext, event: &ToolEvent) {
         plugin_version: None,
         decision: None,
         answered_by: None,
+        via: None,
         can_approve: None,
         applied: true,
     });

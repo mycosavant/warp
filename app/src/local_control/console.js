@@ -1024,7 +1024,16 @@
   function callDecision(call) {
     if (!call.replied || !call.replied.raw || !call.replied.raw.decision) return null;
     var by = call.replied.raw.answered_by;
-    return 'Warp: ' + call.replied.raw.decision + (by ? ' by ' + by : '');
+    var via = viaLabel(call.replied.raw);
+    return 'Warp: ' + call.replied.raw.decision + (by ? ' by ' + by : '') + (via ? ' ' + via : '');
+  }
+
+  // `via: paired_device` on a Warp line (T19) is the record saying the prompt
+  // or the answer came from a phone paired for this conversation. The door
+  // was the control plane either way; this names who was at it.
+  function viaLabel(raw) {
+    if (!raw || !raw.via) return null;
+    return raw.via === 'paired_device' ? 'from the phone' : 'from another device';
   }
 
   function callStamps(call) {
@@ -1096,6 +1105,7 @@
     };
     if (key === 'warp stop') return { label: 'stop', text: row.raw && row.raw.error_type ? String(row.raw.error_type) : null };
     if (row.kind === 'unparsed') return { label: 'unparsed line', text: row.text };
+    if (key === 'warp prompt_submit' || key === 'warp session_start') return { label: viaLabel(row.raw) || '', text: row.text };
     if (labels[key] !== undefined) return { label: labels[key], text: row.text };
     return { label: row.kind, text: row.text };
   }

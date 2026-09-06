@@ -1421,7 +1421,7 @@ fn wait_for_a_person(
         let settled = answered_note(&answer);
         // Read before `outcome_for` consumes the answer, and the ordering is
         // load-bearing rather than incidental.
-        let (decision, answered_by) = replied_fields(&answer);
+        let (decision, answered_by, via) = replied_fields(&answer);
         // Counted here rather than in `registry::answer`, because a request that
         // is never answered at all is also not a refusal -- the `unanswered` arm
         // must not inflate this. See `liveness::REFUSALS` for what the number is
@@ -1448,7 +1448,13 @@ fn wait_for_a_person(
             // exists even if delivering it fails -- and a failure to deliver is
             // the agent having gone away, which is precisely when the record is
             // the only thing left saying what was decided.
-            translator.log_permission_replied(&approval_id, &tool_call_id, decision, answered_by);
+            translator.log_permission_replied(
+                &approval_id,
+                &tool_call_id,
+                decision,
+                answered_by,
+                via,
+            );
             translator.note(settled)
         });
         let _ = tx.unbounded_send(Ok(event));
@@ -1499,7 +1505,7 @@ fn answered_note(
 /// carried anything.
 fn replied_fields(
     answer: &Result<registry::Answer, oneshot::Canceled>,
-) -> (&'static str, Option<&'static str>) {
+) -> (&'static str, Option<&'static str>, Option<&'static str>) {
     match answer {
         Ok(answer) => (
             match answer.decision {
@@ -1507,8 +1513,9 @@ fn replied_fields(
                 registry::Decision::Deny => "denied",
             },
             Some(answer.surface.as_str()),
+            answer.via,
         ),
-        Err(_) => ("unanswered", None),
+        Err(_) => ("unanswered", None, None),
     }
 }
 
@@ -1572,7 +1579,7 @@ impl Drop for AsksNothingMore {
         let Ok(mut translator) = translator.lock() else {
             return;
         };
-        translator.log_permission_replied(&approval_id, &tool_call_id, "unanswered", None);
+        translator.log_permission_replied(&approval_id, &tool_call_id, "unanswered", None, None);
     }
 }
 
