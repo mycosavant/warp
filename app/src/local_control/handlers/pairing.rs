@@ -11,15 +11,66 @@
 //! generic over a URL, which is the whole of what this needed. Rendering here
 //! reuses it; rendering in `warp_cli` would have meant a second `qrcode`
 //! dependency and a second implementation of the same thing.
+use ::local_control::protocol::ControlPairParams;
 use ::local_control::{ControlError, ErrorCode};
+use warpui::{ModelContext, SingletonEntity};
 
+use crate::ai::blocklist::history_model::BlocklistAIHistoryModel;
 use crate::drive::sharing::qr_code::{QUIET_ZONE_MODULES, qr_matrix_for_url};
+use crate::local_control::LocalControlBridge;
 use crate::local_control::bridge::PairingContext;
 use crate::local_control::console::CONSOLE_PATH;
-use crate::local_control::pairing::{pair_url, pairable_actions};
+use crate::local_control::handlers::agent::parse_conversation_id;
+use crate::local_control::pairing::{Scope, pair_url};
 
 /// Answers `control.pair`.
-pub fn control_pair(pairing: Option<&PairingContext>) -> Result<serde_json::Value, ControlError> {
+pub fn control_pair(
+    pairing: Option<&PairingContext>,
+    params: &serde_json::Value,
+    ctx: &mut ModelContext<LocalControlBridge>,
+) -> Result<serde_json::Value, ControlError> {
+    let params: ControlPairParams = serde_json::from_value(params.clone())
+        .map_err(|error| ControlError::new(ErrorCode::InvalidParams, error.to_string()))?;
+    // A code for a conversation that does not exist would be a device paired
+    // to nothing, and the person minting it is at the machine and can be told.
+    let scope = match params.conversation_id {
+        None => Scope::Watch,
+        Some(raw) => {
+            let id = parse_conversation_id(&raw)?;
+            if BlocklistAIHistoryModel::as_ref(ctx)
+                .conversation(&id)
+                .is_none()
+            {
+                return Err(ControlError::new(
+                    ErrorCode::MissingTarget,
+                    format!(
+                        "no live conversation `{raw}` to hand over; `agent.list` reports the ones \
+                         that exist right now"
+                    ),
+                ));
+            }
+            Scope::Control {
+                conversation_id: raw,
+            }
+        }
+    };
+    let result = mint(pairing, scope)?;
+    serde_json::to_value(result).map_err(|err| {
+        ControlError::with_details(
+            ErrorCode::Internal,
+            "failed to serialize pairing result",
+            err.to_string(),
+        )
+    })
+}
+
+/// Mints a code under a scope and builds what a person is shown. Shared with
+/// the panel's `/remote-control` chip, which arrives with a conversation it
+/// already knows exists.
+pub(crate) fn mint(
+    pairing: Option<&PairingContext>,
+    scope: Scope,
+) -> Result<::local_control::PairingResult, ControlError> {
     let Some(pairing) = pairing else {
         // The common case by far, since the wide bind is off by default. Say
         // which variable turns it on rather than reporting a bare refusal: this
@@ -34,28 +85,23 @@ pub fn control_pair(pairing: Option<&PairingContext>) -> Result<serde_json::Valu
         let mut pairings = pairing.pairings.lock().map_err(|_| {
             ControlError::new(ErrorCode::Internal, "local-control pairing is unavailable")
         })?;
-        pairings.issue_code(chrono::Utc::now())
+        pairings.issue_code(chrono::Utc::now(), scope.clone())
     };
     // **The QR points at the console, not at `/v1/pair` (T12.1).** It pointed at
     // the route until a page existed, and that URL was never scannable: `/v1/pair`
     // is `POST`-only, so a phone following it got `405` and a person got a dead
     // QR. The code still ends up POSTed there — by the page, from the fragment.
     let url = pair_url(&pairing.origin, CONSOLE_PATH, &issued.code);
-    let result = ::local_control::PairingResult {
+    Ok(::local_control::PairingResult {
         qr: render_qr(&url)?,
         url,
         expires_at: issued.expires_at,
-        actions: pairable_actions()
+        actions: scope
+            .actions()
             .iter()
             .map(|action| action.as_str().to_owned())
             .collect(),
-    };
-    serde_json::to_value(result).map_err(|err| {
-        ControlError::with_details(
-            ErrorCode::Internal,
-            "failed to serialize pairing result",
-            err.to_string(),
-        )
+        conversation_id: scope.conversation().map(str::to_owned),
     })
 }
 

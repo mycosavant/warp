@@ -537,3 +537,43 @@ fn the_record_is_folded_with_elements_and_never_parsed_as_markup() {
         "…and the folded text is a text node"
     );
 }
+
+/// A device paired by `/remote-control` (2026-09-05) may prompt the one
+/// conversation it was handed. The box is drawn from the action list the
+/// server returned, the same way Yes is, and the prompt is composed in one
+/// place with the conversation the view is on -- which the server then checks
+/// against the grant, so the page being wrong about which conversation is open
+/// cannot reach another.
+#[test]
+fn a_prompt_is_composed_once_with_the_conversation_the_view_is_on() {
+    assert_eq!(
+        executable_lines_mentioning(CONSOLE_SCRIPT, "control(PROMPT,"),
+        vec!["    control(PROMPT, { prompt: prompt, conversation_id: mine.id })"],
+        "one place sends a prompt, and it names the conversation"
+    );
+    assert!(
+        CONSOLE_SCRIPT.contains("el.promptForm.hidden = !can(PROMPT);"),
+        "the box is drawn behind the device's capability"
+    );
+    // The `agent.prompt` action name appears once, as the constant: a second
+    // literal would be a second path to prompting that the capability check
+    // does not cover.
+    assert_eq!(
+        executable_lines_mentioning(CONSOLE_SCRIPT, "'agent.prompt'").len(),
+        1
+    );
+}
+
+/// A device handed one conversation opens it at start and has no home page to
+/// go back to: the server filters every read it makes to that conversation.
+#[test]
+fn a_handed_over_device_lands_on_its_conversation() {
+    assert!(
+        CONSOLE_SCRIPT.contains("if (device && device.conversation_id && !viewing) {"),
+        "a confined device opens its conversation when it starts"
+    );
+    assert!(
+        CONSOLE_SCRIPT.contains("el.back.hidden = !!(device && device.conversation_id);"),
+        "…and is not offered a back button to a list of one"
+    );
+}

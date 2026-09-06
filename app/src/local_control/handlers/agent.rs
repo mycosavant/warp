@@ -471,7 +471,26 @@ pub fn agent_prompt(
         ));
     }
     let conversation_id = resolve_conversation(&params, ctx)?;
-    let terminal_view = terminal_view_for(ActionKind::AgentPrompt, target, ctx)?;
+    // A named conversation is continued in the pane that holds it, not in
+    // whatever pane the target selector resolves to. Before 2026-09-05 the
+    // target won, which was harmless from a CLI that addressed the active pane
+    // and wrong for a phone: a `/remote-control` prompt arrives with no target
+    // and the person may be looking at another pane entirely. The target still
+    // decides when the conversation has no pane open.
+    let owning_pane = conversation_id.as_ref().and_then(|id| {
+        let locations = surface_locations(ctx);
+        BlocklistAIHistoryModel::as_ref(ctx)
+            .terminal_surface_id_for_conversation(id)
+            .and_then(|surface| {
+                locations
+                    .get(&surface)
+                    .map(|location| location.terminal_view.clone())
+            })
+    });
+    let terminal_view = match owning_pane {
+        Some(terminal_view) => terminal_view,
+        None => terminal_view_for(ActionKind::AgentPrompt, target, ctx)?,
+    };
 
     let created = conversation_id.is_none();
     let started = terminal_view.update(ctx, |terminal_view, ctx| {

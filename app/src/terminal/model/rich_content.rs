@@ -9,6 +9,8 @@ pub enum RichContentType {
     AgentViewZeroState,
     TerminalViewZeroState,
     PluginInstructionsBlock,
+    /// Fork: the QR `/remote-control` shows (`remote_control_block.rs`).
+    RemoteControlBlock,
 }
 
 impl RichContentType {

@@ -1667,7 +1667,10 @@ paired console — eight if `WARP_FORK_REMOTE_APPROVE` is set, which adds
 `agent.cancel` and updated the module's own docs without updating this file.
 The seventh is `agent.trace` (2026-09-05), the conversation's record for the
 console's live view, and the widest read a phone gets; the argument is beside
-the entry in `pairing.rs`.
+the entry in `pairing.rs`. **And a code minted for one conversation buys two
+more, `agent.prompt` and `agent.approve`, confined to it on the grant** --
+the fork's `/remote-control`, `.fork/docs/remote-control.md`; the watch list
+above is what `pair show` without `--conversation` still mints.
 **Read the count off `PAIRABLE_ACTIONS` in `app/src/local_control/pairing.rs`,
 never off this sentence** — the same rule this file already states for the 114,
 and for the same reason.

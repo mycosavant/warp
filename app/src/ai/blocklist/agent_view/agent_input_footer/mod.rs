@@ -1552,6 +1552,12 @@ impl AgentInputFooter {
                 if !enabled {
                     return None;
                 }
+                // Fork: a CLI agent in a pane is not a Warp conversation, so the
+                // fork's remote control has nothing to hand over here -- and
+                // Claude Code in a pane has a `/remote-control` of its own.
+                if crate::fork::is_active() {
+                    return None;
+                }
 
                 let button = if shared_status.is_sharer() {
                     &self.stop_remote_control_button
@@ -2100,6 +2106,23 @@ impl AgentInputFooter {
     /// user is anonymous or logged out, since session sharing requires a
     /// real account.
     fn sync_remote_control_button(&self, ctx: &mut ViewContext<Self>) {
+        // Fork: the chip means the fork's pairing, which needs no account. T19
+        // recorded this read as the one call site the account bypass
+        // deliberately left alone, because it decided whether to talk to
+        // Warp's server; under fork policy it no longer does. Never disabled:
+        // what it does need, a wide listener, is a fact of the running
+        // instance that the click reports as a toast naming the variable,
+        // which is a better place for that sentence than a greyed chip.
+        if crate::fork::is_active() {
+            self.start_remote_control_button.update(ctx, |button, ctx| {
+                button.set_disabled(false, ctx);
+                button.set_tooltip(
+                    Some("Hand this conversation to a phone (needs WARP_FORK_CONTROL_BIND)"),
+                    ctx,
+                );
+            });
+            return;
+        }
         let login_required = AuthStateProvider::as_ref(ctx)
             .get()
             .is_anonymous_or_logged_out();
@@ -2112,6 +2135,17 @@ impl AgentInputFooter {
             button.set_disabled(login_required, ctx);
             button.set_tooltip(Some(tooltip), ctx);
         });
+    }
+
+    /// Fork: which of the two remote-control chips to draw. Upstream reads
+    /// the shared-session status; the fork's remote control is a pairing
+    /// scoped to the pane's conversation, so it reads that instead.
+    fn fork_remote_control_active(&self, app: &AppContext) -> bool {
+        BlocklistAIHistoryModel::as_ref(app)
+            .active_conversation(self.terminal_view_id)
+            .is_some_and(|conversation| {
+                crate::local_control::remote_control::is_active(&conversation.id().to_string(), app)
+            })
     }
 
     fn update_context_window_button(&mut self, ctx: &mut ViewContext<Self>) {
@@ -2285,7 +2319,14 @@ impl AgentInputFooter {
                 if !enabled {
                     return None;
                 }
-                let button = if shared_status.is_sharer() {
+                // Fork: the chip's state is the pairing's, not the sharing
+                // server's (`fork_remote_control_active`).
+                let active = if crate::fork::is_active() {
+                    self.fork_remote_control_active(app)
+                } else {
+                    shared_status.is_sharer()
+                };
+                let button = if active {
                     &self.stop_remote_control_button
                 } else {
                     &self.start_remote_control_button
@@ -2665,9 +2706,13 @@ impl TypedActionView for AgentInputFooter {
             }
             AgentInputFooterAction::StartRemoteControl => {
                 ctx.emit(AgentInputFooterEvent::StartRemoteControl);
+                // Fork: the chip reads the pairing state at render, and the
+                // event above is what changes it; ask for a render after it.
+                ctx.notify();
             }
             AgentInputFooterAction::StopRemoteControl => {
                 ctx.emit(AgentInputFooterEvent::StopRemoteControl);
+                ctx.notify();
             }
             AgentInputFooterAction::OpenCodingAgentSettings => {
                 #[cfg(not(target_family = "wasm"))]

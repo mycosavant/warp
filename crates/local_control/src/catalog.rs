@@ -74,6 +74,7 @@ pub enum ActionParameterSpec {
     DriveObjectCreate,
     DriveObjectTrash,
     RemoteWslConnect,
+    ControlPair,
 }
 
 /// Typed result contract for a catalog action.
@@ -455,7 +456,9 @@ define_action_catalog! {
     // `/v1/pair` instead. The split is the same one `events.subscribe` makes for
     // a different reason.
     control {
-        ControlPair => { name: "control.pair", status: Implemented, target: Instance, params: None, result: Pairing },
+        // `params` since 2026-09-05: an optional conversation id mints a code
+        // scoped to driving that one conversation (the fork's `/remote-control`).
+        ControlPair => { name: "control.pair", status: Implemented, target: Instance, params: ControlPair, result: Pairing },
     }
 
     // Fork-local (`.fork/tickets/`, I16). Warp's remote-development stack has

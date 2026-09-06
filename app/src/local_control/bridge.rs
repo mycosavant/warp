@@ -9,6 +9,7 @@ use ::local_control::{
 };
 use warpui::{Entity, ModelContext, SingletonEntity};
 
+use crate::local_control::confine;
 use crate::local_control::handlers::{
     agent, app_state, approvals, close, drive_objects, drive_sync, events, main_pane, metadata,
     metadata_config, pairing, remote_wsl, settings_surfaces, trace, visor,
@@ -70,6 +71,12 @@ impl LocalControlBridge {
         self.control_origin = Some(origin);
     }
 
+    /// The pairing state, for the panel's `/remote-control` chip, which mints
+    /// and revokes codes from the main thread without going through a request.
+    pub(super) fn pairing(&self) -> Option<&PairingContext> {
+        self.pairing.as_ref()
+    }
+
     /// Installs the pairing state and wide address, or clears both (T11.4).
     ///
     /// Takes both halves at once because neither is usable alone: a map with no
@@ -113,6 +120,14 @@ impl LocalControlBridge {
             return ResponseEnvelope::error(request.request_id, error);
         }
         if let Err(error) = validate_action_target(request.action.kind, &request.target) {
+            return ResponseEnvelope::error(request.request_id, error);
+        }
+        // A grant confined to one conversation (a device paired by
+        // `/remote-control`) may name that conversation and no other; see
+        // `confine.rs`. Every other grant passes through untouched.
+        if let Err(error) = confine::ensure_within(&request.action, &grant, |approval_id| {
+            approvals::conversation_of_approval(approval_id)
+        }) {
             return ResponseEnvelope::error(request.request_id, error);
         }
         let result = match request.action.kind {
@@ -251,7 +266,9 @@ impl LocalControlBridge {
             // Fork-local: the wide bind's front door (`.fork/tickets/` T11.4).
             // Answers with a code to *show*; redeeming it is a route, because a
             // device that has not paired yet cannot invoke an action.
-            ActionKind::ControlPair => pairing::control_pair(self.pairing.as_ref()),
+            ActionKind::ControlPair => {
+                pairing::control_pair(self.pairing.as_ref(), &request.action.params, ctx)
+            }
             ActionKind::SlashList => agent::slash_list(&self.instance_id, &request.target, ctx),
             ActionKind::SlashRun => agent::slash_run(
                 &self.instance_id,
@@ -321,7 +338,10 @@ impl LocalControlBridge {
             ActionKind::PaneClose => close::pane_close(&self.instance_id, &request, ctx),
         };
         match result {
-            Ok(data) => ResponseEnvelope::ok(request.request_id, data),
+            Ok(mut data) => {
+                confine::confine_result(request.action.kind, &mut data, &grant);
+                ResponseEnvelope::ok(request.request_id, data)
+            }
             Err(error) => ResponseEnvelope::error(request.request_id, error),
         }
     }

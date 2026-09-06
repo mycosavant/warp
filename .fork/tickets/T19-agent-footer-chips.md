@@ -141,13 +141,27 @@ egress deny-list's blind spot is unreachable without an account.
       spot is unreachable while the fork stays accountless. Build the third point
       to make "cannot happen" independent of "has no token"; until then the gate
       is the enforcement and this is the documented refusal.
-- [ ] **May a paired device submit a prompt?** Authority question, not plumbing.
-      Blocks any repoint of the `/remote-control` chip, because without it the
-      chip would open a surface that cannot do what its label says.
-- [ ] **Repoint `ShareSession`'s dispatch under fork policy** once the above is
-      answered — `terminal/view.rs:22356`.
+- [x] **May a paired device submit a prompt?** Answered 2026-09-05 by the
+      maintainer, and the answer is *a device paired for one conversation
+      may*: not the watch scope, which stays as this ticket described it, but
+      a code minted at the machine for one conversation, which buys
+      `agent.prompt` and `agent.approve` confined to it on the grant.
+      `.fork/docs/remote-control.md` carries the argument;
+      `.fork/decisions/2026-09-05-remote-control-is-one-conversation-handed-over.md`
+      the decision.
+- [x] **Repoint `ShareSession`'s dispatch under fork policy.** Done the same
+      day: `use_agent_footer/mod.rs` and `terminal/view.rs`'s
+      `InputEvent::StartRemoteControl` arm both go to
+      `start_fork_remote_control` under fork policy, the login gate in
+      `sync_remote_control_button` is bypassed there, and the chip's
+      start/stop state reads the pairing map. The seam this ticket named as
+      `terminal/view.rs:22356` had moved to 22562 by then; line numbers in a
+      read-only ticket are a fact about the day they were read.
 - [ ] **Hide `HandoffToCloud` under fork policy.** Nothing to point it at.
-- [ ] **Re-run the whole ticket before building.** Read-only as recorded.
+      Still open; board item 5.
+- [x] **Re-run the whole ticket before building.** The one empirical claim,
+      that the chip renders, held; the rest was built against the code as
+      read and then run on Windows (`.fork/runs/remote-control-2026-09-05/`).
 
 ---
 

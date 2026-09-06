@@ -148,7 +148,7 @@ pub(super) const PAIRABLE_ACTIONS: &[ActionKind] = &[
 /// chosen — so it is chosen per machine and defaults to no.
 const REMOTE_APPROVE_ACTION: ActionKind = ActionKind::AgentApprove;
 
-/// The pairable set as it stands right now.
+/// The pairable set as it stands right now, for the watch scope.
 ///
 /// A function rather than a second constant because the answer depends on the
 /// environment, and a client asking "what may I do?" should be told what is true
@@ -159,6 +159,73 @@ pub(super) fn pairable_actions() -> Vec<ActionKind> {
         actions.push(REMOTE_APPROVE_ACTION);
     }
     actions
+}
+
+/// What a pairing code was minted for, and so what the device that spends it
+/// holds (2026-09-05, the fork's `/remote-control`).
+///
+/// **Two scopes, and the second is the whole of the remote-control decision.**
+/// `Watch` is what `warpctrl pair show` has always minted: the read surface
+/// and the safe half of answering, for every agent in the instance. `Control`
+/// is minted for *one conversation*, by a person at the machine who chose that
+/// conversation -- the panel's `/remote-control` chip, or `pair show
+/// --conversation` -- and it buys [`CONTROL_ACTIONS`] on top: `agent.prompt`
+/// for that conversation and `agent.approve` for its requests, which
+/// `REMOTE_APPROVE_ACTION` above argues can never be made safe by mechanism.
+///
+/// What makes it defensible is not the credential, which is the same weak
+/// QR, but two things the watch scope does not have. The *gesture*: the code
+/// exists because someone at the keyboard pointed at a conversation and said
+/// "drive this from my phone", which is a stronger consent than an
+/// environment variable set once and forgotten, and it is Claude Code's own
+/// shape for the same feature. And the *confinement*: every credential the
+/// device mints carries the conversation on its grant
+/// (`CredentialGrant::conversation`), the bridge refuses anything that names
+/// another conversation or none, and the reads it does get are filtered to
+/// that one. A stolen control token drives one conversation the owner already
+/// handed to a phone, for as long as the owner leaves it handed over --
+/// `revoke_conversation` is the stop button, and a Warp restart is the other.
+///
+/// The `Watch` half is unchanged by this, including its `WARP_FORK_REMOTE_APPROVE`
+/// asymmetry: that switch is about a phone answering for *every* agent, which
+/// is a different claim from answering for the one you pointed at.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum Scope {
+    Watch,
+    Control { conversation_id: String },
+}
+
+/// What the control scope adds to the watch scope, for its one conversation.
+///
+/// Not `agent.spawn`, `slash.run`, `input.*` or anything that reaches a pane:
+/// a conversation is the unit the person handed over, and a prompt to it is
+/// the whole of what "drive it" means. `agent.trace`, `agent.cancel`,
+/// `agent.deny` and the reads come from the watch list underneath.
+pub(super) const CONTROL_ACTIONS: &[ActionKind] =
+    &[ActionKind::AgentPrompt, ActionKind::AgentApprove];
+
+impl Scope {
+    /// What a device paired under this scope may obtain credentials for.
+    pub(super) fn actions(&self) -> Vec<ActionKind> {
+        let mut actions = pairable_actions();
+        if let Scope::Control { .. } = self {
+            for action in CONTROL_ACTIONS {
+                if !actions.contains(action) {
+                    actions.push(*action);
+                }
+            }
+        }
+        actions
+    }
+
+    /// The conversation every credential minted under this scope is confined
+    /// to, if any.
+    pub(super) fn conversation(&self) -> Option<&str> {
+        match self {
+            Scope::Watch => None,
+            Scope::Control { conversation_id } => Some(conversation_id),
+        }
+    }
 }
 
 /// How long a displayed pairing code stays spendable.
@@ -203,11 +270,13 @@ pub(super) struct Pairings {
 struct PendingCode {
     code: AuthToken,
     expires_at: DateTime<Utc>,
+    scope: Scope,
 }
 
 struct PairedDevice {
     token: AuthToken,
     expires_at: DateTime<Utc>,
+    scope: Scope,
 }
 
 /// A minted pairing code and its deadline.
@@ -216,10 +285,11 @@ pub(super) struct IssuedCode {
     pub(super) expires_at: DateTime<Utc>,
 }
 
-/// A redeemed device token and its deadline.
+/// A redeemed device token, its deadline, and what it holds.
 pub(super) struct IssuedDevice {
     pub(super) token: AuthToken,
     pub(super) expires_at: DateTime<Utc>,
+    pub(super) scope: Scope,
 }
 
 impl Pairings {
@@ -229,7 +299,7 @@ impl Pairings {
     /// request being refused: asking for a code is how a person retries a
     /// pairing that did not take, and answering that with an error would make
     /// the retry the thing that breaks.
-    pub(super) fn issue_code(&mut self, now: DateTime<Utc>) -> IssuedCode {
+    pub(super) fn issue_code(&mut self, now: DateTime<Utc>, scope: Scope) -> IssuedCode {
         self.prune(now);
         if self.codes.len() >= MAX_PENDING_CODES {
             self.codes.remove(0);
@@ -239,8 +309,41 @@ impl Pairings {
         self.codes.push(PendingCode {
             code: code.clone(),
             expires_at,
+            scope,
         });
         IssuedCode { code, expires_at }
+    }
+
+    /// Ends remote control of one conversation: every code minted for it that
+    /// is still unspent, and every device that spent one, stop working now.
+    ///
+    /// The watch scope is untouched, because a phone that was watching every
+    /// agent was not handed this conversation and loses nothing by its return.
+    /// Returns how many devices were cut off, so the panel can say whether a
+    /// phone was actually connected or only a code had been shown.
+    pub(super) fn revoke_conversation(&mut self, conversation_id: &str) -> usize {
+        let scope = Scope::Control {
+            conversation_id: conversation_id.to_owned(),
+        };
+        self.codes.retain(|pending| pending.scope != scope);
+        let before = self.devices.len();
+        self.devices.retain(|device| device.scope != scope);
+        before - self.devices.len()
+    }
+
+    /// Whether a conversation is handed to a device right now: a live device
+    /// paired for it, or a code for it still waiting to be scanned.
+    pub(super) fn is_controlling(&self, conversation_id: &str, now: DateTime<Utc>) -> bool {
+        let scope = Scope::Control {
+            conversation_id: conversation_id.to_owned(),
+        };
+        self.devices
+            .iter()
+            .any(|device| device.scope == scope && device.expires_at > now)
+            || self
+                .codes
+                .iter()
+                .any(|pending| pending.scope == scope && pending.expires_at > now)
     }
 
     /// Spends a pairing code and returns the device token it buys.
@@ -264,7 +367,7 @@ impl Pairings {
                 "pairing code is not valid",
             ));
         };
-        self.codes.remove(index);
+        let scope = self.codes.remove(index).scope;
         if self.devices.len() >= MAX_PAIRED_DEVICES {
             self.devices.remove(0);
         }
@@ -273,19 +376,25 @@ impl Pairings {
         self.devices.push(PairedDevice {
             token: token.clone(),
             expires_at,
+            scope: scope.clone(),
         });
-        Ok(IssuedDevice { token, expires_at })
+        Ok(IssuedDevice {
+            token,
+            expires_at,
+            scope,
+        })
     }
 
-    /// Confirms a device token is one this instance issued and has not expired.
+    /// Confirms a device token is one this instance issued and has not
+    /// expired, and says what it was paired for.
     pub(super) fn verify_device(
         &mut self,
         offered: &AuthToken,
         now: DateTime<Utc>,
-    ) -> Result<(), ControlError> {
+    ) -> Result<Scope, ControlError> {
         self.prune(now);
-        if self.devices.iter().any(|device| &device.token == offered) {
-            return Ok(());
+        if let Some(device) = self.devices.iter().find(|device| &device.token == offered) {
+            return Ok(device.scope.clone());
         }
         Err(ControlError::new(
             ErrorCode::UnauthorizedLocalClient,
@@ -299,10 +408,14 @@ impl Pairings {
     }
 }
 
-/// Refuses an action a paired device may not have.
+/// Refuses an action a device paired under a scope may not have.
+///
+/// The control scope's extra actions are answered here; the refusal for the
+/// watch scope still names the switch for `agent.approve`, because under that
+/// scope it is still a choice made on this machine.
 ///
 /// Stated as an allowlist rather than a denylist on purpose. A denylist is a
-/// promise to remember every future catalog addition, and the catalog is 114
+/// promise to remember every future catalog addition, and the catalog is 115
 /// entries and grows; the failure mode of forgetting is a new action silently
 /// becoming remotely reachable.
 ///
@@ -310,8 +423,8 @@ impl Pairings {
 /// to 114 — the stale-count hazard `CLAUDE.md` names, in the one comment whose
 /// argument depends on the catalog being large and growing. Read it off
 /// `catalog_has_exactly_*_retained_actions`, never off prose.)
-pub(super) fn ensure_pairable(action: ActionKind) -> Result<(), ControlError> {
-    let allowed = pairable_actions();
+pub(super) fn ensure_pairable_under(action: ActionKind, scope: &Scope) -> Result<(), ControlError> {
+    let allowed = scope.actions();
     if allowed.contains(&action) {
         return Ok(());
     }
@@ -329,8 +442,9 @@ pub(super) fn ensure_pairable(action: ActionKind) -> Result<(), ControlError> {
     // a client author debugging it would otherwise go looking for a bug.
     if action == REMOTE_APPROVE_ACTION {
         message.push_str(
-            ". Saying yes from another device is off unless WARP_FORK_REMOTE_APPROVE is set; \
-             agent.deny needs no such switch",
+            ". Saying yes from another device is off unless WARP_FORK_REMOTE_APPROVE is set, or \
+             the device was paired for one conversation by /remote-control; agent.deny needs no \
+             such switch",
         );
     }
     Err(ControlError::new(

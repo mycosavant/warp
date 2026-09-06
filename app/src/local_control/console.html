@@ -102,6 +102,10 @@
   #trace pre { margin:.3rem 0 0; white-space:pre-wrap; word-break:break-word; font:inherit; color:var(--fg); }
   #trace details > summary { color:var(--dim); cursor:pointer; font-size:11px; }
   #trace-foot { margin:.6rem 0 0; }
+  #conv-prompt { position:sticky; bottom:0; margin:.6rem -.8rem 0; padding:.5rem .8rem env(safe-area-inset-bottom); background:var(--panel); border-top:1px solid var(--line); }
+  #prompt-text { display:block; width:100%; font:inherit; color:var(--hi); background:#0d1117; border:1px solid #30363d; border-radius:6px; padding:.4rem .5rem; resize:vertical; }
+  #conv-prompt .answers { margin-top:.4rem; }
+  #conv-prompt button { flex:0 1 8rem; }
 </style>
 </head>
 <body>
@@ -137,6 +141,15 @@
     <p class="note bad" id="conv-error" hidden></p>
     <ol id="trace"></ol>
     <p class="meta" id="trace-foot"></p>
+    <!-- Drawn only when this device may prompt: a device paired by
+         `/remote-control` for this one conversation. The server confines
+         every credential it holds to that conversation, so this box cannot
+         reach another even if the page were wrong about which is open. -->
+    <form id="conv-prompt" hidden>
+      <textarea id="prompt-text" rows="3" placeholder="prompt this conversation…" autocomplete="off"></textarea>
+      <div class="answers"><button type="submit" class="allow" id="prompt-send">Send</button></div>
+      <p class="note bad" id="prompt-error" hidden></p>
+    </form>
   </section>
 
   <section id="waiting" class="home">

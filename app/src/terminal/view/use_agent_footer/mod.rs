@@ -249,6 +249,16 @@ impl TerminalView {
                 };
                 self.toggle_file_tree(source, cli_agent.map(Into::into), ctx);
             }
+            // Fork: `/remote-control` hands the pane's conversation to a phone
+            // through the fork's own pairing, not to Warp's sharing server.
+            // `remote_control_block.rs`; the argument is in T19 and
+            // `pairing.rs`'s `Scope`.
+            UseAgentToolbarEvent::StartRemoteControl { .. } if crate::fork::is_active() => {
+                self.start_fork_remote_control(ctx);
+            }
+            UseAgentToolbarEvent::StopRemoteControl if crate::fork::is_active() => {
+                self.stop_fork_remote_control(ctx);
+            }
             UseAgentToolbarEvent::StartRemoteControl { scrollback_type } => {
                 self.auto_stop_sharing_on_cli_end =
                     *scrollback_type == SharedSessionScrollbackType::None;

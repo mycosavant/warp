@@ -870,6 +870,22 @@ pub struct AgentReadResult {
     pub included_tool_results: bool,
 }
 
+/// Parameters for `control.pair` (2026-09-05, the fork's `/remote-control`).
+///
+/// Empty is what `warpctrl pair show` has always sent: a code that buys the
+/// watch surface. Naming a conversation mints a code for *driving that one
+/// conversation* from the device that scans it -- `agent.prompt`,
+/// `agent.approve`, `agent.deny`, `agent.cancel` and `agent.trace` for it, and
+/// the reads -- which is Claude Code's remote-control shape: started at the
+/// machine, for one session, on purpose. Every credential the device mints is
+/// confined to that conversation on the grant (`CredentialGrant::conversation`).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ControlPairParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub conversation_id: Option<String>,
+}
+
 /// Result of `events.subscribe` (T11.2): where the stream is, and how long the
 /// credential that opens it is good for.
 ///
@@ -913,6 +929,10 @@ pub struct PairingResult {
     /// `catalog_has_exactly_*_retained_actions`, never off prose — this line
     /// said 110 for four increments after the catalog grew.)
     pub actions: Vec<String>,
+    /// The conversation a scan of this code is confined to, if it was minted
+    /// for one (`ControlPairParams::conversation_id`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub conversation_id: Option<String>,
 }
 
 /// Result of redeeming a pairing code at `POST /v1/pair` (T11.4).
@@ -927,6 +947,11 @@ pub struct PairedDeviceResult {
     /// client can present a truthful capability list rather than discovering the
     /// boundary one refusal at a time.
     pub actions: Vec<String>,
+    /// The one conversation this device is confined to, if its code was
+    /// minted for one. A client that sees it opens that conversation and
+    /// nothing else: the server would refuse anything else anyway.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub conversation_id: Option<String>,
 }
 
 /// Result of `agent.settle` (T8.3).

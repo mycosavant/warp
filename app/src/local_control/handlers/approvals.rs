@@ -475,6 +475,19 @@ fn acp_approvals() -> Vec<PendingApproval> {
     Vec::new()
 }
 
+/// Which conversation a pending request belongs to, for the confinement check
+/// a `/remote-control` device is under (`confine.rs`).
+///
+/// `None` for a pane agent's request, which has no conversation, and for an
+/// id nothing is waiting under; the check treats both as "not this
+/// conversation's", which is the only answer a confined device is owed.
+pub(crate) fn conversation_of_approval(approval_id: &str) -> Option<String> {
+    acp_approvals()
+        .into_iter()
+        .find(|approval| approval.approval_id == approval_id)
+        .and_then(|approval| approval.conversation_id)
+}
+
 /// The pending approval a session represents, if it is waiting on a person.
 ///
 /// Split from the walk so the shape of an approval can be asserted without a

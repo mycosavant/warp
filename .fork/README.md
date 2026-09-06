@@ -23,6 +23,7 @@ changes the answer; the story of the finding stays in the ticket it cites.
 | `docs/wsl.md` | a WSL pane as a remote session: what routes through the server, what still goes over 9p, what to build |
 | `docs/composer.md` | the agent panel as drawn: Warp's notes, tool rows, the approval card, the measured chrome-to-words ratio |
 | `docs/observability.md` | the viewer spec: the harness's own transcript is the record, Warp adds what it alone knows |
+| `docs/remote-control.md` | `/remote-control` the fork's way: one conversation handed to a phone, which may drive it and nothing else |
 | `docs/classifier.md` | a local permission classifier, and why "a model deciding is not consent" does two jobs |
 | `docs/manual.md` | the operating manual, whole: building and launching on each platform, `warpctrl`, Warp Drive, remote access, the gotchas. Large; navigate by heading. To be cut into surface pages one at a time as each is next touched |
 

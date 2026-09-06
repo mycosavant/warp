@@ -556,6 +556,15 @@ fn add_parameter_properties(
                 }),
             );
         }
+        ActionParameterSpec::ControlPair => {
+            properties.insert(
+                "conversation_id".to_owned(),
+                json!({
+                    "type": "string",
+                    "description": "Mint a code scoped to driving this one conversation from the device that scans it (prompt, approve, deny, cancel, trace). Omit for the watch surface.",
+                }),
+            );
+        }
         ActionParameterSpec::AgentTrace => require(
             "conversation_id",
             json!({

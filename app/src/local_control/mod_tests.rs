@@ -554,9 +554,10 @@ fn disabling_scripting_invalidates_existing_grant_and_prevents_new_grants() {
                 pairings: None,
             }
         });
-        let credential = issue_credential(&state, CredentialRequest::new(ActionKind::AppPing))
-            .await
-            .expect("local-control credential should be issued");
+        let credential =
+            issue_credential(&state, CredentialRequest::new(ActionKind::AppPing), None)
+                .await
+                .expect("local-control credential should be issued");
 
         app.update(|ctx| {
             LocalControlSettings::handle(ctx).update(ctx, |settings, ctx| {
@@ -585,7 +586,7 @@ fn disabling_scripting_invalidates_existing_grant_and_prevents_new_grants() {
         .await;
         assert_eq!(response.status(), axum::http::StatusCode::BAD_REQUEST);
 
-        let err = issue_credential(&state, CredentialRequest::new(ActionKind::AppPing))
+        let err = issue_credential(&state, CredentialRequest::new(ActionKind::AppPing), None)
             .await
             .expect_err("disabled scripting should prevent new grants");
         assert_eq!(err.code, ErrorCode::LocalControlDisabled);

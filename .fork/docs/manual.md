@@ -2705,7 +2705,12 @@ app.ping   agent.list   events.subscribe   agent.approvals   agent.deny   agent.
 ```
 
 …plus `agent.approve`, but only if this machine's owner set
-`WARP_FORK_REMOTE_APPROVE` (see *Answering from the couch* below). `agent.trace`
+`WARP_FORK_REMOTE_APPROVE` (see *Answering from the couch* below). **Or scope
+the code to one conversation** with `pair show --conversation <id>`, which is
+what the panel's `/remote-control` chip does: the device that scans it also
+gets `agent.prompt` and `agent.approve`, for that conversation and no other,
+and every read it makes is filtered to it. `.fork/docs/remote-control.md`
+carries the argument. `agent.trace`
 (2026-09-05) is the widest read on the list -- the conversation's record, with
 the prompts, the full tool inputs and results, and the agent's thinking where
 its harness writes it -- and `pairing.rs` carries the argument for it beside
@@ -2948,6 +2953,30 @@ after a Warp restart the icon opens a page that says *"run `warpctrl pair show`
 … then scan the QR"*. That is the intended behaviour and it is why the icon is
 worth having anyway — an app that tells you what to do beats a URL that refuses
 to connect.
+
+### Driving one conversation from a phone — `/remote-control`
+
+The chip in the agent footer, and the slash command, under fork policy
+(2026-09-05; `.fork/docs/remote-control.md` is the page). Click it in a pane
+whose panel has a conversation: a block appears in the pane with a QR, the
+link, when the code dies and what the phone may do, and the link is copied.
+Scan it and the console opens on that conversation with the live record, its
+permission requests, Stop, and a prompt box. *Stop sharing*, the same chip,
+cuts the phone off. Needs the wide listener (`ggwarpdev console`, or
+`WARP_FORK_CONTROL_BIND`); without it the click is a toast naming the variable.
+
+```console
+$ warpctrl pair show --conversation 7f178839-c751-4d19-bdf0-7ea96cc7abe5   # the same code, from the CLI
+…
+a device that scans this may: app.ping, agent.list, events.subscribe, agent.approvals, agent.deny, agent.cancel, agent.trace, agent.prompt, agent.approve
+confined to conversation 7f178839-…: it may drive that one and touch no other
+```
+
+The confinement is on the grant and checked before every handler
+(`confine.rs`): a prompt for another conversation, or for none, is refused;
+an approval answered must be that conversation's; the list and the stream
+show that conversation alone. The chip is hidden for a CLI agent in a pane,
+which is not a Warp conversation and has a `/remote-control` of its own.
 
 ### Answering from the couch — `agent approvals`, `approve`, `deny`
 

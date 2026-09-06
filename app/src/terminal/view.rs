@@ -39,6 +39,7 @@ mod passive_suggestions;
 mod pending_user_query;
 #[cfg(not(target_family = "wasm"))]
 pub(crate) mod plugin_instructions_block;
+pub(crate) mod remote_control_block;
 pub mod rich_content;
 mod shared_session;
 mod shell_terminated_banner;
@@ -22558,6 +22559,12 @@ impl TerminalView {
             }
             InputEvent::OpenShareSessionModal => {
                 self.open_share_session_modal(SharedSessionActionSource::FooterChip, ctx);
+            }
+            // Fork: the `/remote-control` slash command lands here, and under
+            // fork policy it means the fork's pairing, not Warp's sharing
+            // server (`remote_control_block.rs`).
+            InputEvent::StartRemoteControl if crate::fork::is_active() => {
+                self.start_fork_remote_control(ctx);
             }
             InputEvent::StartRemoteControl => {
                 let source = SharedSessionSource::user(

@@ -39,6 +39,12 @@
   // file. Pairable on the argument in `pairing.rs`: a read, wider than the
   // event stream, asked for so a phone can answer "what is it doing".
   var TRACE = 'agent.trace';
+  // What a device paired by `/remote-control` holds and a watching device does
+  // not: a prompt to the one conversation it was handed. The server confines
+  // every credential such a device mints to that conversation, so the box is
+  // drawn from the action list the same way Yes is, and cannot reach another
+  // conversation whatever the page believes is open.
+  var PROMPT = 'agent.prompt';
 
   // How often the conversation view asks for the tail of the record. Fast
   // while the turn runs, because that is what watching means; slow once it
@@ -126,7 +132,11 @@
     convNote: document.getElementById('conv-note'),
     convError: document.getElementById('conv-error'),
     trace: document.getElementById('trace'),
-    traceFoot: document.getElementById('trace-foot')
+    traceFoot: document.getElementById('trace-foot'),
+    promptForm: document.getElementById('conv-prompt'),
+    promptText: document.getElementById('prompt-text'),
+    promptSend: document.getElementById('prompt-send'),
+    promptError: document.getElementById('prompt-error')
   };
 
   var device = null;
@@ -802,7 +812,12 @@
     history.pushState({ conversation: c.conversation_id }, '', location.pathname);
     el.home.forEach(function (section) { section.hidden = true; });
     el.conversation.hidden = false;
-    el.back.hidden = false;
+    // A device handed one conversation has nowhere to go back to: the home
+    // page would list that conversation alone, because the server filters
+    // everything it reads to it.
+    el.back.hidden = !!(device && device.conversation_id);
+    el.promptForm.hidden = !can(PROMPT);
+    el.promptError.hidden = true;
     clear(el.trace);
     el.traceFoot.textContent = '';
     el.convError.hidden = true;
@@ -811,6 +826,31 @@
     renderConversationHead();
     renderConversationApprovals();
     pollTrace();
+  }
+
+  // The one place a prompt is composed: the text, and the conversation the
+  // view is on. Sent through the same credential path as every other action,
+  // where the server checks the conversation against the grant.
+  function sendPrompt() {
+    if (!viewing) return;
+    var mine = viewing;
+    var prompt = el.promptText.value.trim();
+    if (!prompt) return;
+    el.promptSend.disabled = true;
+    el.promptError.hidden = true;
+    control(PROMPT, { prompt: prompt, conversation_id: mine.id })
+      .then(function () {
+        if (viewing !== mine) return;
+        el.promptText.value = '';
+        scheduleTracePoll(300);
+        refreshState();
+      })
+      .catch(function (err) {
+        if (viewing !== mine) return;
+        el.promptError.hidden = false;
+        el.promptError.textContent = String(err.message || err);
+      })
+      .then(function () { el.promptSend.disabled = false; });
   }
 
   function closeConversation() {
@@ -1169,6 +1209,12 @@
     badge(el.link, 'connecting');
     el.pairing.hidden = true;
     el.unpair.hidden = false;
+    // A device paired by `/remote-control` was handed one conversation, and
+    // the server told it which at pairing. Open it straight away; the summary
+    // fills in from the first state poll.
+    if (device && device.conversation_id && !viewing) {
+      openConversation({ conversation_id: device.conversation_id, status: 'connecting' });
+    }
     refreshApprovals();
     refreshState();
     // The backstop, not the mechanism — `scheduleApprovalRefresh` on every event
@@ -1190,6 +1236,10 @@
     // one path; `popstate` is where the view actually closes.
     el.back.addEventListener('click', function () { history.back(); });
     window.addEventListener('popstate', closeConversation);
+    el.promptForm.addEventListener('submit', function (submit) {
+      submit.preventDefault();
+      sendPrompt();
+    });
 
     // Read the fragment once and erase it before anything can render, so the
     // code is never on screen, in history, or in a `Referer`.

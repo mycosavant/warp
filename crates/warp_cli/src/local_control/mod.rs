@@ -1356,9 +1356,25 @@ pub enum PairCommand {
     /// unavoidable: the code has to be readable to be scanned. It is spendable
     /// once and expires in two minutes, so the scrollback it lands in goes stale
     /// almost immediately. What a scan buys is the read surface — `app.ping`,
-    /// `agent.list`, `events.subscribe` — and nothing that types, runs or
+    /// `agent.list`, `events.subscribe`, `agent.approvals`, `agent.deny`,
+    /// `agent.cancel`, `agent.trace` — and nothing that types, runs or
     /// changes anything.
-    Show(TargetArgs),
+    ///
+    /// `--conversation <id>` mints a code for *driving that one conversation*
+    /// instead: the device that scans it may also prompt it and say yes to its
+    /// permission requests, and can touch nothing else. It is what the panel's
+    /// `/remote-control` chip does, on the CLI.
+    Show(PairShowArgs),
+}
+
+#[derive(Args, Debug, Clone)]
+pub struct PairShowArgs {
+    /// Scope the code to driving this conversation, from `warpctrl agent list`.
+    #[arg(long = "conversation", value_name = "ID")]
+    pub conversation: Option<String>,
+
+    #[command(flatten)]
+    pub target: TargetArgs,
 }
 
 #[derive(Debug, Clone, Subcommand)]

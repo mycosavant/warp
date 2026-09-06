@@ -74,7 +74,7 @@ fn light_modules_are_drawn_and_not_left_to_the_background() {
 /// variable because this error is the whole discovery path for the feature.
 #[test]
 fn there_is_nothing_to_pair_with_until_a_wide_listener_exists() {
-    let error = control_pair(None).expect_err("refused");
+    let error = mint(None, Scope::Watch).expect_err("refused");
 
     assert_eq!(error.code, ErrorCode::LocalControlDisabled);
     assert!(error.message.contains("WARP_FORK_CONTROL_BIND"));

@@ -14,7 +14,7 @@ fn at(minute: u32) -> DateTime<Utc> {
 #[test]
 fn a_pairing_code_can_be_spent_exactly_once() {
     let mut pairings = Pairings::default();
-    let issued = pairings.issue_code(at(0));
+    let issued = pairings.issue_code(at(0), Scope::Watch);
 
     assert!(pairings.redeem(&issued.code, at(0)).is_ok());
     assert!(
@@ -27,21 +27,21 @@ fn a_pairing_code_can_be_spent_exactly_once() {
 #[test]
 fn a_pairing_code_stops_working_when_it_expires() {
     let mut pairings = Pairings::default();
-    let issued = pairings.issue_code(at(0));
+    let issued = pairings.issue_code(at(0), Scope::Watch);
 
     assert!(
         pairings.redeem(&issued.code, at(1)).is_ok(),
         "a code must survive long enough to walk across the room"
     );
 
-    let stale = pairings.issue_code(at(0));
+    let stale = pairings.issue_code(at(0), Scope::Watch);
     assert!(pairings.redeem(&stale.code, at(5)).is_err());
 }
 
 #[test]
 fn a_paired_device_stops_being_paired_after_a_working_day() {
     let mut pairings = Pairings::default();
-    let code = pairings.issue_code(at(0));
+    let code = pairings.issue_code(at(0), Scope::Watch);
     let device = pairings
         .redeem(&code.code, at(0))
         .expect("pairing succeeds");
@@ -61,7 +61,7 @@ fn a_paired_device_stops_being_paired_after_a_working_day() {
 #[test]
 fn the_two_secrets_are_not_interchangeable() {
     let mut pairings = Pairings::default();
-    let code = pairings.issue_code(at(0));
+    let code = pairings.issue_code(at(0), Scope::Watch);
     let device = pairings
         .redeem(&code.code, at(0))
         .expect("pairing succeeds");
@@ -71,7 +71,7 @@ fn the_two_secrets_are_not_interchangeable() {
         "a device token must not buy another device token"
     );
 
-    let unspent = pairings.issue_code(at(0));
+    let unspent = pairings.issue_code(at(0), Scope::Watch);
     assert!(
         pairings.verify_device(&unspent.code, at(0)).is_err(),
         "a pairing code must not authenticate as a device"
@@ -81,7 +81,7 @@ fn the_two_secrets_are_not_interchangeable() {
 #[test]
 fn a_secret_this_instance_never_issued_is_refused() {
     let mut pairings = Pairings::default();
-    pairings.issue_code(at(0));
+    pairings.issue_code(at(0), Scope::Watch);
     let stranger = AuthToken::generate();
 
     assert!(pairings.redeem(&stranger, at(0)).is_err());
@@ -111,7 +111,7 @@ fn a_paired_device_cannot_reach_the_actions_that_execute() {
         ActionKind::WindowClose,
     ] {
         assert!(
-            ensure_pairable(action).is_err(),
+            ensure_pairable_under(action, &Scope::Watch).is_err(),
             "{} must not be reachable by scanning a QR code",
             action.as_str()
         );
@@ -160,7 +160,7 @@ fn a_paired_device_gets_the_read_surface_and_the_safe_half_of_answering() {
         .as_slice()
     );
     for action in PAIRABLE_ACTIONS {
-        assert!(ensure_pairable(*action).is_ok());
+        assert!(ensure_pairable_under(*action, &Scope::Watch).is_ok());
     }
 }
 
@@ -175,9 +175,10 @@ fn a_paired_device_gets_the_read_surface_and_the_safe_half_of_answering() {
 /// the decision itself without a process-global.
 #[test]
 fn saying_yes_does_not_travel_by_default_and_saying_no_does() {
-    assert!(ensure_pairable(ActionKind::AgentDeny).is_ok());
+    assert!(ensure_pairable_under(ActionKind::AgentDeny, &Scope::Watch).is_ok());
 
-    let error = ensure_pairable(ActionKind::AgentApprove).expect_err("refused by default");
+    let error = ensure_pairable_under(ActionKind::AgentApprove, &Scope::Watch)
+        .expect_err("refused by default");
     assert!(error.message.contains("agent.approve"));
     assert!(
         error.message.contains("WARP_FORK_REMOTE_APPROVE"),
@@ -190,7 +191,7 @@ fn saying_yes_does_not_travel_by_default_and_saying_no_does() {
 /// author guessing one action at a time against a server that only says no.
 #[test]
 fn the_refusal_says_what_a_device_may_do_instead() {
-    let error = ensure_pairable(ActionKind::InputSubmit).expect_err("refused");
+    let error = ensure_pairable_under(ActionKind::InputSubmit, &Scope::Watch).expect_err("refused");
 
     assert!(error.message.contains("input.submit"));
     assert!(error.message.contains("agent.list"));
@@ -211,4 +212,93 @@ fn the_code_rides_in_the_fragment() {
         "the part a server would log must not contain the code"
     );
     assert_eq!(fragment, "s3cret");
+}
+
+/// The remote-control scope (2026-09-05): a code minted for one conversation
+/// buys `agent.prompt` and `agent.approve` on top of the watch list, with no
+/// switch, because the gesture that minted it is the consent. Pinned as a
+/// whole list, like the watch list above, so the widening is visible here.
+#[test]
+fn a_code_minted_for_one_conversation_buys_driving_it() {
+    let control = Scope::Control {
+        conversation_id: "c-1".to_owned(),
+    };
+    let mut expected = pairable_actions();
+    expected.push(ActionKind::AgentPrompt);
+    if !expected.contains(&ActionKind::AgentApprove) {
+        expected.push(ActionKind::AgentApprove);
+    }
+    assert_eq!(control.actions(), expected);
+    assert!(ensure_pairable_under(ActionKind::AgentPrompt, &control).is_ok());
+    assert!(ensure_pairable_under(ActionKind::AgentApprove, &control).is_ok());
+    // Still not the executing half of the catalog: a conversation is the
+    // unit handed over, and a pane is not.
+    for action in [
+        ActionKind::InputSubmit,
+        ActionKind::AgentSpawn,
+        ActionKind::SlashRun,
+        ActionKind::WindowClose,
+    ] {
+        assert!(ensure_pairable_under(action, &control).is_err());
+    }
+    assert_eq!(control.conversation(), Some("c-1"));
+    assert_eq!(Scope::Watch.conversation(), None);
+}
+
+/// The scope rides from the code to the device that spent it, and the device
+/// answers with it on every later check: that is what the credential route
+/// reads to confine the grant.
+#[test]
+fn a_device_holds_the_scope_of_the_code_it_spent() {
+    let mut pairings = Pairings::default();
+    let control = Scope::Control {
+        conversation_id: "c-1".to_owned(),
+    };
+    let watch_code = pairings.issue_code(at(0), Scope::Watch);
+    let control_code = pairings.issue_code(at(0), control.clone());
+
+    let watcher = pairings.redeem(&watch_code.code, at(0)).expect("pairs");
+    let driver = pairings.redeem(&control_code.code, at(0)).expect("pairs");
+    assert_eq!(watcher.scope, Scope::Watch);
+    assert_eq!(driver.scope, control);
+    assert_eq!(
+        pairings
+            .verify_device(&watcher.token, at(1))
+            .expect("paired"),
+        Scope::Watch
+    );
+    assert_eq!(
+        pairings
+            .verify_device(&driver.token, at(1))
+            .expect("paired"),
+        control
+    );
+}
+
+/// Stop sharing ends it: the driving device is cut off, an unscanned code for
+/// the conversation is dead, and a watching device loses nothing.
+#[test]
+fn revoking_a_conversation_cuts_off_its_devices_and_codes_and_nothing_else() {
+    let mut pairings = Pairings::default();
+    let control = Scope::Control {
+        conversation_id: "c-1".to_owned(),
+    };
+    let watcher = {
+        let code = pairings.issue_code(at(0), Scope::Watch);
+        pairings.redeem(&code.code, at(0)).expect("pairs")
+    };
+    let driver = {
+        let code = pairings.issue_code(at(0), control.clone());
+        pairings.redeem(&code.code, at(0)).expect("pairs")
+    };
+    let unscanned = pairings.issue_code(at(0), control);
+    assert!(pairings.is_controlling("c-1", at(0)));
+    assert!(!pairings.is_controlling("c-2", at(0)));
+
+    assert_eq!(pairings.revoke_conversation("c-1"), 1);
+
+    assert!(!pairings.is_controlling("c-1", at(0)));
+    assert!(pairings.verify_device(&driver.token, at(0)).is_err());
+    assert!(pairings.redeem(&unscanned.code, at(0)).is_err());
+    assert!(pairings.verify_device(&watcher.token, at(0)).is_ok());
 }

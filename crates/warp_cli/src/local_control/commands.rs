@@ -6,9 +6,9 @@ use local_control::protocol::{
     Action, ActionKind, ActionNameParams, AgentApprovalsResult, AgentApproveParams,
     AgentCancelParams, AgentPromptParams, AgentReadParams, AgentRevealParams, AgentRevealTarget,
     AgentSettleParams, AgentSpawnParams, BindingNameParams, BooleanValueParams, ColorValueParams,
-    ControlError, DirectionParams, DriveObjectCreateParams, DriveObjectGetParams,
-    DriveObjectListParams, DriveObjectTrashParams, EmptyParams, ErrorCode, EventStreamResult,
-    FileOpenParams, KeyParams, KeyValueParams, PageQueryParams, QueryParams,
+    ControlError, ControlPairParams, DirectionParams, DriveObjectCreateParams,
+    DriveObjectGetParams, DriveObjectListParams, DriveObjectTrashParams, EmptyParams, ErrorCode,
+    EventStreamResult, FileOpenParams, KeyParams, KeyValueParams, PageQueryParams, QueryParams,
     RemoteWslConnectParams, RenameParams, RequestEnvelope, ResizeParams, SettingListParams,
     SlashRunParams, TabActivateParams, TabActivationMode, TabCloseMode, TabCloseParams,
     TabCreateParams, TextParams, ThemeNameParams,
@@ -351,6 +351,14 @@ fn render_pairing(data: &serde_json::Value) -> String {
         })
         .unwrap_or_else(|| "<unknown>".to_owned());
     out.push_str(&format!("a device that scans this may: {actions}"));
+    if let Some(conversation) = data
+        .get("conversation_id")
+        .and_then(serde_json::Value::as_str)
+    {
+        out.push_str(&format!(
+            "\nconfined to conversation {conversation}: it may drive that one and touch no other"
+        ));
+    }
     out
 }
 
@@ -1045,9 +1053,14 @@ pub(super) fn run_pair_command(
     output_format: OutputFormat,
 ) -> Result<(), ControlError> {
     match command {
-        PairCommand::Show(args) => {
-            run_action_with_params(args, ActionKind::ControlPair, EmptyParams {}, output_format)
-        }
+        PairCommand::Show(args) => run_action_with_params(
+            args.target,
+            ActionKind::ControlPair,
+            ControlPairParams {
+                conversation_id: args.conversation,
+            },
+            output_format,
+        ),
     }
 }
 

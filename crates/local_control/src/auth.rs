@@ -146,6 +146,20 @@ pub struct CredentialGrant {
     pub action: ActionKind,
     pub issued_at: DateTime<Utc>,
     pub expires_at: DateTime<Utc>,
+    /// The one conversation this credential may touch, when it was minted for
+    /// a device paired to one (the fork's `/remote-control`, 2026-09-05).
+    ///
+    /// `None` is every credential that existed before this field: a local
+    /// client's, and a device paired by `warpctrl pair show`, which holds the
+    /// watch surface and nothing conversation-shaped it could be confined to.
+    /// `Some` is what a device paired by a code the person minted *for one
+    /// conversation* holds, and it is what lets that device be granted
+    /// `agent.prompt` at all: the action names a conversation, the server
+    /// checks it against this, and a prompt for any other is refused before a
+    /// handler runs. The check is on the grant rather than on the pairing
+    /// because a grant is what a request carries.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub conversation: Option<String>,
 }
 
 impl CredentialGrant {
@@ -157,7 +171,14 @@ impl CredentialGrant {
             action,
             issued_at,
             expires_at: issued_at + ttl,
+            conversation: None,
         }
+    }
+
+    /// The same grant, confined to one conversation. See [`Self::conversation`].
+    pub fn confined_to(mut self, conversation: Option<String>) -> Self {
+        self.conversation = conversation;
+        self
     }
 
     pub fn is_expired(&self) -> bool {

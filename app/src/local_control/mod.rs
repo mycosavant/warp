@@ -58,10 +58,12 @@
 //! Discovery records never include raw bearer tokens: discovery only exposes
 //! endpoint metadata and credential broker references while Scripting is enabled.
 mod bridge;
+mod confine;
 pub(crate) mod console;
 mod handlers;
 pub(crate) mod pairing;
 mod permissions;
+pub(crate) mod remote_control;
 pub(crate) mod resolver;
 
 use std::collections::HashMap;
@@ -570,7 +572,7 @@ async fn handle_credential_broker_connection(
                 )
             })?;
             match serde_json::from_slice::<CredentialRequest>(&bytes) {
-                Ok(request) => issue_credential(&state, request)
+                Ok(request) => issue_credential(&state, request, None)
                     .await
                     .and_then(|credential| serialize_credential_broker_response(&credential)),
                 Err(err) => Err(ControlError::with_details(
@@ -710,7 +712,7 @@ async fn handle_credential_broker_connection(
     let response = match ensure_same_user_peer(&pipe) {
         Ok(()) => match read_broker_request(&mut pipe).await {
             Ok(bytes) => match serde_json::from_slice::<CredentialRequest>(&bytes) {
-                Ok(request) => issue_credential(&state, request)
+                Ok(request) => issue_credential(&state, request, None)
                     .await
                     .and_then(|credential| serialize_credential_broker_response(&credential)),
                 Err(err) => Err(ControlError::with_details(
@@ -892,6 +894,7 @@ fn serialize_credential_broker_response(
 async fn issue_credential(
     state: &ControlServerState,
     request: CredentialRequest,
+    confined_to: Option<String>,
 ) -> Result<ScopedCredential, ControlError> {
     ensure_feature_enabled()?;
     ensure_protocol_version(request.protocol_version)?;
@@ -922,7 +925,8 @@ async fn issue_credential(
         state.instance_id.clone(),
         request.action,
         Duration::minutes(5),
-    );
+    )
+    .confined_to(confined_to);
     let mut credentials = state.credentials.lock().map_err(|_| {
         ControlError::new(
             ErrorCode::Internal,
@@ -1105,6 +1109,10 @@ async fn handle_event_stream(
             }
             tokio::select! {
                 received = receiver.recv() => match received {
+                    // A grant confined to one conversation sees that
+                    // conversation's lines and nothing else; the line is parsed
+                    // only to read its `session_id`, and forwarded verbatim.
+                    Ok(line) if !confine::line_is_within(&line, grant.conversation.as_deref()) => {}
                     Ok(line) => yield Ok(axum::response::sse::Event::default().data(line)),
                     // The subscriber fell behind the bounded channel. Say so
                     // rather than silently skipping: a reader that does not know
@@ -1162,10 +1170,13 @@ async fn handle_pair_request(
         Json(::local_control::PairedDeviceResult {
             device_token: issued.token.secret().to_owned(),
             expires_at: issued.expires_at,
-            actions: pairing::pairable_actions()
+            actions: issued
+                .scope
+                .actions()
                 .iter()
                 .map(|action| action.as_str().to_owned())
                 .collect(),
+            conversation_id: issued.scope.conversation().map(str::to_owned),
         }),
     )
         .into_response()
@@ -1195,17 +1206,18 @@ async fn handle_pair_credential_request(
     let Some(pairings) = &state.pairings else {
         return reject(StatusCode::FORBIDDEN, pairing_unavailable());
     };
-    {
+    let scope = {
         let Ok(mut pairings) = pairings.lock() else {
             return reject(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 ControlError::new(ErrorCode::Internal, "local-control pairing is unavailable"),
             );
         };
-        if let Err(error) = pairings.verify_device(&offered, Utc::now()) {
-            return reject(StatusCode::UNAUTHORIZED, error);
+        match pairings.verify_device(&offered, Utc::now()) {
+            Ok(scope) => scope,
+            Err(error) => return reject(StatusCode::UNAUTHORIZED, error),
         }
-    }
+    };
     let request = match serde_json::from_slice::<CredentialRequest>(&payload) {
         Ok(request) => request,
         Err(err) => {
@@ -1219,10 +1231,12 @@ async fn handle_pair_credential_request(
             );
         }
     };
-    if let Err(error) = pairing::ensure_pairable(request.action) {
+    if let Err(error) = pairing::ensure_pairable_under(request.action, &scope) {
         return reject(StatusCode::FORBIDDEN, error);
     }
-    match issue_credential(&state, request).await {
+    // The confinement travels on the grant, because a grant is what every
+    // later request carries; the scope itself stays in the pairing map.
+    match issue_credential(&state, request, scope.conversation().map(str::to_owned)).await {
         Ok(credential) => (StatusCode::OK, Json(credential)).into_response(),
         Err(error) => reject(StatusCode::FORBIDDEN, error),
     }

@@ -60,7 +60,7 @@ same board as of that date and is not updated.
 | 2 | Windows launcher: product by default, rig behind `-Instrumented` | **done**, this commit |
 | 3 | Measure egress on Windows, against the merged binary | **done** 2026-09-05, `.fork/runs/egress-windows-2026-09-05/`: every warp-oss socket loopback, T2.5 voice measured, T19 WebSocket gate written down |
 | 4 | Composer cancel path (`.fork/docs/composer.md` item 7, the `^C` at the prompt, the missing `stop`) | **done** 2026-09-05, `2ff77def8`; the `^C` was the person's command dying, and the buffered sentence was the whole answer |
-| 5 | Hide the two cloud chips in the agent footer (T19) | open |
+| 5 | Hide the two cloud chips in the agent footer (T19) | half done 2026-09-05: `/remote-control` is the fork's own now (`.fork/docs/remote-control.md`); "Hand off to cloud" still to hide |
 | 6 | The viewer: one trace from the harness's record and Warp's (`.fork/docs/observability.md`) | phase 0 **done** 2026-09-05, `7bb323cbc`, `.fork/runs/viewer-phase0-2026-09-05/`; phases 1 and 2 **done** the same day: `warpctrl agent trace`, text by default, `--html FILE` for the page; phase 3 **done** the same night: `agent.trace` pairable, the console's conversation view live on a phone |
 | 7 | WSL parity: connect automatically, then diffs, then language servers (`.fork/docs/wsl.md`) | **done** 2026-09-05: `ea61116e1`, `099b26ea5`, `6d07c1e1a`–`f6f59cfe8` |
 
