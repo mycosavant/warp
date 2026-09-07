@@ -164,6 +164,26 @@ degrades to a plain two-dot diff — no warning, no protection. Compute bases
 (`$(git merge-base upstream/master dev)`); never paste them. Full account in
 `.fork/archive/CONSOLIDATION.md` §1.1.
 
+**…and a number that cannot be true is a reading error, not a fact to
+record. It was recorded, and the instruction built on it nearly took the
+distro with it.** 2026-09-07: this session read the Lxss `BasePath` for the
+Ubuntu distro, saw a C: path, searched X: for a `.vhdx`, found none, and
+told the maintainer the image was still on C: and to `wsl --manage --move`
+it. Its own note said *"988 GB on a 931 GB drive"* and nobody stopped at a
+file larger than the disk it was supposedly on. The path was a **junction**:
+Settings → Apps → Move leaves the Store package folder on C: as seven
+reparse points into `X:\WpSystem\<SID>\...`, so the registry was true and
+the bytes were elsewhere, and the search never looked under `WpSystem`. The
+move lifted the vhdx out of app-container EFS; WSL could not attach it
+(`E_ACCESSDENIED`, `ERROR_FILE_ENCRYPTED`) and Windows Home has no way to
+decrypt. Repaired by another session by moving it back and restoring
+`BasePath`; `.fork/runs/wsl-move-2026-09-07/`. Three rules from it. **Never
+`wsl --manage --move` this distro.** A negative from a search is only as
+good as the directories it entered (`Get-ChildItem -Force` under
+`X:\WpSystem`, or `dir /AL` on the package folder, would each have settled
+it). And an impossible number is the one thing a session cannot have
+measured, so it is the first thing to re-check, not the one to write down.
+
 **GUI gestures are runnable now, so "needs a person" needs an argument.**
 `use_computer drag` (T9.1) performs press-move-release against one window and
 photographs the frame *before* the release, which is the only moment a drop
@@ -1478,7 +1498,7 @@ the CI side — *"OOM-killing release builds"* — so it is one failure with two
 faces, and the guest-side face is worse because it takes the session with it.
 The host has 64 GB and had **no `.wslconfig` at all**, so the VM's 32 GB was
 WSL2's default half-of-host rather than a chosen value; one now exists with more
-headroom, real swap and `autoMemoryReclaim`.
+headroom and real swap. The `autoMemoryReclaim` line in it sat under `[wsl2]`, where WSL refuses it, from the day it was written until 2026-09-07, so that half was never in force; it is under `[experimental]` now, and the swap file is on X: (`.fork/runs/wsl-move-2026-09-07/`).
 
 **And read the two numbers above as pre-fix.** The 32 GB and the `-j 8` that was
 landed on after repeated OOM crashes both describe the VM *before* the

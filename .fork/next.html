@@ -141,7 +141,7 @@
       <p>Gemma 4 12B at dynamic 4-bit is on disk and answers a Next Command-shaped request in half a second at 68 tok/s, with thinking switched off at the server, because with it on the answer is empty every time. The survey of what fits, with the two-model recommendation, is in the run README.</p>
       <p>And the first thing it was pointed at was the four small features, which found three stale points from one upstream merge, each one layer under the last: the form refused a local URL, the settings file dropped the endpoint, the reader looked in the pre-merge vector. Fixed the same night (<code>7529749a8</code>, <code>26c376090</code>); three of the four features then drew from the local model on the debug build, screenshots in the run.</p>
       <div class="gates"><span class="k">What is still the maintainer's</span><ul>
-        <li>The 22 GB Qwen3.6-35B-A3B for the panel. The machine has one disk with 49 GB free, and the fork's own builds need room on it.</li>
+        <li>The 22 GB Qwen3.6-35B-A3B for the panel, to <code>X:\models</code>, which has 2.1 TB free. An earlier version of this line said disk was the reason to wait; that was a false reading of where the WSL image lives, corrected in <code>.fork/runs/wsl-move-2026-09-07/</code>.</li>
       </ul></div>
       <div class="gates"><span class="k">Open from the run</span><ul>
         <li>The commit message in a <em>routed</em> WSL pane: the daemon inside the distribution generates it with its own client, where the fork's config is not installed, so on the recommended configuration this one feature is dead. The daemon should return the diff and the GUI generate; a protocol addition.</li>

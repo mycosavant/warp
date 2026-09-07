@@ -81,8 +81,9 @@ for and evicts the other, and a 7 GB load from NVMe is a few seconds.
   at `127.0.0.1:8080`; both directions were measured with a throwaway
   listener before anything was downloaded.
 - **Models in `X:\models\`** since later the same night, when the maintainer pointed out that C: was nearly full and X: (4 TB, 2.1 TB free) was the drive meant for this; the runtime stays on C:. Gemma 4 12B is there (7.4 GB). The 22 GB
-  Qwen is not: with 49 GB free on the one disk that is a decision for the
-  maintainer, not for a script.
+  Qwen is not yet. This line first said the download waited on disk, on a
+  reading of the machine that was wrong: X: had 2.1 TB free all along and
+  the WSL image was already on it (`../wsl-move-2026-09-07/`).
 
 ## The server, measured from WSL
 
