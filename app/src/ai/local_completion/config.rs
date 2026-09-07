@@ -43,10 +43,12 @@ const DEFAULT_OPENAI_MODEL: &str = "gpt-4o-mini";
 /// the main thread.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LocalCompletionConfig {
-    /// Full URL, including the route. Providers disagree on the path
-    /// (`/v1/messages` vs `/v1/chat/completions` vs `/v1/responses`), and
-    /// self-hosted servers mount them anywhere, so this is never assembled
-    /// from a host.
+    /// Full URL, including the route. The settings page asks for a *base*
+    /// URL (`https://openrouter.ai/api/v1`) because upstream's server appends
+    /// the route; this module dials the URL itself, so a stored URL that does
+    /// not already end in the schema's route gets it appended
+    /// ([`with_route`]) and one that does is kept. Never assembled from a
+    /// host alone: self-hosted servers mount `/v1` anywhere.
     pub endpoint: String,
     pub api_key: String,
     pub schema: CustomEndpointSchema,
@@ -175,7 +177,7 @@ pub fn resolve(
                     .collect(),
             })?;
         (
-            found.url.trim().to_string(),
+            with_route(found.url.trim(), found.schema),
             found.api_key.trim().to_string(),
             found.schema,
             first_model(found),
@@ -186,7 +188,7 @@ pub fn resolve(
         .find(|candidate| !candidate.url.trim().is_empty())
     {
         (
-            found.url.trim().to_string(),
+            with_route(found.url.trim(), found.schema),
             found.api_key.trim().to_string(),
             found.schema,
             first_model(found),
@@ -257,6 +259,25 @@ pub fn resolve(
         schema,
         models,
     })
+}
+
+/// The stored URL with the schema's route on the end, unless it is there
+/// already. The settings page's placeholder asks for a base URL, so a person
+/// following it stores `https://openrouter.ai/api/v1`; a person who read this
+/// module stores the full route. Both have to work, and a trailing slash on
+/// either is not a different URL.
+fn with_route(url: &str, schema: CustomEndpointSchema) -> String {
+    let route = match schema {
+        CustomEndpointSchema::OpenaiChatCompletions => "/chat/completions",
+        CustomEndpointSchema::OpenaiResponses => "/responses",
+        CustomEndpointSchema::AnthropicMessages => "/messages",
+    };
+    let base = url.trim_end_matches('/');
+    if base.ends_with(route) {
+        base.to_string()
+    } else {
+        format!("{base}{route}")
+    }
 }
 
 fn first_model(endpoint: &ai::api_keys::CustomEndpoint) -> String {

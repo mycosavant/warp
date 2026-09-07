@@ -1,4 +1,6 @@
-use ::ai::api_keys::{CustomEndpoint, CustomEndpointSchema, validate_custom_endpoint_url};
+use ::ai::api_keys::{
+    CustomEndpoint, CustomEndpointSchema, is_local_endpoint_url, validate_custom_endpoint_url,
+};
 use warp_editor::editor::NavigationKey;
 use warpui::elements::{
     Border, ChildView, ClippedScrollStateHandle, ClippedScrollable, ConstrainedBox, Container,
@@ -151,7 +153,12 @@ impl CustomEndpointModal {
                 ..Default::default()
             };
             let mut editor = EditorView::single_line(options, ctx);
-            editor.set_placeholder_text("Please include 'https://'", ctx);
+            // fork: a server on this machine is the common case here, and it
+            // is plain http; `validate_custom_endpoint_url` says which hosts.
+            editor.set_placeholder_text(
+                "https://..., or http://127.0.0.1:... for a server on this machine",
+                ctx,
+            );
             if let Some(ep) = endpoint {
                 editor.set_buffer_text(&ep.url, ctx);
             }
@@ -172,7 +179,10 @@ impl CustomEndpointModal {
                 ..Default::default()
             };
             let mut editor = EditorView::single_line(options, ctx);
-            editor.set_placeholder_text("e.g., sk-...", ctx);
+            editor.set_placeholder_text(
+                "e.g., sk-... (not needed for a server on this machine)",
+                ctx,
+            );
             if let Some(ep) = endpoint {
                 editor.set_buffer_text(&ep.api_key, ctx);
             }
@@ -1085,7 +1095,9 @@ fn validate_url(url: &str) -> Result<(), &'static str> {
 fn is_endpoint_form_valid(name: &str, url: &str, api_key: &str, has_models: bool) -> bool {
     !name.trim().is_empty()
         && !url.trim().is_empty()
-        && !api_key.trim().is_empty()
+        // fork: a llama.cpp or Ollama server on loopback has no key to give,
+        // and `local_completion` sends no auth header for an empty one.
+        && (!api_key.trim().is_empty() || is_local_endpoint_url(url.trim()))
         && has_models
         && validate_url(url).is_ok()
 }

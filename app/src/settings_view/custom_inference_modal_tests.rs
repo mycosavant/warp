@@ -395,21 +395,47 @@ fn validate_url_allows_whitespace_only() {
     assert!(validate_url("   ").is_ok());
 }
 
+/// fork: this process dials the URL, so a host on this machine or its network
+/// is accepted, and over plain http. Upstream refused every one of these
+/// because its server would have been the one dialing them.
 #[test]
-fn validate_url_rejects_localhost_and_private_ips() {
-    let error = Err("URL must not use a local or private host");
-    assert_eq!(validate_url("https://localhost:8080"), error);
-    assert_eq!(validate_url("https://127.0.0.1/v1"), error);
-    assert_eq!(validate_url("https://0.0.0.0/v1"), error);
-    assert_eq!(validate_url("https://10.0.0.1/v1"), error);
-    assert_eq!(validate_url("https://172.16.0.1/v1"), error);
-    assert_eq!(validate_url("https://192.168.0.1/v1"), error);
-    assert_eq!(validate_url("https://169.254.0.1/v1"), error);
-    assert_eq!(validate_url("https://[::1]/v1"), error);
-    assert_eq!(validate_url("https://[::]/v1"), error);
-    assert_eq!(validate_url("https://[fc00::1]/v1"), error);
-    assert_eq!(validate_url("https://[fe80::1]/v1"), error);
-    assert_eq!(validate_url("https://[::ffff:192.168.0.1]/v1"), error);
+fn validate_url_accepts_a_host_on_this_machine_or_its_network() {
+    for local in [
+        "https://localhost:8080",
+        "https://127.0.0.1/v1",
+        "https://10.0.0.1/v1",
+        "https://[::1]/v1",
+        "https://[fe80::1]/v1",
+        "https://[::ffff:192.168.0.1]/v1",
+        "http://127.0.0.1:8080/v1",
+        "http://localhost:11434/v1",
+        "http://192.168.0.1:8080/v1",
+        "http://[::1]:8080/v1",
+    ] {
+        assert!(validate_url(local).is_ok(), "{local}");
+    }
+    assert_eq!(
+        validate_url("http://api.example.com/v1"),
+        Err("URL must use HTTPS"),
+        "a public host still needs TLS"
+    );
+}
+
+/// fork: the key field may stay empty for a local server, and only for one.
+#[test]
+fn endpoint_form_valid_needs_no_key_for_a_local_server() {
+    assert!(is_endpoint_form_valid(
+        "Local",
+        "http://127.0.0.1:8080/v1",
+        "",
+        true
+    ));
+    assert!(!is_endpoint_form_valid(
+        "Cloud",
+        "https://api.example.com/v1",
+        "",
+        true
+    ));
 }
 
 #[test]

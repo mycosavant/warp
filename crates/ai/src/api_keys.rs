@@ -333,18 +333,50 @@ impl schemars::JsonSchema for CustomEndpointDefinitions {
     }
 }
 
+/// A custom endpoint's URL, as the settings page and the settings file
+/// accept it.
+///
+/// Upstream requires HTTPS and refuses every loopback, private and link-local
+/// host, because on upstream's agent path the URL is forwarded to Warp's
+/// backend and dialed *there*, where a local address would be a request into
+/// Warp's own network. This fork dials the URL from this process
+/// (`ai::local_completion`), so a host on this machine or its network is the
+/// ordinary case, and `http://` to one is what a llama.cpp, Ollama or LM
+/// Studio server on loopback is. The public-host rule is unchanged: a key
+/// does not cross the internet in the clear.
+///
+/// Not gated on fork policy, on `http_client::egress`'s precedent: this crate
+/// has no policy reader, and under `WARP_FORK_POLICY=0` a local URL fails at
+/// request time on Warp's backend instead of at the form, the same outcome one
+/// step later.
+///
+/// Until 2026-09-07 this was upstream's rule verbatim. It arrived in the
+/// 2026-08-26 merge (APP-5380), eight days after `local_completion` was built
+/// against a loopback URL, and that module's tests build the endpoint struct
+/// by hand and never saw the refusal; the settings file and the modal both
+/// did, so the manual promised a local endpoint the product refused.
 pub fn validate_custom_endpoint_url(value: &str) -> Result<(), &'static str> {
     let parsed = Url::parse(value).map_err(|_| "Invalid URL")?;
-    if parsed.scheme() != "https" {
+    let scheme = parsed.scheme();
+    if scheme != "https" && scheme != "http" {
         return Err("URL must use HTTPS");
     }
     let Some(host) = parsed.host_str().filter(|host| !host.is_empty()) else {
         return Err("URL must include a host");
     };
-    if is_restricted_host(host) {
-        return Err("URL must not use a local or private host");
+    if scheme == "http" && !is_restricted_host(host) {
+        return Err("URL must use HTTPS");
     }
     Ok(())
+}
+
+/// Whether the URL names a host on this machine or its network: the case in
+/// which a custom endpoint needs no key, and the one `http://` is allowed for.
+pub fn is_local_endpoint_url(value: &str) -> bool {
+    Url::parse(value)
+        .ok()
+        .and_then(|parsed| parsed.host_str().map(is_restricted_host))
+        .unwrap_or(false)
 }
 
 fn is_restricted_host(host: &str) -> bool {

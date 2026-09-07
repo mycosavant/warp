@@ -154,7 +154,38 @@ fn a_custom_endpoint_outranks_a_pasted_key() {
 
     assert_eq!(
         resolve(&keys, &no_settings()).unwrap().endpoint,
-        "http://127.0.0.1:8080/v1"
+        "http://127.0.0.1:8080/v1/chat/completions"
+    );
+}
+
+/// The settings page asks for a base URL because upstream's server appends
+/// the route; this module dials the URL itself, so it appends the route the
+/// schema names when the stored URL lacks it, and keeps a full one.
+#[test]
+fn a_base_url_gets_the_schemas_route_and_a_full_route_is_kept() {
+    use CustomEndpointSchema::*;
+    assert_eq!(
+        with_route("https://openrouter.ai/api/v1", OpenaiChatCompletions),
+        "https://openrouter.ai/api/v1/chat/completions"
+    );
+    assert_eq!(
+        with_route("http://127.0.0.1:8080/v1/", OpenaiChatCompletions),
+        "http://127.0.0.1:8080/v1/chat/completions"
+    );
+    assert_eq!(
+        with_route(
+            "http://127.0.0.1:8080/v1/chat/completions",
+            OpenaiChatCompletions
+        ),
+        "http://127.0.0.1:8080/v1/chat/completions"
+    );
+    assert_eq!(
+        with_route("http://127.0.0.1:8080/v1", OpenaiResponses),
+        "http://127.0.0.1:8080/v1/responses"
+    );
+    assert_eq!(
+        with_route("http://127.0.0.1:8080/v1", AnthropicMessages),
+        "http://127.0.0.1:8080/v1/messages"
     );
 }
 
@@ -199,7 +230,7 @@ fn an_endpoint_with_no_models_asks_for_one() {
     assert_eq!(
         resolve(&keys, &no_settings()).unwrap_err(),
         Unconfigured::NoModel {
-            endpoint: "http://127.0.0.1:8080/v1".into()
+            endpoint: "http://127.0.0.1:8080/v1/chat/completions".into()
         }
     );
 }

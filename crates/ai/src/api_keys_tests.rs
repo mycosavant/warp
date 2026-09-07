@@ -277,10 +277,7 @@ fn custom_endpoint_url_requires_public_https() {
     }
     for invalid in [
         "http://api.example.com/v1",
-        "https://localhost:8080",
-        "https://127.0.0.1/v1",
-        "https://10.0.0.1/v1",
-        "https://[::1]/v1",
+        "ftp://127.0.0.1/v1",
         "not a url",
     ] {
         assert!(
@@ -288,6 +285,24 @@ fn custom_endpoint_url_requires_public_https() {
             "{invalid} should be rejected"
         );
     }
+}
+
+/// fork: this process dials the URL, so a server on this machine or its
+/// network is accepted, over plain `http` too. See the doc on the function.
+#[test]
+fn a_host_on_this_machine_or_its_network_may_be_plain_http() {
+    for local in [
+        "http://127.0.0.1:8080/v1/chat/completions",
+        "http://localhost:11434/v1",
+        "http://[::1]:8080/v1",
+        "http://192.168.1.20:8080/v1",
+        "https://127.0.0.1:8443/v1",
+    ] {
+        assert_eq!(validate_custom_endpoint_url(local), Ok(()), "{local}");
+        assert!(is_local_endpoint_url(local), "{local}");
+    }
+    assert!(!is_local_endpoint_url("https://openrouter.ai/api/v1"));
+    assert!(!is_local_endpoint_url("not a url"));
 }
 
 #[test]
