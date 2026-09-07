@@ -73,6 +73,7 @@ number means the file whose name starts with that number.
 | `T18-wsl-pane-turns.md` | every turn in a WSL pane died before it began | fixed |
 | `T19-agent-footer-chips.md` | the two cloud chips in the agent footer | closed 2026-09-06 |
 | `T20-what-run-2-left.md` | what run 2 left | |
+| `T21-the-agents-models.md` | the agent's models: labels, the specs card, which agents say any of it | filed 2026-09-07 |
 | `open-questions.md` | the open-questions list from the old board | |
 
 `I00-idea-board.md` through `I22-openrouter-provider.md` are the idea board:

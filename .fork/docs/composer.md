@@ -1294,3 +1294,18 @@ person picking most wants to know. The agent's descriptions say *Most
 capable* and *Efficient for routine tasks*, which is as close as the
 protocol gets. And the *Full Terminal Use* tab stays empty: it reads
 `cli_agent`, a list nothing here fills.
+
+**The chip's label, `8a6e64f81`.** The first build passed the agent's
+description into `LLMInfo::description`, which upstream's chip appends in
+parentheses, so the chip read the sentence in the first row of the table
+above. The words are Claude Code's: `claude-agent-acp` names a row by
+family and puts the version and one of four taglines in the description,
+joined by ` · `. The label is now the segment before the separator
+(*Fable 5.1*, *Opus 5 with 1M context*), the name when there is none
+(*Default (recommended)*, whose description is the model it resolves to),
+and the description is not passed on. Measured on `v0.fork.8a6e64f81`
+(`label-2-after-turn.png`, `label-3-picker-open.png` in the run): the chip
+*Sonnet 5* after one turn, the menu *Default (recommended)*, *Opus 5 with 1M
+context*, *Fable 5.1*, *Sonnet 5 (selected)*, *Haiku 4.5*, and the store
+rewritten with the new labels and no descriptions. The tagline, the specs
+card and the other agents are `T21-the-agents-models.md`.

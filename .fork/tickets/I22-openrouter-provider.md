@@ -72,3 +72,22 @@ argument.
 
 ---
 
+## The gate, looked for on 2026-09-07
+
+Read, not run, while filing `T21-the-agents-models.md`; the detail is in
+its T21.4.
+
+- Upstream already has an OpenRouter key: `ApiKeys.open_router` in
+  `crates/ai/src/api_keys.rs`, pasted on the Warp Agent settings page. On
+  upstream's agent path it travels inside the request to Warp's backend,
+  which the fork never reaches; the fork's `local_completion` already uses it
+  for the small features.
+- Custom Inference is the same shape and is not a route into the agent
+  panel, because the panel's agent is a process Warp does no inference for.
+- The route into the panel is `opencode` over ACP, which is what this entry
+  was written against, and T14.14's picker (built 2026-09-07) is the
+  "dynamic model availability" half once it has been measured against
+  opencode's 356-row list: T21.3b. Pricing on the card is T21.2, where the
+  recommendation is a table the person can edit before any fetch.
+- The secrets half is untouched and keeps its threat-model gate.
+

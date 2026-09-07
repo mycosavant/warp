@@ -70,3 +70,22 @@ default (Fable here) runs only on a profile that has never met the agent.
 `conversation-{c,d,f}.txt`, `events-{c,d,f}.jsonl`, `trace-c.txt`,
 `acp-models.json` (the store as written), `desk-1` to `desk-12`, `p1-paired.png`,
 `p2-shade.png`.
+
+## The label, later the same day (`8a6e64f81`)
+
+`label-run.sh`, binary `v0.fork.8a6e64f81`. The chip had read *Fable (Fable
+5.1 · Most capable for your hardest and longest-running tasks)* because the
+agent's description went into `LLMInfo::description`, which upstream's chip
+appends in parentheses. Now the label is the version before ` · `.
+
+| | seen |
+|---|---|
+| before any turn, `label-1-before-any-turn.png` | a fresh tab; the previous build's store still held the old labels |
+| after one turn, `label-2-after-turn.png` | chip *Sonnet 5* |
+| the chip clicked, `label-3-picker-open.png` | *Default (recommended)*, *Opus 5 with 1M context*, *Fable 5.1*, *Sonnet 5 (selected)*, *Haiku 4.5*; the specs card still `?` on all three bars under upstream's "Warp's benchmarks" header, which is T21.2 |
+| `acp-models.json` after the turn | the five new labels, `description` null on every row |
+
+One trap: `model-run.sh`'s chip coordinate (70,872) hit the cwd chip on this
+layout; the model chip was at (647,873). Read the coordinate off the
+screenshot each time.
+

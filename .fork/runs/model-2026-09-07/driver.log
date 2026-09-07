@@ -25,3 +25,8 @@
 [16:14:27] instance: 1
 [16:14:40] conversation F 5948fb50-6a7f-478f-9e87-83789f841742: `model` “Model”, current `fable`; requested `sonnet`, sent
     16:14:31 claude-sonnet-5 [{'type': 'text', 'text': 'three'}]
+[17:11:16] label run, binary v0.fork.8a6e64f81
+[17:11:34] conversation L de73df13-32da-4678-8c43-7f563e3bf905
+[17:11:43] the chip clicked at 70,872: CLICKED window(70,872) -> client(70,872) pid=24488
+[17:12:05] the model chip clicked at 647,873 (70,872 was the cwd chip on this layout)
+[17:12:43] chip Sonnet 5; menu Default (recommended) / Opus 5 with 1M context / Fable 5.1 / Sonnet 5 (selected) / Haiku 4.5; window closed

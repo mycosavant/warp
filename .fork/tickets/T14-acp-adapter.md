@@ -3032,7 +3032,7 @@ mode descriptions is the first legitimate instance of `acp_permission.rs`'s
       settles a side question: this run billed opencode's hosted model, not the
       user's Claude subscription.
 
-- [x] **T14.14** **Let a person choose the model the agent uses.** Built 2026-09-07, both halves; `.fork/docs/composer.md`, "The model picker, built and measured".
+- [x] **T14.14** **Let a person choose the model the agent uses.** Built 2026-09-07, both halves; `.fork/docs/composer.md`, "The model picker, built and measured". What the maintainer asked for after using it (a name on the chip, the specs card, other agents) is `T21-the-agents-models.md`.
       `session/load`'s reply carries `configOptions`, which measured against a
       live agent includes a model select — so the protocol already offers this and
       the fork simply does not read it. Small, self-contained, and the first
