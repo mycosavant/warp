@@ -1,0 +1,18 @@
+warpdev: ~/.warpdev is no longer read (profiles are per launch); delete it when convenient.
+warpdev: profile INSTRUMENTED (the rig) + CONSOLE
+  WARP_FORK_ACP_COMMAND    = wsl.exe -d Ubuntu -- npx -y @agentclientprotocol/claude-agent-acp@0.73.0
+                             the agent panel answers from this agent, started inside WSL so a pane cwd resolves
+  WARP_FORK_EVENT_LOG      = on
+                             one JSONL per conversation, the record the console draws a run from
+  WARP_FORK_ACP_MODE       = default
+                             makes the agent ask; without it its own classifier answers and Warp is never in the loop
+  WARP_FORK_TRANSCRIPT     = on
+                             the conversation on disk under the pane directory, for grepping back what compaction dropped
+  WARP_FORK_CONTROL_BIND   = 192.168.254.3:41234
+                             the wide listener, so a phone on the LAN can pair; the only variable that reaches off the machine
+  note: a Warp started any other way gets none of this.
+warpdev: binary C:\dev\warp\target\release\warp-oss.exe
+warpdev: tree at 5c1a1c346 fork: the agent's model list survives a relaunch, because upstream keeps it nowhere (T14.14)
+warpdev: launching INSTRUMENTED (the rig) + CONSOLE
+warpdev: no discovery record after 45s.
+  The window may still be on first-run onboarding, which has no workspace.

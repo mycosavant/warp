@@ -1,0 +1,27 @@
+[15:38:32] binary v0.fork.952d80a08
+[15:38:32] launch: warpdev.ps1 -Instrumented -Console -Bind 192.168.254.3:41234
+[15:38:46] conversation C a3678688-6bac-4a10-9bdd-e27525af6427
+[15:38:54] session_model lines:
+    15:38:46 `model` “Model”, current `fable`
+[15:39:21] the chip clicked at 70,872: CLICKED window(70,872) -> client(70,872) pid=26232
+[15:39:34] a row clicked at 55,697: CLICKED window(55,697) -> client(55,697) pid=26232
+[15:39:48] session_model lines:
+    15:38:46 `model` “Model”, current `fable`
+    15:39:37 `model` “Model”, current `claude-fable-5-1`; requested `sonnet`, sent
+[15:39:49] the harness's own model field per assistant message:
+    15:38:52 claude-fable-5-1
+    15:39:44 claude-sonnet-5
+[15:40:33] chrome notification records after ~6 s: 2 (before 0)
+[15:41:16] --- relaunch: does the list and the choice survive, and does the NEW pill fire again
+[15:41:20] instances after close: 0
+[15:43:57] conversation D db9ed70e-ea70-4e33-9d49-5f6cd3a3c3ce session_model: `model` “Model”, current `fable`
+[15:57:04] --- build v0.fork.5c1a1c346: launch one writes the store, launch two is the measurement
+[15:57:25] launch one, conversation E 9f0f474a-44c4-44af-8e17-bea756529cdc: `model` “Model”, current `fable`
+    15:57:22 claude-fable-5-1 [{'type': 'text', 'text': 'one'}]
+   store: 3156 bytes 11:57:15
+[15:57:29] closed; relaunching
+[16:01:06] launch two, conversation F : 
+[16:14:18] --- build v0.fork.58b449ccb: the store on disk from the launch before (3156 bytes 11:57:15); one launch, chip before any turn, then a turn
+[16:14:27] instance: 1
+[16:14:40] conversation F 5948fb50-6a7f-478f-9e87-83789f841742: `model` “Model”, current `fable`; requested `sonnet`, sent
+    16:14:31 claude-sonnet-5 [{'type': 'text', 'text': 'three'}]

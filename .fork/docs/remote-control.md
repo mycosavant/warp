@@ -227,7 +227,18 @@ phone that installed the authority).
   has not been decided, asks from that tap and never on load. With
   permission granted and the page hidden, a `permission_request` or a
   `stop`/`stop_failure` on the conversation this device is on posts a
-  notification titled with the conversation's first prompt and buzzes. The
+  notification and buzzes. An ask is titled with the conversation and reads
+  the call; **a turn's end is titled with the prompt that ended and reads
+  the agent's last words** (since 2026-09-07: it said *the turn ended*
+  under the conversation's first prompt, which a real phone read on its
+  lock screen and learned nothing from). The stop event carries the prompt
+  and never the answer, so the page waits for the trace poll the stop
+  scheduled and takes the last `text` the harness wrote after that turn's
+  prompt; a failed poll still reports the end, with the placeholder.
+  Measured on the emulator with the tab hidden: title *Reply with exactly
+  this sentence and nothing else: The quick brown fo…*, text *The quick
+  brown fox jumps over the lazy dog.*, 6 s
+  (`.fork/runs/model-2026-09-07/p2-shade.png`). The
   events stream already carries both; nothing is sent anywhere. **On Android
   that goes through a service worker** (`/sw.js`, the console's fifth
   constant): Chrome there has no `Notification` constructor, and the first
@@ -346,12 +357,20 @@ becoming active first, which is what a person at the desk looks like.
 
 ## Unverified, as of writing
 
-- **A phone, still.** The emulator above is a Windows process with Android
-  in it, and it settled everything a browser and Android's settings decide.
-  What it cannot say: the camera scanning the block (the link was opened by
-  intent), a lock screen and doze, how the buzz feels, and iOS altogether
-  (the profile, Certificate Trust Settings, Safari's *Add to Home Screen*,
-  and whether an installed page there may post at all).
+- **A phone, still, and one phone has now walked it.** The emulator above
+  is a Windows process with Android in it, and it settled everything a
+  browser and Android's settings decide. On 2026-09-07 the maintainer ran
+  the checklist on a real Android device with Firefox, their own browser:
+  it held, and **a notification reached the lock screen with the console
+  backgrounded**, which Chrome on the emulator never did while backgrounded
+  as an app. So a locked phone being told is a fact about the browser, not
+  about Android, and Firefox keeps a hidden page's stream alive where Chrome
+  stops it. What that walk-through found was the notification's body (fixed
+  above) and the model picker (`composer.md`). Still unmeasured: the camera
+  scanning the block (the link was opened by intent), doze, how the buzz
+  feels, and iOS altogether (the profile, Certificate Trust Settings,
+  Safari's *Add to Home Screen*, and whether an installed page there may
+  post at all).
 - Whether the `wsl.exe` relays Warp spawns for its git chip should outlive
   the instance at all. They held the wide listener until the listener was
   marked non-inheritable (`keep_from_children`, measured: a close and a

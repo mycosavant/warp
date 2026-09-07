@@ -1238,3 +1238,59 @@ conversation until that finishes"* — which under a fork transport it is not.
 Same coupling, other direction. Left for the friction log: a person who types
 a long command and then asks the panel something will hit it.
 
+
+### The model picker, built and measured (T14.14 second half, `952d80a08`, `5c1a1c346`)
+
+**Found on a phone, 2026-09-07.** The maintainer, walking the checklist on
+a real Android device, noticed the panel's agent was on Fable, the dearest
+model, and that nothing said how to change it: `/` offered `/model`,
+`/model` opened a picker that was empty under both *Base* and *Full
+Terminal Use*, and the chip read *auto (cost-efficient)*.
+
+**Three things stacked.** The chip, `/model` and the inline menu are
+upstream's control over `ModelsByFeature::agent_mode`, a list Warp's server
+used to send and the egress backstop refuses, so the control drew
+`ModelsByFeature::default()`'s one placeholder. `acp_agent::model` had read
+the agent's `configOptions` since T14.14's first half, logged the current
+model every turn, and had a send door with no caller. And the model in
+force was the agent's own resolution: `ANTHROPIC_MODEL`, then Claude Code's
+`settings.json`, then the resumed session's live model, then its default.
+
+**What was built is the smallest thing that makes the existing control
+true**, and it touches no upstream view:
+
+- the catalog the turn already captures becomes `agent_mode` through
+  `LLMPreferences::update_feature_model_choices`, the same path a
+  server-fetched list takes, hopped onto the app thread by a
+  `ModelSpawner` installed at startup (`acp_agent::picker`), so the chip,
+  `/model` and the menu draw the agent's models with the agent's own names
+  and descriptions, and its current selection as the default;
+- the picked id, which upstream already puts on every request as
+  `params.model`, is sent as `session/set_config_option` after
+  `session/new` or `session/load`, **every turn**, the way the mode is;
+  not sent when it is the agent's current model or the placeholder, logged
+  as `requested x, not offered` when no model option offered it, and the
+  turn refused when the agent offered the id and then declined it;
+- the list is written to `fork::state_dir()/acp-models.json` when it
+  changes and read back before any turn, because
+  `UserWorkspaces::workspaceless_models_by_feature` is an in-memory
+  `Option` and the first relaunch ran a turn on Fable under a chip that
+  said Sonnet a second later.
+
+**Measured on the Windows release build**, `.fork/runs/model-2026-09-07/`:
+
+| | seen |
+|---|---|
+| the chip, 2 s into the first turn | *Fable (Fable 5.1 · Most capable for your hardest and longest-running tasks)*, from the agent's list, before the answer |
+| the chip clicked | *Default (recommended)*, *Opus (1M context)*, *Fable (selected)*, *Sonnet*, *Haiku*: the agent's five, under upstream's tabs |
+| Sonnet picked, *Which model are you?* | `session_model · current claude-fable-5-1; requested sonnet, sent`; the answer `claude-sonnet-5`; Claude Code's own transcript: `claude-fable-5-1` on the first assistant message, `claude-sonnet-5` on the second |
+| the third turn | the `session/load` reply reported *current* `claude-fable-5-1[1m]`; the pick was re-sent and the harness ran `claude-sonnet-5`. The resumed session reports one model and runs another until told, which is the mode's story again and why the send is per turn |
+| the first relaunch, `952d80a08` | chip *auto (cost-efficient)*, first turn on Fable with nothing requested, chip *Sonnet* after it: the list was gone and the pick was not. `5c1a1c346` keeps it on disk, and its own relaunch panicked at startup reaching `AIExecutionProfilesModel` before it was registered, the `has_singleton_model` hazard by the book; `58b449ccb` restores after that model. Measured on it: the chip read *Sonnet* before any turn and a new conversation's first turn ran on `claude-sonnet-5`, Claude Code's transcript agreeing |
+| a *NEW* pill beside the chip | upstream's new-models announcement, fired by the list changing from the placeholder to the agent's. Once per change of list, so once per agent, not per launch |
+
+**What the picker does not know.** The wire carries names, ids and
+descriptions and nothing about cost, so the menu cannot say what the
+person picking most wants to know. The agent's descriptions say *Most
+capable* and *Efficient for routine tasks*, which is as close as the
+protocol gets. And the *Full Terminal Use* tab stays empty: it reads
+`cli_agent`, a list nothing here fills.

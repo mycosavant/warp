@@ -1,0 +1,7 @@
+{
+  "ok": false,
+  "error": {
+    "code": "no_instance",
+    "message": "no local Warp control instances were discovered"
+  }
+}
