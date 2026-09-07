@@ -1613,7 +1613,23 @@ The agent *process* does still inherit Warp's working directory, because ACP's
 spawn config carries a command, args and env and no cwd. That is real but much
 less interesting than it looked.
 
-**Not yet:** `/compact`, model selection, and Warp's own tools.
+**Model selection is the agent's own list since 2026-09-07** (T14.14, then
+T21): the chip, `/model` and the menu show what the agent advertised on
+`session/new`, the pick rides every turn as `session/set_config_option`, and
+the list is kept in `<state dir>/fork/acp-models.json` so the first turn
+after a relaunch already runs on it. The Model Specs card beside the menu
+draws bars from a table this fork keeps, not from the wire, and its header
+says so: cost is the vendor's output list price relative to the dearest
+model the agent offers, intelligence and speed are a ranking written as an
+opinion. The defaults are `app/src/ai/acp_agent/specs.default.toml`; a copy
+at `<state dir>/fork/acp-model-specs.toml` lays over them by `id` (a row
+replaces, a new id adds, `as_of` and `source` carry the date the prices were
+read) and is re-read on every `session/new`, so a price goes stale by a text
+edit and no rebuild. An id the table does not know draws `?`. On Windows the
+state dir is `%LOCALAPPDATA%\warp\WarpOss\data`; `.fork/docs/composer.md`
+has the measurements.
+
+**Not yet:** `/compact` and Warp's own tools.
 
 ### Talking to an agent that is not Warp's: `warpctrl acp probe`
 
@@ -4167,7 +4183,7 @@ proof files pass between them as plain files. No SSH, no agent, no daemon.
 |---|---|
 | `C:\dev\build.ps1` | Builds `warp-oss.exe` with the env that winget's PATH changes never reach. |
 | `C:\dev\shot.ps1`  | Screenshots **one window by process name**, even when buried or unfocused (`PrintWindow`). Falls back to the whole virtual screen without `-Process`. |
-| `C:\dev\click.ps1` | Clicks inside a window, without touching the physical mouse. |
+| `C:\dev\click.ps1` | Clicks inside a window, without touching the physical mouse. `-Hover` posts the move and no button, which is how a menu's details pane is photographed for a row without choosing it (T21.2). |
 | `C:\dev\keys.ps1`  | Posts keystrokes to one window, without taking focus. |
 | `C:\dev\drag.ps1`  | Press-move-release inside one window, same mechanism as `click.ps1`. Superseded by `use_computer drag --window-id`; kept because it needs no build. |
 | `C:\dev\ctrlclick.ps1` | `click.ps1` with a modifier held through `keybd_event` around the posted click. Written 2026-09-05 for go-to-definition; holds VK_LWIN, because the editor's cmd modifier is the Super key on winit builds. Posted key messages do not set the modifier state the windowing layer reads, which is why it is real input. |

@@ -1,0 +1,27 @@
+=== will name the build v0.fork.5856078d9 ===
+=== building warp-oss (release, features: gui,warp_control_cli) at 14:19:28 ===
+     |
+2604 |             while let Ok(Some(item)) = sse.event_receiver.try_next() {
+     |                                                           ^^^^^^^^
+System.Management.Automation.RemoteException
+warning: methods `default_id` and `choices` are never used
+   --> app\src\ai\llms.rs:532:19
+    |
+488 | impl AvailableLLMs {
+    | ------------------ methods in this implementation
+...
+532 |     pub(crate) fn default_id(&self) -> &LLMId {
+    |                   ^^^^^^^^^^
+...
+536 |     pub(crate) fn choices(&self) -> impl Iterator<Item = &LLMInfo> {
+    |                   ^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+System.Management.Automation.RemoteException
+warning: `warp` (lib) generated 5 warnings
+    Finished `release` profile [optimized + debuginfo] target(s) in 9m 14s
+=== cargo exit 0 at 14:28:43 ===
+=== sidecar .\target\release\warp-oss.version = v0.fork.5856078d9 ===
+=== binary 2026-09-07 14:28:40 353510912 bytes ===
+=== warpctrl: present ===
+exit 0

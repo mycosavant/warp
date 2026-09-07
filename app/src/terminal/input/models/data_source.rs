@@ -645,7 +645,10 @@ impl SearchItem for ModelSearchItem {
                     .with_color(theme.disabled_ui_text_color().into())
                     .finish(),
                 )
-                .with_margin_bottom(12.)
+                // Tighter than upstream's 12 between header and bars: the
+                // menu's height does not grow with this pane, and at 12 the
+                // Cost row was clipped (measured, `specs-0-clipped-first-build.png`).
+                .with_margin_bottom(6.)
                 .finish()
             };
             let scores = render_model_spec_scores(
@@ -662,7 +665,7 @@ impl SearchItem for ModelSearchItem {
                 app,
             );
             let mut column =
-                Flex::column().with_child(Container::new(header).with_margin_bottom(12.).finish());
+                Flex::column().with_child(Container::new(header).with_margin_bottom(8.).finish());
             if let Some(tagline) = self.description.clone() {
                 column = column.with_child(note(tagline));
             }

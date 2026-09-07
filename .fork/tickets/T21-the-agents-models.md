@@ -146,8 +146,8 @@ The protocol has **two** shapes for model selection, and the fork reads one.
 |---|---|---|---|---|
 | `claude-agent-acp` | 0.73.0 | `configOptions`: `model` (category `model`), `effort` (`thought_level`), `agent` (no category) | `session/set_config_option` | **run**, 2026-09-07 |
 | `opencode` | 1.18.25 | `configOptions` with categories `model`, `mode`, `thought_level`, `agent_context`, `conversation`, `system_prompt`, `tab`, and the `models` draft beside them | `session/set_config_option` | strings in the binary, **read**; the 356-row OpenRouter catalogue arriving as `configOptions` was **seen** 2026-08-28 (I22) |
-| `@google/gemini-cli` | 0.58.0 | the **`models` draft** (`availableModels`, `currentModelId`) and `modes`; the bundle carries the `configOptions` schema but builds no such list | `session/set_model` (`unstable_setSessionModel`) | bundle **read**, not run |
-| `@zed-industries/codex-acp` | 0.16.0 | unknown: a native binary per platform, README lists slash commands, permissions, auth methods and no model selection | unknown | **not inspected** |
+| `@google/gemini-cli` | 0.58.0 | the **`models` draft** (`availableModels`, `currentModelId`) and `modes`; the bundle carries the `configOptions` schema but builds no such list | `session/set_model` (`unstable_setSessionModel`) | bundle **read**; **probed** 2026-09-07: `initialize` answered, `session/new` refused for want of a Gemini credential, so the list is unseen |
+| `@zed-industries/codex-acp` | 0.16.0 | unknown: a native binary per platform, README lists slash commands, permissions, auth methods and no model selection | unknown | **probed** 2026-09-07: `initialize` answered (`codex-acp` 0.16.0, protocol 1, session list/resume/close), `session/new` refused with `Authentication required`, so the list is unseen |
 | Grok | — | no ACP agent for xAI found on the npm registry. Upstream's Grok support is an OAuth token sent *inside the request to Warp's backend* (`api_keys_for_request`, `grok_oauth_access_token`), the same billing-substitution path as every BYO key, which the fork never reaches | — | `crates/ai/src/api_keys.rs`, **read** |
 
 So the honest answer to "is it plug and play": **the `configOptions` half
@@ -165,8 +165,18 @@ list would be.
 
 Items, none started:
 
-- [ ] **T21.3a** probe `codex-acp` and `gemini --acp` with `acp probe` and
-      fill the two rows above from the wire, not the bundle.
+- [x] **T21.3a** probed 2026-09-07, `.fork/runs/acp-survey-2026-09-07/`:
+      both agents answer `initialize` and refuse `session/new` without a
+      credential this machine does not have (Codex: a ChatGPT login or an
+      OpenAI key; Gemini: a Google login or a Gemini key). The model list is
+      on the `session/new` reply, so the two rows stay half-filled until the
+      maintainer supplies one. What the probes settled anyway: **both
+      advertise `authMethods`, and `acp_agent` never sends `authenticate`**.
+      With `claude-agent-acp` the login is Claude Code's own file and the
+      panel never needed the step; with either of these the panel would fail
+      every `session/new` the way the probe did. Sending `authenticate` with
+      a method id is small; choosing the method is the person's, as with
+      `WARP_FORK_ACP_MODE`. Filed as T21.3d below.
 - [ ] **T21.3b** run the picker against `opencode` on OpenRouter: 356 rows
       through `AvailableLLMs::new`, upstream's search box over them, and the
       pick sent as `session/set_config_option`. Measured for
@@ -174,6 +184,12 @@ Items, none started:
       availability" and it may already work.
 - [ ] **T21.3c** the `models` draft as a second door, if gemini is wanted
       in the panel.
+- [ ] **T21.3d** `authenticate`: an agent that lists `authMethods` on
+      `initialize` gets the one `WARP_FORK_ACP_AUTH=<method id>` names, sent
+      before `session/new`, and the panel reports the refusal in the agent's
+      words when none is named. Blocked on a credential to measure against,
+      not on code. Whether a login made in the agent's own CLI is found by the
+      ACP process is the first thing to measure once one exists.
 
 ### T21.4 — OpenRouter, custom inference, and what the fork already has
 

@@ -41,6 +41,13 @@
 
     -EventLog       Accepted and means PRODUCT, which carries the log now.
 
+    -Agent '<cmd>'  Name a different agent for this launch, in place of the
+                    profile's `WARP_FORK_ACP_COMMAND`. The same rule applies:
+                    start it inside the distribution, or a WSL pane's cwd
+                    does not resolve. Written for T21.3b, the picker against
+                    opencode's OpenRouter list:
+                      -Agent 'wsl.exe -d Ubuntu --shell-type login -- opencode acp'
+
     -Console        Also open the wide listener (`WARP_FORK_CONTROL_BIND`) so
                     a phone on the LAN can pair and watch: `warpctrl pair show`
                     prints the QR. The address is `-Bind`, default
@@ -102,6 +109,7 @@ param(
     # and maps to `-Stock`; `-Launch` was the only way to launch and is now the
     # default, so it is a no-op.
     [switch]$Launch,
+    [string]$Agent,
     [switch]$On,
     [switch]$Off
 )
@@ -339,6 +347,14 @@ if ($live.Count -gt 0) {
 # rig without anything printed saying so.
 foreach ($name in $AllVars) { Remove-Item -Path "env:$name" -ErrorAction SilentlyContinue }
 foreach ($i in $ToSet) { Set-Item -Path "env:$($i.Name)" -Value $i.Value }
+if ($Agent) {
+    if ($Stock) {
+        Write-Host "warpdev: -Agent names a fork agent; -Stock has none." -ForegroundColor Red
+        exit 2
+    }
+    Set-Item -Path 'env:WARP_FORK_ACP_COMMAND' -Value $Agent
+    $ProfileName = "$ProfileName, agent: $Agent"
+}
 Write-Host "warpdev: launching $ProfileName" -ForegroundColor Green
 
 # `-NoNewWindow` is load-bearing and not cosmetic. `warp-oss.exe` is a

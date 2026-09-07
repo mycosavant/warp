@@ -62,7 +62,11 @@ pub(crate) const USER_TABLE_FILE: &str = "acp-model-specs.toml";
 /// The card's header for an agent's list, replacing upstream's *Warp's
 /// benchmarks…*, which describes floats Warp's server sends for Warp's own
 /// agent and nothing about a list that came from `session/new`.
-pub(crate) const AGENT_MODEL_SPECS_DESCRIPTION: &str = "Cost is the vendor's output price, relative to the dearest model this agent offers. Intelligence and speed are a ranking kept in this fork, not a benchmark.";
+///
+/// Two lines at the card's width, measured: the first cut was three, and
+/// with the two lines under it the Cost row fell off the bottom of a menu
+/// whose height does not follow its details pane.
+pub(crate) const AGENT_MODEL_SPECS_DESCRIPTION: &str = "Cost: output list price against the dearest model offered. Intelligence and speed: this fork's ranking, not a benchmark.";
 
 /// Unknown, for a field of `LLMSpec` this module cannot fill. See the module
 /// docs.
