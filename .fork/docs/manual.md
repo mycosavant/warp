@@ -3272,6 +3272,43 @@ Give it a URL, a key and at least one model. That is the whole setup. A pasted
 Anthropic, OpenAI or OpenRouter key on the same page works too, with no endpoint
 at all.
 
+Two things about the URL field, both found 2026-09-07 and both fixed the same
+day. **It takes a base URL or a full route.** The page asks for a base
+(`https://openrouter.ai/api/v1`) because upstream's server appends the route;
+the fork dials the URL itself and used to post to whatever was stored, so a
+person following the page posted to `/api/v1` and read the provider's 404. The
+schema's route (`/chat/completions`, `/responses`, `/messages`) is appended
+now when it is missing and kept when it is there. **And a host on this machine
+is accepted, over plain http, with no key.** Upstream's 2026-08-26 merge added a
+validator that requires https and refuses every loopback, private and
+link-local host, because upstream's server is the one dialing the URL. It ran on
+the modal's Save and on every settings-file load, so between that merge and
+today a local endpoint was refused at the form and, declared in the file,
+invalidated every endpoint in it. This section promised otherwise throughout.
+The fork's rule is https for a public host and http or https for a local one
+(`validate_custom_endpoint_url` in `crates/ai`), and the key may stay empty
+for a local one because no auth header is sent for an empty key.
+
+The endpoint can also be declared in `settings.toml` directly, which is what a
+scratch profile does:
+
+    [agents.custom_endpoints.llama-local]
+    name = "llama"
+    base_url = "http://127.0.0.1:8080/v1"
+    schema = "openai_chat_completions"
+    models = [{ name = "gemma-4-12b", config_key = "gemma-4-12b" }]
+
+The key for a declared endpoint lives in the OS keychain under the endpoint's
+id, never in this file, and a local endpoint needs none.
+
+A third thing from the same merge, found by the first live run rather than by
+reading: the endpoint a person saves is now that definition joined with its
+key by the key manager, and the fork's resolver was still reading the
+pre-merge vector, which is empty once the settings file has spoken. So a
+correctly declared endpoint answered *"no Custom Inference endpoints are
+configured"* in the log, twice per prompt. Fixed the same night; the install
+test now goes through the definitions door.
+
 `settings.toml` only chooses among what is stored there:
 
     [agents.local_ai]
@@ -3302,11 +3339,29 @@ loopback and `api.anthropic.com` with your own key. What both have in common —
 and the whole point — is that Warp is not in the middle. For a fully on-device
 setup, point a Custom Inference endpoint at whatever you already run:
 
-    http://127.0.0.1:11434/v1/chat/completions    # Ollama
-    http://127.0.0.1:8080/v1/chat/completions     # llama.cpp / LM Studio
+    http://127.0.0.1:11434/v1    # Ollama
+    http://127.0.0.1:8080/v1     # llama.cpp / LM Studio
 
 Protocol comes from the endpoint's schema dropdown — OpenAI Chat Completions,
 OpenAI Responses, or Anthropic Messages. All three are implemented.
+
+**Switch the model's thinking off at the server.** Measured 2026-09-07 with
+Gemma 4 12B on llama-server: with thinking on, a Next Command-shaped request
+returned an empty `content` and 64 tokens of `reasoning_content` every time,
+which the feature would show as a blank suggestion and no error. The fork's
+client sends `max_tokens` and `temperature` and nothing that names a thinking
+mode, because the three schemas spell it differently and llama.cpp, Ollama and
+LM Studio each have a server-side switch. `C:\dev\llama\serve.ps1` sets
+`LLAMA_ARG_CHAT_TEMPLATE_KWARGS={"enable_thinking":false}`; with it the same
+request answered `git add crates/ai/src/api_keys.rs` in 14 tokens at 68 tok/s,
+the 141-token prompt at 479 tok/s.
+
+**The server can be on either side of the VM.** Under mirrored networking a
+listener on `127.0.0.1` in WSL answers the Windows Warp and a listener on the
+Windows side answers a WSL pane and an agent started inside the distribution,
+both measured 2026-09-07. The one here runs on the Windows side because the
+official llama.cpp release ships a CUDA build for Windows and none for Linux,
+and no CUDA toolkit is installed in the distribution to build one with.
 
 ### Trying it
 
@@ -3317,10 +3372,23 @@ A wrong model name comes back as the provider's own 404, which names the model;
 set `agents.local_ai.model` to fix it. An endpoint that is not listening comes
 back naming the URL it could not reach.
 
-This part has *not* been verified against a real provider — there was no key or
-local LLM available to test with. The request shape is asserted field by field
-against a stub server, but a stub agrees with whatever it is told. One real
-request is worth more than that whole test file.
+Verified against a real provider on 2026-09-07, after the three fixes above:
+llama-server on the Windows side with Gemma 4 12B, a scratch profile on the
+Windows debug build (`.fork/runs/localmodel-2026-09-07/`). Next Command drew
+`git diff` as ghost text, Prompt Suggestions put *"What changes were made to
+main.rs and README.md?"* above the input, and the commit dialog filled itself
+with a two-line message, each within a second or two of the trigger. Block
+titles were not driven.
+
+**In a routed WSL pane the commit message does not arrive**, and the other
+three are unaffected. A routed pane's diff state is remote, and the message
+is generated by the remote-server daemon inside the distribution with its own
+`AIClient`, in a process where this configuration was never installed and
+could not be, so the dialog stays blank and the log says *"No AI endpoint is
+configured"*. Measured against the same dialog in the same pane unrouted
+(`WARP_FORK_WSL_AUTO_CONNECT=0`), which filled in. The fix is for the daemon
+to hand back the diff and the GUI to generate, a protocol addition that is
+filed and not built.
 
 ## The agent, answered by your own Claude (experimental)
 
@@ -4193,7 +4261,7 @@ proof files pass between them as plain files. No SSH, no agent, no daemon.
 | `C:\dev\build.ps1` | Builds `warp-oss.exe` with the env that winget's PATH changes never reach. |
 | `C:\dev\shot.ps1`  | Screenshots **one window by process name**, even when buried or unfocused (`PrintWindow`). Falls back to the whole virtual screen without `-Process`. |
 | `C:\dev\click.ps1` | Clicks inside a window, without touching the physical mouse. `-Hover` posts the move and no button, which is how a menu's details pane is photographed for a row without choosing it (T21.2). |
-| `C:\dev\keys.ps1`  | Posts keystrokes to one window, without taking focus. Knows the arrow keys, Home, End and the page keys since 2026-09-07. `-Text` posts characters and **an inline menu's search box does not take them** (measured); use it for the shell, and walk a menu with the arrows. |
+| `C:\dev\keys.ps1`  | Posts keystrokes to one window, without taking focus. Knows the arrow keys, Home, End, the page keys, `Plus` and `Minus` since 2026-09-07. `-Text` posts characters and **an inline menu's search box does not take them** (measured); use it for the shell, and walk a menu with the arrows. **`-Ctrl`/`-Shift` do not reach a shortcut** (measured the same day: `-Key Plus -Ctrl -Shift` typed `=` into the input), because the window reads modifier state from the keyboard, not from the posted key-downs; open a surface through `warpctrl surface` or a click instead. |
 | `C:\dev\drag.ps1`  | Press-move-release inside one window, same mechanism as `click.ps1`. Superseded by `use_computer drag --window-id`; kept because it needs no build. |
 | `C:\dev\ctrlclick.ps1` | `click.ps1` with a modifier held through `keybd_event` around the posted click. Written 2026-09-05 for go-to-definition; holds VK_LWIN, because the editor's cmd modifier is the Super key on winit builds. Posted key messages do not set the modifier state the windowing layer reads, which is why it is real input. |
 | `C:\dev\winclick_real.ps1` | A real Win+click: `SetCursorPos` + `mouse_event` with VK_LWIN held. Moves the real cursor, unlike everything above; the one shape that armed the editor's definition link. The context menu's *Go to definition* needs neither script. |

@@ -262,3 +262,47 @@ for the gate first":
 So "OpenRouter support" splits: the small features have it; the panel has it
 through `opencode` and needs a measurement; the secrets store I22 wants is
 untouched by any of this and keeps its threat-model gate.
+
+### T21.5 — A model on this machine, and the wiring that was refused (2026-09-07)
+
+The maintainer asked which open-weight model fits the 12 GB card with the
+least quantization loss, and asked for the OpenRouter and local wiring of the
+small features to be checked. `.fork/runs/localmodel-2026-09-07/README.md`
+holds the survey and the numbers; what belongs here is what it changed.
+
+- **The wiring was dead for twelve days, and T21.4 above was written against
+  it without noticing.** Upstream's 2026-08-26 merge added
+  `validate_custom_endpoint_url` (https only, no local hosts), run on the
+  modal and on every settings load. So "the fork's `local_completion` already
+  uses it" was true of the code and false of the product: a loopback endpoint
+  could not be saved and, declared in the file, took every endpoint with it.
+  T3's tests never meet the validator. Fixed in `7529749a8`; the account is
+  in `T03-small-ai-features.md`.
+- **A second one beside it**: the page asks for a base URL and the fork
+  posted to it verbatim, so an OpenRouter endpoint entered as the page
+  says would have posted to `/api/v1`. `with_route` appends the route.
+- **The runtime is llama-server on the Windows side**, reachable from WSL at
+  `127.0.0.1:8080` under mirrored networking (measured both ways). Not
+  Ollama and not the LM Studio already installed: neither can put a MoE's
+  experts in RAM and its attention on the GPU, which is what the strongest
+  model that fits needs. `C:\dev\llama\serve.ps1`.
+- **Two models, one per job.** Gemma 4 12B at dynamic 4-bit for the four
+  small features (7.4 GB, all on the GPU, 68 tok/s measured, no RAM beside a
+  build); Qwen3.6-35B-A3B at dynamic 4-bit for the panel (22 GB, experts in
+  RAM via `--n-cpu-moe`, ~38 tok/s on a 3060-class card in others' hands).
+  The 27B dense models do not fit at agent speed. The Qwen is not downloaded:
+  one disk, 49 GB free.
+- **Thinking must be off at the server.** With it on, a `max_tokens: 64`
+  one-shot returned empty `content` every time and no error.
+- **Measured end to end on the Windows debug build, three of the four
+  features.** Next Command, Prompt Suggestions and the commit message each
+  drew from the local model within a second or two; the run table is in the
+  README. **A third stale point from the same merge** was found by that run
+  and fixed in `26c376090`: the reader looked at the pre-merge endpoint
+  vector, which is empty once the settings file has spoken.
+- **Open: the commit message in a routed WSL pane.** The daemon inside the
+  distribution generates it with its own `AIClient`, in a process where the
+  fork's config is not installed, so on the recommended configuration this
+  one feature is dead and the log says *"No AI endpoint is configured"*.
+  Unrouted, it works. Fix: the daemon returns the diff, the GUI generates; a
+  protocol addition. Filed on `next.html`.

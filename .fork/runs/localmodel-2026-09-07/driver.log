@@ -1,0 +1,40 @@
+[20:15:12] local-model run, binary v0.fork.7529749a8
+[20:15:12] server: {"models":[{"name":"gemma-4-12b","model":"gemma-4-12b","modified_at":"","size":"
+[20:15:12] server requests before: 4
+[20:15:21] instance: {"instances":[{"instance_id":"inst_1c5effe852814ee79aeaafddb488fc98","pid":53060,"channel":"warp-oss","app_id":"dev.warp.WarpOss","app_version":"v0.fork.7529749
+[20:15:36] server requests after one command: 4
+[20:15:43] server requests settled: 4
+[20:15:43] part 1 done; the commit dialog is driven by hand from local-2-settled.png
+[20:17:18] local-model run, binary v0.fork.7529749a8
+[20:17:18] server: {"models":[{"name":"gemma-4-12b","model":"gemma-4-12b","modified_at":"","size":"
+[20:17:18] server requests before: 4
+[20:17:26] instance: {"instances":[{"instance_id":"inst_8958644973c74683a505d349402bb301","pid":3808,"channel":"warp-oss","app_id":"dev.warp.WarpOss","app_version":"v0.fork.7529749a
+[20:17:42] server requests after one command: 4
+[20:17:48] server requests settled: 4
+[20:17:48] part 1 done; the commit dialog is driven by hand from local-2-settled.png
+[20:23:25] local-model run, binary v0.fork.7529749a8
+[20:23:25] server: {"models":[{"name":"gemma-4-12b","model":"gemma-4-12b","modified_at":"","size":"
+[20:23:25] server requests before: 4
+[20:23:32] instance: {"instances":[{"instance_id":"inst_66b0b14098e441538cd71b8963d1f5f9","pid":28328,"channel":"warp-oss","app_id":"dev.warp.WarpOss","app_version":"v0.fork.7529749
+[20:23:47] server requests after one command: 4
+[20:23:55] server requests settled: 4
+[20:23:55] part 1 done; the commit dialog is driven by hand from local-2-settled.png
+[20:31:09] local-model run, binary v0.fork.7529749a8
+[20:31:09] server: {"models":[{"name":"gemma-4-12b","model":"gemma-4-12b","modified_at":"","size":"
+[20:31:09] server requests before: 4
+[20:31:16] instance: {"instances":[{"instance_id":"inst_44f743374d874fa39b82ca33c825d212","pid":30900,"channel":"warp-oss","app_id":"dev.warp.WarpOss","app_version":"v0.fork.26c3760
+[20:31:32] server requests after one command: 7
+[20:31:39] server requests settled: 7
+[20:31:39] part 1 done; the commit dialog is driven by hand from local-2-settled.png
+[20:31:58] part 2: requests before: 7
+[20:31:59] code review panel: sent Plus (vk 0xbb) to 0x640b9c
+[20:32:04] requests after opening the panel: 7
+[20:33:32] commit button at 968,65: CLICKED window(968,65) -> client(968,65) pid=30900
+[20:33:42] requests after the dialog: 7
+515:2026-09-07T20:33:32Z [WARN] [warp::code_review::git_dialog::commit] Failed to autogenerate commit message: No AI endpoint is configured. Add an API key or a Custom Inference endpoint under Settings > Warp Agent, or point `agents.local_ai.endpoint` at a local server.
+[20:35:42] part 3: instances after close: {"instances":[]}
+[20:35:42] requests before: 7
+[20:36:04] session: 
+[20:36:11] requests after the panel: 11
+[20:36:24] commit button at 968,65: CLICKED window(968,65) -> client(968,65) pid=48340
+[20:36:36] requests after the dialog: 12

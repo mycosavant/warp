@@ -135,11 +135,16 @@
   <article class="item" data-id="runtime">
     <div class="rank">2</div>
     <div class="body">
-      <div class="head"><h2>A model runtime inside the distribution</h2><span class="status">gate</span></div>
-      <div class="meta"><span>needs a say-so</span><span>RTX 5070, 12 GB, on the host</span></div>
-      <p>Nothing on either side of the VM serves a model today: no <code>ollama</code>, no <code>llama-server</code>, nothing on <code>:11434</code>. The agent runs inside the distribution, so the runtime must be reachable from there. Two placements: <code>ollama</code> in WSL with CUDA passthrough, which is the shape the pane already has; or on Windows, reachable at <code>localhost</code> under <code>networkingMode=mirrored</code>, which the console already relies on. <strong>Installing either is a change to the machine the agent will not make unasked.</strong> A 12 GB card fits a 7B to 14B model at 4-bit; the point is a turn that never leaves the machine, not a good one.</p>
-      <div class="gates"><span class="k">The ask</span><ul>
-        <li>Which side, and which model. The agent's recommendation: <code>ollama</code> in WSL, one coding model that fits the card, because the pane, the agent and the runtime then share a filesystem and a loopback.</li>
+      <div class="head"><h2>A model runtime, reachable from both sides</h2><span class="status">done 2026-09-07</span></div>
+      <div class="meta"><span>llama-server b10844, Windows side</span><span><code>.fork/runs/localmodel-2026-09-07/</code></span></div>
+      <p>Decided by measuring rather than by the recommendation this item carried in the morning. Under mirrored networking a loopback listener on either side answers the other, both directions checked with a throwaway server, so the side is a matter of toolchain: the official llama.cpp release ships a CUDA build for Windows and none for Linux, and no CUDA toolkit is installed in the distribution. So <code>C:\dev\llama\b10844\llama-server.exe</code>, unzipped and not installed, with <code>serve.ps1</code> beside it, and models under <code>C:\dev\models\</code>. Not <code>ollama</code>: it has no expert-offload flag, and the strongest model that runs at agent speed on 9.6 GB of free VRAM is a 35B MoE whose experts have to live in RAM. Not LM Studio, which is installed and empty: 0.4 dropped that toggle too.</p>
+      <p>Gemma 4 12B at dynamic 4-bit is on disk and answers a Next Command-shaped request in half a second at 68 tok/s, with thinking switched off at the server, because with it on the answer is empty every time. The survey of what fits, with the two-model recommendation, is in the run README.</p>
+      <p>And the first thing it was pointed at was the four small features, which found three stale points from one upstream merge, each one layer under the last: the form refused a local URL, the settings file dropped the endpoint, the reader looked in the pre-merge vector. Fixed the same night (<code>7529749a8</code>, <code>26c376090</code>); three of the four features then drew from the local model on the debug build, screenshots in the run.</p>
+      <div class="gates"><span class="k">What is still the maintainer's</span><ul>
+        <li>The 22 GB Qwen3.6-35B-A3B for the panel. The machine has one disk with 49 GB free, and the fork's own builds need room on it.</li>
+      </ul></div>
+      <div class="gates"><span class="k">Open from the run</span><ul>
+        <li>The commit message in a <em>routed</em> WSL pane: the daemon inside the distribution generates it with its own client, where the fork's config is not installed, so on the recommended configuration this one feature is dead. The daemon should return the diff and the GUI generate; a protocol addition.</li>
       </ul></div>
     </div>
   </article>
@@ -149,7 +154,7 @@
     <div class="body">
       <div class="head"><h2>A local model answers the panel</h2><span class="status">open</span></div>
       <div class="meta"><span>the thesis, measured</span><span>egress recipe: <code>.fork/runs/egress-windows-2026-09-05/</code></span></div>
-      <p><code>opencode</code> speaks to an OpenAI-compatible endpoint from its own config, so the panel path is unchanged: <code>WARP_FORK_ACP_COMMAND</code> names the same agent and the agent names the runtime. What is measured is the claim the fork makes in its first sentence: one turn, the event log's <code>session_model</code> line naming the local model, the harness transcript agreeing, and a socket census during the turn showing loopback and nothing else. The specs table gets a row with <code>output = 0</code>, so the cost bar is empty for the one honest reason.</p>
+      <p>Two agents can do this without a line of fork code. <code>opencode</code> speaks to an OpenAI-compatible endpoint from its own config. <code>claude-agent-acp</code> honours <code>ANTHROPIC_BASE_URL</code>, and llama-server's <code>/v1/messages</code> answered the Anthropic shape correctly on 2026-09-07, so the recommended agent keeps every permission measurement this fork has made and swaps only the model. Either way the panel path is unchanged: <code>WARP_FORK_ACP_COMMAND</code> names the same agent and the agent names the runtime. What is measured is the claim the fork makes in its first sentence: one turn, the event log's <code>session_model</code> line naming the local model, the harness transcript agreeing, and a socket census during the turn showing loopback and nothing else. The specs table gets a row with <code>output = 0</code>, so the cost bar is empty for the one honest reason.</p>
       <div class="gates"><span class="k">Falsifier</span><ul>
         <li>A socket to OpenRouter during a local turn: opencode consulting its provider list, or a title being generated elsewhere. Then the local turn is not local and the census says where it went.</li>
         <li>The turn answers and the tool calls do not: a small model that cannot drive opencode's tools is a fact about the model, recorded, not a defect in the panel.</li>

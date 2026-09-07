@@ -112,6 +112,27 @@ count behind a pinned test. And **the fork's stale-doc question is worth asking
 of upstream files too**: the first twelve were all fork-authored, which quietly
 suggested the defect was ours.
 
+**The fourteenth was falsified by a merge, and its tests stayed green for
+twelve days.** Found 2026-09-07. `.fork/docs/manual.md` promised since T3 that
+a Custom Inference endpoint could be `http://127.0.0.1:8080` and the four small
+AI features would go there. Upstream's 2026-08-26 merge added a validator that
+requires https and refuses every loopback and private host, run on the modal's
+Save and on every settings-file load, so from that day a local endpoint was
+refused at the form and, declared in the file, invalidated every endpoint in it.
+T3's 64 tests build the endpoint struct by hand and never meet the validator.
+Neither author was wrong when they wrote: upstream's server dials the URL, so
+its rule is right there, and the fork dials it from this process, so the manual
+was right here. A merge put the two in one binary and nothing in the toolchain
+could see it. The shape to remember: **a fork claim that depends on upstream
+not doing something is re-tested by every merge, and only a test that goes
+through upstream's door can see it fail.** Fixed the same day in
+`validate_custom_endpoint_url`, with the argument beside it, and then twice
+more that night, because the same merge had moved the endpoint into a
+settings definition the fork's reader did not look at: the form refused the
+URL, the file dropped the endpoint, the reader looked in the pre-merge
+vector, and the tests at each layer were green. The first live run found the
+third one in a minute (`.fork/runs/localmodel-2026-09-07/`).
+
 The pattern is always the same: the code was corrected and the prose above it was
 not, so the doc preserves a design that was considered and rejected. Two of these
 were in files whose *other* comments argue the correction at length. **Ask that

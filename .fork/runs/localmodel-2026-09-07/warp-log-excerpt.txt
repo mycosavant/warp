@@ -1,0 +1,5 @@
+242: 2026-09-07T20:31:12Z [INFO] [remote_server::manager] Remote server connected: session=SessionId(6847623974341820394) host=7e899255-dede-4a67-9493-1e5370523a85
+244: 2026-09-07T20:31:12Z [INFO] [remote_server::manager] Remote server connected: session=SessionId(13909863003035477068) host=7e899255-dede-4a67-9493-1e5370523a85
+274: 2026-09-07T20:31:16Z [INFO] [remote_server::manager] Remote server connected: session=SessionId(18003253491073118796) host=7e899255-dede-4a67-9493-1e5370523a85
+373: 2026-09-07T20:31:19Z [INFO] [remote_server::manager] Remote server connected: session=SessionId(11310379390121403361) host=7e899255-dede-4a67-9493-1e5370523a85
+515: 2026-09-07T20:33:32Z [WARN] [warp::code_review::git_dialog::commit] Failed to autogenerate commit message: No AI endpoint is configured. Add an API key or a Custom Inference endpoint under Settings > Warp Agent, or point `agents.local_ai.endpoint` at a local server.

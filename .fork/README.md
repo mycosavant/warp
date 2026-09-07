@@ -110,6 +110,7 @@ undated in the source and say so in their filename. Later decisions live in
 | `runs/pairing-2026-09-06/` | a control pairing with no clock, the block's three states, `via: paired_device` in the record and "from the phone" in the trace |
 | `runs/page-2026-09-06/` | the console's header, diff and notify button on the Windows build; the h2 refusal found and closed; the chip flipping back on its own |
 | `runs/model-2026-09-07/` | the panel's model chip picking the ACP agent's model, measured to Claude Code's own transcript; a stop notification carrying the agent's answer; the list lost on relaunch and kept on disk |
+| `runs/localmodel-2026-09-07/` | a model on this machine: the hardware measured, the 2026 open-weight field against 9.6 GB of free VRAM and 49 GB of disk, llama-server on the Windows side with Gemma 4 12B, and the four small features measured against it; three stale points from one upstream merge found and fixed on the way, and the commit message in a routed WSL pane found dead |
 | `runs/phone-2026-09-06/` | the phone checklist on an Android emulator: the authority installed through Settings, the page paired over TLS, a notification through a worker, Yes and a prompt from the phone, the home-screen install; four defects found and fixed, and Android not running a backgrounded Chrome recorded as the push case |
 
 ## viewer/ — fixtures the trace is pinned against

@@ -18,6 +18,10 @@ the same shape. Started 2026-09-07 as I19's first step, done as a habit.
 | date | # | what | stopped work? | where it went |
 |---|---|---|---|---|
 | 2026-09-07 | a1 | Named `opencode acp` for a launch from the Windows build and every turn failed at `initialize` with *Incoming transport closed*; the panel said nothing about why. The login shell had no nvm on its PATH | yes | the absolute path; `.fork/docs/manual.md`, "Naming an agent that lives under nvm". Open: the panel could show the agent's stderr on a transport that closes at `initialize` |
+| 2026-09-07 | a2 | Declared a loopback Custom Inference endpoint the way the manual said and the four small features answered *"no Custom Inference endpoints are configured"*; the form refused the URL too. Three stale points from upstream's 2026-08-26 merge, one under the other | yes, an hour | `7529749a8`, `26c376090`; `T03`, `CLAUDE.md`'s fourteenth. Open: a test that goes through upstream's door, so the next merge cannot do this silently |
+| 2026-09-07 | a3 | Two release-build launches on a scratch profile ran on the real profile: `WARP_DATA_PROFILE` is debug-only and a relocated `LOCALAPPDATA` moves the discovery record and nothing else | yes, two builds | the debug binary, as the cancel run had already found; `run.sh` says why. Open: the manual's scratch-profile recipe is Linux-only |
+| 2026-09-07 | a4 | The commit dialog in a routed WSL pane stayed blank with the local model configured: the daemon generates the message in a process that has no fork config | no | `next.html`, the runtime item; `wsl.md` diff-panel row. Fix is a protocol addition (daemon returns the diff, GUI generates) |
+| 2026-09-07 | a5 | `keys.ps1 -Key Plus -Ctrl -Shift` typed `=` into the input; posted modifier key-downs are not modifier state | no | `warpctrl surface code-review open`, or the footer chip; the manual's script table |
 
 ## Notes
 

@@ -134,3 +134,32 @@ BYO keys stay disabled for anonymous users. Not T3-caused; it is in the
 baseline. Recorded here because it was previously counted anonymously among
 "the same failure families" and deserves a name.
 
+### Re-read 2026-09-07: the local endpoint this ticket promised was refused for twelve days
+
+Found while checking the OpenRouter wiring for T21. Upstream's 2026-08-26
+merge (`1e45ef773`, APP-5380, "Share custom inference endpoints across GUI
+and TUI") added `validate_custom_endpoint_url`: https only, and every
+loopback, private and link-local host refused. It runs on the modal's Save
+and on every settings-file load through `CustomEndpointDefinitions`, so a
+local endpoint was refused at the form and, declared in `settings.toml`,
+invalidated every endpoint in the file. **The 64 tests above stayed green**,
+because every one builds `CustomEndpoint` by hand and none goes through the
+validator. Upstream's rule is right for upstream, whose server dials the URL;
+this fork dials it from this process, so the rule is now https for a public
+host and http or https for a local one, with the key optional for a local
+one. Second finding in the same file: the page asks for a *base* URL and
+`local_completion` posted to it verbatim, so a person following the page
+posted to `/api/v1`. `with_route` appends the schema's route when missing.
+Third, found by the first live run and not by reading: the same merge made
+a saved endpoint a settings *definition* joined with a keychain key, resolved
+by `ApiKeyManager::custom_endpoints()`, and `config::refresh` still read
+`keys().custom_endpoints`, the pre-merge vector, which is empty once the
+settings file has spoken. A correctly declared endpoint logged *"no Custom
+Inference endpoints are configured"* twice per prompt. The install test now
+declares one through the definitions door.
+
+The "not verified against a real provider" paragraph above is answered the
+same day: llama-server b10844 with Gemma 4 12B on the Windows side answers
+a Next Command-shaped request at 68 tok/s, and the Warp-side run is in
+`.fork/runs/localmodel-2026-09-07/`.
+
