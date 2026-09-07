@@ -77,9 +77,16 @@
 //! here and no permission request involved. Validating the value does not fix
 //! that and is not claimed to.
 
+use std::collections::HashMap;
+
 use agent_client_protocol::schema::v1::{
     SessionConfigId, SessionConfigKind, SessionConfigOption, SessionConfigOptionCategory,
-    SessionConfigOptionValue, SessionConfigSelectOptions, SessionId, SetSessionConfigOptionRequest,
+    SessionConfigOptionValue, SessionConfigSelectOption, SessionConfigSelectOptions,
+    SessionConfigValueId, SessionId, SetSessionConfigOptionRequest,
+};
+
+use crate::ai::llms::{
+    AvailableLLMs, LLMContextWindow, LLMId, LLMInfo, LLMProvider, LLMUsageMetadata,
 };
 
 /// The agent's claim about which model is selected and what else may be.
@@ -127,11 +134,10 @@ impl Catalog {
     /// render could never have shown — and refuses any value the option did not
     /// offer, for the same reason one field along. See [`advertises`].
     ///
-    /// Dead in this build only because no surface reaches for it yet: the
-    /// model picker (T14.14's second half) is the caller, and it arrives after
-    /// this seam. Until then the construction is pinned by the tests in this
-    /// file rather than by a live render.
-    #[cfg_attr(not(test), allow(dead_code))]
+    /// Reached through [`Catalog::request_for_value`] since 2026-09-07, when
+    /// the second half of T14.14 arrived: the panel's own picker, fed by
+    /// [`Catalog::picker_choices`], with the picked id riding the request the
+    /// way upstream's own model id always did.
     pub(crate) fn request(
         &self,
         session_id: &SessionId,
@@ -149,6 +155,134 @@ impl Catalog {
         ))
     }
 }
+
+impl Catalog {
+    /// The send door, entered from the panel: the request that sets the model
+    /// option offering `value`, or `None` when no model option offered it.
+    ///
+    /// The panel hands over an id and not an option, because the picker it
+    /// came through knows nothing of config options. The id is matched against
+    /// every model option this catalog holds, through [`Catalog::request`], so
+    /// a value that qualifies here was on the wire under `category: "model"`.
+    pub(crate) fn request_for_value(
+        &self,
+        session_id: &SessionId,
+        value: &str,
+    ) -> Option<SetSessionConfigOptionRequest> {
+        self.options.iter().find_map(|option| {
+            let value = SessionConfigOptionValue::ValueId {
+                value: SessionConfigValueId::from(value.to_owned()),
+            };
+            self.request(session_id, &option.id, value)
+        })
+    }
+
+    /// The model the agent says it is on, by the first model select's current
+    /// value.
+    pub(crate) fn current(&self) -> Option<String> {
+        self.options.iter().find_map(|option| match &option.kind {
+            SessionConfigKind::Select(select) => Some(select.current_value.0.to_string()),
+            _ => None,
+        })
+    }
+
+    /// The agent's model list in the shape the panel's picker reads (T14.14,
+    /// the second half).
+    ///
+    /// **Why the picker is upstream's and not a new surface.** The panel
+    /// already has a model control: the chip on the input, `/model`, and the
+    /// inline menu they open, all reading `ModelsByFeature::agent_mode` and
+    /// writing the choice into the execution profile that every request's
+    /// `model` field is built from. In this fork that list came from Warp's
+    /// server, which the egress backstop refuses, so the control drew
+    /// upstream's placeholder (`auto (cost-efficient)`) and nothing else, and a
+    /// person reading the chip was told the panel's agent ran on a model it
+    /// had never heard of. Replacing the list is the smallest change that makes
+    /// the existing control true: the agent's models, named as the agent
+    /// names them, with the agent's current selection as the default.
+    ///
+    /// The first model select only, flattened across groups. A second model
+    /// option is a thing no agent surveyed has shipped and the picker has one
+    /// list; the log line still names every option.
+    ///
+    /// The fields the picker reads that the protocol does not carry are left
+    /// at their neutral values: no usage multiplier, no provider, no context
+    /// window. Nothing here says a model costs what it costs, which is the
+    /// one thing the person picking wants to know and the one thing the wire
+    /// does not say.
+    pub(crate) fn picker_choices(&self) -> Option<AvailableLLMs> {
+        let select = self.options.iter().find_map(|option| match &option.kind {
+            SessionConfigKind::Select(select) => Some(select),
+            _ => None,
+        })?;
+        let offered: Vec<&SessionConfigSelectOption> = match &select.options {
+            SessionConfigSelectOptions::Ungrouped(options) => options.iter().collect(),
+            SessionConfigSelectOptions::Grouped(groups) => groups
+                .iter()
+                .flat_map(|group| group.options.iter())
+                .collect(),
+            // `#[non_exhaustive]`: a shape this build cannot read is a list it
+            // cannot show, as in `advertises`.
+            _ => return None,
+        };
+        let choices = offered
+            .into_iter()
+            .map(|option| LLMInfo {
+                display_name: option.name.clone(),
+                base_model_name: option.name.clone(),
+                id: LLMId::from(option.value.0.to_string()),
+                reasoning_level: None,
+                usage_metadata: LLMUsageMetadata {
+                    request_multiplier: 1,
+                    credit_multiplier: None,
+                },
+                description: option.description.clone(),
+                disable_reason: None,
+                vision_supported: true,
+                spec: None,
+                provider: LLMProvider::Unknown,
+                host_configs: HashMap::new(),
+                discount_percentage: None,
+                context_window: LLMContextWindow::default(),
+            })
+            .collect::<Vec<_>>();
+        AvailableLLMs::new(
+            LLMId::from(select.current_value.0.to_string()),
+            choices,
+            None,
+        )
+        .ok()
+    }
+}
+
+/// What became of the model the panel asked for on this turn, for the log.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum Choice {
+    /// The panel asked for the model the agent was already on, or for
+    /// upstream's placeholder, which is not a choice anyone made.
+    Unchanged,
+    /// Sent, and the agent accepted it.
+    Sent(String),
+    /// The panel's id is not one this agent offered: the picker was filled by
+    /// a different agent, or by an older list. Nothing was sent, and the
+    /// agent's own model runs.
+    NotOffered(String),
+}
+
+impl Choice {
+    fn describe(&self) -> Option<String> {
+        match self {
+            Choice::Unchanged => None,
+            Choice::Sent(model) => Some(format!("requested `{model}`, sent")),
+            Choice::NotOffered(model) => Some(format!("requested `{model}`, not offered")),
+        }
+    }
+}
+
+/// The id upstream's default model list carries when no list was ever fetched
+/// (`ModelsByFeature::default`). Before the first turn of a fresh profile it is
+/// what the panel sends, and it names nothing anyone chose.
+pub(crate) const UPSTREAM_PLACEHOLDER: &str = "auto";
 
 /// Whether this option actually offered this value.
 ///
@@ -211,12 +345,13 @@ pub(crate) fn log(
     agent: &str,
     cwd: &str,
     catalog: &Catalog,
+    choice: &Choice,
 ) {
     let options = catalog.options();
     if options.is_empty() {
         return;
     }
-    let summary = options
+    let mut summary = options
         .iter()
         .map(|option| match &option.kind {
             // The protocol is open-ended (`#[non_exhaustive]`), so an unknown
@@ -232,6 +367,10 @@ pub(crate) fn log(
         })
         .collect::<Vec<_>>()
         .join("; ");
+    if let Some(outcome) = choice.describe() {
+        summary.push_str("; ");
+        summary.push_str(&outcome);
+    }
     crate::event_log::record(crate::event_log::Entry {
         v: None,
         agent,

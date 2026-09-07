@@ -713,3 +713,44 @@ fn a_handed_over_device_lands_on_its_conversation() {
         "…and is not offered a back button to a list of one"
     );
 }
+
+/// A turn's end is reported in the agent's words, read from the trace, under
+/// the prompt that ended (2026-09-07, from a phone).
+///
+/// The stop event carries the prompt and never the answer, so a notification
+/// built from the event alone can only say that a turn ended. The first cut
+/// did exactly that, and what a person read on the lock screen was the
+/// conversation's first prompt over "the turn ended". The body now comes from
+/// the last `text` row the harness wrote after the turn's prompt, and it is
+/// read from a poll sent after the stop arrived, from both ends of that poll:
+/// a failed poll still reports the end, with the placeholder.
+#[test]
+fn a_turns_end_is_reported_in_the_agents_words() {
+    let reads = executable_lines_mentioning(CONSOLE_SCRIPT, "row.kind === 'text'");
+    assert_eq!(
+        reads.len(),
+        1,
+        "one reader of the agent's text rows: {reads:?}"
+    );
+    assert!(
+        reads[0].contains("row.from === 'harness'"),
+        "the answer is the harness's text, not Warp's: {}",
+        reads[0]
+    );
+    let posted = executable_lines_mentioning(CONSOLE_SCRIPT, "stopBody(ended, ");
+    assert_eq!(
+        posted.len(),
+        2,
+        "reported from the poll's rows, and with nothing when the poll fails: {posted:?}"
+    );
+    assert!(
+        posted.iter().all(|line| line.contains("turnTitle(ended)")),
+        "under the prompt that ended, not the conversation's first: {posted:?}"
+    );
+    let placeholder = executable_lines_mentioning(CONSOLE_SCRIPT, "'the turn ended'");
+    assert_eq!(
+        placeholder.len(),
+        1,
+        "the placeholder is the fallback and nothing else posts it: {placeholder:?}"
+    );
+}

@@ -522,6 +522,16 @@ impl AvailableLLMs {
         self.choices.iter().find(|info| info.id == *id)
     }
 
+    /// Fork (T14.14): the list and its default, read back by the tests that
+    /// pin what an ACP agent's catalog becomes here.
+    pub(crate) fn default_id(&self) -> &LLMId {
+        &self.default_id
+    }
+
+    pub(crate) fn choices(&self) -> impl Iterator<Item = &LLMInfo> {
+        self.choices.iter()
+    }
+
     /// Returns the info for the given id only if the model is usable (present
     /// and not effectively disabled for the current user).
     fn usable_info_for_id(&self, id: &LLMId, app: &AppContext) -> Option<&LLMInfo> {

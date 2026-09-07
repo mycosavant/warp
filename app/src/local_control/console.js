@@ -786,7 +786,6 @@
     if (!notificationsPossible() || Notification.permission !== 'granted') return;
     if (!document.hidden) return;
     if (!record || record.session_id !== conversationOfInterest()) return;
-    var body = null;
     if (record.event === 'permission_request') {
       // The summary opens with the approval's id, which is for the answer
       // and not for a glance at the shade; what follows the separator is the
@@ -795,14 +794,65 @@
       var ask = String(record.summary || '');
       var cut = ask.indexOf(' · ');
       if (/^approval /.test(ask) && cut > 0) ask = ask.slice(cut + 3);
-      body = 'asks: ' + (ask || record.tool_input_preview || record.tool_name || 'a permission');
-    } else if (record.event === 'stop') {
-      body = 'the turn ended';
-    } else if (record.event === 'stop_failure') {
-      body = 'the turn ended: ' + (record.error_type || 'error');
+      post(conversationTitle(), 'asks: ' + (ask || record.tool_input_preview || record.tool_name || 'a permission'), record);
+    } else if (record.event === 'stop' || record.event === 'stop_failure') {
+      // The stop line carries the prompt that ended, never the answer: that
+      // is in the harness's own file, which the trace poll this event just
+      // scheduled reads. So the notification waits for that poll and reads
+      // the last thing the agent said. A phone (Firefox on Android,
+      // 2026-09-07) read "the turn ended" under the conversation's first
+      // prompt, which told the person a turn had ended and nothing else.
+      if (viewing && viewing.id === record.session_id) {
+        viewing.pendingStop = record;
+      } else {
+        post(turnTitle(record), stopBody(record, []), record);
+      }
     }
-    if (!body) return;
-    var title = (viewing && viewing.summary && viewing.summary.title) || 'warp';
+  }
+
+  function conversationTitle() {
+    return (viewing && viewing.summary && viewing.summary.title) || 'warp';
+  }
+
+  // The prompt whose turn this was, so the shade says which question got its
+  // answer; the conversation's own title is its first prompt, which after
+  // a morning of turns is the one thing the person is not asking about.
+  function turnTitle(record) {
+    return oneLine(record.summary, 70) || conversationTitle();
+  }
+
+  function stopBody(record, rows) {
+    var said = lastSaid(rows);
+    if (record.event === 'stop_failure') {
+      return 'the turn failed: ' + (record.error_type || 'error') + (said ? ' · ' + said : '');
+    }
+    return said || 'the turn ended';
+  }
+
+  // The newest text the agent wrote after the newest prompt, in time order.
+  // A text row older than the turn's prompt is the previous answer, and a
+  // stale answer in the shade is worse than the placeholder.
+  function lastSaid(rows) {
+    var sorted = rows.slice().sort(byTime);
+    var since = NaN;
+    var said = '';
+    sorted.forEach(function (row) {
+      if (row.from === 'warp' && (row.kind === 'prompt_submit' || row.kind === 'session_start')) {
+        since = row.at;
+        said = '';
+      } else if (row.from === 'harness' && row.kind === 'text' && row.text && !(row.at < since)) {
+        said = row.text;
+      }
+    });
+    return oneLine(said, 200);
+  }
+
+  function oneLine(value, max) {
+    var flat = String(value || '').replace(/\s+/g, ' ').trim();
+    return flat.length > max ? flat.slice(0, max - 1) + '…' : flat;
+  }
+
+  function post(title, body, record) {
     // `tag` collapses repeats of the same event on the same conversation into
     // one entry in the shade rather than a stack; `renotify` makes the second
     // ask buzz anyway, since a replaced entry is otherwise silent.
@@ -1074,6 +1124,11 @@
     if (!viewing || viewing.inflight) return;
     var mine = viewing;
     mine.inflight = true;
+    // A turn that ended while the page was hidden is reported from this
+    // poll's rows, and only from a poll sent after the stop arrived: one
+    // already in flight was sent before the answer was on disk.
+    var ended = mine.pendingStop || null;
+    mine.pendingStop = null;
     control(TRACE, { conversation_id: mine.id, warp_after: mine.warpAfter, harness_after: mine.harnessAfter })
       .then(function (data) {
         if (viewing !== mine) return;
@@ -1097,11 +1152,13 @@
         renderConversationHead();
         renderTrace(mine);
         if (atBottom) el.main.scrollTop = el.main.scrollHeight;
+        if (ended) post(turnTitle(ended), stopBody(ended, mine.rows), ended);
         scheduleTracePoll(mine.summary && mine.summary.is_busy ? TRACE_BUSY_MS : TRACE_IDLE_MS);
       })
       .catch(function (err) {
         if (viewing !== mine) return;
         mine.inflight = false;
+        if (ended) post(turnTitle(ended), stopBody(ended, []), ended);
         el.convError.hidden = false;
         el.convError.textContent = String(err.message || err);
         scheduleTracePoll(TRACE_IDLE_MS);

@@ -104,6 +104,7 @@
 pub(crate) mod liveness;
 pub(crate) mod mode;
 pub(crate) mod model;
+pub(crate) mod picker;
 pub(crate) mod registry;
 mod translate;
 
@@ -193,6 +194,14 @@ fn resume_failed(agent: &str, error: &str) -> String {
 /// refusing a mode it advertised rather than a typo, which is why the advice
 /// points at the agent rather than at the spelling. Nothing runs, because the
 /// alternative is running under a policy the person did not choose.
+fn model_request_failed(agent: &str, model: &str, error: &str) -> String {
+    format!(
+        "{agent} offered the model `{model}` the panel picked and then refused to switch to it, \
+         so nothing was run rather than run on a model you did not choose. Underlying error: \
+         {error}"
+    )
+}
+
 fn mode_request_failed(agent: &str, error: &str) -> String {
     format!(
         "{agent} advertised the mode WARP_FORK_ACP_MODE asked for and then refused to switch to \
@@ -234,6 +243,13 @@ pub(crate) struct Turn {
     /// `agent.list` already shows (T14.10). Not the ACP session id, which is the
     /// agent's and does not exist yet at the moment a turn can already stall.
     conversation_id: String,
+    /// The model id the panel's picker holds for this pane (T14.14).
+    ///
+    /// Upstream's own field, filled from the execution profile the picker
+    /// writes into, and until 2026-09-07 read by nothing on this path. It is
+    /// one of the agent's ids once the agent's list has reached the picker
+    /// (`picker`), and upstream's placeholder before then.
+    model: String,
 }
 
 impl Turn {
@@ -281,6 +297,7 @@ impl Turn {
                 _ => None,
             },
             conversation_id: params.conversation_id.to_string(),
+            model: params.model.as_str().to_owned(),
         })
     }
 }
@@ -353,6 +370,7 @@ fn run(command: String, turn: Turn) -> impl Stream<Item = Event> + Send + use<> 
         turn.transcript_reaches_disk,
         turn.distro,
         conversation_id,
+        turn.model,
         Arc::clone(&translator),
         tx.clone(),
     );
@@ -384,6 +402,7 @@ async fn drive(
     transcript_reaches_disk: bool,
     distro: Option<String>,
     conversation_id: String,
+    model: String,
     translator: Arc<Mutex<Translator>>,
     tx: mpsc::UnboundedSender<Event>,
 ) {
@@ -395,6 +414,7 @@ async fn drive(
         transcript_reaches_disk,
         distro,
         conversation_id,
+        model,
         Arc::clone(&translator),
         tx.clone(),
     )
@@ -441,6 +461,7 @@ async fn exchange(
     transcript_reaches_disk: bool,
     distro: Option<String>,
     conversation_id: String,
+    model: String,
     translator: Arc<Mutex<Translator>>,
     tx: mpsc::UnboundedSender<Event>,
 ) -> anyhow::Result<()> {
@@ -710,13 +731,13 @@ async fn exchange(
             // which is the render door (`Catalog::options`) gated before any
             // surface exists.
             let catalog = model::Catalog::of(config_options.as_deref());
-            model::log(
-                &conversation_id,
-                Some(&linked),
-                &program,
-                &cwd_text,
-                &catalog,
-            );
+            // The list reaches the panel's picker from here, every turn: the
+            // hop is cheap, an unchanged list is not rewritten, and a picker
+            // opened before any turn has run shows the last agent's list
+            // rather than nothing (T14.14, second half).
+            if let Some(choices) = catalog.picker_choices() {
+                picker::publish(choices).await;
+            }
             if let Some(reason) = decision.refusal() {
                 return Err(anyhow!(reason.to_owned()).into());
             }
@@ -758,6 +779,51 @@ async fn exchange(
                 // entered.
                 mode::acknowledged(&conversation_id, mode);
             }
+            // The panel's pick, sent the way the mode is: every turn, because
+            // a resumed session comes back in whatever the agent restored, and
+            // only when it names something the agent offered. Not sending is
+            // never silent -- the log line says what was asked and not sent.
+            // Refused the same way the mode is when the agent offered the id
+            // and then declined it: running on a model nobody chose is the
+            // complaint this exists to answer.
+            let choice = if model.is_empty()
+                || model == model::UPSTREAM_PLACEHOLDER
+                || catalog.current().as_deref() == Some(model.as_str())
+            {
+                model::Choice::Unchanged
+            } else {
+                match catalog.request_for_value(&session_id, &model) {
+                    None => model::Choice::NotOffered(model.clone()),
+                    Some(request) => match connection.send_request(request).block_task().await {
+                        Err(error) => {
+                            return Err(anyhow!(model_request_failed(
+                                &program,
+                                &model,
+                                &error.to_string()
+                            ))
+                            .into());
+                        }
+                        Ok(reply) => {
+                            // The reply carries the options as they now
+                            // stand, current value included; the picker's
+                            // default follows it.
+                            let refreshed = model::Catalog::of(Some(&reply.config_options));
+                            if let Some(choices) = refreshed.picker_choices() {
+                                picker::publish(choices).await;
+                            }
+                            model::Choice::Sent(model.clone())
+                        }
+                    },
+                }
+            };
+            model::log(
+                &conversation_id,
+                Some(&linked),
+                &program,
+                &cwd_text,
+                &catalog,
+                &choice,
+            );
             if let Some(note) = decision.note() {
                 let note = crate::ai::warp_note::Note::from_wire(note);
                 let event = emit(&translator, |translator| translator.note(note));

@@ -187,3 +187,123 @@ fn a_value_the_agent_never_advertised_is_not_sent() {
         "and neither must a value of the wrong shape"
     );
 }
+
+/// The picker's list is the agent's, named as the agent names it, with the
+/// agent's current selection as the default (T14.14, second half).
+#[test]
+fn the_picker_reads_the_agents_list_and_its_current_selection() {
+    let catalog = Catalog::of(Some(&[SessionConfigOption::select(
+        SessionConfigId::from("model".to_owned()),
+        "Model".to_owned(),
+        SessionConfigValueId::from("sonnet".to_owned()),
+        vec![
+            SessionConfigSelectOption::new("fable", "Fable 5.1").description("the dear one"),
+            SessionConfigSelectOption::new("sonnet", "Sonnet 5"),
+        ],
+    )
+    .category(SessionConfigOptionCategory::Model)]));
+
+    let choices = catalog.picker_choices().expect("a select is a list");
+    assert_eq!(
+        choices.default_id().as_str(),
+        "sonnet",
+        "the default is what the agent is on"
+    );
+    let named: Vec<(String, String, Option<String>)> = choices
+        .choices()
+        .map(|llm| {
+            (
+                llm.id.as_str().to_owned(),
+                llm.display_name.clone(),
+                llm.description.clone(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        named,
+        vec![
+            (
+                "fable".to_owned(),
+                "Fable 5.1".to_owned(),
+                Some("the dear one".to_owned())
+            ),
+            ("sonnet".to_owned(), "Sonnet 5".to_owned(), None),
+        ]
+    );
+    assert_eq!(catalog.current().as_deref(), Some("sonnet"));
+}
+
+/// A grouped list is one list to the picker.
+#[test]
+fn a_grouped_list_is_flattened_for_the_picker() {
+    use agent_client_protocol::schema::v1::SessionConfigSelectGroup;
+    let catalog = Catalog::of(Some(&[SessionConfigOption::select(
+        SessionConfigId::from("model".to_owned()),
+        "Model".to_owned(),
+        SessionConfigValueId::from("b".to_owned()),
+        SessionConfigSelectOptions::Grouped(vec![
+            SessionConfigSelectGroup::new(
+                "one",
+                "One",
+                vec![SessionConfigSelectOption::new("a", "A")],
+            ),
+            SessionConfigSelectGroup::new(
+                "two",
+                "Two",
+                vec![SessionConfigSelectOption::new("b", "B")],
+            ),
+        ]),
+    )
+    .category(SessionConfigOptionCategory::Model)]));
+
+    let ids: Vec<String> = catalog
+        .picker_choices()
+        .expect("groups flatten")
+        .choices()
+        .map(|llm| llm.id.as_str().to_owned())
+        .collect();
+    assert_eq!(ids, vec!["a".to_owned(), "b".to_owned()]);
+}
+
+/// The send door from the panel's side: an id the agent offered becomes the
+/// request on the option that offered it; one it did not is nothing.
+#[test]
+fn a_picked_id_becomes_a_request_only_when_the_agent_offered_it() {
+    let catalog = Catalog::of(Some(&[
+        option("mode", Some(SessionConfigOptionCategory::Mode)),
+        model_option("model"),
+    ]));
+    let session = SessionId::from("s1".to_owned());
+
+    let request = catalog
+        .request_for_value(&session, "b")
+        .expect("offered under `model`");
+    assert_eq!(request.config_id.0.to_string(), "model");
+    assert!(
+        catalog.request_for_value(&session, "z").is_none(),
+        "an id no model option offered is not sent anywhere"
+    );
+    assert!(
+        catalog
+            .request_for_value(&session, "mode-current")
+            .is_none(),
+        "the mode select's own current value does not qualify through the model door"
+    );
+}
+
+/// Nothing to show is `None`, not an empty list the picker would draw as
+/// nothing and upstream's constructor would refuse.
+#[test]
+fn no_model_select_means_no_picker_list() {
+    let catalog = Catalog::of(Some(&[option(
+        "mode",
+        Some(SessionConfigOptionCategory::Mode),
+    )]));
+    assert!(catalog.picker_choices().is_none());
+    assert!(catalog.current().is_none());
+    assert_eq!(Choice::Unchanged.describe(), None);
+    assert_eq!(
+        Choice::NotOffered("x".to_owned()).describe().as_deref(),
+        Some("requested `x`, not offered")
+    );
+}
