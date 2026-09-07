@@ -29,7 +29,7 @@ last).
 | the block on the desk | *Waiting for a scan* (`desk-waiting.png`), *Paired at 00:48:17 UTC* (`desk-paired.png`), the chip's tooltip back to *Hand this conversation to a phone* after Stop sharing (`desk-after-stop.png`) |
 | add to home screen | Chrome's menu: *Add to Home screen*; the sheet: *Install app · Warp — console* (`n23-sheet.png`); the icon on the home screen with the console's own image (`n26-home.png`); launched from there it opened in `WebappActivity`, standalone, no URL bar (`n28-standalone.png`). No WebAPK package: this image has no Play Store to mint one, so it is Chrome's shortcut-style install, which is what a phone without Google's minting gets too |
 | Stop sharing | the desk's chip flipped; **the phone read `live` for another five minutes and `reconnecting` after six** (`n29-after-stop.png`, `n32-six-minutes-after-stop.png`): the second defect below |
-| overnight | the final pass leaves a conversation paired (`conversation-d.txt`, `p13-overnight.png`); the morning is the measurement |
+| overnight | the final pass left conversation D paired at 02:06:49 UTC (`conversation-d.txt`, `p13-overnight.png`). At 12:45:28 the maintainer prompted it from the emulator, `prompt_submit · via paired_device`, with no re-pair (`events-d.jsonl`). That turn ended `stop_failure`: the agent's Claude OAuth session had expired overnight and Claude Code in a terminal refused the same way at the same time. `/login` there, nothing touched in Warp, and the retry at 12:50:21 ended `stop` with the answer. The pairing held for the night; the credential that expired was the agent's, which Warp neither holds nor renews |
 
 ## The final pass, on `v0.fork.0fedbfda5` (02:00–02:07 UTC, 2026-09-07)
 
@@ -139,5 +139,5 @@ record as `answered_by panel`, which is correct.
 `phone-run.sh`, `driver.log`, `run.out`, `build.txt`, `build2.txt`,
 `launch.txt`, `tab.json`, `prompt-*.json`, `pair-show-2.json`,
 `conversation-c.txt`, `conversation-d.txt`, `stamp*.txt`, `events-c.jsonl`,
-`trace-c.txt`, `clipboard.txt`, and the screenshots named above plus the
+`trace-c.txt`, `events-d.jsonl` (the overnight conversation, through the morning), `clipboard.txt`, and the screenshots named above plus the
 final pass's `p1`–`p13` and `desk-*`.

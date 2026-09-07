@@ -4,7 +4,26 @@ Written 2026-09-06 for a fresh session. Repo `/home/effatha/git/warp`, branch
 `dev`, HEAD at or after `29308327a`. Everything below is either measured and
 says so, or read and says that.
 
-## Where it stands, 2026-09-06 night
+## Where it stands, 2026-09-07 morning
+
+The overnight line is measured. Conversation D, paired on the emulator at
+02:06 UTC, took a prompt from the phone at 12:45 with no re-pair
+(`prompt_submit · via paired_device` in
+`.fork/runs/phone-2026-09-06/events-d.jsonl`). The first turn failed, and
+the failure was not the fork's: the agent's Claude OAuth session had expired
+overnight and could not be refreshed, and Claude Code in a terminal refused
+the same way at the same moment. `/login` there, nothing touched in Warp,
+and the retry from the phone at 12:50 answered. So every line of the
+checklist that a browser or Android decides is now measured on the
+emulator; what remains needs a phone (camera, lock screen, iOS) and is
+listed below.
+
+One thing worth knowing from it: an agent's own credential expiring looks,
+from the phone, like the fork refusing a prompt. The record says
+`stop_failure` with the agent's error text, and the remedy is at the desk,
+in the agent's own login, not in Warp.
+
+## Where it stood, 2026-09-06 night
 
 The checklist below was run on an Android emulator (`.fork/tools/phone.sh`,
 `.fork/runs/phone-2026-09-06/`, and `remote-control.md`'s "Measured on the

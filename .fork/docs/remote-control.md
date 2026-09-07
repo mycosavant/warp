@@ -310,7 +310,7 @@ screenshot. Line by line against the handoff's checklist:
 | a prompt from the box | `prompt_submit · via paired_device`, the panel drew it as the person's words, the trace `P from the phone:` |
 | the block on the desk | *Paired at …*, then *Hand this conversation to a phone* again after Stop sharing |
 | add to home screen | Chrome's menu offered *Add to Home screen*; the sheet was Chrome's own *Install app · Warp — console*; the icon landed on the home screen with the console's own image and opened in `WebappActivity`, standalone, no URL bar |
-| overnight | conversation D paired at 02:06:49 UTC on 2026-09-07 and left running with Warp and the emulator; the morning is the measurement |
+| overnight | conversation D paired at 02:06:49 UTC on 2026-09-07 and left running with Warp and the emulator. At 12:45 the maintainer prompted it from the emulator: `prompt_submit · via paired_device`, ten hours forty minutes after pairing, no re-pair. That turn ended `stop_failure`, the agent's Claude OAuth session having expired overnight (*OAuth session expired and could not be refreshed*), the same refusal Claude Code gave in a terminal at the same time. After `/login` there, nothing touched in Warp, the retry at 12:50 answered from the phone. The pairing held; what expired was the agent's own credential, which Warp does not hold and cannot renew |
 
 Leftover from the final pass: a notification about an ask, tapped, lands
 the reader at the tail of the record rather than on the ask. Recorded, not
