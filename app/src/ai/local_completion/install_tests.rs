@@ -6,7 +6,10 @@
 //! silently — a missed subscription looks like a feature that works but needs a
 //! restart, which is the kind of thing nobody reports as a bug.
 
-use ai::api_keys::{ApiKeyManager, CustomEndpointParams, CustomEndpointSchema};
+use ai::api_keys::{
+    ApiKeyManager, CustomEndpointDefinition, CustomEndpointDefinitions, CustomEndpointId,
+    CustomEndpointModel, CustomEndpointParams, CustomEndpointSchema,
+};
 use ai::llm_provider::LLMProvider;
 use settings::Setting as _;
 use warpui::{App, SingletonEntity as _};
@@ -97,6 +100,46 @@ fn keys_and_settings_reach_the_call_sites_without_a_restart() {
             resolved.model_for(LocalAiFeature::BlockTitle),
             "qwen2.5-coder",
             "a per-feature override must not leak into the other features"
+        );
+
+        // Since upstream's 2026-08-26 merge the endpoint the settings page
+        // saves is a *definition* in settings.toml, joined with a keychain key
+        // by the manager; the legacy vector above is a migration source only.
+        // The first live run (2026-09-07) declared an endpoint this way and
+        // got "no Custom Inference endpoints are configured", because the
+        // config read the legacy vector. This is the door that run went
+        // through, with no key, which a local server has none of.
+        let mut definitions = CustomEndpointDefinitions::default();
+        definitions
+            .insert(
+                CustomEndpointId::parse("llama-local").unwrap(),
+                CustomEndpointDefinition {
+                    name: "llama".to_owned(),
+                    base_url: "http://127.0.0.1:8080/v1".to_owned(),
+                    schema: CustomEndpointSchema::OpenaiChatCompletions,
+                    models: vec![CustomEndpointModel {
+                        name: "gemma-4-12b".to_owned(),
+                        alias: None,
+                        config_key: "gemma-4-12b".to_owned(),
+                    }],
+                },
+            )
+            .unwrap();
+        app.update(|ctx| {
+            ApiKeyManager::handle(ctx).update(ctx, |manager, ctx| {
+                manager.set_custom_endpoint_definitions(definitions, ctx);
+            });
+        });
+
+        let resolved = config::current().unwrap();
+        assert_eq!(
+            resolved.endpoint, "http://127.0.0.1:8080/v1/chat/completions",
+            "a declared endpoint replaces the legacy vector and gets its route"
+        );
+        assert_eq!(resolved.api_key, "", "a local server has no key");
+        assert_eq!(
+            resolved.model_for(LocalAiFeature::NextCommand),
+            "gemma-4-12b"
         );
     });
 }

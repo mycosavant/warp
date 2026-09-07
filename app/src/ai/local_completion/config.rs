@@ -332,10 +332,17 @@ pub fn install(ctx: &mut AppContext) {
 }
 
 fn refresh(ctx: &AppContext) {
-    let resolved = resolve(
-        ApiKeyManager::as_ref(ctx).keys(),
-        LocalAiSettings::as_ref(ctx),
-    );
+    let manager = ApiKeyManager::as_ref(ctx);
+    // Since upstream's 2026-08-26 merge a custom endpoint is a definition in
+    // `settings.toml` joined with a key from the keychain, and the manager
+    // resolves the pair; `keys().custom_endpoints` is the pre-merge vector,
+    // kept as a migration source and empty once the settings file has
+    // spoken. This read was on the old vector until 2026-09-07, when a
+    // declared endpoint produced "no Custom Inference endpoints are
+    // configured" on the first live run.
+    let mut keys = manager.keys().clone();
+    keys.custom_endpoints = manager.custom_endpoints().to_vec();
+    let resolved = resolve(&keys, LocalAiSettings::as_ref(ctx));
     *CONFIG.write() = Some(resolved);
 }
 
