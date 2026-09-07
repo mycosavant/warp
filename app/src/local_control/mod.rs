@@ -1216,6 +1216,19 @@ async fn handle_event_stream(
         )
             .into_response();
     }
+    // The bearer this stream was opened with, so the loop can ask whether it
+    // is still issued. `authenticate` proved it once; *Stop sharing* purges
+    // it from the broker afterwards, and a stream that checked only its own
+    // expiry kept a cut-off phone reading `live` for the credential's
+    // remaining minutes (the emulator, 2026-09-06: five). A grant is a copy,
+    // so the map has to be asked.
+    let secret = headers
+        .get(AUTHORIZATION)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|header| AuthToken::from_authorization_header(Some(header)).ok())
+        .map(|token| token.secret().to_string())
+        .unwrap_or_default();
+    let credentials = state.credentials.clone();
     // Subscribe before returning: a receiver is what makes `event_log::record`
     // start producing when no file sink is configured, and taking it here rather
     // than inside the stream closes the window where events between the
@@ -1233,6 +1246,14 @@ async fn handle_event_stream(
                     axum::response::sse::Event::default()
                         .event("expired")
                         .data("credential expired; obtain a new one and reconnect"),
+                );
+                break;
+            }
+            if !credential_still_issued(&credentials, &secret) {
+                yield Ok(
+                    axum::response::sse::Event::default()
+                        .event("revoked")
+                        .data("credential revoked; sharing was stopped on the machine running Warp"),
                 );
                 break;
             }
@@ -1482,6 +1503,22 @@ fn authenticate(
     })?;
     lookup_credential(&mut credentials, &auth_token, &state.instance_id)
         .map_err(|error| reject(StatusCode::UNAUTHORIZED, error))
+}
+
+/// Whether a bearer the broker once issued is still in it. `false` after
+/// *Stop sharing* purged it (`confine::purge_confined`), after its own expiry
+/// was swept, or if the broker's lock is poisoned — every case in which a
+/// stream holding a copy of the grant should stop. An empty secret was never
+/// issued.
+fn credential_still_issued(
+    credentials: &Arc<Mutex<HashMap<String, CredentialGrant>>>,
+    secret: &str,
+) -> bool {
+    !secret.is_empty()
+        && credentials
+            .lock()
+            .map(|credentials| credentials.contains_key(secret))
+            .unwrap_or(false)
 }
 
 /// Resolves an unexpired bearer token issued by this exact running instance.

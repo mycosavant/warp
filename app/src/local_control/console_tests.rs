@@ -232,6 +232,62 @@ async fn each_document_is_served_as_what_it_is() {
     assert!(body_of(worker).await.starts_with("'use strict'"));
 }
 
+/// A control call refused with 401 drops the credential the page cached for
+/// that action and mints once more, and only once. The mint is the one call
+/// that forgets a cut-off device, so a page that kept reusing a cached token
+/// after *Stop sharing* stayed `live` until the token aged out.
+#[test]
+fn a_refused_credential_is_dropped_and_minted_again_once() {
+    let dropping = executable_lines_mentioning(CONSOLE_SCRIPT, "delete credentials[action]");
+    assert_eq!(
+        dropping.len(),
+        1,
+        "one place drops a cached control credential: {dropping:?}"
+    );
+    let stream =
+        executable_lines_mentioning(CONSOLE_SCRIPT, "delete credentials['events.subscribe']");
+    assert_eq!(
+        stream.len(),
+        1,
+        "and one drops the stream's, on the same 401"
+    );
+    assert!(stream[0].contains("response.status === 401"));
+    let again = executable_lines_mentioning(CONSOLE_SCRIPT, "control(action, params, true)");
+    assert_eq!(again.len(), 1, "the retry is marked so it cannot loop");
+    assert!(
+        executable_lines_mentioning(CONSOLE_SCRIPT, "response.status === 401 && !retried").len()
+            == 1,
+        "the retry happens on 401 and not on a retried call"
+    );
+}
+
+/// A code in the URL is redeemed before a remembered device is tried, never
+/// after. The other order looked right and failed on the second scan after
+/// every restart of Warp: the remembered device is dead, the fresh code was
+/// already erased from the URL, and the page said "pair again" to a person
+/// who had just paired. Pinned by position in `boot`, which is the only place
+/// either happens.
+#[test]
+fn a_code_in_the_url_outranks_a_remembered_device() {
+    let boot = CONSOLE_SCRIPT
+        .rfind("function boot()")
+        .map(|at| &CONSOLE_SCRIPT[at..])
+        .expect("boot is the last function");
+    let redeem = boot.find("redeem(code)").expect("boot redeems the code");
+    let remembered = boot
+        .find("if (device) {")
+        .expect("boot tries the remembered device");
+    assert!(
+        redeem < remembered,
+        "the fresh code must be tried before the remembered device"
+    );
+    assert_eq!(
+        executable_lines_mentioning(CONSOLE_SCRIPT, "redeem(code).").len(),
+        1,
+        "one redeem, in boot"
+    );
+}
+
 /// The page registers the worker from the *notify me* tap and from a start
 /// where permission was already granted, and from nowhere else: a worker is
 /// a thing the person asked for by asking to be told, not part of loading a

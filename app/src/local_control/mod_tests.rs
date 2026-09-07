@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
 use ::local_control::auth::{CredentialGrant, CredentialRequest};
 use ::local_control::protocol::{
@@ -20,11 +21,11 @@ use super::ensure_peer_uid;
 use super::resolver::validate_action_target;
 use super::{
     ControlServerState, ListenerOrigin, LocalControlBridge, LocalControlServer,
-    MAX_ACTIVE_CREDENTIALS, capabilities, ensure_feature_enabled, ensure_protocol_version,
-    ensure_settings_allow_action, handle_control_request, insert_credential, issue_credential,
-    lookup_credential, require_active_window_id, resolve_index_from_ids,
-    resolve_title_from_matches, validate_action_params, validate_endpoint_headers,
-    validate_request_authority, validate_tab_create_target,
+    MAX_ACTIVE_CREDENTIALS, capabilities, confine, credential_still_issued, ensure_feature_enabled,
+    ensure_protocol_version, ensure_settings_allow_action, handle_control_request,
+    insert_credential, issue_credential, lookup_credential, require_active_window_id,
+    resolve_index_from_ids, resolve_title_from_matches, validate_action_params,
+    validate_endpoint_headers, validate_request_authority, validate_tab_create_target,
 };
 use crate::settings::{LocalControlMode, LocalControlModeSetting, LocalControlSettings};
 
@@ -481,6 +482,56 @@ fn bridge_checks_grant_before_action_params() {
     )
     .expect_err("wrong-action grant is rejected before params");
     assert_eq!(err.code, ErrorCode::InsufficientPermissions);
+}
+
+/// What the event stream asks on every tick and every line since 2026-09-06.
+/// A grant is a copy, so `is_expired` on it cannot see *Stop sharing* purge
+/// the broker; measured on the emulator, a cut-off phone read `live` for the
+/// five minutes its stream credential had left. The map is the truth.
+#[test]
+fn a_stream_stops_when_stop_sharing_purges_its_credential() {
+    let credentials: Arc<Mutex<HashMap<String, CredentialGrant>>> = Arc::default();
+    let instance_id = InstanceId("inst_test".to_owned());
+    {
+        let mut map = credentials.lock().unwrap();
+        insert_credential(
+            &mut map,
+            "phone-stream".to_owned(),
+            CredentialGrant::new(
+                instance_id.clone(),
+                ActionKind::EventsSubscribe,
+                Duration::minutes(5),
+            )
+            .confined_to(Some("conv-1".to_owned())),
+        );
+        insert_credential(
+            &mut map,
+            "other-stream".to_owned(),
+            CredentialGrant::new(
+                instance_id,
+                ActionKind::EventsSubscribe,
+                Duration::minutes(5),
+            )
+            .confined_to(Some("conv-2".to_owned())),
+        );
+    }
+    assert!(credential_still_issued(&credentials, "phone-stream"));
+    assert!(
+        !credential_still_issued(&credentials, ""),
+        "an empty secret was never issued"
+    );
+    assert!(!credential_still_issued(&credentials, "never-minted"));
+
+    let purged = confine::purge_confined(&mut credentials.lock().unwrap(), "conv-1");
+    assert_eq!(purged, 1);
+    assert!(
+        !credential_still_issued(&credentials, "phone-stream"),
+        "the stream for the stopped conversation must end"
+    );
+    assert!(
+        credential_still_issued(&credentials, "other-stream"),
+        "a stream for another conversation is untouched"
+    );
 }
 
 #[test]

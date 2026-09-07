@@ -343,7 +343,7 @@
   }
 
   // One typed action over `POST /v1/control`, the same envelope `warpctrl` sends.
-  function control(action, params) {
+  function control(action, params, retried) {
     return credentialFor(action).then(function (token) {
       var body = JSON.stringify({
         protocol_version: PROTOCOL_VERSION,
@@ -356,6 +356,17 @@
         body: body
       }).then(function (response) {
         return response.text().then(function (raw) {
+          // A credential the page still holds and the server no longer
+          // does: *Stop sharing* purged it, or the clocks disagree about its
+          // expiry. Either way the answer is to mint again, once — and the
+          // mint is where a cut-off device learns it was cut off
+          // (`credentialFor` forgets it on 401). Measured on the emulator:
+          // without this, a stopped page kept its cached credentials and
+          // read `live` until they aged out.
+          if (response.status === 401 && !retried) {
+            delete credentials[action];
+            return control(action, params, true);
+          }
           if (!response.ok) throw new Error(describeFailure(response, raw));
           var envelope = JSON.parse(raw);
           if (envelope.response && envelope.response.status === 'error') {
@@ -777,7 +788,14 @@
     if (!record || record.session_id !== conversationOfInterest()) return;
     var body = null;
     if (record.event === 'permission_request') {
-      body = 'asks: ' + (record.summary || record.tool_input_preview || record.tool_name || 'a permission');
+      // The summary opens with the approval's id, which is for the answer
+      // and not for a glance at the shade; what follows the separator is the
+      // call. Measured on the emulator: a body of `asks: approval b865…:0 ·
+      // Write /tmp/…` spent its two lines on the id.
+      var ask = String(record.summary || '');
+      var cut = ask.indexOf(' · ');
+      if (/^approval /.test(ask) && cut > 0) ask = ask.slice(cut + 3);
+      body = 'asks: ' + (ask || record.tool_input_preview || record.tool_name || 'a permission');
     } else if (record.event === 'stop') {
       body = 'the turn ended';
     } else if (record.event === 'stop_failure') {
@@ -845,6 +863,10 @@
       })
       .then(function (response) {
         if (!response.ok) {
+          // A cached stream credential the server no longer holds: drop it,
+          // so the reconnect mints, and the mint is what tells a cut-off
+          // device it was cut off. See `control` for the same rule.
+          if (response.status === 401) delete credentials['events.subscribe'];
           return response.text().then(function (body) {
             throw new Error(describeFailure(response, body));
           });
@@ -1052,9 +1074,6 @@
     if (!viewing || viewing.inflight) return;
     var mine = viewing;
     mine.inflight = true;
-    // The bottom of the list is where the new rows land; keep the reader there
-    // if that is where they were, and leave them alone if they scrolled up.
-    var atBottom = el.main.scrollHeight - el.main.scrollTop - el.main.clientHeight < 40;
     control(TRACE, { conversation_id: mine.id, warp_after: mine.warpAfter, harness_after: mine.harnessAfter })
       .then(function (data) {
         if (viewing !== mine) return;
@@ -1068,6 +1087,13 @@
           mine.rows.push(row);
         });
         mine.facts = recordFacts(mine.rows);
+        // The bottom of the list is where the new rows land; keep the reader
+        // there if that is where they are, and leave them alone if they
+        // scrolled up. Measured at the moment the list changes, not when the
+        // poll was sent: measured before the fetch, a thumb that started
+        // scrolling up while a poll was in flight was pulled back to the tail
+        // when it landed (the emulator, 2026-09-06, twice in one minute).
+        var atBottom = el.main.scrollHeight - el.main.scrollTop - el.main.clientHeight < 40;
         renderConversationHead();
         renderTrace(mine);
         if (atBottom) el.main.scrollTop = el.main.scrollHeight;
@@ -1473,19 +1499,27 @@
     var code = location.hash.replace(/^#/, '');
     if (code) history.replaceState(null, '', location.pathname);
 
+    // A code in the URL is the person's own act, just now, and outranks a
+    // device this browser remembers. Measured on the emulator (2026-09-06):
+    // the remembered device is dead after every Warp restart, and a page
+    // that tried it first read the fresh code out of the URL, erased it, and
+    // then said "pair again" — the second scan after any restart failed
+    // until the person found *unpair*. If the code is refused, the
+    // remembered device is still worth a try; if there is neither, say so.
     device = loadDevice();
+    if (code) {
+      redeem(code).then(start).catch(function (err) {
+        if (device) { start(); return; }
+        showPairing('pairing failed: ' + String(err.message || err) +
+          ' — codes last two minutes and are spent on first use.');
+      });
+      return;
+    }
     if (device) {
       start();
       return;
     }
-    if (!code) {
-      showPairing('run `warpctrl pair show` on the machine running Warp, then scan the QR it prints.');
-      return;
-    }
-    redeem(code).then(start).catch(function (err) {
-      showPairing('pairing failed: ' + String(err.message || err) +
-        ' — codes last two minutes and are spent on first use.');
-    });
+    showPairing('run `warpctrl pair show` on the machine running Warp, then scan the QR it prints.');
   }
 
   boot();
