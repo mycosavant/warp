@@ -1,6 +1,7 @@
 use agent_client_protocol::schema::v1::{SessionConfigSelectOption, SessionConfigValueId};
 
 use super::*;
+use crate::ai::acp_agent::specs;
 
 fn option(id: &str, category: Option<SessionConfigOptionCategory>) -> SessionConfigOption {
     let option = SessionConfigOption::select(
@@ -206,7 +207,9 @@ fn the_picker_reads_the_agents_list_and_its_current_selection() {
     )
     .category(SessionConfigOptionCategory::Model)]));
 
-    let choices = catalog.picker_choices().expect("a select is a list");
+    let choices = catalog
+        .picker_choices(&specs::Table::defaults())
+        .expect("a select is a list");
     assert_eq!(
         choices.default_id().as_str(),
         "sonnet",
@@ -225,18 +228,67 @@ fn the_picker_reads_the_agents_list_and_its_current_selection() {
     assert_eq!(
         named,
         vec![
-            ("fable".to_owned(), "Fable 5.1".to_owned(), None),
+            (
+                "fable".to_owned(),
+                "Fable 5.1".to_owned(),
+                Some("Most capable for your hardest and longest-running tasks".to_owned())
+            ),
             ("sonnet".to_owned(), "Sonnet 5".to_owned(), None),
             (
                 "default".to_owned(),
                 "Default (recommended)".to_owned(),
-                None
+                Some("Opus (1M context)".to_owned())
             ),
         ],
-        "the version before ` · ` is the label, the tagline rides no chip, \
-         and a description without the separator leaves the name alone"
+        "the version before ` · ` is the label, the tagline is the description \
+         for the card, and a description without the separator leaves the \
+         name alone and is the card's line whole"
+    );
+    // The bars are the table's, cost against the dearest model offered:
+    // Fable at $50 out is full width, Sonnet at $10 is a fifth, and the
+    // default row resolves to Opus through its description.
+    let specs: Vec<(String, Option<(f32, f32, f32)>)> = choices
+        .choices()
+        .map(|llm| {
+            (
+                llm.id.as_str().to_owned(),
+                llm.spec.as_ref().map(|s| (s.cost, s.quality, s.speed)),
+            )
+        })
+        .collect();
+    assert_eq!(
+        specs,
+        vec![
+            ("fable".to_owned(), Some((1.0, 1.0, 0.5))),
+            ("sonnet".to_owned(), Some((0.2, 0.7, 0.8))),
+            ("default".to_owned(), Some((0.5, 0.85, 0.6))),
+        ]
     );
     assert_eq!(catalog.current().as_deref(), Some("sonnet"));
+}
+
+/// An agent the table has never heard of, sending no descriptions, gets no
+/// bars and no sentence: the `?` the card drew before, under a header that
+/// now says why.
+#[test]
+fn an_unknown_agents_list_has_no_bars_and_no_sentence() {
+    let catalog = Catalog::of(Some(&[SessionConfigOption::select(
+        SessionConfigId::from("model".to_owned()),
+        "Model".to_owned(),
+        SessionConfigValueId::from("a".to_owned()),
+        vec![
+            SessionConfigSelectOption::new("openrouter/x/a", "A"),
+            SessionConfigSelectOption::new("openrouter/x/b", "B"),
+        ],
+    )
+    .category(SessionConfigOptionCategory::Model)]));
+    let choices = catalog
+        .picker_choices(&specs::Table::defaults())
+        .expect("a select is a list");
+    for llm in choices.choices() {
+        assert_eq!(llm.spec, None, "{}", llm.id.as_str());
+        assert_eq!(llm.description, None);
+    }
 }
 
 /// A grouped list is one list to the picker.
@@ -263,7 +315,7 @@ fn a_grouped_list_is_flattened_for_the_picker() {
     .category(SessionConfigOptionCategory::Model)]));
 
     let ids: Vec<String> = catalog
-        .picker_choices()
+        .picker_choices(&specs::Table::defaults())
         .expect("groups flatten")
         .choices()
         .map(|llm| llm.id.as_str().to_owned())
@@ -305,7 +357,7 @@ fn no_model_select_means_no_picker_list() {
         "mode",
         Some(SessionConfigOptionCategory::Mode),
     )]));
-    assert!(catalog.picker_choices().is_none());
+    assert!(catalog.picker_choices(&specs::Table::defaults()).is_none());
     assert!(catalog.current().is_none());
     assert_eq!(Choice::Unchanged.describe(), None);
     assert_eq!(

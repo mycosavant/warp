@@ -419,6 +419,11 @@ impl LLMInfo {
         if custom_model_routers::is_custom_router_id(self.id.as_str()) {
             return self.display_name.clone();
         }
+        // Fork: an ACP agent's row carries the agent's sentence about the
+        // model, which is the specs card's to draw (T21.2).
+        if crate::fork::model_list_is_the_agents() {
+            return self.display_name.clone();
+        }
         // Base label includes optional description in parentheses
         match &self.description {
             // This is a temporary implementation that won't scale well for longer

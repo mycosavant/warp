@@ -106,6 +106,7 @@ pub(crate) mod mode;
 pub(crate) mod model;
 pub(crate) mod picker;
 pub(crate) mod registry;
+pub(crate) mod specs;
 mod translate;
 
 use std::str::FromStr as _;
@@ -735,7 +736,7 @@ async fn exchange(
             // hop is cheap, an unchanged list is not rewritten, and a picker
             // opened before any turn has run shows the last agent's list
             // rather than nothing (T14.14, second half).
-            if let Some(choices) = catalog.picker_choices() {
+            if let Some(choices) = catalog.picker_choices(&specs::Table::load()) {
                 picker::publish(choices).await;
             }
             if let Some(reason) = decision.refusal() {
@@ -808,7 +809,7 @@ async fn exchange(
                             // stand, current value included; the picker's
                             // default follows it.
                             let refreshed = model::Catalog::of(Some(&reply.config_options));
-                            if let Some(choices) = refreshed.picker_choices() {
+                            if let Some(choices) = refreshed.picker_choices(&specs::Table::load()) {
                                 picker::publish(choices).await;
                             }
                             model::Choice::Sent(model.clone())

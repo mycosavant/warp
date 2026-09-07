@@ -326,6 +326,19 @@ pub fn panel_agent_is_external() -> bool {
     acp_agent_command().is_some() || local_agent_enabled()
 }
 
+/// Whether the panel's model list is the ACP agent's own (T14.14, T21).
+///
+/// With an agent named, `ai::acp_agent::picker` replaces the agent-mode list
+/// with what the agent advertised on `session/new`, so every row's
+/// `description` is that agent's sentence about the model and every `spec` is
+/// a value from `ai::acp_agent::specs`, not Warp's server. Two upstream
+/// surfaces ask this: the chip, which keeps the sentence off its label the way
+/// it already does for a custom router, and the Model Specs card, which swaps
+/// a header claiming Warp's benchmarks for one that says what the bars are.
+pub fn model_list_is_the_agents() -> bool {
+    acp_agent_command().is_some()
+}
+
 /// The session mode to ask an ACP agent for, by the agent's own id for it:
 /// `WARP_FORK_ACP_MODE=default`.
 const ACP_MODE_ENV_VAR: &str = "WARP_FORK_ACP_MODE";

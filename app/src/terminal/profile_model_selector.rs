@@ -2090,7 +2090,12 @@ impl ProfileModelSelector {
         let theme = appearance.theme();
         let header = self.render_model_spec_header(
             "Model Specs".to_string(),
-            "Warp’s benchmarks for how well a model performs in our harness, the rate at which it consumes credits, and task speed.".to_string(),
+            if crate::fork::model_list_is_the_agents() {
+                // Fork: the bars are a table's, not a benchmark (T21.2).
+                crate::ai::acp_agent::specs::AGENT_MODEL_SPECS_DESCRIPTION.to_string()
+            } else {
+                "Warp’s benchmarks for how well a model performs in our harness, the rate at which it consumes credits, and task speed.".to_string()
+            },
             app,
         );
         let spec = self.render_all_model_spec_values(

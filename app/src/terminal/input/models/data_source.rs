@@ -359,7 +359,11 @@ struct ModelSearchItem {
     is_selected: bool,
     is_custom_router: bool,
     /// Source/routing description for custom model routers (from `LLMInfo.description`).
+    /// Fork: for an ACP agent's row, the agent's sentence about the model (T21.2).
     description: Option<String>,
+    /// Fork: the one word the table beside the ACP agent's row has for it,
+    /// drawn after the name (T21.2).
+    class: Option<String>,
     disable_reason: Option<DisableReason>,
     is_auto: bool,
     is_using_bedrock: bool,
@@ -410,6 +414,12 @@ impl ModelSearchItem {
             is_selected: &llm.id == active_llm_id,
             is_custom_router,
             description: llm.description.clone(),
+            class: crate::fork::model_list_is_the_agents()
+                .then(|| {
+                    crate::ai::acp_agent::specs::Table::current()
+                        .class(llm.id.as_str(), llm.description.as_deref())
+                })
+                .flatten(),
             disable_reason: choice.disable_reason,
             is_auto,
             is_using_bedrock,
@@ -500,6 +510,14 @@ impl SearchItem for ModelSearchItem {
                     .with_margin_left(6.)
                     .finish(),
             );
+        }
+
+        if let Some(class) = &self.class {
+            let class_text =
+                Text::new_inline(format!("· {class}"), appearance.ui_font_family(), font_size)
+                    .with_color(secondary_text_color.into())
+                    .finish();
+            row = row.with_child(Container::new(class_text).with_margin_left(6.).finish());
         }
 
         if self.is_selected {
@@ -602,6 +620,59 @@ impl SearchItem for ModelSearchItem {
                 .finish();
             return Some(
                 ConstrainedBox::new(column)
+                    .with_width(model_specs_width(app))
+                    .finish(),
+            );
+        }
+
+        // Fork: an ACP agent's list. The bars are a table's and the header
+        // says so; the agent's own sentence and the list price go under it
+        // (`ai::acp_agent::specs`, T21.2).
+        if crate::fork::model_list_is_the_agents() {
+            use crate::ai::acp_agent::specs;
+            let header = render_model_spec_header(
+                MODEL_SPECS_TITLE,
+                specs::AGENT_MODEL_SPECS_DESCRIPTION,
+                app,
+            );
+            let note = |text: String| {
+                Container::new(
+                    Text::new(
+                        text,
+                        appearance.ui_font_family(),
+                        inline_styles::font_size(appearance),
+                    )
+                    .with_color(theme.disabled_ui_text_color().into())
+                    .finish(),
+                )
+                .with_margin_bottom(12.)
+                .finish()
+            };
+            let scores = render_model_spec_scores(
+                // A half-known spec draws `?` per bar, not `?` for all three.
+                self.spec.as_ref().filter(|spec| {
+                    specs::bar(spec.quality).is_some() && specs::bar(spec.speed).is_some()
+                }),
+                CostRow::Bar {
+                    value: self.spec.as_ref().and_then(|spec| specs::bar(spec.cost)),
+                },
+                ModelSpecScoresLayout {
+                    bg_bar_color: internal_colors::neutral_3(theme),
+                },
+                app,
+            );
+            let mut column =
+                Flex::column().with_child(Container::new(header).with_margin_bottom(12.).finish());
+            if let Some(tagline) = self.description.clone() {
+                column = column.with_child(note(tagline));
+            }
+            if let Some(price) =
+                specs::Table::current().price_line(self.id.as_str(), self.description.as_deref())
+            {
+                column = column.with_child(note(price));
+            }
+            return Some(
+                ConstrainedBox::new(column.with_child(scores).finish())
                     .with_width(model_specs_width(app))
                     .finish(),
             );

@@ -1,0 +1,60 @@
+# What the panel's Model Specs card says about the agent's models (T21.2).
+#
+# Nothing here comes off the wire: the Agent Client Protocol carries a model's
+# id, name and a sentence, and no number. Every bar the card draws for an
+# agent's list is a value from this table, and the card's header says so.
+#
+# A copy of this file at <state dir>/fork/acp-model-specs.toml is read on top
+# of it: a row there with the same `id` replaces the row here, a new `id` is
+# added, and `as_of`/`source` there replace these. No rebuild.
+#
+# `input` and `output` are the vendor's list price in USD per million tokens.
+# The card does not show them as dollars; it shows `output` relative to the
+# dearest model the agent currently offers, dearest at full width, because on
+# a subscription the dollar figure is not what a turn costs and the ratio is
+# roughly how fast a turn spends the window.
+#
+# `intelligence` and `speed` are 0..1 and are this fork's ranking, an opinion
+# written down so it can be argued with. They are not a benchmark. `class` is
+# the one word the menu shows beside the name.
+#
+# `id` is the agent's own id for the row. `opus[1m]` matches `opus`: a
+# bracketed suffix is dropped before the lookup. A row whose description has
+# no ` · ` (Claude Code's `default`, described as the model it resolves to)
+# is looked up by the first word of that description, so `Opus (1M context)`
+# finds `opus`.
+
+as_of = "2026-09-07"
+source = "https://platform.claude.com/docs/en/about-claude/pricing"
+
+[[model]]
+id = "fable"
+class = "Frontier"
+input = 10.0
+output = 50.0
+intelligence = 1.0
+speed = 0.5
+
+[[model]]
+id = "opus"
+class = "Flagship"
+input = 5.0
+output = 25.0
+intelligence = 0.85
+speed = 0.6
+
+[[model]]
+id = "sonnet"
+class = "Everyday"
+input = 2.0
+output = 10.0
+intelligence = 0.7
+speed = 0.8
+
+[[model]]
+id = "haiku"
+class = "Fast"
+input = 1.0
+output = 5.0
+intelligence = 0.4
+speed = 0.9

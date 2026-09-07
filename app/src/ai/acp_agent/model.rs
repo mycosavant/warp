@@ -85,6 +85,7 @@ use agent_client_protocol::schema::v1::{
     SessionConfigValueId, SessionId, SetSessionConfigOptionRequest,
 };
 
+use super::specs;
 use crate::ai::llms::{
     AvailableLLMs, LLMContextWindow, LLMId, LLMInfo, LLMProvider, LLMUsageMetadata,
 };
@@ -211,13 +212,20 @@ impl Catalog {
     /// one thing the person picking wants to know and the one thing the wire
     /// does not say.
     ///
-    /// The row's label is [`label`], not the row's name, and its description
-    /// is dropped rather than passed on: upstream's chip appends
-    /// `LLMInfo::description` in parentheses, so the first build of this
-    /// read *Fable (Fable 5.1 · Most capable for your hardest and
+    /// The row's label is [`label`], not the row's name: upstream's chip
+    /// appends `LLMInfo::description` in parentheses, so the first build of
+    /// this read *Fable (Fable 5.1 · Most capable for your hardest and
     /// longest-running tasks)* in a chip forty characters wide. Upstream's
     /// own comment on `menu_display_name` calls the parenthetical temporary.
-    pub(crate) fn picker_choices(&self) -> Option<AvailableLLMs> {
+    /// The tagline goes into `description` for the specs card, and
+    /// `menu_display_name` keeps it off the chip for an agent's list
+    /// (`fork::model_list_is_the_agents`), the way it already does for a
+    /// custom router's routing note.
+    ///
+    /// The three bars and the one-word class come from `specs`, a table this
+    /// fork keeps, because the wire has no number; the card's header for an
+    /// agent's list says so.
+    pub(crate) fn picker_choices(&self, specs: &specs::Table) -> Option<AvailableLLMs> {
         let select = self.options.iter().find_map(|option| match &option.kind {
             SessionConfigKind::Select(select) => Some(select),
             _ => None,
@@ -232,27 +240,34 @@ impl Catalog {
             // cannot show, as in `advertises`.
             _ => return None,
         };
+        let dearest = specs.dearest_output(
+            offered
+                .iter()
+                .map(|option| (option.value.0.as_ref(), option.description.as_deref())),
+        );
         let choices = offered
             .into_iter()
-            .map(|option| LLMInfo {
-                display_name: label(option),
-                base_model_name: label(option),
-                id: LLMId::from(option.value.0.to_string()),
-                reasoning_level: None,
-                usage_metadata: LLMUsageMetadata {
-                    request_multiplier: 1,
-                    credit_multiplier: None,
-                },
-                // The tagline has no home the chip does not draw; see
-                // `label`. It is still in `Catalog::options` for the log.
-                description: None,
-                disable_reason: None,
-                vision_supported: true,
-                spec: None,
-                provider: LLMProvider::Unknown,
-                host_configs: HashMap::new(),
-                discount_percentage: None,
-                context_window: LLMContextWindow::default(),
+            .map(|option| {
+                let id = option.value.0.to_string();
+                let description = option.description.as_deref();
+                LLMInfo {
+                    display_name: label(option),
+                    base_model_name: label(option),
+                    id: LLMId::from(id.clone()),
+                    reasoning_level: None,
+                    usage_metadata: LLMUsageMetadata {
+                        request_multiplier: 1,
+                        credit_multiplier: None,
+                    },
+                    description: description.and_then(specs::tagline).map(str::to_owned),
+                    disable_reason: None,
+                    vision_supported: true,
+                    spec: specs.spec(&id, description, dearest),
+                    provider: LLMProvider::Unknown,
+                    host_configs: HashMap::new(),
+                    discount_percentage: None,
+                    context_window: LLMContextWindow::default(),
+                }
             })
             .collect::<Vec<_>>();
         AvailableLLMs::new(
