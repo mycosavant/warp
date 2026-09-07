@@ -1,0 +1,104 @@
+[01:16:27] binary v0.fork.b6191f914; emulator 16 (API 36), Chrome versionName=133.0.6943.137
+[01:16:27] instances before: 0
+[01:16:27] launch: warpdev.ps1 -Instrumented -Console -Bind 192.168.254.3:41234
+[01:16:37] 2026-09-07T01:16:28Z [INFO] local-control wide listener started at 192.168.254.3:41234, serving TLS
+[01:16:39] --- a conversation, the chip once, the link opened on the phone
+[01:17:50] conversation C c5603bdd-f770-418b-ae76-d1b688304f2d
+CLICKED window(905,516) -> client(905,516) pid=45152
+[01:18:05] clipboard: https://192.168.254.3:41234/#<code>
+[01:18:15]   chrome says: 
+[01:18:20] --- the page in the background, the agent asks, the phone is told
+[01:18:22] chrome notification records before: 0
+[01:20:01] chrome notification records after ~90 s: 0 (approvals waiting: 1)
+[01:20:05] --- the phone answers: a tap arms Yes, a second tap sends it
+[01:20:18] approvals after the phone's yes: 1
+[01:21:30] file inside the distribution: 6 /tmp/phone-1788743902.txt -> hello
+[01:21:30] --- a prompt from the box
+[01:21:42] --- the record
+    01:17:57.776 stop | via None | answered_by None | decision None | Say the single word ready and nothing else.
+    01:18:23.698 prompt_submit | via None | answered_by None | decision None | Create the file /tmp/phone-1788743902.txt containi
+    01:18:28.812 permission_request | via None | answered_by None | decision None | approval 68d61545-3304-44ee-9def-4ce9f2289a6c:0 · 
+    01:21:26.042 permission_replied | via None | answered_by panel | decision allowed | approval 68d61545-3304-44ee-9def-4ce9f2289a6c:0
+    01:21:28.163 stop | via None | answered_by None | decision None | Create the file /tmp/phone-1788743902.txt containi
+[01:21:42] trace lines mentioning the phone: 0
+[01:21:43] --- add to home screen
+[01:23:09]   no install item in Chrome's menu
+[01:23:09] --- stop sharing from the desk: the phone is refused
+CLICKED window(905,516) -> client(905,516) pid=45152
+[01:23:22] done; Warp and the emulator are left running for the overnight check
+[01:26:45] --- second attempt on the same binary: the page forgot the rejected device, a fresh code from pair show
+[01:26:56]   chrome says: Connection is secure
+[01:26:58]   chrome notification records before: 2
+[01:28:38]   chrome notification records after ~90 s: 2 (approvals waiting: 1)
+    NotificationRecord(0x00cd3d8b: pkg=com.android.chrome user=UserHandle{0} id=1000001 tag=null importance=2 key=0|com.android.chrome|1000001|null|10160: Notification(channel=completed_downloads shortcut=null contentView=null vibrate=null sound=null defaults=0 flags=AUTO_CANCEL|LOCAL_ONLY color=0x00000000 groupKey=Downloads vis=PRIVATE))
+[01:30:19] --- variant: the tab hidden behind another tab, Chrome itself in the foreground
+[01:30:25]   tabs: See 3 tabs
+[01:30:37]   chrome notification records after ~9 s: 4 (before 2; approvals waiting: 1)
+    NotificationRecord(0x0d5cf244: pkg=com.android.chrome user=UserHandle{0} id=-1 tag=p#https://192.168.254.3:41234/#1c5603bdd-f770-418b-ae76-d1b688304f2d:permission_request importance=3 key=0|com.android.chrome|-1|p#https://192.168.254.3:41234/#1c5603bdd-f770-418b-ae76-d1b688304f2d:permission_request|10160: Notification(channel=web:https://192.168.254.3:41234;13433215784327614 shortcut=null contentView=null vibrate=null sound=null tick defaults=0 flags=0 color=0x00000000 groupKey=Web:192.168.254.3:41234 actions=1 vis=PRIVATE publicVersion=Notification(channel=web:https://192.168.254.3:41234;13433215784327614 shortcut=null contentView=null vibrate=null sound=null defaults=0 flags=0 color=0x00000000 vis=PRIVATE)))
+[01:31:09]   shade shows: 587 929 | asks: approval b86540fe-976e-4741-8469-9e5ae7b2cda1:0 · Writ
+[01:31:15]   after tapping the notification: mCurrentFocus=Window{f1993d2 u0 com.android.chrome/org.chromium.chrome.browser.ChromeTabbedActivity}
+[01:35:02]   approvals after the phone's two taps: 1
+[01:37:06] --- the phone answers (scrolled to the top by hand; Yes at 280,1130 there)
+[01:37:11]   approvals after two taps: 0
+[01:37:14]   file inside the distribution: 6 /tmp/phone-1788744625.txt -> hello
+[01:37:14] --- a prompt from the box
+    01:30:33.780 permission_request | via None | answered_by None | decision None | approval b86540fe-976e-4741-8469-9e5ae7b2cda1:0 · 
+    01:37:07.980 permission_replied | via paired_device | answered_by control_plane | decision allowed | approval b86540fe-976e-4741-8469-9e5ae7b2cda1:0
+    01:37:09.879 stop | via None | answered_by None | decision None | Create the file /tmp/phone-1788744625.txt containi
+    01:37:20.307 prompt_submit | via paired_device | answered_by None | decision None | Reply with the single word phone.
+    01:37:24.630 stop | via None | answered_by None | decision None | Reply with the single word phone.
+[01:37:29] --- add to home screen
+   menu items: ['Open the home page']
+[01:38:18]   menu: ['Forward', 'Bookmark', 'Download', 'Page info', 'Refresh', 'Update Chrome', 'Newer version is available', 'New tab', 'New Incognito tab', 'History', 'Delete browsing data', 'Downloads', 'Bookmarks', 'Recent tabs', 'Share…', 'Find in page', 'Translate…', 'Add to Home screen', 'Desktop site', 'Settings', 'Help & feedback']
+[01:38:25]   sheet: ['Web View', 'Open the home page', 'Connection is secure', '192.168.254.3:41234', 'New tab', 'See 4 tabs', 'Customize and control Google Chrome', 'Install app', 'Warp — console', 'Warp — console', '192.168.254.3:41234', 'Cancel', 'Install']
+[01:38:32]   after: ['Chrome', 'Touch & hold the widget to move it around the home screen', 'warp widget, 1 wide by 1 high', 'warp', '1 × 1', 'Cancel', 'Add to home screen']
+[01:39:23]   launcher: ['At a glance', 'Sun, Sep 6', 'Gmail', 'Photos', 'YouTube', 'Home', 'Phone', 'Messages', 'Chrome', 'Gmail', 'Google search', 'Google app', 'Voice search', 'Google Lens']
+895 1472 | Install
+[01:40:33]   launcher dialog: ['Web View', 'Open the home page', 'Connection is secure', '192.168.254.3:41234', 'New tab', 'See 4 tabs', 'Customize and control Google Chrome']
+[01:40:47]   home screen: ['warp', 'Home', 'Phone', 'Messages', 'Chrome', 'Gmail', 'Google search', 'Google app', 'Voice search', 'Google Lens']
+[01:41:07] --- launched from the home screen
+169 385 | warp
+[01:41:15]   focus: mCurrentFocus=Window{680b7a4 u0 com.android.chrome/org.chromium.chrome.browser.webapps.WebappActivity}
+[01:41:15] --- stop sharing from the desk
+CLICKED window(905,516) -> client(905,516) pid=45152
+[01:41:31]   emulator page after stop: n29-after-stop.png
+--- final pass
+[01:59:40] binary v0.fork.0fedbfda5; emulator 16 (API 36), Chrome versionName=133.0.6943.137
+[01:59:40] instances before: 0
+[01:59:40] launch: warpdev.ps1 -Instrumented -Console -Bind 192.168.254.3:41234
+[01:59:47] 2026-09-07T01:59:41Z [INFO] local-control wide listener started at 192.168.254.3:41234, serving TLS
+[01:59:49] --- a conversation, the chip once, the link opened on the phone
+[02:00:18] conversation C 816dad4f-7cb7-4851-83ab-ce57efd94478
+CLICKED window(905,516) -> client(905,516) pid=37652
+[02:00:34] clipboard: https://192.168.254.3:41234/#<code>
+[02:00:45]   chrome says: Connection is secure
+[02:00:49] --- Chrome in the background (HOME): the agent asks, and Android does not run the page
+[02:00:51] chrome notification records before: 0
+[02:01:59] chrome notification records after ~60 s: 0 (approvals waiting: 1)
+[02:01:59]   the desk answers this one, so the next ask is fresh
+[02:02:03] --- the tab hidden behind another tab, Chrome in the foreground: the phone is told
+[02:02:17] chrome notification records after ~6 s: 2 (before 0; approvals waiting: 1)
+[02:02:22]   tapping it: 587 876 | asks: Write /tmp/phone-1788746528.txt
+[02:02:25]   lands in: mCurrentFocus=Window{5754ff0 u0 com.android.chrome/org.chromium.chrome.browser.ChromeTabbedActivity}
+[02:02:25] --- the phone answers: scrolled to the top, a tap arms Yes, a second tap sends it
+[02:02:42] approvals after the phone's yes: 1
+[02:04:30] file inside the distribution: 6 /tmp/phone-1788746528.txt -> hello
+[02:04:30] --- a prompt from the box
+[02:04:42] --- the record
+    02:02:10.129 prompt_submit | via None | answered_by None | decision None | Create the file /tmp/phone-1788746528.txt containi
+    02:02:15.247 permission_request | via None | answered_by None | decision None | approval f3d079b2-40ee-4dab-b56d-944e8c641219:0 · 
+    02:04:26.343 permission_replied | via None | answered_by panel | decision allowed | approval f3d079b2-40ee-4dab-b56d-944e8c641219:0
+    02:04:28.434 stop | via None | answered_by None | decision None | Create the file /tmp/phone-1788746528.txt containi
+    02:04:33.983 prompt_submit | via paired_device | answered_by None | decision None | Reply with the single word phone.
+    02:04:39.008 stop | via None | answered_by None | decision None | Reply with the single word phone.
+[02:04:42] trace lines mentioning the phone: 1
+[02:04:43] --- the installed app, from the home screen (installed by hand earlier; Chrome's menu offered Add to Home screen and the sheet read Install app)
+169 385 | warp
+[02:04:53]   focus: mCurrentFocus=Window{16d3f93 u0 com.android.chrome/org.chromium.chrome.browser.webapps.WebappActivity}
+[02:04:53] --- stop sharing from the desk: the phone is refused
+OUTSIDE client area: (905,516) not within 594x730
+[02:05:08] --- a second conversation handed over and left paired, for the morning
+OUTSIDE client area: (905,516) not within 594x730
+[02:05:34] conversation D 2c238c73-f974-450f-af08-2e551b575328 paired at 02:05:34; Warp and the emulator are left running
+[02:06:34] --- the chip clicks above landed outside a resized window; conversation D handed over with pair show --conversation instead
+[02:06:49]   D 2c238c73-f974-450f-af08-2e551b575328: Connection is secure at 02:06:49; left running

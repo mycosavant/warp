@@ -228,7 +228,15 @@ phone that installed the authority).
   permission granted and the page hidden, a `permission_request` or a
   `stop`/`stop_failure` on the conversation this device is on posts a
   notification titled with the conversation's first prompt and buzzes. The
-  events stream already carries both; nothing is sent anywhere. Web Push is
+  events stream already carries both; nothing is sent anywhere. **On Android
+  that goes through a service worker** (`/sw.js`, the console's fifth
+  constant): Chrome there has no `Notification` constructor, and the first
+  build posted with it and was told nothing, measured on the emulator the
+  same evening (below). The page registers the worker from the *notify me*
+  tap, or at start when permission was already granted, and never on load;
+  the worker handles no `fetch` and no `push`, so it changes nothing the
+  page shows and is not a push endpoint. A browser that refuses both paths
+  says so in the header. Web Push is
   **not built**: it would reach a locked phone through Google's or Apple's
   relay, which then learns when this machine had something to say. Recorded
   here as an opt-in behind its own variable, off, that does not exist yet; to
@@ -285,17 +293,65 @@ On the Windows release builds `v0.fork.dd68ff0de` and `v0.fork.a09fd38f2`:
   passed under an instrument narrower than a phone. The listener advertises
   HTTP/1.1 only now (`e8005d252`).
 
+## Measured on the emulator, 2026-09-06 night
+
+An Android 16 emulator on the Windows side (`.fork/tools/phone.sh`; the
+manual's "A phone that is not a phone" says what it is and is not), Chrome
+133, against the release builds `v0.fork.e8005d252` and `v0.fork.b6191f914`.
+`.fork/runs/phone-2026-09-06/` has the driver, the log, the record and every
+screenshot. Line by line against the handoff's checklist:
+
+| the checklist asked | seen |
+|---|---|
+| install the authority from `http://<bind>/ca.crt` | Chrome downloaded it with no prompt; Settings › Security & privacy › More security & privacy › Encryption & credentials › Install a certificate › CA certificate › *Install anyway* › the file; the User tab of Trusted credentials then lists *warp fork · Warp fork console CA ed1cbed4*. Tapping the file from Downloads instead opens the certificate installer, which refuses CA certificates and says to use Settings. Android posts a permanent *Certificate authority installed · By an unknown third party* notification afterwards. |
+| the block's link with no warning page | `https://192.168.254.3:41234/#…` opened by intent: Chrome's lock reads *Connection is secure*, the page paired on load, *notify me* in the header, which only a secure context draws |
+| *notify me*, a notification with the page in the background | tapped, allowed. **First build: nothing.** Chrome on Android has no `Notification` constructor; the page now posts through a service worker (`/sw.js`). On that build, with the tab hidden behind another tab, the notification arrived in 9 s: *Say the single word ready and nothing else.* / *asks: … Write /tmp/phone-….txt*, and tapping it brought the console tab forward. **With Chrome itself in the background (HOME), nothing in 90 s, on both builds**: Android does not run the page then. So the foreground half works exactly as far as its name says, and a phone in a pocket is what push is for, which stays unbuilt and disclosed. |
+| answer from the phone | Yes is arm-then-confirm; two taps 0.7 s apart answered, `permission_replied · via paired_device · answered_by control_plane`, the file inside the distribution six bytes later |
+| a prompt from the box | `prompt_submit · via paired_device`, the panel drew it as the person's words, the trace `P from the phone:` |
+| the block on the desk | *Paired at …*, then *Hand this conversation to a phone* again after Stop sharing |
+| add to home screen | Chrome's menu offered *Add to Home screen*; the sheet was Chrome's own *Install app · Warp — console*; the icon landed on the home screen with the console's own image and opened in `WebappActivity`, standalone, no URL bar |
+| overnight | conversation D paired at 02:06:49 UTC on 2026-09-07 and left running with Warp and the emulator; the morning is the measurement |
+
+Leftover from the final pass: a notification about an ask, tapped, lands
+the reader at the tail of the record rather than on the ask. Recorded, not
+built.
+
+Four things the emulator found that the desk had not, each fixed the same
+night and pinned by a test:
+
+- **A code in the URL lost to a remembered device.** `boot` tried the
+  remembered device first and erased the fresh code from the URL; after every
+  restart of Warp the remembered device is dead, so the second scan said
+  *pair again* to a person who had just scanned. The code is redeemed first
+  now, the remembered device is the fallback.
+- **Stop sharing left the phone reading `live` for five minutes**, and
+  *reconnecting* after that rather than *pair again*, six minutes on. The
+  event stream held a copy of its grant and checked only its own expiry, and
+  the page reused cached credentials until they aged out. The stream now asks the
+  broker on every tick and line whether its bearer is still issued and ends
+  with a `revoked` event when it is not; the page drops a cached credential on
+  a 401 and mints once more, and the mint is where a cut-off device learns it
+  was cut off.
+- **A thumb scrolling up was pulled back to the tail** when a trace poll
+  that had started at the bottom landed. The reader's position is measured
+  when the list changes now, not when the poll was sent.
+- **The notification's two lines went on the approval's id.** The body
+  reads the call now, *asks: Write /tmp/…*, and the id stays where the answer
+  needs it.
+
+And one the emulator produced itself, recorded in the run's README: during
+the first scripted pass the panel's own Yes was armed and clicked at
+01:21:25 with the driver sending no click and Warp logging its window
+becoming active first, which is what a person at the desk looks like.
+
 ## Unverified, as of writing
 
-- **A phone.** Nothing so far has been one: Brave on the Windows side stood
-  in. Scanning the block, installing the authority from `http://<bind>/ca.crt`
-  on Android (Settings › Security › Encryption & credentials › Install a
-  certificate › CA certificate) and on iOS (the profile, then Certificate
-  Trust Settings), `https://<bind>` with no warning, *secure context: yes* on
-  the pairing page, *notify me* offered and a notification arriving with the
-  page in the background, adding to the home screen (Chrome should now offer
-  a real install; iOS adds it either way), a lock and unlock mid-turn, and
-  the pairing surviving overnight. Each is one line in the next run's README.
+- **A phone, still.** The emulator above is a Windows process with Android
+  in it, and it settled everything a browser and Android's settings decide.
+  What it cannot say: the camera scanning the block (the link was opened by
+  intent), a lock screen and doze, how the buzz feels, and iOS altogether
+  (the profile, Certificate Trust Settings, Safari's *Add to Home Screen*,
+  and whether an installed page there may post at all).
 - Whether the `wsl.exe` relays Warp spawns for its git chip should outlive
   the instance at all. They held the wide listener until the listener was
   marked non-inheritable (`keep_from_children`, measured: a close and a

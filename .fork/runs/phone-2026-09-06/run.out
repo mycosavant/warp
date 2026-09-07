@@ -1,0 +1,37 @@
+[01:59:40] binary v0.fork.0fedbfda5; emulator 16 (API 36), Chrome versionName=133.0.6943.137
+[01:59:40] instances before: 0
+[01:59:40] launch: warpdev.ps1 -Instrumented -Console -Bind 192.168.254.3:41234
+[01:59:47] 2026-09-07T01:59:41Z [INFO] local-control wide listener started at 192.168.254.3:41234, serving TLS
+[01:59:49] --- a conversation, the chip once, the link opened on the phone
+[02:00:18] conversation C 816dad4f-7cb7-4851-83ab-ce57efd94478
+CLICKED window(905,516) -> client(905,516) pid=37652
+[02:00:34] clipboard: https://192.168.254.3:41234/#<code>
+[02:00:45]   chrome says: Connection is secure
+[02:00:49] --- Chrome in the background (HOME): the agent asks, and Android does not run the page
+[02:00:51] chrome notification records before: 0
+[02:01:59] chrome notification records after ~60 s: 0 (approvals waiting: 1)
+[02:01:59]   the desk answers this one, so the next ask is fresh
+[02:02:03] --- the tab hidden behind another tab, Chrome in the foreground: the phone is told
+[02:02:17] chrome notification records after ~6 s: 2 (before 0; approvals waiting: 1)
+[02:02:22]   tapping it: 587 876 | asks: Write /tmp/phone-1788746528.txt
+[02:02:25]   lands in: mCurrentFocus=Window{5754ff0 u0 com.android.chrome/org.chromium.chrome.browser.ChromeTabbedActivity}
+[02:02:25] --- the phone answers: scrolled to the top, a tap arms Yes, a second tap sends it
+[02:02:42] approvals after the phone's yes: 1
+[02:04:30] file inside the distribution: 6 /tmp/phone-1788746528.txt -> hello
+[02:04:30] --- a prompt from the box
+[02:04:42] --- the record
+    02:02:10.129 prompt_submit | via None | answered_by None | decision None | Create the file /tmp/phone-1788746528.txt containi
+    02:02:15.247 permission_request | via None | answered_by None | decision None | approval f3d079b2-40ee-4dab-b56d-944e8c641219:0 · 
+    02:04:26.343 permission_replied | via None | answered_by panel | decision allowed | approval f3d079b2-40ee-4dab-b56d-944e8c641219:0
+    02:04:28.434 stop | via None | answered_by None | decision None | Create the file /tmp/phone-1788746528.txt containi
+    02:04:33.983 prompt_submit | via paired_device | answered_by None | decision None | Reply with the single word phone.
+    02:04:39.008 stop | via None | answered_by None | decision None | Reply with the single word phone.
+[02:04:42] trace lines mentioning the phone: 1
+[02:04:43] --- the installed app, from the home screen (installed by hand earlier; Chrome's menu offered Add to Home screen and the sheet read Install app)
+169 385 | warp
+[02:04:53]   focus: mCurrentFocus=Window{16d3f93 u0 com.android.chrome/org.chromium.chrome.browser.webapps.WebappActivity}
+[02:04:53] --- stop sharing from the desk: the phone is refused
+OUTSIDE client area: (905,516) not within 594x730
+[02:05:08] --- a second conversation handed over and left paired, for the morning
+OUTSIDE client area: (905,516) not within 594x730
+[02:05:34] conversation D 2c238c73-f974-450f-af08-2e551b575328 paired at 02:05:34; Warp and the emulator are left running

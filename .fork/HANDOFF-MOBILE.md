@@ -4,7 +4,25 @@ Written 2026-09-06 for a fresh session. Repo `/home/effatha/git/warp`, branch
 `dev`, HEAD at or after `29308327a`. Everything below is either measured and
 says so, or read and says that.
 
-## Where it stands, 2026-09-06 evening
+## Where it stands, 2026-09-06 night
+
+The checklist below was run on an Android emulator (`.fork/tools/phone.sh`,
+`.fork/runs/phone-2026-09-06/`, and `remote-control.md`'s "Measured on the
+emulator") and every line a browser or Android decides is measured: the
+authority installed through Settings, the link opened with no warning, the
+page paired over TLS, a notification arriving with the tab hidden, Yes and a
+prompt from the phone in the record, the install to the home screen opening
+standalone. Four defects found and fixed the same night, all page-side or in
+the stream (a fresh code lost to a remembered device; Stop sharing leaving
+the phone `live` for five minutes; a scroll pulled back to the tail; the
+notification body spent on an id). One limit stands and is not a defect:
+**with Chrome in the background as an app, Android does not run the page**,
+so the foreground notification reaches a phone whose Chrome is open on
+another tab and not a phone in a pocket. That is the push opt-in's case,
+still unbuilt by decision. What a person with a real phone still owns: the
+camera, the lock screen, iOS.
+
+## Where it stood, 2026-09-06 evening
 
 Steps 1 (its code half), 2, 3, 4, 5 and 6 below are built and committed
 (`5a954bf7e`..`fbb75ca19` and after). Measured on the Windows release build:

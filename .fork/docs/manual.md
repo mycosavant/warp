@@ -28,6 +28,7 @@ then each capability the fork opened.
 * [**The release build**](#the-release-build-what-to-use-day-to-day) — what to use day to day
 * [Running under WSL2 (WSLg)](#running-under-wsl2-wslg) — and why the launch flags matter
 * [Driving the Windows build from WSL](#driving-the-windows-build-from-wsl)
+* [**A phone that is not a phone**](#a-phone-that-is-not-a-phone--the-android-emulator) — the Android emulator, driven from WSL
 * [**Driving a gesture**](#driving-a-gesture--use_computer-drag) — how an agent checks its own GUI work
 * [**Warp's remote server, in a WSL distribution**](#warps-remote-server-in-a-wsl-distribution) — the Zed-style split, and how to run it
 
@@ -2307,6 +2308,62 @@ wins and the drag is not cancelled.
 release. Driven by hand on the Windows release build, 2026-08-23: "much
 snappier… nice and smooth." The tab-bar hover index, which recomputes on every
 drag event, was the next suspect and does not need to be.
+
+## A phone that is not a phone — the Android emulator
+
+Set up 2026-09-06, so the checklist in `.fork/HANDOFF-MOBILE.md` could be
+run without waiting for a person with a phone. `.fork/tools/phone.sh` wraps
+it: `start [cold]`, `wait`, `stop`, `shot <file>`, `open <url>`, `tap`,
+`type`, `key`, `tapon <label>`, `find <label>`, `ui`, `adb …`.
+
+**It runs on the Windows side**, from the SDK Android Studio installed
+(`C:\Users\onemind\AppData\Local\Android\Sdk`, emulator 36.1, WHPX). That
+is not a preference: WSL cannot reach the wide listener at all (measured,
+`curl` exit 7), and the emulator's NAT rides the Windows stack, so from inside
+it `192.168.254.3:41234` is reachable the way it is from a phone on the LAN.
+The AVD is `warp_phone`, an `android-36` Google APIs x86_64 image (Android
+16, Chrome included, no Play Store so `adb root` works), written by hand into
+`C:\Users\onemind\.android\avd\` because that SDK has no `avdmanager`; the
+two files are three lines and a `config.ini`, and the script's header says
+what they hold. Launched with `-no-metrics`.
+
+What the first evening found, so nobody re-finds it:
+
+- **`adb exec-out screencap` through a `tr -d '\r'` gives a corrupt PNG.**
+  The script strips carriage returns from every adb answer because Windows
+  `adb.exe` adds them; the screenshot path bypasses that (`adbraw`). Read the
+  first screenshot before believing the tenth.
+- **Pin the serial.** A phantom `emulator-5562 offline` appears beside the
+  real `emulator-5554`, and every unpinned command answers *more than one
+  device*.
+- **`uiautomator` sees Chrome's chrome and not the page.** `tapon` works for
+  Settings, the picker and Chrome's own menus; inside the console it is
+  coordinates read off a screenshot (`shot` is 1080×2400; the Yes button sat
+  at 280,920 and the prompt box at 540,2111 in that evening's layout).
+- **Yes is arm-then-confirm.** One tap turns it into *tap again to allow*
+  and it disarms after `ARM_MS`, four seconds; a driver that taps once and waits
+  has answered nothing. Two taps 0.7 s apart.
+- **Gboard's stylus tutorial eats typed text.** The first focus of a text
+  field opened *Try out your stylus* and `input text` typed into it.
+  `settings put secure stylus_handwriting_enabled 0` once, then it is quiet.
+- **Chrome's DevTools port answers nothing.** `adb forward tcp:9222
+  localabstract:chrome_devtools_remote` connects and every request times out
+  with 0 bytes, from either side. Twenty minutes, then dropped; the page
+  discloses its own failures now instead.
+- **Installing the authority is the Settings path a person walks**, and the
+  install activity is not exported, so `am start` cannot shortcut it: open
+  `http://<bind>/ca.crt` in Chrome (it downloads, no prompt), then Settings ›
+  Security & privacy › More security & privacy › Encryption & credentials ›
+  Install a certificate › CA certificate › *Install anyway* › the file. A
+  persistent *Certificate authority installed · By an unknown third party*
+  notification appears in the shade afterwards and stays; a real phone shows
+  the same one. Tapping the `.crt` from Downloads instead opens the
+  certificate installer, which refuses CA certificates and says to use
+  Settings.
+
+What it cannot tell you: anything about a camera (the link is opened by
+intent, not scanned), a lock screen's power behaviour, doze, or how a buzz
+feels. Those stay on the person's half of the checklist.
 
 ## Driving a gesture — `use_computer drag`
 
