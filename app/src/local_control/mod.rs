@@ -431,6 +431,13 @@ impl LocalControlServer {
                 console::CONSOLE_ICON_PATH,
                 get(console::handle_console_icon_request),
             )
+            // The service worker a notification on Android has to go through
+            // (T19). It handles no fetch, so it changes what the page shows
+            // in no way; `console_sw.js` says the rest.
+            .route(
+                console::CONSOLE_WORKER_PATH,
+                get(console::handle_console_worker_request),
+            )
             // The console authority's public half (T19). On both listeners,
             // like the pairing routes and for the same reason; on loopback it
             // answers 404, because there is nothing to install for it. The

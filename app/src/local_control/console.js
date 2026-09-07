@@ -19,6 +19,7 @@
   var STATE = '/v1/state';
   var EVENTS = '/v1/events';
   var PAIR = '/v1/pair';
+  var WORKER = '/sw.js';
   var CREDENTIAL = '/v1/pair/credential';
   var CONTROL = '/v1/control';
   var PROTOCOL_VERSION = 1;
@@ -736,9 +737,32 @@
 
   // Asked from a tap, never on load: a permission prompt that appears unasked
   // is the one browsers have learned to bury.
+  // Chrome on Android has no `Notification` constructor: a page's notification
+  // is shown only through a service worker registration's `showNotification`.
+  // Measured on the emulator on 2026-09-06 — the constructor path posted
+  // nothing and its catch said nothing. So a worker is registered the moment
+  // the person asks to be told, and at start when they already have; it
+  // handles no fetch and no push (`/sw.js`), it is a place for
+  // `showNotification` to live and a tap-to-focus handler. Resolves to the
+  // registration, or to null where there is none to be had.
+  function registerNotifier() {
+    if (!notificationsPossible() || !('serviceWorker' in navigator)) return Promise.resolve(null);
+    return navigator.serviceWorker.register(WORKER)
+      .then(function () { return navigator.serviceWorker.ready; })
+      .catch(function () { return null; });
+  }
   function askToNotify() {
     if (!notificationsPossible()) return;
-    Notification.requestPermission().then(syncNotifyButton, syncNotifyButton);
+    Notification.requestPermission().then(function () {
+      syncNotifyButton();
+      if (Notification.permission === 'granted') registerNotifier();
+    }, syncNotifyButton);
+  }
+  // The header is the one place a phone reads, so a notification that could
+  // not be posted says so there rather than in a console nobody opens.
+  function noteNotifyFailure(err) {
+    text(el.notify, 'notify failed: ' + String((err && err.message) || err || 'unknown').slice(0, 80));
+    el.notify.hidden = false;
   }
 
   function conversationOfInterest() {
@@ -761,16 +785,28 @@
     }
     if (!body) return;
     var title = (viewing && viewing.summary && viewing.summary.title) || 'warp';
-    try {
-      if (navigator.vibrate) navigator.vibrate([120, 60, 120]);
-      // `tag` collapses repeats of the same event on the same conversation
-      // into one entry in the shade rather than a stack.
-      var shown = new Notification(title, { body: body, tag: record.session_id + ':' + record.event });
-      shown.addEventListener('click', function () { window.focus(); shown.close(); });
-    } catch (_) {
-      // A browser that refuses the constructor (iOS outside an installed page
-      // does) is a browser that cannot be told; nothing else to do.
-    }
+    // `tag` collapses repeats of the same event on the same conversation into
+    // one entry in the shade rather than a stack; `renotify` makes the second
+    // ask buzz anyway, since a replaced entry is otherwise silent.
+    var options = { body: body, tag: record.session_id + ':' + record.event, renotify: true, vibrate: [120, 60, 120] };
+    if (navigator.vibrate) navigator.vibrate([120, 60, 120]);
+    var viaWorker = ('serviceWorker' in navigator)
+      ? navigator.serviceWorker.getRegistration().then(function (reg) {
+          if (!reg || !reg.active) throw new Error('no worker');
+          return reg.showNotification(title, options);
+        })
+      : Promise.reject(new Error('no serviceWorker'));
+    viaWorker.catch(function () {
+      // A browser with no worker to route through gets the constructor,
+      // which desktop browsers still honour. One that refuses both (iOS
+      // outside an installed page does) is told about it in the header.
+      try {
+        var shown = new Notification(title, options);
+        shown.addEventListener('click', function () { window.focus(); shown.close(); });
+      } catch (err) {
+        noteNotifyFailure(err);
+      }
+    });
   }
 
   // One SSE frame, as the wire delivers it: `event:` and `data:` lines, with a
@@ -1398,6 +1434,7 @@
     el.pairing.hidden = true;
     el.unpair.hidden = false;
     syncNotifyButton();
+    if (notificationsPossible() && Notification.permission === 'granted') registerNotifier();
     // A device paired by `/remote-control` was handed one conversation, and
     // the server told it which at pairing. Open it straight away; the summary
     // fills in from the first state poll.

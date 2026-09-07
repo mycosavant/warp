@@ -101,6 +101,47 @@ fn the_script_never_assigns_markup() {
             executable_lines_mentioning(CONSOLE_SCRIPT, forbidden).is_empty(),
             "the console renders untrusted text and must not use {forbidden}"
         );
+        assert!(
+            executable_lines_mentioning(CONSOLE_WORKER, forbidden).is_empty(),
+            "the worker runs on the same origin and must not use {forbidden}"
+        );
+    }
+}
+
+/// The worker is a place for `showNotification` to live, and nothing else —
+/// a service worker with a `fetch` handler sits between the page and the
+/// server for every request, and one with a `push` handler is a Web Push
+/// endpoint, which `remote-control.md` records as deliberately not built.
+/// Pinned by the absence of those two listeners and of any way to load or
+/// run code it was not served with. The one navigation it performs is to the
+/// literal console path, from a tap on a notification it posted itself.
+#[test]
+fn the_worker_listens_to_nothing_on_the_network() {
+    for forbidden in [
+        "'fetch'",
+        "'push'",
+        "'pushsubscriptionchange'",
+        "'sync'",
+        "importScripts",
+        "fetch(",
+        "XMLHttpRequest",
+        "caches.",
+        "indexedDB",
+    ] {
+        assert!(
+            executable_lines_mentioning(CONSOLE_WORKER, forbidden).is_empty(),
+            "the worker must not touch {forbidden}"
+        );
+    }
+    let opening = executable_lines_mentioning(CONSOLE_WORKER, "openWindow(");
+    assert_eq!(opening.len(), 1, "one openWindow, to the console itself");
+    assert!(opening[0].contains("openWindow('/')"));
+    for wired in ["'install'", "'activate'", "'notificationclick'"] {
+        assert_eq!(
+            executable_lines_mentioning(CONSOLE_WORKER, wired).len(),
+            1,
+            "the worker wires {wired} once"
+        );
     }
 }
 
@@ -180,6 +221,45 @@ async fn each_document_is_served_as_what_it_is() {
     );
     assert_eq!(header(&script, X_CONTENT_TYPE_OPTIONS), "nosniff");
     assert!(body_of(script).await.contains("'use strict'"));
+
+    let worker = handle_console_worker_request().await;
+    assert_eq!(worker.status(), StatusCode::OK);
+    assert_eq!(
+        header(&worker, CONTENT_TYPE),
+        "text/javascript; charset=utf-8"
+    );
+    assert_eq!(header(&worker, CACHE_CONTROL), "no-store");
+    assert!(body_of(worker).await.starts_with("'use strict'"));
+}
+
+/// The page registers the worker from the *notify me* tap and from a start
+/// where permission was already granted, and from nowhere else: a worker is
+/// a thing the person asked for by asking to be told, not part of loading a
+/// page.
+#[test]
+fn the_worker_is_registered_only_once_the_person_asked_to_be_told() {
+    let registering = executable_lines_mentioning(CONSOLE_SCRIPT, "serviceWorker.register(");
+    assert_eq!(
+        registering.len(),
+        1,
+        "one registration site, in registerNotifier"
+    );
+    let callers = executable_lines_mentioning(CONSOLE_SCRIPT, "registerNotifier();");
+    assert_eq!(
+        callers.len(),
+        2,
+        "called from the tap and from a granted start: {callers:?}"
+    );
+    for caller in &callers {
+        assert!(
+            caller.contains("Notification.permission === 'granted'"),
+            "every registration is behind a granted permission: {caller}"
+        );
+    }
+    assert!(
+        executable_lines_mentioning(CONSOLE_SCRIPT, "showNotification(").len() == 1,
+        "the worker path is the one way a notification is posted first"
+    );
 }
 
 /// The safety property T11.5 exists for, pinned where it can be deleted by

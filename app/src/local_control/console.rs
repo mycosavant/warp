@@ -59,10 +59,16 @@ pub(crate) const CONSOLE_MANIFEST_PATH: &str = "/manifest.webmanifest";
 /// The icon, referenced by both the manifest and `apple-touch-icon` (T12.3).
 pub(crate) const CONSOLE_ICON_PATH: &str = "/icon.png";
 
+/// The service worker (T19). Registered by the page when the person asks to
+/// be notified, because Chrome on Android shows a notification only through
+/// one; see `console_sw.js` for what it does not do.
+pub(crate) const CONSOLE_WORKER_PATH: &str = "/sw.js";
+
 const CONSOLE_HTML: &str = include_str!("console.html");
 const CONSOLE_SCRIPT: &str = include_str!("console.js");
 const CONSOLE_MANIFEST: &str = include_str!("console.webmanifest");
 const CONSOLE_ICON: &[u8] = include_bytes!("console_icon.png");
+const CONSOLE_WORKER: &str = include_str!("console_sw.js");
 
 /// The policy the page is served under.
 ///
@@ -113,13 +119,20 @@ pub(super) async fn handle_console_manifest_request() -> Response {
 
 /// Answers `GET /icon.png` (T12.3).
 ///
-/// A PNG rather than an SVG, and that is not a preference. On plain HTTP at a
-/// LAN address there is no secure context, so no service worker, so no
-/// install prompt and no WebAPK — which leaves iOS Safari's manual *Add to Home
-/// Screen* as the one path to a standalone launch, and it takes its icon from
-/// `apple-touch-icon`, which does not render SVG.
+/// A PNG rather than an SVG, and that is not a preference. When this was
+/// written the console was plain HTTP at a LAN address, so not a secure
+/// context, so no service worker and no install prompt anywhere but iOS
+/// Safari's manual *Add to Home Screen*, which takes its icon from
+/// `apple-touch-icon` and does not render SVG. The wide listener speaks TLS
+/// since T19 and Chrome can install the page properly; iOS still reads this
+/// tag, so the PNG stays.
 pub(super) async fn handle_console_icon_request() -> Response {
     served(CONSOLE_ICON, "image/png")
+}
+
+/// Answers `GET /sw.js` (T19) — the service worker, a constant like the rest.
+pub(super) async fn handle_console_worker_request() -> Response {
+    served(CONSOLE_WORKER.as_bytes(), "text/javascript; charset=utf-8")
 }
 
 /// The headers every console document carries.
