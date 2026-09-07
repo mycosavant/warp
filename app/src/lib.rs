@@ -2494,13 +2494,6 @@ pub(crate) fn initialize_app(
     ctx.add_singleton_model(LocalWorkflows::new);
 
     ctx.add_singleton_model(LLMPreferences::new);
-    // The ACP agent's own model list reaches the panel's picker through this
-    // (fork, T14.14): the spawner is the way onto this thread from the
-    // connection's task, and `LLMPreferences` owns the write.
-    LLMPreferences::handle(ctx).update(ctx, |preferences, ctx| {
-        let spawner = ctx.spawner();
-        ai::acp_agent::picker::install(spawner, preferences, ctx);
-    });
     ctx.add_singleton_model(HarnessAvailabilityModel::new);
     ctx.add_singleton_model(ConnectedSelfHostedWorkersModel::new);
 
@@ -2542,6 +2535,16 @@ pub(crate) fn initialize_app(
     ctx.add_singleton_model(move |_| timer);
 
     ctx.add_singleton_model(|ctx| AIExecutionProfilesModel::new(launch_mode, ctx));
+    // The ACP agent's own model list reaches the panel's picker through this
+    // (fork, T14.14): the spawner is the way onto this thread from the
+    // connection's task, and `LLMPreferences` owns the write. After the
+    // profiles model, not beside `LLMPreferences`: the write that puts last
+    // launch's list back reconciles the profile's pick against it, and
+    // measured 2026-09-07 that reach panicked the launch when it ran first.
+    LLMPreferences::handle(ctx).update(ctx, |preferences, ctx| {
+        let spawner = ctx.spawner();
+        ai::acp_agent::picker::install(spawner, preferences, ctx);
+    });
 
     ctx.add_singleton_model(DefaultTerminal::new);
 

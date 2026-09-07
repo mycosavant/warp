@@ -93,7 +93,20 @@ fn apply(
         return false;
     }
     models.agent_mode = agent_mode;
-    preferences.update_feature_model_choices(Ok(models), ctx);
+    // The server-update path reconciles the profile's pick against the new
+    // list, which reaches `AIExecutionProfilesModel`; a process that has not
+    // registered it yet (measured: a launch that restored the list too early
+    // panicked there) gets the list written and nothing reconciled, which is
+    // what the first turn does anyway.
+    if ctx
+        .has_singleton_model::<crate::ai::execution_profiles::profiles::AIExecutionProfilesModel>()
+    {
+        preferences.update_feature_model_choices(Ok(models), ctx);
+    } else {
+        UserWorkspaces::handle(ctx).update(ctx, |workspaces, _| {
+            workspaces.set_feature_model_choice_for_team_uid(None, models);
+        });
+    }
     true
 }
 
