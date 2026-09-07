@@ -2497,7 +2497,10 @@ pub(crate) fn initialize_app(
     // The ACP agent's own model list reaches the panel's picker through this
     // (fork, T14.14): the spawner is the way onto this thread from the
     // connection's task, and `LLMPreferences` owns the write.
-    ai::acp_agent::picker::install(LLMPreferences::handle(ctx).update(ctx, |_, ctx| ctx.spawner()));
+    LLMPreferences::handle(ctx).update(ctx, |preferences, ctx| {
+        let spawner = ctx.spawner();
+        ai::acp_agent::picker::install(spawner, preferences, ctx);
+    });
     ctx.add_singleton_model(HarnessAvailabilityModel::new);
     ctx.add_singleton_model(ConnectedSelfHostedWorkersModel::new);
 
