@@ -1309,3 +1309,54 @@ and the description is not passed on. Measured on `v0.fork.8a6e64f81`
 context*, *Fable 5.1*, *Sonnet 5 (selected)*, *Haiku 4.5*, and the store
 rewritten with the new labels and no descriptions. The tagline, the specs
 card and the other agents are `T21-the-agents-models.md`.
+
+**The specs card, `5856078d9` and `21b8d2341` (T21.2).** The wire carries
+no number, so every bar the card draws for an agent's list is a value
+from `ai::acp_agent::specs`, a table this fork keeps: cost is the vendor's
+output list price relative to the dearest model the agent currently
+offers, dearest at full width; intelligence and speed are a ranking
+written as an opinion in `specs.default.toml`, with the tier a Claude Code
+tagline names standing in when the table has no row and `?` when neither
+exists. The defaults lay under `<state dir>/acp-model-specs.toml`, read on
+every `session/new`, so a price goes stale by a text edit. The card's
+header says what the bars are instead of claiming Warp's benchmarks; the
+agent's own sentence about the model and the list price with its date go
+under it; the menu row shows the table's one word after the name
+(*Fable 5.1 · Frontier*, *Sonnet 5 · Everyday*). Prices were read off the
+vendor's pricing page on 2026-09-07 and the file says so.
+
+Measured on the Windows release build, `.fork/runs/model-2026-09-07/`:
+
+| | seen |
+|---|---|
+| first build, `specs-0-clipped-first-build.png` | header, sentence, price and the one word all drew; the Cost row fell off the bottom, because the inline menu's height does not follow its details pane. Header cut to two lines, margins to 8 and 6 |
+| second build, `v0.fork.21b8d2341`, `specs-2-picker-open.png` | Sonnet's card whole: the two-line header, *Efficient for routine tasks*, *$2 in · $10 out per million tokens, list price as of 2026-09-07*, three bars. The menu: *Default (recommended) · Flagship*, *Opus 5 with 1M context · Flagship*, *Fable 5.1 · Frontier*, *Sonnet 5 · Everyday (selected)*, *Haiku 4.5 · Fast* |
+| the rows walked with the arrow keys, `specs-3-*.png` | Fable: cost full width, intelligence full, speed half, *$10 in · $50 out*. The default row: *Opus (1M context)* as its line, *$5 in · $25 out*, cost half, resolved through the description. Haiku: cost a tenth. Every card a different card |
+| `acp-models-specs.json` | every row with its sentence as `description` and its three numbers as `spec`: Fable `1.0 · 1.0 · 0.5`, Opus and the default row that resolves to it `0.5 · 0.85 · 0.6`, Sonnet `0.2 · 0.7 · 0.8`, Haiku `0.1 · 0.4 · 0.9` (cost, intelligence, speed) |
+
+One instrument note: a hover moves the highlight and not the details
+pane, which follows the keyboard, so the first run photographed Sonnet's
+card five times under five highlights. `keys.ps1` knows the arrow keys
+now and the script walks the rows with them.
+
+Not done on the card: the settings page's copy draws `LLMSpec` straight
+into a clamped bar, so an unknown there is an empty bar under the same
+honest header. The *Full Terminal Use* tab is still empty.
+
+**The picker at 365 rows, the same night (T21.3b, `.fork/runs/openrouter-2026-09-07/`).**
+`opencode` over OpenRouter, the other agent that speaks `configOptions`:
+the list arrived as 358 `OpenRouter/…` rows and 7 `OpenCode Zen/…` rows,
+the menu drew them with the selected one highlighted, the card drew `?`
+on all three bars with no sentence and no price under the fork's header
+(an id the table does not know), and a row picked was sent as
+`session/set_config_option`, answered by its own id, and recorded in
+opencode's own database as the model of the next assistant message.
+Plug and play, as T21's survey said the `configOptions` half would be.
+Two instrument facts: the search box could not be typed into by posted
+characters, so it is unmeasured; and a login shell started by `wsl.exe`
+has no nvm on its PATH, so the agent must be named by its absolute path.
+
+And item 5 above has an answer it did not have at 0.73.0: opencode's
+`big-pickle` sends thought chunks, and the panel drew them under a
+collapsible *Thinking* above the answer (`or-1-after-turn.png`). Thinking
+has a home; what was missing was an agent that sent any.

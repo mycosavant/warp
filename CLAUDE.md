@@ -1872,7 +1872,10 @@ routed buffer loses a feature the unrouted one has, grep for `file_path()`
 before anything else. Two facts from the runs that are not the fork's: the
 editor's cmd modifier is the Super key on winit builds, so go-to-definition
 on Windows is **Win+click** (the context menu has the same item), and the
-`--shell-type login` is what gives the server the user's profile PATH.
+`--shell-type login` is what gives the server the user's profile PATH — **the
+`.profile` half of it only**: `.bashrc` returns for a non-interactive shell
+before it loads nvm, so anything installed under nvm (`opencode`, measured
+2026-09-07) is not found and must be named by its absolute path.
 
 **And connect before you `cd`, or rather: it no longer matters, which is the
 point.** Until 2026-09-02 a pane that navigated into a repository and *then* ran

@@ -1629,6 +1629,15 @@ edit and no rebuild. An id the table does not know draws `?`. On Windows the
 state dir is `%LOCALAPPDATA%\warp\WarpOss\data`; `.fork/docs/composer.md`
 has the measurements.
 
+**Naming an agent that lives under nvm, from the Windows build.** `wsl.exe -d
+Ubuntu --shell-type login -- opencode acp` finds no `opencode`: the login
+shell sources `.profile`, which sources `.bashrc`, which returns for a
+non-interactive shell before it loads nvm. The panel shows *Incoming
+transport closed* at `initialize` and nothing about why (measured 2026-09-07,
+`.fork/runs/openrouter-2026-09-07/`). Name the binary by its absolute path:
+`wsl.exe -d Ubuntu --shell-type login -- /home/<you>/.nvm/versions/node/<v>/bin/opencode acp`.
+`warpdev.ps1 -Agent '<cmd>'` runs one launch with a different agent.
+
 **Not yet:** `/compact` and Warp's own tools.
 
 ### Talking to an agent that is not Warp's: `warpctrl acp probe`
@@ -4184,7 +4193,7 @@ proof files pass between them as plain files. No SSH, no agent, no daemon.
 | `C:\dev\build.ps1` | Builds `warp-oss.exe` with the env that winget's PATH changes never reach. |
 | `C:\dev\shot.ps1`  | Screenshots **one window by process name**, even when buried or unfocused (`PrintWindow`). Falls back to the whole virtual screen without `-Process`. |
 | `C:\dev\click.ps1` | Clicks inside a window, without touching the physical mouse. `-Hover` posts the move and no button, which is how a menu's details pane is photographed for a row without choosing it (T21.2). |
-| `C:\dev\keys.ps1`  | Posts keystrokes to one window, without taking focus. |
+| `C:\dev\keys.ps1`  | Posts keystrokes to one window, without taking focus. Knows the arrow keys, Home, End and the page keys since 2026-09-07. `-Text` posts characters and **an inline menu's search box does not take them** (measured); use it for the shell, and walk a menu with the arrows. |
 | `C:\dev\drag.ps1`  | Press-move-release inside one window, same mechanism as `click.ps1`. Superseded by `use_computer drag --window-id`; kept because it needs no build. |
 | `C:\dev\ctrlclick.ps1` | `click.ps1` with a modifier held through `keybd_event` around the posted click. Written 2026-09-05 for go-to-definition; holds VK_LWIN, because the editor's cmd modifier is the Super key on winit builds. Posted key messages do not set the modifier state the windowing layer reads, which is why it is real input. |
 | `C:\dev\winclick_real.ps1` | A real Win+click: `SetCursorPos` + `mouse_event` with VK_LWIN held. Moves the real cursor, unlike everything above; the one shape that armed the editor's definition link. The context menu's *Go to definition* needs neither script. |

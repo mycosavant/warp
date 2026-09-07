@@ -1,5 +1,5 @@
 warpdev: ~/.warpdev is no longer read (profiles are per launch); delete it when convenient.
-warpdev: profile INSTRUMENTED (the rig) + CONSOLE
+warpdev: profile INSTRUMENTED (the rig)
   WARP_FORK_ACP_COMMAND    = wsl.exe -d Ubuntu -- npx -y @agentclientprotocol/claude-agent-acp@0.73.0
                              the agent panel answers from this agent, started inside WSL so a pane cwd resolves
   WARP_FORK_EVENT_LOG      = on
@@ -8,10 +8,9 @@ warpdev: profile INSTRUMENTED (the rig) + CONSOLE
                              makes the agent ask; without it its own classifier answers and Warp is never in the loop
   WARP_FORK_TRANSCRIPT     = on
                              the conversation on disk under the pane directory, for grepping back what compaction dropped
-  WARP_FORK_CONTROL_BIND   = 192.168.254.3:41234
-                             the wide listener, so a phone on the LAN can pair; the only variable that reaches off the machine
+  cleared: WARP_FORK_CONTROL_BIND
   note: a Warp started any other way gets none of this.
 warpdev: binary C:\dev\warp\target\release\warp-oss.exe
 warpdev: tree at 21b8d2341 fork: the card fits the menu, the other two agents probed, and the launcher takes an agent (T21.2, T21.3a)
-warpdev: launching INSTRUMENTED (the rig) + CONSOLE
-warpdev: up - inst_e13beecc6f594c54a00ceee3f36fd1dd (pid 26812, channel warp-oss, app dev.warp.WarpOss, protocol 1)
+warpdev: launching INSTRUMENTED (the rig), agent: wsl.exe -d Ubuntu --shell-type login -- /home/effatha/.nvm/versions/node/v24.5.0/bin/opencode acp
+warpdev: up - inst_bef3190d4e83453398f257e83869f924 (pid 42848, channel warp-oss, app dev.warp.WarpOss, protocol 1)

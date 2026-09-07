@@ -60,7 +60,46 @@ and the description is no longer passed into `LLMInfo`. So *Fable 5.1*,
 suggested, and the tagline, which now appears nowhere on screen. Both belong
 on the specs card, not on the chip.
 
-### T21.2 — The specs card for an agent's list
+### T21.2 — The specs card for an agent's list ✅ **built 2026-09-07, `5856078d9`, `21b8d2341`**
+
+**As built, after the maintainer agreed with the recommendation below
+(table, fetch later; the fork's ranking with the vendor's ordering as the
+fallback).** `app/src/ai/acp_agent/specs.rs` and `specs.default.toml`:
+
+- `<state dir>/acp-model-specs.toml` lays over the compiled defaults by
+  `id` (a row replaces, a new id adds, `as_of` and `source` carry the date
+  the prices were read); re-read on every `session/new`; a malformed file
+  is logged and is the defaults.
+- Cost is `output` against the dearest `output` among the models the
+  agent currently offers, so the same row draws differently under a
+  different list. Intelligence and speed are the table's, then the tier
+  the Claude Code tagline names, then `?`. A half-known spec is written
+  with `-1.0` for the unknown field and the inline card draws that bar as
+  `?`; the settings page clamps it to an empty bar under the same header.
+- Lookup keys: the id, the id without a `[..]` suffix (`opus[1m]`), and for
+  a description with no ` · ` its first word, which is how Claude Code's
+  `default` row (described as *Opus (1M context)*) finds `opus`.
+- One new predicate, `fork::model_list_is_the_agents`, asked by the chip
+  (the sentence stays off it, as for a custom router) and by both specs
+  cards (the header). The menu row shows the table's `class` after the
+  name. The tagline is `LLMInfo::description` again, drawn under the
+  header with the price line.
+- Prices as of 2026-09-07 from the vendor's pricing page: Fable 5.1
+  $10/$50, Opus 5 $5/$25, Sonnet 5 $2/$10, Haiku 4.5 $1/$5 per million
+  tokens in/out. The ranking is the maintainer's sketch filled in and is
+  labelled as an opinion in the file.
+
+Measured in `.fork/runs/model-2026-09-07/` (`specs-run.sh`); the account is
+in `.fork/docs/composer.md`, "The specs card". The first build clipped the
+Cost row, because the inline menu's height does not follow its details
+pane; the second is the one that counts.
+
+**Still open on this item:** the settings page's empty-bar-for-unknown; the
+*Full Terminal Use* tab; the fetch behind a switch, if the table goes stale
+often enough to matter. None is scheduled.
+
+#### The design, as written before the decision
+
 
 **What the wire carries**: `id`, `name`, `description`, `category`, groups.
 Nothing numeric. Every number on the card is therefore something the fork
@@ -145,7 +184,7 @@ The protocol has **two** shapes for model selection, and the fork reads one.
 | agent | version | model list on the wire | how it is set | evidence |
 |---|---|---|---|---|
 | `claude-agent-acp` | 0.73.0 | `configOptions`: `model` (category `model`), `effort` (`thought_level`), `agent` (no category) | `session/set_config_option` | **run**, 2026-09-07 |
-| `opencode` | 1.18.25 | `configOptions` with categories `model`, `mode`, `thought_level`, `agent_context`, `conversation`, `system_prompt`, `tab`, and the `models` draft beside them | `session/set_config_option` | strings in the binary, **read**; the 356-row OpenRouter catalogue arriving as `configOptions` was **seen** 2026-08-28 (I22) |
+| `opencode` | 1.18.25 | `configOptions` with categories `model`, `mode`, `thought_level`, `agent_context`, `conversation`, `system_prompt`, `tab`, and the `models` draft beside them | `session/set_config_option` | **run** 2026-09-07 in the panel: 365 rows, a pick sent and honoured, confirmed in opencode's own database (`.fork/runs/openrouter-2026-09-07/`) |
 | `@google/gemini-cli` | 0.58.0 | the **`models` draft** (`availableModels`, `currentModelId`) and `modes`; the bundle carries the `configOptions` schema but builds no such list | `session/set_model` (`unstable_setSessionModel`) | bundle **read**; **probed** 2026-09-07: `initialize` answered, `session/new` refused for want of a Gemini credential, so the list is unseen |
 | `@zed-industries/codex-acp` | 0.16.0 | unknown: a native binary per platform, README lists slash commands, permissions, auth methods and no model selection | unknown | **probed** 2026-09-07: `initialize` answered (`codex-acp` 0.16.0, protocol 1, session list/resume/close), `session/new` refused with `Authentication required`, so the list is unseen |
 | Grok | — | no ACP agent for xAI found on the npm registry. Upstream's Grok support is an OAuth token sent *inside the request to Warp's backend* (`api_keys_for_request`, `grok_oauth_access_token`), the same billing-substitution path as every BYO key, which the fork never reaches | — | `crates/ai/src/api_keys.rs`, **read** |
@@ -177,11 +216,17 @@ Items, none started:
       every `session/new` the way the probe did. Sending `authenticate` with
       a method id is small; choosing the method is the person's, as with
       `WARP_FORK_ACP_MODE`. Filed as T21.3d below.
-- [ ] **T21.3b** run the picker against `opencode` on OpenRouter: 356 rows
-      through `AvailableLLMs::new`, upstream's search box over them, and the
-      pick sent as `session/set_config_option`. Measured for
-      `claude-agent-acp` only so far; this is I22's "dynamic model
-      availability" and it may already work.
+- [x] **T21.3b** run 2026-09-07, `.fork/runs/openrouter-2026-09-07/`: it
+      already worked. 365 rows (358 OpenRouter, 7 OpenCode Zen) through
+      `AvailableLLMs::new`, a pick sent as `session/set_config_option` and
+      honoured, the answer and opencode's own `opencode.db` agreeing. The
+      search box is unmeasured: posted characters never reach it, so the
+      instrument cannot type. The specs card draws `?` on every row, as
+      designed for an id the table does not know; the fetch that would fill
+      365 rows is `.fork/next.html` item 4. One trap for the launch: a login
+      shell started by `wsl.exe` has no nvm on its PATH, so name the agent by
+      its absolute path or `initialize` closes the transport with nothing in
+      the panel saying why.
 - [ ] **T21.3c** the `models` draft as a second door, if gemini is wanted
       in the panel.
 - [ ] **T21.3d** `authenticate`: an agent that lists `authMethods` on

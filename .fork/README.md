@@ -12,6 +12,12 @@ outranks everything else here while it stands.
 self-contained, status chips remembered per browser. Open it, do not publish
 it; the maintainer asks for a cloud copy when one is wanted.
 
+**`next.html` is the horizon drafted beside it on 2026-09-07**: what the agent
+works while the maintainer lives in the build (a local model in the panel, the
+picker against a non-Anthropic list, the other agents from the wire, the
+recurring housekeeping). Same rules: static, self-contained, a map not a
+tracker; the boxes are ticked in `tickets/T21-the-agents-models.md`.
+
 **`mobile.html` is the spec for the phone surface**, drafted 2026-09-06 in the
 same shape: what `/remote-control` does today against Claude Code's, seven gaps
 ranked, and four decisions marked as the maintainer's with a recommendation

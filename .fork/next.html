@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Own Credentials, All the Way Down</title>
+<!--
+  Local-first, self-contained, no external fonts, scripts or fetches, by the
+  maintainer's rule of 2026-09-05. The style block is board.html's.
+-->
+<style>
+  :root {
+    --paper: #f6f5f1; --paper-2: #edebe4; --ink: #1c1f24; --ink-2: #4a4f58; --ink-3: #7a7f88;
+    --rule: #d9d6cd; --accent: #0f6e6a; --accent-ink: #0a4f4c; --accent-wash: #dcecea;
+    --done: #3f7d3a; --done-wash: #dfeadb; --active: #a86a12; --active-wash: #f3e6cf;
+    --park: #8a8f98; --code-bg: #ecebe5;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif;
+    --cond: "Arial Narrow", "Roboto Condensed", "Segoe UI", system-ui, sans-serif;
+    --mono: ui-monospace, "Cascadia Mono", Consolas, "SF Mono", Menlo, "DejaVu Sans Mono", monospace;
+    color-scheme: light dark;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #17191d; --paper-2: #1f2227; --ink: #e8e6df; --ink-2: #b4b2aa; --ink-3: #7f7e78;
+      --rule: #33373e; --accent: #5fb8b2; --accent-ink: #8fd4cf; --accent-wash: #173634;
+      --done: #86c07a; --done-wash: #1f3320; --active: #d9a052; --active-wash: #3a2c14;
+      --park: #767b84; --code-bg: #20232a;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--paper); color: var(--ink); font-family: var(--sans); font-size: 16px; line-height: 1.55; margin: 0; }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 48px 24px 96px; }
+  header { display: grid; gap: 14px; margin-bottom: 40px; }
+  .eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); display: flex; gap: 16px; flex-wrap: wrap; }
+  h1 { font-family: var(--serif); font-weight: 600; font-size: 42px; line-height: 1.05; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+  .lede { font-size: 18px; color: var(--ink-2); margin: 0; max-width: 62ch; }
+  .decision { border-left: 3px solid var(--accent); background: var(--accent-wash); padding: 16px 20px; margin: 0 0 40px; display: grid; gap: 8px; }
+  .decision .k { font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent-ink); }
+  .decision p { margin: 0; max-width: 66ch; }
+  .seq { margin: 0 0 48px; }
+  .seq h2 { margin-bottom: 12px; }
+  .seq ol { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; }
+  .seq li { border-top: 2px solid var(--rule); padding-top: 8px; font-family: var(--cond); font-weight: 500; font-size: 15px; line-height: 1.25; }
+  .seq li small { display: block; font-family: var(--mono); font-size: 11px; color: var(--ink-3); margin-bottom: 4px; }
+  @media (max-width: 620px) { .seq ol { grid-template-columns: repeat(3, 1fr); } }
+  h2 { font-family: var(--serif); font-weight: 600; font-size: 22px; margin: 0 0 8px; line-height: 1.2; text-wrap: balance; }
+  .item { border-top: 1px solid var(--rule); padding: 28px 0 32px; display: grid; grid-template-columns: 56px 1fr; gap: 0 20px; }
+  .rank { font-family: var(--cond); font-weight: 600; font-size: 40px; line-height: 1; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+  .item.done .rank { color: var(--done); }
+  .item.active .rank { color: var(--active); }
+  .body { display: grid; gap: 14px; min-width: 0; }
+  .head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  .head h2 { margin: 0; }
+  .meta { font-family: var(--mono); font-size: 12px; color: var(--ink-3); display: flex; gap: 14px; flex-wrap: wrap; }
+  .body p { margin: 0; max-width: 66ch; }
+  .status { font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; border: 1px solid var(--rule); border-radius: 999px; padding: 3px 10px; background: var(--paper-2); color: var(--ink-2); cursor: pointer; user-select: none; white-space: nowrap; }
+  .status:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .item.active .status { background: var(--active-wash); color: var(--active); border-color: transparent; }
+  .item.done .status { background: var(--done-wash); color: var(--done); border-color: transparent; }
+  .item.done h2 { text-decoration: line-through; text-decoration-color: var(--ink-3); text-decoration-thickness: 1px; }
+  .facts { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: 6px 12px 6px 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  th { font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); font-weight: 500; }
+  td.n, th.n { text-align: right; padding-right: 0; }
+  .gates { display: grid; gap: 6px; }
+  .gates .k { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); }
+  .gates ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; }
+  .gates li { font-size: 14px; color: var(--ink-2); padding-left: 14px; position: relative; }
+  .gates li::before { content: "\00b7"; position: absolute; left: 2px; color: var(--accent); }
+  code { font-family: var(--mono); font-size: 0.88em; background: var(--code-bg); padding: 1px 5px; border-radius: 3px; }
+  pre { font-family: var(--mono); font-size: 13px; line-height: 1.5; background: var(--code-bg); padding: 12px 14px; border-radius: 4px; overflow-x: auto; margin: 0; }
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media (max-width: 620px) { .split { grid-template-columns: 1fr; } }
+  .split h3 { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); margin: 0 0 6px; font-weight: 500; }
+  .split ul { margin: 0; padding: 0 0 0 16px; font-size: 14px; color: var(--ink-2); }
+  .split li { margin-bottom: 4px; }
+  .parked { border-top: 1px solid var(--rule); padding: 28px 0 0; }
+  .parked ul { margin: 12px 0 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+  .parked li { display: grid; grid-template-columns: 200px 1fr; gap: 16px; font-size: 14px; }
+  .parked li b { font-weight: 500; color: var(--park); font-family: var(--cond); font-size: 15px; }
+  .parked li span { color: var(--ink-2); }
+  @media (max-width: 620px) { .parked li { grid-template-columns: 1fr; gap: 2px; } }
+  footer { margin-top: 48px; font-family: var(--mono); font-size: 12px; color: var(--ink-3); border-top: 1px solid var(--rule); padding-top: 16px; }
+  footer p { margin: 0 0 6px; max-width: 70ch; }
+  @media (prefers-reduced-motion: no-preference) { .status { transition: background-color 120ms ease, color 120ms ease; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">
+      <span>warp fork &middot; dev</span>
+      <span>drafted 2026-09-07</span>
+      <span>the next horizon, run in parallel with living in the build</span>
+    </div>
+    <h1>Own Credentials, All the Way Down</h1>
+    <p class="lede">The maintainer lives in the Windows build and logs frictions. In parallel, the agent works this board: the thesis names <em>local models</em> and nothing has ever answered the panel from this machine; the protocol reaches four agents and one is measured. Every item here can be built and measured without the maintainer at the desk, except where a gate says otherwise.</p>
+  </header>
+
+  <section class="decision">
+    <span class="k">What this is and is not</span>
+    <p><strong>A second horizon beside <code>GOAL.md</code>, not a replacement.</strong> <em>Live in it</em> stands until seven working days are logged; its rule that a friction which stops a turn is fixed the same day outranks every row below. This page is what the agent does on the days nothing stopped. It is a run with a definition of done, so it can be met or abandoned and then deleted.</p>
+    <p><strong>Done when:</strong> a turn in the panel is answered by a model running on this machine, with the event log naming it and zero sockets off loopback during the turn; the picker has been measured against a list that is not Anthropic's; every agent in the survey table is filled from the wire or blocked on a credential the maintainer has declined; and the specs card says something true about every row on offer, including <code>?</code>.</p>
+  </section>
+
+  <section class="seq">
+    <h2>Sequence</h2>
+    <ol>
+      <li><small>done</small>The picker against opencode's OpenRouter list. <em>365 rows, a pick sent and honoured, the same night.</em></li>
+      <li><small>gate</small>A model runtime inside the distribution. <em>Needs a say-so: it is an install.</em></li>
+      <li><small>day 1</small>A local model answers the panel; egress measured during the turn.</li>
+      <li><small>day 1&ndash;2</small>The specs card for a list the table cannot hand-cover: the fetch, opt-in, off.</li>
+      <li><small>day 2</small><code>authenticate</code> for Codex and Gemini: the refusal disclosed now, the send when a credential exists.</li>
+      <li><small>between builds</small>Housekeeping that recurs: the record that outlives the process, the websocket check, the cron line, the stale boxes.</li>
+      <li><small>a quiet hour</small>The clean-build test of <code>-j 8</code>. <em>Only when no Windows build runs.</em></li>
+    </ol>
+  </section>
+
+  <article class="item done" data-id="openrouter">
+    <div class="rank">1</div>
+    <div class="body">
+      <div class="head"><h2>The picker against a list that is not Anthropic's</h2><span class="status">done 2026-09-07</span></div>
+      <div class="meta"><span>T21.3b &middot; I22</span><span>run: <code>.fork/runs/openrouter-2026-09-07/</code></span></div>
+      <p>Everything the picker knows was measured against five rows from one vendor. <code>opencode</code> on this machine holds an OpenRouter credential and advertises hundreds of models as <code>configOptions</code>, the same shape. The question is whether upstream's menu, its search box and the fork's per-turn <code>session/set_config_option</code> survive a list that long, and whether the specs card draws <code>?</code> for every row under a header that says why. <code>warpdev.ps1 -Agent</code> names opencode for the launch.</p>
+      <p><strong>Measured:</strong> 365 rows, the pick sent and honoured, opencode's own database agreeing; the card <code>?</code> everywhere, as designed. Neither falsifier fired; the store's per-turn rewrite is unmeasured.</p>
+      <div class="gates"><span class="k">Falsifier</span><ul>
+        <li>The store file at 356 rows is rewritten every turn, because <code>publish</code> compares whole lists and opencode reorders. Then the write needs a stable order, not a bigger file.</li>
+        <li>A pick sent as <code>set_config_option</code> is accepted and the turn still runs on the old model: the same resume story as Claude Code's, or a different one.</li>
+      </ul></div>
+    </div>
+  </article>
+
+  <article class="item" data-id="runtime">
+    <div class="rank">2</div>
+    <div class="body">
+      <div class="head"><h2>A model runtime inside the distribution</h2><span class="status">gate</span></div>
+      <div class="meta"><span>needs a say-so</span><span>RTX 5070, 12 GB, on the host</span></div>
+      <p>Nothing on either side of the VM serves a model today: no <code>ollama</code>, no <code>llama-server</code>, nothing on <code>:11434</code>. The agent runs inside the distribution, so the runtime must be reachable from there. Two placements: <code>ollama</code> in WSL with CUDA passthrough, which is the shape the pane already has; or on Windows, reachable at <code>localhost</code> under <code>networkingMode=mirrored</code>, which the console already relies on. <strong>Installing either is a change to the machine the agent will not make unasked.</strong> A 12 GB card fits a 7B to 14B model at 4-bit; the point is a turn that never leaves the machine, not a good one.</p>
+      <div class="gates"><span class="k">The ask</span><ul>
+        <li>Which side, and which model. The agent's recommendation: <code>ollama</code> in WSL, one coding model that fits the card, because the pane, the agent and the runtime then share a filesystem and a loopback.</li>
+      </ul></div>
+    </div>
+  </article>
+
+  <article class="item" data-id="local">
+    <div class="rank">3</div>
+    <div class="body">
+      <div class="head"><h2>A local model answers the panel</h2><span class="status">open</span></div>
+      <div class="meta"><span>the thesis, measured</span><span>egress recipe: <code>.fork/runs/egress-windows-2026-09-05/</code></span></div>
+      <p><code>opencode</code> speaks to an OpenAI-compatible endpoint from its own config, so the panel path is unchanged: <code>WARP_FORK_ACP_COMMAND</code> names the same agent and the agent names the runtime. What is measured is the claim the fork makes in its first sentence: one turn, the event log's <code>session_model</code> line naming the local model, the harness transcript agreeing, and a socket census during the turn showing loopback and nothing else. The specs table gets a row with <code>output = 0</code>, so the cost bar is empty for the one honest reason.</p>
+      <div class="gates"><span class="k">Falsifier</span><ul>
+        <li>A socket to OpenRouter during a local turn: opencode consulting its provider list, or a title being generated elsewhere. Then the local turn is not local and the census says where it went.</li>
+        <li>The turn answers and the tool calls do not: a small model that cannot drive opencode's tools is a fact about the model, recorded, not a defect in the panel.</li>
+      </ul></div>
+    </div>
+  </article>
+
+  <article class="item" data-id="fetch">
+    <div class="rank">4</div>
+    <div class="body">
+      <div class="head"><h2>The specs card for a list the table cannot hand-cover</h2><span class="status">open</span></div>
+      <div class="meta"><span>T21.2, the deferred half</span><span><code>WARP_FORK_MODEL_PRICES=fetch</code></span></div>
+      <p>Four rows were written by hand from the vendor's page. Item 1 puts hundreds on offer, and a table cannot follow them. OpenRouter's public model list carries a price per row and needs no key, so the fetch the ticket parked earns its place here: <strong>opt-in, off by default, one request per launch at most</strong>, cached under the state directory with a thirty-day age printed on the card, and refused by name unless the variable is set. It is the fork's first outbound request to a party that is not the person's own agent, which is why it is a variable and not a default, and why the egress deny-list is not the layer that decides it.</p>
+      <div class="gates"><span class="k">Falsifier</span><ul>
+        <li>The fetch runs with the variable unset, on any path. One test pins that the request builder is never constructed without it.</li>
+        <li>An OpenRouter slug that does not map to the agent's id. The mapping table is still the design; the fetch only fills its numbers.</li>
+      </ul></div>
+    </div>
+  </article>
+
+  <article class="item" data-id="auth">
+    <div class="rank">5</div>
+    <div class="body">
+      <div class="head"><h2><code>authenticate</code>, disclosed now and sent later</h2><span class="status">open</span></div>
+      <div class="meta"><span>T21.3d</span><span>run: <code>.fork/runs/acp-survey-2026-09-07/</code></span></div>
+      <p>Codex and Gemini both answer <code>initialize</code> with <code>authMethods</code> and refuse <code>session/new</code> without one; the fork never sends <code>authenticate</code>. Half of this needs no credential: when <code>session/new</code> is refused and the agent listed methods, the panel says so in the agent's words and names the variable. The other half, sending the method <code>WARP_FORK_ACP_AUTH</code> names, is a small addition measured only when a credential exists, and the credential is the maintainer's to supply or decline. Choosing the method is not Warp's, for the reason <code>WARP_FORK_ACP_MODE</code> has no default.</p>
+    </div>
+  </article>
+
+  <article class="item" data-id="housekeeping">
+    <div class="rank">6</div>
+    <div class="body">
+      <div class="head"><h2>Housekeeping that has recurred</h2><span class="status">between builds</span></div>
+      <div class="meta"><span>from the inventory of 2026-09-07</span></div>
+      <p>Each of these is an evening and none needs the desk. Ranked by how often the files themselves mention it.</p>
+      <div class="facts"><table>
+        <tr><th>what</th><th>where</th><th class="n">mentions</th></tr>
+        <tr><td>A discovery record and broker socket outlive three clean <code>window close</code> shutdowns; unbisected</td><td>T15</td><td class="n">3</td></tr>
+        <tr><td>A third egress check, at socket construction in <code>crates/websocket</code>, with a test pinning the consumer list</td><td>T19</td><td class="n">2</td></tr>
+        <tr><td><code>did_change_watched_files</code> advertised and never sent; two candidate fixes, the maintainer picks</td><td>T18</td><td class="n">2</td></tr>
+        <tr><td>Stale boxes: T16 items 1&ndash;3 built and unticked; <code>open-questions.md</code> still says T2.5 audio is unverified; <code>manual.md</code> still documents the <code>acp probe --cwd</code> limitation T20.5 removed; <code>GOAL.md</code> lists T14.14 under <em>not this horizon</em>; T04 has an empty heading</td><td>the fork's commonest defect</td><td class="n">&mdash;</td></tr>
+        <tr><td>The drift-check cron line, never installed</td><td>GOAL board item 1</td><td class="n">1</td></tr>
+        <tr><td>Windows Developer Mode so the <code>.claude/skills</code> symlink resolves in <code>C:\dev\warp</code></td><td>open-questions</td><td class="n">1</td></tr>
+      </table></div>
+    </div>
+  </article>
+
+  <article class="item" data-id="clean-build">
+    <div class="rank">7</div>
+    <div class="body">
+      <div class="head"><h2>The clean-build test of <code>-j 8</code></h2><span class="status">a quiet hour</span></div>
+      <div class="meta"><span>GOAL standing constraint</span><span>30+ minutes, carries the risk it measures</span></div>
+      <p>Two sampled builds measured the tail of the graph, where the app crate compiles alone at 15 to 17 GB, and neither was the many-large-crates front that took the guest down. The cap is <em>unresolved, not lifted</em> until a clean build is sampled the same way. It runs only when the maintainer says no Windows build is running, because the host's 64 GB is the quantity that matters and both sides draw on it.</p>
+    </div>
+  </article>
+
+  <section class="parked">
+    <h2>Not this horizon, and why</h2>
+    <ul>
+      <li><b>I18, the classifier, the approval button</b><span>Permission posture is frozen by the maintainer. T14.16's button is a question about modality that the maintainer said needs a session of its own; not touched from this board.</span></li>
+      <li><b>I22's secrets store</b><span>Needs a named threat model first. Item 1 uses the credential opencode already holds, which is the point: the panel gets OpenRouter without the store.</span></li>
+      <li><b>Web Push</b><span>Gated by decision on a week of use saying the foreground half is not enough. The week is the other horizon's.</span></li>
+      <li><b>headscale on a VPS</b><span>Ops, not code, and reach is not what stops a turn.</span></li>
+      <li><b>The TUI answerer (I20)</b><span>No friction log has asked, and the type-ahead hazard is unmeasured.</span></li>
+      <li><b>Gemini's <code>models</code> draft door (T21.3c)</b><span>Wanted only if Gemini is wanted in the panel, which item 5 decides first.</span></li>
+    </ul>
+  </section>
+
+  <section class="parked">
+    <h2>Logging in parallel</h2>
+    <ul>
+      <li><b>The maintainer's log</b><span><code>.fork/runs/run-live-2026-09/friction.md</code>, one line per working day, an empty day is a line. It holds one dated day; the horizon needs seven.</span></li>
+      <li><b>The agent's log</b><span>The same file, a second table headed <em>agent</em>: what the agent working this board lacked in the panel, one line per session. This is I19's first step, done as a habit instead of a task. A line that recurs three times outranks any row above.</span></li>
+      <li><b>What would make this fail</b><span>Installing a runtime unasked. Measuring a local model on the Windows side while the pane is in the distribution. Reading <code>success</code> off <code>agent list</code> instead of the output. A fetch that runs with its variable unset.</span></li>
+    </ul>
+  </section>
+
+  <footer>
+    <p>Drafted 2026-09-07 from the inventory of every open item under <code>.fork/</code>. Local-first, self-contained, no scripts. Status words are static: this page is a map, and <code>.fork/tickets/T21-the-agents-models.md</code> is where the boxes get ticked.</p>
+  </footer>
+</div>
+</body>
+</html>

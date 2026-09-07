@@ -89,3 +89,23 @@ One trap: `model-run.sh`'s chip coordinate (70,872) hit the cwd chip on this
 layout; the model chip was at (647,873). Read the coordinate off the
 screenshot each time.
 
+
+## The specs card, the same night (`5856078d9`, `21b8d2341`)
+
+`specs-run.sh`. The wire carries no number, so the card's bars are a table
+this fork keeps (`app/src/ai/acp_agent/specs.default.toml`, prices read off
+the vendor's page on 2026-09-07), cost relative to the dearest model
+offered, and the header says so.
+
+| | seen |
+|---|---|
+| first build `v0.fork.5856078d9`, `specs-0-clipped-first-build.png` | header (three lines), the sentence, the price, the one word after every name; the Cost row clipped, because the inline menu's height does not follow its details pane |
+| second build `v0.fork.21b8d2341`, `specs-2-picker-open.png` | header two lines, margins 8 and 6; Sonnet's card whole |
+| `specs-3-{default,opus,fable,sonnet,haiku}.png` | each row's own card, reached with the arrow keys |
+| `acp-models-specs.json` | the sentence as `description` and the three numbers as `spec` on every row |
+
+Two instrument notes. A hover (`click.ps1 -Hover`, a `WM_MOUSEMOVE` with
+no button) highlights the row and leaves the details pane on the selected
+item, so the first run's five hover screenshots were all Sonnet's card;
+the pane follows the keyboard, and `keys.ps1` knows the arrow keys now.
+And the chip coordinate is still (647,873) on this layout.

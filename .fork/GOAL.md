@@ -83,12 +83,22 @@ outranks a new idea with none.
 - **Building item 6 before phase 0.** `.fork/docs/observability.md` names one defect and one
   measurement that come before any rendering.
 
+## The next horizon, drafted beside this one
+
+**`.fork/next.html`, 2026-09-07.** What the agent works while the maintainer
+lives in the build: a local model answering the panel, the picker against a
+list that is not Anthropic's, the other agents filled from the wire or blocked
+on a credential, and the housekeeping the files keep mentioning. This
+horizon's same-day rule for a friction that stops a turn outranks it.
+
 ## Not this horizon, and why
 
 - **Permission-path measurements, I18, `.fork/docs/classifier.md`.** Set aside by the
   maintainer. Posture frozen.
-- **T14.14's model picker and I22's OpenRouter provider.** Under ACP the agent
-  owns model and provider; a second picker in Warp duplicates it.
+- ~~**T14.14's model picker and I22's OpenRouter provider.** Under ACP the agent
+  owns model and provider; a second picker in Warp duplicates it.~~ Overtaken
+  2026-09-07: the picker is the agent's own list (T14.14 built, T21 follows),
+  not a second one. What is left of I22 is on the next horizon.
 - **I1's inbox.** No friction log has asked for it.
 - **The clean-build test of the `-j 8` cap.** Worth running once; not part of
   living in the build.

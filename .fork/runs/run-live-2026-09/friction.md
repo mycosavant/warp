@@ -10,6 +10,15 @@ Launched through `warpdev.ps1`'s product profile unless a line says otherwise.
 |---|---|---|---|---|
 | 2026-09-05 | 1 | Opened the diff panel in a WSL pane on this repo: *"Cannot detect diffs for this folder. Diffs don't currently work in WSL."* | yes | `.fork/docs/wsl.md`; board item 7. Step 1 (connect automatically) built the same day, `ea61116e1` + `1a42ecdb8`; step 2 the same evening, `099b26ea5`: routed, the panel works unchanged; unrouted, the text names the 9p read |
 
+## The agent's log
+
+What the agent working `.fork/next.html` lacked, one line per session, in
+the same shape. Started 2026-09-07 as I19's first step, done as a habit.
+
+| date | # | what | stopped work? | where it went |
+|---|---|---|---|---|
+| 2026-09-07 | a1 | Named `opencode acp` for a launch from the Windows build and every turn failed at `initialize` with *Incoming transport closed*; the panel said nothing about why. The login shell had no nvm on its PATH | yes | the absolute path; `.fork/docs/manual.md`, "Naming an agent that lives under nvm". Open: the panel could show the agent's stderr on a transport that closes at `initialize` |
+
 ## Notes
 
 **2026-09-05, #1.** Found within minutes of the first product-profile session.

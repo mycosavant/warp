@@ -91,3 +91,12 @@ its T21.4.
   recommendation is a table the person can edit before any fetch.
 - The secrets half is untouched and keeps its threat-model gate.
 
+
+## Measured 2026-09-07: the panel has OpenRouter through opencode
+
+`.fork/runs/openrouter-2026-09-07/`. The picker built for T14.14 took
+opencode's 365-row list, a pick was sent and honoured, and opencode's own
+database agrees. So "dynamic model availability" is done without a
+provider in Warp. What this idea still owns is the specs card for a list
+that size (an opt-in fetch, `.fork/next.html` item 4) and the secrets
+store, which keeps its threat-model gate.
