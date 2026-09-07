@@ -197,8 +197,11 @@ fn the_picker_reads_the_agents_list_and_its_current_selection() {
         "Model".to_owned(),
         SessionConfigValueId::from("sonnet".to_owned()),
         vec![
-            SessionConfigSelectOption::new("fable", "Fable 5.1").description("the dear one"),
+            SessionConfigSelectOption::new("fable", "Fable")
+                .description("Fable 5.1 · Most capable for your hardest and longest-running tasks"),
             SessionConfigSelectOption::new("sonnet", "Sonnet 5"),
+            SessionConfigSelectOption::new("default", "Default (recommended)")
+                .description("Opus (1M context)"),
         ],
     )
     .category(SessionConfigOptionCategory::Model)]));
@@ -222,13 +225,16 @@ fn the_picker_reads_the_agents_list_and_its_current_selection() {
     assert_eq!(
         named,
         vec![
-            (
-                "fable".to_owned(),
-                "Fable 5.1".to_owned(),
-                Some("the dear one".to_owned())
-            ),
+            ("fable".to_owned(), "Fable 5.1".to_owned(), None),
             ("sonnet".to_owned(), "Sonnet 5".to_owned(), None),
-        ]
+            (
+                "default".to_owned(),
+                "Default (recommended)".to_owned(),
+                None
+            ),
+        ],
+        "the version before ` · ` is the label, the tagline rides no chip, \
+         and a description without the separator leaves the name alone"
     );
     assert_eq!(catalog.current().as_deref(), Some("sonnet"));
 }

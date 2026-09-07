@@ -210,6 +210,13 @@ impl Catalog {
     /// window. Nothing here says a model costs what it costs, which is the
     /// one thing the person picking wants to know and the one thing the wire
     /// does not say.
+    ///
+    /// The row's label is [`label`], not the row's name, and its description
+    /// is dropped rather than passed on: upstream's chip appends
+    /// `LLMInfo::description` in parentheses, so the first build of this
+    /// read *Fable (Fable 5.1 · Most capable for your hardest and
+    /// longest-running tasks)* in a chip forty characters wide. Upstream's
+    /// own comment on `menu_display_name` calls the parenthetical temporary.
     pub(crate) fn picker_choices(&self) -> Option<AvailableLLMs> {
         let select = self.options.iter().find_map(|option| match &option.kind {
             SessionConfigKind::Select(select) => Some(select),
@@ -228,15 +235,17 @@ impl Catalog {
         let choices = offered
             .into_iter()
             .map(|option| LLMInfo {
-                display_name: option.name.clone(),
-                base_model_name: option.name.clone(),
+                display_name: label(option),
+                base_model_name: label(option),
                 id: LLMId::from(option.value.0.to_string()),
                 reasoning_level: None,
                 usage_metadata: LLMUsageMetadata {
                     request_multiplier: 1,
                     credit_multiplier: None,
                 },
-                description: option.description.clone(),
+                // The tagline has no home the chip does not draw; see
+                // `label`. It is still in `Catalog::options` for the log.
+                description: None,
                 disable_reason: None,
                 vision_supported: true,
                 spec: None,
@@ -253,6 +262,28 @@ impl Catalog {
         )
         .ok()
     }
+}
+
+/// The name the chip and the menu show for one of the agent's rows.
+///
+/// `claude-agent-acp` names a row by family and puts the version and a
+/// tagline in the description, joined by ` · `: name `Fable`, description
+/// `Fable 5.1 · Most capable for your hardest and longest-running tasks`,
+/// the strings being Claude Code's own (`/model` in the CLI shows the same
+/// four taglines). The version is the name a person wants on a chip; the
+/// tagline is a sentence, and a chip is not where a sentence goes. A
+/// description without the separator is something else, for the `default`
+/// row the model it currently resolves to, and the name stands. An agent
+/// that sends no description, `opencode` among those surveyed, is unchanged.
+fn label(option: &SessionConfigSelectOption) -> String {
+    option
+        .description
+        .as_deref()
+        .and_then(|description| description.split_once(" · "))
+        .map(|(version, _tagline)| version.trim())
+        .filter(|version| !version.is_empty())
+        .map(str::to_owned)
+        .unwrap_or_else(|| option.name.clone())
 }
 
 /// What became of the model the panel asked for on this turn, for the log.
