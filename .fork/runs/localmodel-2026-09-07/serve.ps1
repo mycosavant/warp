@@ -13,13 +13,15 @@
   address too, so the Windows Warp, a WSL pane and an agent started inside the
   distribution all see the same server (measured both directions 2026-09-07).
 
-  -Model    a .gguf under C:\dev\models; default Gemma 4 12B UD-Q4_K_XL
+  -Model    a .gguf under X:\models (moved off the nearly full C: on
+            2026-09-07; the runtime itself stays under C:\dev\llama); default
+            Gemma 4 12B UD-Q4_K_XL
   -Alias    the id the server answers to in the `model` field
   -Ctx      context tokens, total across slots (kv_unified)
   -Think    keep the model's thinking on (default off)
 #>
 param(
-    [string]$Model = 'C:\dev\models\gemma-4-12b-it-UD-Q4_K_XL.gguf',
+    [string]$Model = 'X:\models\gemma-4-12b-it-UD-Q4_K_XL.gguf',
     [string]$Alias = 'gemma-4-12b',
     [int]$Ctx = 12288,
     [int]$Port = 8080,

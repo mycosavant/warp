@@ -80,7 +80,7 @@ for and evicts the other, and a 7 GB load from NVMe is a few seconds.
   Warp, a WSL pane and an agent started inside the distribution all reach it
   at `127.0.0.1:8080`; both directions were measured with a throwaway
   listener before anything was downloaded.
-- **Models in `C:\dev\models\`.** Gemma 4 12B is there (7.4 GB). The 22 GB
+- **Models in `X:\models\`** since later the same night, when the maintainer pointed out that C: was nearly full and X: (4 TB, 2.1 TB free) was the drive meant for this; the runtime stays on C:. Gemma 4 12B is there (7.4 GB). The 22 GB
   Qwen is not: with 49 GB free on the one disk that is a decision for the
   maintainer, not for a script.
 
