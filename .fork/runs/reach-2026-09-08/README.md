@@ -48,11 +48,28 @@ is marked.
 
 ## What the person supplied
 
-The phone's radio during step 8, cellular or Wi-Fi, is the maintainer's to
-state; the driver cannot see it. The relay state in step 3 and step 8 says
-the path did not depend on the LAN either way: with ProtonVPN up the PC
-cannot be reached directly from anywhere, LAN included, and the console was
-reached.
+The phone was on cellular with Wi-Fi off during step 8 (the maintainer,
+afterwards; the driver cannot see the radio). The relay state in step 3 and
+step 8 says the path did not depend on the LAN either way.
+
+Two more things from the phones, the same evening:
+
+- **Android with Tailscale on reported *Private DNS server cannot be
+  accessed* and treated the network as down**, while the pairing above was
+  working through it. Android's DNS-over-TLS setting cannot reach its named
+  server through the tunnel. Settings → Network & internet → Private DNS →
+  Off fixed it; the tailnet pushes no resolvers (`tailscale dns status`), so
+  nothing was lost.
+- **The iPhone (`iphone-13`, `100.74.53.3`, Wi-Fi only, no mobile plan)
+  joined, dropped off for a while, and then installed the authority.** The
+  steps that worked, in order: Safari on `http://100.82.213.46:41234/ca.crt`
+  offers the profile; Settings shows *Profile Downloaded* near the top
+  (else General → VPN & Device Management); install; then **General → About
+  → Certificate Trust Settings → full trust**. The last step is the one the
+  page still needs after the install appears to succeed: until it was
+  done, Safari called the console insecure. iOS's rows of the checklist
+  that this leaves: Add to Home Screen from the share sheet, and whether an
+  installed page there may post a notification.
 
 ## What it means
 

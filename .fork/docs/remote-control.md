@@ -398,9 +398,15 @@ headscale steps are `.fork/reach.html`.
   stops it. What that walk-through found was the notification's body (fixed
   above) and the model picker (`composer.md`). Still unmeasured: the camera
   scanning the block (the link was opened by intent), doze, how the buzz
-  feels, and iOS altogether (the profile, Certificate Trust Settings,
-  Safari's *Add to Home Screen*, and whether an installed page there may
-  post at all).
+  feels, and on iOS Safari's *Add to Home Screen* and whether an installed
+  page there may post at all. **The iOS profile is measured, 2026-09-08**:
+  Safari on `/ca.crt` offers it, Settings installs it, and the page stays
+  insecure until General → About → Certificate Trust Settings grants full
+  trust, which is the step that looks optional and is not
+  (`.fork/runs/reach-2026-09-08/`). The same evening, Android with the
+  tailnet on reported *Private DNS server cannot be accessed* while the
+  pairing worked through it; Private DNS off on the phone is the fix, and
+  `.fork/reach.html` says why.
 - Whether the `wsl.exe` relays Warp spawns for its git chip should outlive
   the instance at all. They held the wide listener until the listener was
   marked non-inheritable (`keep_from_children`, measured: a close and a
