@@ -1,0 +1,3 @@
+# 2026-09-08T22:28:06Z tailscale status after the phone's prompt (ProtonVPN connected)
+100.82.213.46   effatha  mycosavant@  windows  -                                        
+100.100.201.63  s25      mycosavant@  android  active; relay "ord", tx 185584 rx 95288  

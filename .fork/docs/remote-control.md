@@ -355,7 +355,37 @@ the first scripted pass the panel's own Yes was armed and clicked at
 01:21:25 with the driver sending no click and Warp logging its window
 becoming active first, which is what a person at the desk looks like.
 
+## Reach (2026-09-08)
+
+The console left the LAN on 2026-09-08, on a stop-gap: Tailscale with
+Tailscale's own coordination server, one free account, the PC and the
+Android phone as its two nodes. Nothing in Warp changed for it.
+`WARP_FORK_CONTROL_BIND` already took one literal IP, `tls.rs` already
+minted the server certificate per launch for whatever address was bound,
+and the authority the phone installed on 2026-09-07 signs the new leaf. The
+launcher (`warpdev.ps1 -Console`) now defaults `-Bind` to `tailnet`,
+resolved from `tailscale ip -4` at launch, and stops the launch if Tailscale
+gives no address rather than binding something a saved URL does not name.
+The Tailscale adapter is a Private network on Windows, so the existing
+41234 rule admits it; port 22 got its own rule for `100.64.0.0/10`.
+
+Measured with ProtonVPN connected (`.fork/runs/reach-2026-09-08/`): the
+PC's public endpoint is a Proton exit with `MappingVariesByDestIP: true`,
+and `tailscale ping` to the phone answered only *via DERP(ord)*, 240 to
+590 ms, never direct. So the stop-gap relays every packet through
+Tailscale's Chicago relay while ProtonVPN is up. Encrypted end to end, and
+the console's own TLS is inside that, so the words are two envelopes deep;
+but it is their relay. The way out is either Proton's split tunneling for
+`tailscaled.exe` (a paid feature) or a relay of your own beside headscale.
+The whole choice, Cloudflare Tunnel refused by name, the providers and the
+headscale steps are `.fork/reach.html`.
+
 ## Unverified, as of writing
+
+- **The phone off the LAN, end to end.** The mesh path is measured (above);
+  a pairing scanned at the desk and driven from cellular is the run this
+  page owes next, and it waits on a release build the Windows checkout lost
+  on 2026-09-07 when its `target` was deleted for disk.
 
 - **A phone, still, and one phone has now walked it.** The emulator above
   is a Windows process with Android in it, and it settled everything a

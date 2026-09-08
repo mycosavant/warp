@@ -1,0 +1,12 @@
+{
+  "instances": [
+    {
+      "instance_id": "inst_42cdcc173ce34f6fab27d5505a6b1c6f",
+      "pid": 10196,
+      "channel": "warp-oss",
+      "app_id": "dev.warp.WarpOss",
+      "app_version": "v0.fork.2e1552fc0",
+      "protocol_version": 1
+    }
+  ]
+}

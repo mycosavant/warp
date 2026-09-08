@@ -49,12 +49,21 @@
                       -Agent 'wsl.exe -d Ubuntu --shell-type login -- opencode acp'
 
     -Console        Also open the wide listener (`WARP_FORK_CONTROL_BIND`) so
-                    a phone on the LAN can pair and watch: `warpctrl pair show`
-                    prints the QR. The address is `-Bind`, default
-                    192.168.254.3:41234 -- the one the Windows firewall rule
-                    names (`.fork/docs/manual.md`, "Reaching the console from
-                    a phone"). Off unless asked for, because it is the one
-                    variable that reaches off the machine.
+                    a phone can pair and watch: `warpctrl pair show` prints
+                    the QR. The address is `-Bind`, default `tailnet`, which
+                    is resolved here from `tailscale ip -4` at launch (the
+                    parser in Warp takes one literal IP and never a name) on
+                    port 41234. A phone on the mesh reaches it from anywhere;
+                    on the LAN it is the same address, delivered directly. If
+                    Tailscale is not up the launch stops and says so, rather
+                    than quietly binding something a saved URL does not name.
+                    `-Bind 192.168.254.3:41234` is the LAN bind the Windows
+                    firewall rule was written for (`.fork/docs/manual.md`,
+                    "Reaching the console from a phone"); the Tailscale
+                    adapter is a Private network, so the same rule admits
+                    the mesh (measured 2026-09-08). Off unless asked for,
+                    because it is the one variable that reaches off the
+                    machine.
 
     -Stock          UPSTREAM. Every WARP_FORK_* variable here cleared. For A/B-ing a
                     suspected fork regression. Plan the shutdown first: with
@@ -98,7 +107,7 @@ param(
     [switch]$Instrumented,
     [switch]$EventLog,
     [switch]$Console,
-    [string]$Bind = '192.168.254.3:41234',
+    [string]$Bind = 'tailnet',
     [switch]$Stock,
     [switch]$Status,
     [switch]$Force,
@@ -194,6 +203,25 @@ if ($Console) {
     if ($Stock) {
         Write-Host "warpdev: -Console needs the fork's listener; -Stock has none." -ForegroundColor Red
         exit 2
+    }
+    # `tailnet` (or `tailnet:<port>`) is resolved to the machine's own mesh
+    # address now, once, so Warp still receives one literal IP. Refuse rather
+    # than fall back: a phone holds this address in a saved URL and a home
+    # screen icon, and a listener on any other address is one it cannot find.
+    if ($Bind -match '^tailnet(:(\d+))?$') {
+        $port = if ($Matches[2]) { $Matches[2] } else { '41234' }
+        $ts = 'C:\Program Files\Tailscale\tailscale.exe'
+        $ip = $null
+        if (Test-Path $ts) { $ip = (& $ts ip -4 2>$null | Where-Object { $_ -match '^100\.' } | Select-Object -First 1) }
+        if (-not $ip) {
+            Write-Host "warpdev: -Bind tailnet, but Tailscale gave no IPv4 (not installed, not logged in, or the service is down)." -ForegroundColor Red
+            Write-Host "  Check:  & '$ts' status" -ForegroundColor DarkGray
+            Write-Host "  Or name an address: -Bind 192.168.254.3:41234 (LAN only)" -ForegroundColor DarkGray
+            exit 2
+        }
+        $Bind = "$($ip.Trim()):$port"
+        $Wide[0].Value = $Bind
+        $Wide[0].Why = 'the wide listener on this machine''s tailnet address, so a phone on the mesh can pair from anywhere; the only variable that reaches off the machine'
     }
     $ProfileName = "$ProfileName + CONSOLE"
     $ToSet = @($ToSet + $Wide)

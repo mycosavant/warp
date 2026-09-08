@@ -1650,6 +1650,22 @@ push opt-in's whole case, and it stays unbuilt by decision.
 names one port, so an *ephemeral* port is refused outright rather than merely
 producing a stale saved URL. `WARP_FORK_CONTROL_BIND=192.168.254.3:41234`.
 
+**And since 2026-09-08 the console is off the LAN, on a tailnet address, with
+no change to Warp.** `warpdev.ps1 -Console` defaults `-Bind` to `tailnet`,
+resolved from `tailscale ip -4` at launch, and stops the launch when there
+is no address rather than binding one a saved URL does not name. The Tailscale
+adapter is a Private network on Windows, so the 41234 rule above admits it
+unchanged. Measured the same day with ProtonVPN connected: the PC sits behind
+a symmetric NAT at Proton's exit and every packet to the phone crosses
+Tailscale's DERP relay, 240-590 ms, never direct; a conversation was still
+handed to the phone and driven from it through that relay
+(`.fork/runs/reach-2026-09-08/`). The coordination server is Tailscale's own
+for now, one free account, a stop-gap the maintainer chose on the day;
+headscale on a VPS is the destination and `.fork/reach.html` carries the
+choice, the refusals (Cloudflare Tunnel decrypts at its edge and reads every
+prompt) and the ops steps. `winget`'s id is `Tailscale.Tailscale`, case
+included; the lowercase form the manual carried answers *No package found*.
+
 **Check Warp is alive before diagnosing the network.** `pair show` answering
 `no_instance` is the whole diagnosis; a phone that cannot load the page tells you
 nothing about why until you know there was something to load.

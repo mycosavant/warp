@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A Phone Anywhere</title>
+<!--
+ Local-first, self-contained, like board.html and mobile.html. No external
+ fonts, scripts or fetches. Drafted 2026-09-08 from what was measured that
+ afternoon (Tailscale installed on the PC and the phone, the path between
+ them read off `tailscale ping` and `netcheck`) and from the manual's
+ network measurements of 2026-09-02. Where a claim is read rather than run,
+ it says so.
+-->
+<style>
+ :root {
+ --paper: #f6f5f1; --paper-2: #edebe4; --ink: #1c1f24; --ink-2: #4a4f58; --ink-3: #7a7f88;
+ --rule: #d9d6cd; --accent: #0f6e6a; --accent-ink: #0a4f4c; --accent-wash: #dcecea;
+ --done: #3f7d3a; --done-wash: #dfeadb; --active: #a86a12; --active-wash: #f3e6cf;
+ --no: #9a3b32; --no-wash: #f1dcd9; --park: #8a8f98; --code-bg: #ecebe5;
+ --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+ --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif;
+ --cond: "Arial Narrow", "Roboto Condensed", "Segoe UI", system-ui, sans-serif;
+ --mono: ui-monospace, "Cascadia Mono", Consolas, "SF Mono", Menlo, "DejaVu Sans Mono", monospace;
+ color-scheme: light dark;
+ }
+ @media (prefers-color-scheme: dark) {
+ :root {
+ --paper: #17191d; --paper-2: #1f2227; --ink: #e8e6df; --ink-2: #b4b2aa; --ink-3: #7f7e78;
+ --rule: #33373e; --accent: #5fb8b2; --accent-ink: #8fd4cf; --accent-wash: #173634;
+ --done: #86c07a; --done-wash: #1f3320; --active: #d9a052; --active-wash: #3a2c14;
+ --no: #d98a80; --no-wash: #3a2220; --park: #767b84; --code-bg: #20232a;
+ }
+ }
+ * { box-sizing: border-box; }
+ body { background: var(--paper); color: var(--ink); font-family: var(--sans); font-size: 16px; line-height: 1.55; margin: 0; }
+ .wrap { max-width: 800px; margin: 0 auto; padding: 48px 24px 96px; }
+ header { display: grid; gap: 14px; margin-bottom: 40px; }
+ .eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); display: flex; gap: 16px; flex-wrap: wrap; }
+ h1 { font-family: var(--serif); font-weight: 600; font-size: 42px; line-height: 1.05; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+ .lede { font-size: 18px; color: var(--ink-2); margin: 0; max-width: 62ch; }
+ h2 { font-family: var(--serif); font-weight: 600; font-size: 24px; margin: 48px 0 12px; line-height: 1.2; text-wrap: balance; }
+ h2:first-of-type { margin-top: 0; }
+ h3 { font-family: var(--cond); font-weight: 600; font-size: 19px; margin: 28px 0 6px; }
+ p { margin: 0 0 12px; max-width: 70ch; }
+ li { max-width: 70ch; }
+ .k { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); }
+ .callout { border-left: 3px solid var(--accent); background: var(--accent-wash); padding: 16px 20px; margin: 0 0 32px; display: grid; gap: 8px; }
+ .callout .k { color: var(--accent-ink); }
+ .callout p { margin: 0; }
+ .warn { border-left-color: var(--active); background: var(--active-wash); }
+ .warn .k { color: var(--active); }
+ .facts { overflow-x: auto; margin-bottom: 16px; }
+ table { border-collapse: collapse; width: 100%; font-size: 14px; }
+ th, td { text-align: left; padding: 8px 14px 8px 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+ th { font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); font-weight: 500; }
+ td:first-child { font-family: var(--cond); font-weight: 500; white-space: nowrap; }
+ .yes { color: var(--done); font-weight: 600; }
+ .no { color: var(--no); font-weight: 600; }
+ .part { color: var(--active); font-weight: 600; }
+ .opt { border-top: 1px solid var(--rule); padding: 20px 0 22px; display: grid; grid-template-columns: 150px 1fr; gap: 0 18px; }
+ .opt .name { font-family: var(--cond); font-weight: 600; font-size: 17px; line-height: 1.25; }
+ .opt .name small { display: block; font-family: var(--mono); font-size: 11px; font-weight: 500; margin-top: 4px; }
+ .opt .body { display: grid; gap: 8px; min-width: 0; }
+ .opt .body p { margin: 0; }
+ @media (max-width: 620px) { .opt { grid-template-columns: 1fr; gap: 6px; } }
+ ol.steps { padding-left: 22px; display: grid; gap: 14px; }
+ ol.steps li p { margin: 0 0 6px; }
+ code { font-family: var(--mono); font-size: 0.88em; background: var(--code-bg); padding: 1px 5px; border-radius: 3px; }
+ pre { font-family: var(--mono); font-size: 13px; line-height: 1.5; background: var(--code-bg); padding: 12px 14px; border-radius: 4px; overflow-x: auto; margin: 0 0 12px; }
+ pre code { background: none; padding: 0; font-size: inherit; }
+ footer { margin-top: 48px; font-family: var(--mono); font-size: 12px; color: var(--ink-3); border-top: 1px solid var(--rule); padding-top: 16px; }
+ footer p { margin: 0 0 6px; max-width: 76ch; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+ <div class="eyebrow"><span>warp fork &middot; dev</span><span>drafted 2026-09-08</span><span>stop-gap in force</span></div>
+ <h1>A Phone Anywhere</h1>
+ <p class="lede">The console is built and a phone has walked it. What was missing on 2026-09-08 was reach: the phone could pair only on the home LAN. This page is the choice made that day, the one being built toward, what was measured in between, and the ops you own before tomorrow evening.</p>
+</header>
+
+<div class="callout">
+ <span class="k">where it stands, 2026-09-08 evening</span>
+ <p>Tailscale is installed on the PC and on the Android phone, both logged into one free account. The PC is <code>100.82.213.46</code>, the phone <code>100.100.201.63</code>. The launcher (<code>warpdev.ps1 -Console</code>) now binds the console to the PC's tailnet address by default, resolved from <code>tailscale ip -4</code> at launch, so the phone's saved URL is <code>https://100.82.213.46:41234/</code> from anywhere it has signal. The certificate is minted per launch for whichever address is bound and signed by the authority the phone already installed, so nothing on the phone changes.</p>
+ <p>One thing the measurement found that the manual had predicted only in outline: with ProtonVPN connected, every packet between the two devices goes through a Tailscale relay in Chicago. See <em>the snag</em> below. It works; it is slower and it is their box.</p>
+</div>
+
+<h2>What "remote" has to mean here</h2>
+<p>Three properties, and every option below is judged on them. The words stay off third-party machines: prompts, approvals, the trace. The console stays a secure context on the phone, because notifications and the home-screen install depend on it, and that means <code>https://</code> to an address the phone's browser trusts. And nothing is opened inbound on the home router, because the manual measured on 2026-09-02 that a port-forward to this PC breaks the moment ProtonVPN connects (the reply leaves through the tunnel and the router never sees it).</p>
+<p>The fork already has one layer nobody can take away: the console speaks TLS with a certificate Warp minted and the phone installed (<code>tls.rs</code>, 2026-09-06). So whatever carries the packets, the relay sees TLS to Warp's own authority, never the words. The network layer's job is reach and a second envelope, not the only envelope.</p>
+
+<h2>The options</h2>
+
+<div class="opt">
+ <div class="name">Tailscale, their coordination server <small class="part">TODAY, STOP-GAP</small></div>
+ <div class="body">
+  <p>Mesh WireGuard between your own devices. Tailscale's server sees each device's public key, name, IP endpoints and which account they belong to; it never holds a session key and cannot read traffic. When two devices cannot reach each other directly, their DERP relays carry the encrypted packets and see size and timing. The account is the off-thesis part: a login with a third party, held for as long as the tailnet exists.</p>
+  <p>What it costs you: nothing, and twenty minutes. What it buys: the phone at work reaches the console, SSH and everything else on the PC at one stable address, with no inbound port and no DNS name. Switching to headscale later is one command per device, and the account is deleted afterwards.</p>
+ </div>
+</div>
+
+<div class="opt">
+ <div class="name">headscale on a VPS <small class="yes">THE DESTINATION</small></div>
+ <div class="body">
+  <p>The same clients, the same protocol, your own coordination server. What Tailscale's server saw above is now seen by a box you rent. With <code>derper</code> on the same box, the relay is yours too, and the only third parties left are the VPS host (sees an encrypted WireGuard stream and a metadata service) and the DNS host (sees that a name exists).</p>
+  <p>Requirements are small: one vCPU, 1 GB, Debian or Ubuntu, a public IPv4, a DNS name pointing at it. Ports 443/tcp for headscale, 3478/udp and one more tcp port if you run the relay. An evening of ops; the steps are below.</p>
+ </div>
+</div>
+
+<div class="opt">
+ <div class="name">Cloudflare Tunnel <small class="no">REFUSED</small></div>
+ <div class="body">
+  <p>You asked whether this was the right shape. It is the wrong one for this fork, and the reason is a single fact: Cloudflare terminates TLS at its edge. <code>cloudflared</code> on the PC makes an outbound connection to Cloudflare; the phone connects to a public hostname on Cloudflare; Cloudflare decrypts the phone's request, reads it, and forwards it to the PC. Every prompt, every approval, the whole trace passes through their machines in the clear. That is a relay that reads the words, which is the one thing the phone surface was designed not to have (mobile.html, "where the words go: nowhere").</p>
+  <p>It also needs a Cloudflare account, a domain on their DNS, and it gives the console a public name, which the spec refused separately. Cloudflare's private-network mode (their WARP client plus a tunnel) is the same architecture with the client on the phone: WireGuard from the phone to their edge, decrypted there, re-encrypted to the PC. Not end to end. There is no writeup of it in the repo because it was never a candidate; this paragraph is that writeup.</p>
+ </div>
+</div>
+
+<div class="opt">
+ <div class="name">Plain WireGuard hub on the VPS <small>VIABLE, SECOND CHOICE</small></div>
+ <div class="body">
+  <p>No headscale: a WireGuard server on the VPS, the PC and the phone as peers, all traffic hairpinning through it. Simpler to set up than headscale and it has no coordination server at all. What you give up is direct paths (every packet goes through the box, always), NAT traversal, and the phone app's one-toggle experience; you also maintain peer configs by hand. Worth knowing as the fallback if headscale ever annoys you; not worth choosing first.</p>
+ </div>
+</div>
+
+<div class="opt">
+ <div class="name">Port-forward, Tailscale Funnel, a public certificate <small class="no">RULED OUT</small></div>
+ <div class="body">
+  <p>A port-forward to the PC dies when ProtonVPN connects (measured 2026-09-02). Funnel publishes the console to the internet under a Tailscale-owned name, through their proxy. A public certificate needs a public name for a console meant for one phone. All three were already refused in <code>mobile.html</code> or <code>manual.md</code>; listed here so the list is complete.</p>
+ </div>
+</div>
+
+<h3>Who sees what</h3>
+<div class="facts">
+<table>
+ <tr><th>party</th><th>Tailscale (today)</th><th>headscale + own DERP</th><th>Cloudflare Tunnel</th></tr>
+ <tr><td>the words</td><td>nobody: WireGuard end to end, and TLS to Warp's CA inside it</td><td>nobody</td><td class="no">Cloudflare, in the clear at the edge</td></tr>
+ <tr><td>coordination</td><td>Tailscale: keys, device names, endpoints, account</td><td>your VPS</td><td>Cloudflare: account, hostname, tunnel state</td></tr>
+ <tr><td>relay, when needed</td><td>Tailscale DERP: encrypted blobs, timing</td><td>your VPS</td><td>always Cloudflare, always decrypted</td></tr>
+ <tr><td>inbound on the router</td><td>none</td><td>none</td><td>none</td></tr>
+ <tr><td>a public name for the console</td><td>no</td><td>no (the VPS has one; the console does not)</td><td class="no">yes</td></tr>
+ <tr><td>secure context on the phone</td><td>yes, via the fork's CA</td><td>yes, same</td><td>yes, via Cloudflare's certificate</td></tr>
+</table>
+</div>
+
+<h2>The snag, measured</h2>
+<p>With ProtonVPN connected, <code>tailscale netcheck</code> on the PC reported its public endpoint as a Proton exit (<code>185.98.171.45</code>) and <code>MappingVariesByDestIP: true</code>, which is the NAT shape that defeats hole punching. <code>tailscale ping</code> to the phone answered four times <em>via DERP(ord)</em> at 250 to 480 ms and then <em>direct connection not established</em>. So the tunnel under the tunnel works, and it works by relaying every packet through Tailscale's Chicago relay.</p>
+<p>Three ways out, in the order to try them:</p>
+<ol class="steps">
+ <li><p><strong>Take <code>tailscaled.exe</code> out of ProtonVPN.</strong> Proton's Windows app has split tunneling (exclude an app), which since February 2026 coexists with the kill switch. It is a paid-plan feature; if your plan has it, exclude <code>C:\Program Files\Tailscale\tailscaled.exe</code>, then re-run <code>tailscale ping 100.100.201.63</code> and expect <em>direct</em>. The router is not behind CGNAT (measured 2026-09-02), so a direct path is available once Tailscale's UDP leaves by the real WAN.</p></li>
+ <li><p><strong>Run your own relay.</strong> Once headscale is on the VPS, <code>derper</code> beside it makes the relayed path yours. Latency stays whatever the VPS's location gives; ownership changes.</p></li>
+ <li><p><strong>Accept it.</strong> Everything works today over the relay; a permission answer takes half a second longer. The words are not exposed. This is the state the stop-gap is in as this page is written.</p></li>
+</ol>
+
+<h2>What to do before tomorrow evening</h2>
+<p>All of this is yours to own; none of it is code in the fork. When it is done, the switch on each device is one step and the fork needs no change, because <code>WARP_FORK_CONTROL_BIND</code> takes a tailnet address today and does not care who coordinates it.</p>
+
+<h3>1. Pick a provider</h3>
+<p>The box does almost nothing: a few hundred MB of memory, negligible traffic unless the relay is used, no data at rest but device keys. So the choice is about jurisdiction, what they ask of you at signup, and how they pay. Read, not used; verify the current terms before paying.</p>
+<div class="facts">
+<table>
+ <tr><th>provider</th><th>where</th><th>why here</th><th>watch for</th></tr>
+ <tr><td>1984 Hosting</td><td>Iceland</td><td>privacy is the stated mission, operating since 2006, accepts crypto, minimal logging</td><td>a small catalogue; check the VPS tier has a public IPv4</td></tr>
+ <tr><td>FlokiNET</td><td>Iceland, Finland, Romania, Netherlands</td><td>you choose the jurisdiction; anonymous signup; crypto</td><td>positioned for free-speech hosting, so pricier per GB than a commodity host</td></tr>
+ <tr><td>Njalla</td><td>proxy owner, Nevis-registered</td><td>the domain is registered in their name, not yours, which is the strongest separation available for the DNS half; VPS as an add-on</td><td>the domain is legally theirs; for a name that only points at your own control server that is the point, but know it</td></tr>
+ <tr><td>Hetzner</td><td>Germany, Finland</td><td>the conventional choice: cheap, reliable, well documented</td><td>identity verification at signup for many accounts; a normal EU host, not a privacy one</td></tr>
+</table>
+</div>
+<p>Recommendation: <strong>1984 Hosting for the box</strong>, and a domain from <strong>Njalla</strong> if you want the name held at arm's length, otherwise from whichever registrar you already use. The name only ever resolves to the VPS, so the console itself stays nameless.</p>
+
+<h3>2. Stand up headscale</h3>
+<p>On the VPS, as root, Debian 12 or Ubuntu 24.04. This is the manual's recipe with the relay added and the TLS choice made: headscale's built-in Let's Encrypt, so no reverse proxy.</p>
+<pre><code># the control server
+curl -fsSL -o headscale.deb \
+  https://github.com/juanfont/headscale/releases/latest/download/headscale_linux_amd64.deb
+apt install ./headscale.deb
+
+# /etc/headscale/config.yaml, the lines that matter
+#   server_url: https://hs.example.com
+#   listen_addr: 0.0.0.0:443
+#   tls_letsencrypt_hostname: hs.example.com
+#   tls_letsencrypt_listen: ":80"
+#   derp:
+#     urls: []                      # drop Tailscale's public relay map
+#     paths: [/etc/headscale/derp.yaml]
+systemctl enable --now headscale
+headscale users create me
+headscale preauthkeys create --user me --reusable --expiration 24h</code></pre>
+<p>Then the relay on the same box, on ports that do not collide with 443:</p>
+<pre><code># the relay: tailscale's derper, built from source or from a release
+go install tailscale.com/cmd/derper@latest
+# run it as a service on, say, 3340/tcp with STUN on 3478/udp, with its own
+# Let's Encrypt name (derp.example.com) or the same one on a different port
+derper -hostname derp.example.com -a :3340 -stun-port 3478 -verify-clients
+
+# /etc/headscale/derp.yaml
+regions:
+  900:
+    regionid: 900
+    regioncode: home
+    regionname: mine
+    nodes:
+      - name: 900a
+        regionid: 900
+        hostname: derp.example.com
+        derpport: 3340
+        stunport: 3478</code></pre>
+<p>Firewall on the VPS: 22 (your key only), 80 and 443 tcp, 3340 tcp, 3478 udp; <code>ufw</code> and <code>unattended-upgrades</code> before anything else. <code>-verify-clients</code> on the relay makes it refuse anyone not on your tailnet, and it needs a local <code>tailscaled</code> on the VPS logged into the same headscale to do that check; leave it off for the first test and turn it on once the box itself is a node.</p>
+
+<h3>3. Move the devices</h3>
+<pre><code># the PC (PowerShell)
+& 'C:\Program Files\Tailscale\tailscale.exe' logout
+& 'C:\Program Files\Tailscale\tailscale.exe' up --login-server https://hs.example.com --authkey &lt;key&gt;
+& 'C:\Program Files\Tailscale\tailscale.exe' ip -4      # a new 100.x address: the phone's saved URL changes once</code></pre>
+<p>The phone: the official app, logged out, then the settings menu in the upper right, custom control server, <code>https://hs.example.com</code>; it opens a page with a <code>headscale nodes register</code> line to run on the VPS. On iOS the same, under the top-right menu as "use custom coordination server". Both from headscale's own docs, read 2026-09-08, not yet run here.</p>
+<p>Then delete the Tailscale account from its admin console. Nothing on either device refers to it after the switch.</p>
+
+<h3>4. Prove it</h3>
+<ul>
+ <li><code>tailscale status</code> on the PC lists the phone and the VPS; <code>tailscale ping</code> to the phone says <em>direct</em>, or <em>via DERP(home)</em> if the relay is in use and it is yours.</li>
+ <li>ProtonVPN connected, then the same two commands again. The manual's warning about the kill switch stands: if one is ever armed permanently, test this before relying on it from a train.</li>
+ <li>The phone on cellular, Wi-Fi off: <code>https://&lt;new address&gt;:41234/</code> loads with no warning, a scanned code pairs, an approval lands <code>via paired_device</code>.</li>
+</ul>
+
+<h2>A working day, as it is meant to go</h2>
+<ol class="steps">
+ <li><p><strong>Morning, at the desk.</strong> <code>warpdev.ps1 -Console</code> (or <code>ggwarpdev console</code>). Start the conversation in a pane, <code>cd</code> it where the work is, click <code>/remote-control</code>, scan the block with the phone. The block says <em>paired at HH:MM</em>. Add the page to the home screen if it is not there. Leave.</p></li>
+ <li><p><strong>At work.</strong> Tailscale on the phone connected (it stays connected; it costs little). Open the icon. The page reconnects to the stream, the header says the mode, model and directory. Firefox on Android delivers the buzz to the lock screen when the agent asks (measured 2026-09-07); Chrome only while the page is foreground. Answer, prompt, read the trace.</p></li>
+ <li><p><strong>What ends it.</strong> Stop sharing at the desk, the conversation being deleted, or Warp closing. Not a clock: the control pairing has none since 2026-09-06. The five-minute credentials turn over on their own.</p></li>
+ <li><p><strong>What it cannot do, by decision.</strong> Start a new conversation; change the agent's permission mode; answer for any other conversation. If the agent's own login expires (it did overnight on 2026-09-07), the phone sees a failed turn with the agent's error text, and the remedy is <code>/login</code> at the desk. Plan the day around one conversation, started before leaving.</p></li>
+ <li><p><strong>The backstop.</strong> SSH from Termux over the same address reaches all of <code>warpctrl</code>, tmux and the agent itself. The Windows rule for port 22 is scoped to the LAN subnet today and needs <code>100.64.0.0/10</code> added; one elevated command, recorded in the run when it is done.</p></li>
+</ol>
+
+<div class="callout warn">
+ <span class="k">what the stop-gap costs, stated once</span>
+ <p>Until the switch, Tailscale Inc. holds an account in your name with the public keys and names of two devices, and relays their encrypted packets whenever ProtonVPN is up. It never holds a session key and cannot read anything. That is the whole disclosure, and it is the reason headscale is the destination rather than a preference.</p>
+</div>
+
+<footer>
+ <p>Sources: <code>.fork/docs/manual.md</code> "Reaching this machine from a phone" (the network measured 2026-09-02); <code>.fork/mobile.html</code> and <code>.fork/decisions/2026-09-06-the-phone-surface-four-decisions.md</code> (the refusals); <code>tailscale ping</code> and <code>tailscale netcheck</code> run 2026-09-08 with ProtonVPN connected; headscale's docs for the Android and Apple clients (headscale.net/stable/usage/connect/) and Tailscale's "custom control server" page, read 2026-09-08; provider notes from their own sites and from hosting comparisons read the same day, unverified by use.</p>
+ <p>The PC's and the phone's addresses are read off <code>tailscale status</code>; the bind is read off the launcher's <code>-Status -Console</code> output, not off this page.</p>
+</footer>
+
+</div>
+</body>
+</html>

@@ -24,6 +24,13 @@ ranked, and four decisions marked as the maintainer's with a recommendation
 each. A spec for discussion, not a record; `docs/remote-control.md` is what is
 built.
 
+**`reach.html` is the network half of the phone surface**, drafted 2026-09-08
+the day the console left the LAN: the stop-gap in force (Tailscale, their
+coordination server, one free account), the destination (headscale on a VPS
+with a relay of your own), Cloudflare Tunnel refused by name, a provider
+shortlist, the ops steps the maintainer owns, and the relay the path took
+under ProtonVPN, measured. `runs/reach-2026-09-08/` is the run.
+
 **`HANDOFF-MOBILE.md` is the handoff for that work**, written 2026-09-06 for a
 fresh session after the maintainer answered the spec's four decisions
 (`decisions/2026-09-06-the-phone-surface-four-decisions.md`). Its steps 1

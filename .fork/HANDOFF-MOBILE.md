@@ -4,6 +4,22 @@ Written 2026-09-06 for a fresh session. Repo `/home/effatha/git/warp`, branch
 `dev`, HEAD at or after `29308327a`. Everything below is either measured and
 says so, or read and says that.
 
+## Where it stands, 2026-09-08 evening
+
+Reach, the last unbuilt half of "a phone anywhere", is on a stop-gap:
+Tailscale on the PC (`100.82.213.46`) and the Android phone
+(`100.100.201.63`), Tailscale's own coordination server, one free account.
+`warpdev.ps1 -Console` binds the console to the tailnet address by default
+now (`-Bind tailnet`, resolved at launch; the launch stops if Tailscale gives
+no address). Measured with ProtonVPN connected: the two nodes reach each
+other only through Tailscale's DERP relay, 240-590 ms, because the Proton
+exit is a symmetric NAT (`.fork/runs/reach-2026-09-08/`). The destination is
+headscale on a VPS with a relay of your own; the choice, the refusals
+(Cloudflare Tunnel by name), the provider shortlist and the steps are
+`.fork/reach.html`, and the maintainer owns that ops. The Windows release
+binary was deleted on 2026-09-07 for disk and was being rebuilt as this was
+written; the end-to-end run from cellular is what that build is for.
+
 ## Where it stands, 2026-09-07 morning
 
 The overnight line is measured. Conversation D, paired on the emulator at

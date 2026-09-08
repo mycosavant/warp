@@ -1,0 +1,48 @@
+# 2026-09-08T22:20:40Z tailscale status / ping / netcheck, ProtonVPN connected
+100.82.213.46   effatha  mycosavant@  windows  -  
+100.100.201.63  s25      mycosavant@  android  -  
+
+pong from s25 (100.100.201.63) via DERP(ord) in 587ms
+pong from s25 (100.100.201.63) via DERP(ord) in 238ms
+pong from s25 (100.100.201.63) via DERP(ord) in 279ms
+pong from s25 (100.100.201.63) via DERP(ord) in 271ms
+direct connection not established
+
+
+Report:
+	* Time: 2026-09-08 18:20:46.6652216-04:00
+	* UDP: true
+	* IPv4: yes, 185.98.171.45:16021
+	* IPv6: no, but OS has support
+	* MappingVariesByDestIP: true
+	* PortMapping: 
+	* Nearest DERP: Toronto
+	* DERP latency:
+		- tor: 44.9ms  (Toronto)
+		- nyc: 55.9ms  (New York City)
+		- ord: 57.4ms  (Chicago)
+		- iad: 60.9ms  (Ashburn)
+		- den: 75.3ms  (Denver)
+		- dfw: 75.8ms  (Dallas)
+		- mia: 86.8ms  (Miami)
+		- sea: 95.6ms  (Seattle)
+		- lax: 100.6ms (Los Angeles)
+		- sfo: 116.1ms (San Francisco)
+		- lhr: 125.2ms (London)
+		- ams: 129.5ms (Amsterdam)
+		- par: 129.5ms (Paris)
+		- fra: 135.2ms (Frankfurt)
+		- mad: 138.7ms (Madrid)
+		- nue: 138.7ms (Nuremberg)
+		- waw: 148.8ms (Warsaw)
+		- hnl: 148.8ms (Honolulu)
+		- hel: 157.8ms (Helsinki)
+		- sin:         (Singapore)
+		- syd:         (Sydney)
+		- blr:         (Bengaluru)
+		- tok:         (Tokyo)
+		- sao:         (São Paulo)
+		- jnb:         (Johannesburg)
+		- hkg:         (Hong Kong)
+		- dbi:         (Dubai)
+		- nai:         (Nairobi)

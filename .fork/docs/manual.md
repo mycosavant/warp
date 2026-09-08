@@ -4118,6 +4118,20 @@ ClientAliveCountMax 5
 
 ### 3. Off-LAN access — headscale on a VPS
 
+**In force since 2026-09-08 as a stop-gap: Tailscale with Tailscale's own
+coordination server, one free account, the PC and the Android phone on it.**
+The launcher binds the console to the PC's tailnet address by default
+(`warpdev.ps1 -Console`, `-Bind tailnet`, resolved from `tailscale ip -4` at
+launch), the Tailscale adapter is a Private network so the existing 41234
+rule admits it, and an `SSH from tailnet` rule (`100.64.0.0/10`, port 22)
+was added the same day. Measured with ProtonVPN connected: the two devices
+reach each other **only through Tailscale's DERP relay** (`MappingVariesByDestIP:
+true` behind the Proton exit; `tailscale ping` answered *via DERP(ord)* at
+250-480 ms and never went direct). The choice, the refusals (Cloudflare
+Tunnel among them), the provider shortlist and the headscale steps with a
+relay of your own are in **`.fork/reach.html`**; the recipe below is the
+original and still right.
+
 **Decided 2026-09-02 after measuring this network.** Four facts shaped it and are
 recorded because each of them ruled something out:
 
