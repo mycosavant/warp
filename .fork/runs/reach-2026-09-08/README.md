@@ -71,6 +71,30 @@ Two more things from the phones, the same evening:
   that this leaves: Add to Home Screen from the share sheet, and whether an
   installed page there may post a notification.
 
+## The relay is ProtonVPN's doing, measured both ways
+
+Later the same evening, at the maintainer's hand:
+
+- **`tailscaled.exe` excluded from ProtonVPN (exclude-mode split tunneling),
+  Proton reconnected**: `tailscale ping` timed out six times, the admin
+  console showed the node not connected, and the daemon's health line read
+  *register request ... all connection attempts failed (... dial tcp
+  [2606:b740:49::105]:443: A socket operation was attempted to an
+  unreachable network)*. A `tailscale down`/`up` (this session's, and it
+  cost a re-registration that failed and left the node logged out) did not
+  change it. The exclusion gives a SYSTEM service no working route.
+- **ProtonVPN disconnected** (`tailscale-without-protonvpn.txt`): `up`
+  came back with no new login, public endpoint the home WAN
+  (`71.28.77.93`), `MappingVariesByDestIP: false`, and both phones
+  **direct**: the Android over cellular via its carrier's NAT
+  (`174.202.64.15:5402`, 276 ms) and the iPhone on the LAN
+  (`192.168.254.18:41641`, 5 ms). First pongs went via DERP while the
+  direct path was being found, then switched.
+
+So the line supports direct paths, Proton is the sole cause of the relay,
+and Proton's app exclusion is not the remedy. The exclusion was removed and
+Proton reconnected afterwards; the state the stop-gap lives in is the relay.
+
 ## What it means
 
 - The fork needed no change for reach. `WARP_FORK_CONTROL_BIND` takes one

@@ -19,3 +19,4 @@ curl: unknown --write-out variable: 'tls_version'
 [22:27:37]   phone rows: 1
     22:27:31 prompt_submit paired_device
 [22:27:37] done; the block state and the phone's screenshots are the person's
+console after the toggles: https / -> 200

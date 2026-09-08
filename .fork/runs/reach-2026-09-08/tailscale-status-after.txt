@@ -4,3 +4,14 @@
 100.82.213.46   effatha    mycosavant@  windows  -                        
 100.74.53.3     iphone-13  mycosavant@  iOS      idle, tx 59960 rx 40816  
 100.100.201.63  s25        mycosavant@  android  -                        
+# 2026-09-08T23:41:16Z ProtonVPN reconnected, tailscaled.exe removed from the exclude list
+100.82.213.46   effatha    mycosavant@  windows  -  
+100.74.53.3     iphone-13  mycosavant@  iOS      -  
+100.100.201.63  s25        mycosavant@  android  -  
+
+pong from s25 (100.100.201.63) via DERP(ord) in 985ms
+pong from s25 (100.100.201.63) via DERP(ord) in 298ms
+pong from s25 (100.100.201.63) via DERP(ord) in 108ms
+pong from s25 (100.100.201.63) via DERP(ord) in 129ms
+direct connection not established
+

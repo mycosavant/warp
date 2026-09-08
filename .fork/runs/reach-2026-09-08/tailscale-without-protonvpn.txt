@@ -1,0 +1,29 @@
+# 2026-09-08T23:37:52Z ProtonVPN DISCONNECTED; tailscaled.exe still in Proton's exclude list
+pong from s25 (100.100.201.63) via DERP(ord) in 318ms
+pong from s25 (100.100.201.63) via DERP(ord) in 230ms
+pong from s25 (100.100.201.63) via DERP(ord) in 277ms
+pong from s25 (100.100.201.63) via 174.202.64.15:5402 in 276ms
+
+pong from iphone-13 (100.74.53.3) via DERP(dfw) in 809ms
+pong from iphone-13 (100.74.53.3) via 192.168.254.18:41641 in 5ms
+
+tailscale.exe : 2026/09/08 19:37:59 portmap: monitor: gateway and self IP changed: gw=192.168.254.254 
+self=192.168.254.3
+At line:1 char:118
++ ... .63; ''; & $ts ping -c 3 100.74.53.3; ''; & $ts netcheck 2>&1 | Selec ...
++                                               ~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (2026/09/08 19:3...f=192.168.254.3:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+Report:
+	* Time: 2026-09-08 19:37:59.393175-04:00
+	* UDP: true
+	* IPv4: yes, 71.28.77.93:56859
+	* IPv6: no, but OS has support
+	* MappingVariesByDestIP: false
+	* PortMapping: 
+
+100.82.213.46   effatha    mycosavant@  windows  -                                    
+100.74.53.3     iphone-13  mycosavant@  iOS      active; direct 192.168.254.18:41641  
+100.100.201.63  s25        mycosavant@  android  active; direct 174.202.64.15:5402    
