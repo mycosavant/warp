@@ -51,6 +51,7 @@ changes the answer; the story of the finding stays in the ticket it cites.
 | `docs/observability.md` | the viewer spec: the harness's own transcript is the record, Warp adds what it alone knows |
 | `docs/remote-control.md` | `/remote-control` the fork's way: one conversation handed to a phone, which may drive it and nothing else |
 | `docs/classifier.md` | a local permission classifier, and why "a model deciding is not consent" does two jobs |
+| `docs/model-economy.md` | which model and how much effort for each kind of work here, what the 29k-token `CLAUDE.md` prefix costs, and the caching habits that follow |
 | `docs/away-from-desk.md` | **the command reference for driving this machine from a phone**: which of the three shells a command runs in, restarting Warp remotely, what still works with the desk locked, symptom-to-command troubleshooting |
 | `docs/manual.md` | the operating manual, whole: building and launching on each platform, `warpctrl`, Warp Drive, remote access, the gotchas. Large; navigate by heading. To be cut into surface pages one at a time as each is next touched |
 
@@ -119,6 +120,8 @@ undated in the source and say so in their filename. Later decisions live in
 | `runs/page-2026-09-06/` | the console's header, diff and notify button on the Windows build; the h2 refusal found and closed; the chip flipping back on its own |
 | `runs/model-2026-09-07/` | the panel's model chip picking the ACP agent's model, measured to Claude Code's own transcript; a stop notification carrying the agent's answer; the list lost on relaunch and kept on disk |
 | `runs/localmodel-2026-09-07/` | a model on this machine: the hardware measured, the 2026 open-weight field against 9.6 GB of free VRAM, llama-server on the Windows side with Gemma 4 12B, and the four small features measured against it; three stale points from one upstream merge found and fixed on the way, and the commit message in a routed WSL pane found dead |
+| `runs/reach-2026-09-08/` | the console off the LAN onto a tailnet, driven from a phone over a DERP relay; Proton measured as the sole cause of the relay, both ways |
+| `runs/remote-launch-2026-09-09/` | **Warp relaunched from an SSH session, with the desk locked**: 3 s to a discovery record, the listener rebound, TLS answering, zero render failures. Plus what still works while locked -- `warpctrl` reads and writes, and a `PrintWindow` screenshot of real content |
 | `runs/wsl-move-2026-09-07/` | the WSL image was already on X: behind Store-relocation junctions and this session said it was on C:; the `wsl --manage --move` it suggested lifted the vhdx out of app-container EFS and WSL could not attach it. Written by the session that repaired it; `re-read.md` beside it checks two of its claims against the machine |
 | `runs/phone-2026-09-06/` | the phone checklist on an Android emulator: the authority installed through Settings, the page paired over TLS, a notification through a worker, Yes and a prompt from the phone, the home-screen install; four defects found and fixed, and Android not running a backgrounded Chrome recorded as the push case |
 
