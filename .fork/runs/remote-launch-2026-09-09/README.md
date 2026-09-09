@@ -114,6 +114,40 @@ Copied from the tracked file; the old one is at
 **Prefer the UNC path in any driver anyway.** It cannot go stale, and this run
 used it for exactly that reason.
 
+## What still works with the session locked
+
+Asked afterwards, with the lock still in force and re-confirmed by `LogonUI`
+before and after the probes, because the maintainer wants to *leave* it locked.
+
+| | result |
+|---|---|
+| `warpctrl window list` / `pane list` / `session inspect` | all answered |
+| `warpctrl input submit 'echo LOCKED-INPUT-TEST-OK'` | `executed: true` |
+| `shot.ps1 -Process warp-oss` | **651x800 of real content**, 163 KB |
+
+**The screenshot was the surprise.** `PrintWindow` with `PW_RENDERFULLCONTENT`
+returns the full window on a locked session -- readable text, correct colours,
+not the black frame that `CopyFromScreen` would give. So GUI verification is
+available from the phone, which was not expected and widens what can be checked
+without walking to the machine.
+
+The input test was confirmed the way this fork requires rather than by trusting
+`executed: true`: a screenshot taken straight after shows the prompt line
+`echo LOCKED-INPUT-TEST-OK` and its output beneath it
+(`locked-input-verified.png`). The pane also reported `filesystem: {"where":
+"host"}`, so `WARP_FORK_WSL_AUTO_CONNECT` routed the remotely-launched pane into
+the distribution with nobody present.
+
+**Untested, and named rather than inferred:** synthetic input (`click.ps1`,
+`drag.ps1`). `OpenInputDesktop` answered `Default` rather than `Winlogon`, which
+*suggests* `SendInput` could reach the app, but no click was fired -- the
+semantics of that call on a locked session are ambiguous enough that the probe
+is not evidence, and firing a real click into the maintainer's UI while they are
+out is not worth the answer. GUI gestures are desk work regardless.
+
+So the conclusion the maintainer asked for: **the machine can be left locked.**
+Nothing in the mobile workflow needs it unlocked.
+
 ## Files
 
 | file | what |
@@ -121,3 +155,5 @@ used it for exactly that reason.
 | `rc.sh` | the driver, `a` and `b` phases |
 | `driver.log` | its log, timestamps UTC |
 | `launch-a.txt`, `launch-b.txt` | the launcher's own output for each phase |
+| `locked-shot.png` | the window captured while locked, proving the capture path |
+| `locked-input-verified.png` | the same, after `input submit`, showing the command ran |
