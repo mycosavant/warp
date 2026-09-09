@@ -4113,9 +4113,29 @@ reached over `mosh` — not the console. The console stays the richer view for
 when you are at the desk or want the consent surface and the trace. Measured
 2026-09-09: after a phone tab was closed, the GUI was still up and still serving
 the paired conversation (`instance list` showed the overnight pid; the console
-answered 200); "could not get back in" was the phone's web layer failing, not
-Warp. The console recovers by reloading its URL — the control pairing has no
-clock, so no re-pair.
+answered 200). **The lockout was the phone's Tailscale VPN being off, not Warp
+and not the tab** — a parallel phone-side session found no `tun` device and both
+`22` and `41234` unreachable while the public internet was fine (Opus's
+postmortem, artifact `b1471bf9`). Re-enabling Tailscale restored it, and the
+console recovers by reloading its URL, because the control pairing has no clock.
+Two traps that session recorded, both worth keeping: the phone's carrier
+interface holds a `100.65.x` address, which is inside `100.64.0.0/10` — the same
+CGNAT range Tailscale allocates from — so **a `100.x` address on the phone is not
+proof the tunnel is up; the tell is a `tun` device.** And the `warp` SSH alias is
+LAN-only (`192.168.254.3`); the tailnet alias `warp-ts` (`100.82.213.46`) is the
+one that works on cellular.
+
+**A WSL service on `0.0.0.0` is not reachable from the tailnet unless its port
+has a firewall rule.** Measured 2026-09-09 after the postmortem flagged Postgres
+on 5432 as exposed: 22, 80, 3000, 5432 and 8000 all bind `0.0.0.0` inside WSL,
+but the Windows firewall admits only 22 and 41234 inbound; every other broad
+allow rule is scoped to a Windows program, not to WSL's Linux listeners. SSH
+over the tailnet needed its own rule, which is the proof that WSL inbound is
+default-deny. So the exposure is almost certainly not real; settle it in five
+seconds from Termux with `nc -vz 100.82.213.46 5432` (refused means blocked). If
+you ever *do* want a WSL port on the tailnet, it needs an explicit
+`New-NetFirewallRule … -RemoteAddress 100.64.0.0/10`, and a tailnet ACL is the
+right place to scope who gets it.
 
 **`tmux` first, and it needs no ops.** Plain SSH plus `tmux` already survives a
 dropped link: the session and the agent inside it keep running, and you
