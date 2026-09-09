@@ -1,0 +1,66 @@
+[16:10:09Z] === PHASE A: unlocked ===
+[16:10:09Z] --- snapshot: before ---
+process pid=24432 start=2026-09-08 21:48:23Z
+process pid=24984 start=2026-09-08 21:48:26Z
+session UNLOCKED
+listener 100.82.213.46:41234 pid=24432
+instances: {"instances":[{"instance_id":"inst_021cd044ba384c1e9d7967838f59104f","pid":24432,"channel":"warp-oss","app_id":"dev.warp.WarpOss","app_version":"v0.fork.2e1552fc0","protocol_version":1}]}
+[16:10:10Z] closing the running instance
+{
+  "action": "window.close",
+  "ok": true,
+  "instance_id": "inst_021cd044ba384c1e9d7967838f59104f",
+  "close": "requested",
+  "cancellable": true,
+  "verify": "a cancellable close can be refused and this result does not observe the outcome; poll `instance list` until this instance is gone. If it stays, end any CLI agent running in a pane and cancel any in-flight agent turn, then close again."
+}
+[16:10:15Z] closed after attempt 1
+[16:10:15Z] --- snapshot: after close ---
+process none
+session UNLOCKED
+listener none
+instances: {"instances":[]}
+[16:10:15Z] launching from a stripped environment (simulated ssh session)
+[16:10:18Z] instance record present after 3s
+[16:10:27Z] --- snapshot: after remote launch ---
+process pid=24928 start=2026-09-09 12:10:15Z
+process pid=33924 start=2026-09-09 12:10:15Z
+session UNLOCKED
+listener 100.82.213.46:41234 pid=24928
+instances: {"instances":[{"instance_id":"inst_8fd7aaa78b174f2ab039113707b65507","pid":24928,"channel":"warp-oss","app_id":"dev.warp.WarpOss","app_version":"v0.fork.2e1552fc0","protocol_version":1}]}
+tls OK Tls13 leaf=CN=Warp console 100.82.213.46 sha256=5D280B9D3C261772
+[16:14:15Z] === PHASE B: locked ===
+[16:14:15Z] closing the running instance
+{
+  "action": "window.close",
+  "ok": true,
+  "instance_id": "inst_8fd7aaa78b174f2ab039113707b65507",
+  "close": "requested",
+  "cancellable": true,
+  "verify": "a cancellable close can be refused and this result does not observe the outcome; poll `instance list` until this instance is gone. If it stays, end any CLI agent running in a pane and cancel any in-flight agent turn, then close again."
+}
+[16:14:20Z] closed after attempt 1
+[16:14:20Z] locking the workstation
+[16:14:31Z] --- snapshot: locked, no warp ---
+process none
+session LOCKED
+listener none
+instances: {"instances":[]}
+[16:14:32Z] launching from a stripped environment (simulated ssh session)
+[16:14:35Z] instance record present after 3s
+[16:14:41Z] --- snapshot: after remote launch while locked ---
+process pid=13216 start=2026-09-09 12:14:29Z
+process pid=29260 start=2026-09-09 12:14:29Z
+session LOCKED
+listener 100.82.213.46:41234 pid=13216
+instances: {"instances":[{"instance_id":"inst_6f82cd54587f48d29caa363eefb320c0","pid":13216,"channel":"warp-oss","app_id":"dev.warp.WarpOss","app_version":"v0.fork.2e1552fc0","protocol_version":1}]}
+tls OK Tls13 leaf=CN=Warp console 100.82.213.46 sha256=AC2E699E66910B40
+[16:14:42Z] log: /mnt/c/Users/onemind/AppData/Local/warp/WarpOss/data/logs/warp-oss.log
+2026-09-09T16:14:30Z [INFO] Enabled wgpu backends: Backends(NOOP | VULKAN | GL | METAL | DX12 | BROWSER_WEBGPU)
+2026-09-09T16:14:30Z [INFO] Available wgpu adapters (in priority order):
+2026-09-09T16:14:30Z [WARN] Deprioritizing non DX12 Nvidia adapter due to version > 572 (unsupported). Newer NVIDIA drivers can crash if multiple windows are created if the `Vulkan / OpenGL Present MethodNVIDIA setting is set to `Auto` or `Prefer layered on DXGI Swapchain`.
+2026-09-09T16:14:30Z [INFO] DiscreteGpu: NVIDIA GeForce RTX 5070
+2026-09-09T16:14:30Z [INFO] DiscreteGpu: NVIDIA GeForce RTX 5070
+2026-09-09T16:14:30Z [INFO] Verifying adapter "NVIDIA GeForce RTX 5070" is valid...
+2026-09-09T16:14:30Z [INFO] Using Dx12 DiscreteGpu (NVIDIA GeForce RTX 5070) for rendering new window.
+[16:14:42Z] done

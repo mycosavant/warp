@@ -4105,9 +4105,14 @@ waking it remotely to begin with.
 ### 2. Sessions die when the link drops — `tmux` now, `mosh` for the flaky link
 
 **There are two remote surfaces and they do not fail the same way.** The console
-(a phone browser onto the running GUI Warp) depends on two fragile layers: the
-browser tab and the GUI process, and neither can be relaunched from the phone.
-A CLI agent (Claude Code, `opencode`) in a terminal depends on neither. So for
+(a phone browser onto the running GUI Warp) depends on two layers the CLI path
+does not: the browser tab and the GUI process. **Both can be recovered from the
+phone — the GUI one measured 2026-09-09, correcting the sentence that stood here
+saying neither could be** (see "Relaunching Warp from the phone" below). The tab
+was never the problem: the device token is in `localStorage` and a control
+pairing has no clock, so reopening the URL reconnects. What remains true is that
+the console needs a live GUI Warp and a browser that trusts the authority, and a
+CLI agent (Claude Code, `opencode`) in a terminal needs neither. So for
 *rock-solid* away-from-desk work, the durable surface is a CLI agent in `tmux`,
 reached over `mosh` — not the console. The console stays the richer view for
 when you are at the desk or want the consent surface and the trace. Measured
@@ -4143,6 +4148,42 @@ instead of `0.0.0.0`, or scope it with a tailnet ACL. The distinction to carry:
 a native WSL port needs an explicit `New-NetFirewallRule … -RemoteAddress
 100.64.0.0/10` to be reachable; a Docker-published one is reachable unless you
 bind it to loopback.
+
+**Relaunching Warp from the phone works, and a locked Windows session does not
+stop it** (measured 2026-09-09, `.fork/runs/remote-launch-2026-09-09/`). This
+was written down as the thing that needed the desk, on the theory that a GUI app
+on a locked session would hit Warp's own *Failed to render a frame 3 times in a
+row* exit. It does not: with `LogonUI` confirmed present, Warp enumerated
+adapters and took the discrete GPU (`Using Dx12 DiscreteGpu (NVIDIA GeForce RTX
+5070)`), published its discovery record **3 seconds** after launch, rebound the
+wide listener on the tailnet address, and answered TLS. Zero render failures
+across three launches in four minutes.
+
+```bash
+# from Termux. `powershell.exe` is NOT on an sshd session's PATH -- name it in full.
+/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -NoProfile \
+  -ExecutionPolicy Bypass -File \
+  '\\wsl.localhost\Ubuntu\home\effatha\git\warp\.fork\tools\warpdev.ps1' -Console
+warp-oss.exe --warpctrl pair show          # mint your own code, tap the url
+```
+
+Two facts that make it work, both measured on the maintainer's own live phone
+sessions. **`WSL_INTEROP` is unset in an sshd session and interop works anyway**,
+falling back to the `/run/WSL/1_interop` symlink. And **an sshd session's `PATH`
+carries no Windows entries**, which is why the full path above is not optional.
+
+The leaf is minted per launch, so every relaunch presents a different
+certificate — all signed by the same authority, which is unchanged since the
+phones installed it. A relaunch therefore costs the phone nothing: same address,
+same trust, no reinstall. `pair show` from that shell returns a code on the
+tailnet origin with the usual 7 pairable actions, so the loop closes with nobody
+at the machine.
+
+**Use the UNC path to the tracked launcher, not `C:\dev\warpdev.ps1`.** The live
+copy was found five days stale that day — the pre-2026-09-04 `-On`/`-Off`
+version with no `-Console` and no `-Bind`, which could not have opened the
+console at all. It has been synced, but the UNC path is the one that cannot go
+stale, because it is the file in the repository.
 
 **`tmux` first, and it needs no ops.** Plain SSH plus `tmux` already survives a
 dropped link: the session and the agent inside it keep running, and you
