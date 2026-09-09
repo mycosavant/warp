@@ -4125,17 +4125,24 @@ proof the tunnel is up; the tell is a `tun` device.** And the `warp` SSH alias i
 LAN-only (`192.168.254.3`); the tailnet alias `warp-ts` (`100.82.213.46`) is the
 one that works on cellular.
 
-**A WSL service on `0.0.0.0` is not reachable from the tailnet unless its port
-has a firewall rule.** Measured 2026-09-09 after the postmortem flagged Postgres
-on 5432 as exposed: 22, 80, 3000, 5432 and 8000 all bind `0.0.0.0` inside WSL,
-but the Windows firewall admits only 22 and 41234 inbound; every other broad
-allow rule is scoped to a Windows program, not to WSL's Linux listeners. SSH
-over the tailnet needed its own rule, which is the proof that WSL inbound is
-default-deny. So the exposure is almost certainly not real; settle it in five
-seconds from Termux with `nc -vz 100.82.213.46 5432` (refused means blocked). If
-you ever *do* want a WSL port on the tailnet, it needs an explicit
-`New-NetFirewallRule … -RemoteAddress 100.64.0.0/10`, and a tailnet ACL is the
-right place to scope who gets it.
+**A *native* WSL service on `0.0.0.0` is not reachable from the tailnet without
+a firewall rule; a *Docker-published* port is a different story and probably
+is.** Measured 2026-09-09 after the postmortem flagged Postgres on 5432. First
+read, too quickly: 22, 80, 3000, 5432 and 8000 all bind `0.0.0.0` in WSL, the
+Windows firewall port-scopes only 22 and 41234, SSH over the tailnet needed its
+own rule, so WSL inbound is default-deny and the exposure "almost certainly not
+real." Then the service itself was read: 5432 is a **Docker** container
+(`promis-db`), published by Docker Desktop, whose backend has a broad inbound
+allow (`com.docker.backend.exe`, remote=Any, any port). That rule is exactly the
+path a native WSL bind lacks, so a Docker-published port rides it and is very
+likely reachable from the tailnet — the opposite of the first conclusion, and a
+clean case of reasoning from the wrong service's firewall path. Which it is gets
+settled from Termux in five seconds: `nc -vz 100.82.213.46 5432`, refused means
+blocked, open means exposed. If open, the fix is to publish it to `127.0.0.1:5432`
+instead of `0.0.0.0`, or scope it with a tailnet ACL. The distinction to carry:
+a native WSL port needs an explicit `New-NetFirewallRule … -RemoteAddress
+100.64.0.0/10` to be reachable; a Docker-published one is reachable unless you
+bind it to loopback.
 
 **`tmux` first, and it needs no ops.** Plain SSH plus `tmux` already survives a
 dropped link: the session and the agent inside it keep running, and you
