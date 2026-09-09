@@ -1,0 +1,4 @@
+# poller 471466 started 2026-09-09T23:27:04.292Z
+# probe exited 0 2026-09-09T23:27:48.511Z
+# control done 2026-09-09T23:27:48.821Z
+# poller stopped, 1298 samples

@@ -18,6 +18,14 @@
 # written down so it can be argued with. They are not a benchmark. `class` is
 # the one word the menu shows beside the name.
 #
+# `slug` is this model's id in the public catalogue `WARP_FORK_MODEL_PRICES=
+# fetch` reads (T21.4). When the fetch is on and the catalogue carries that
+# slug, its numbers replace `input`/`output` here and the card says where they
+# came from and how old they are. When it is off, or the slug is unknown there,
+# the numbers below stand. An agent whose model ids *are* catalogue slugs needs
+# no row at all -- the id is looked up directly -- which is the case the fetch
+# was built for and the case a hand-written table cannot serve.
+#
 # `id` is the agent's own id for the row. `opus[1m]` matches `opus`: a
 # bracketed suffix is dropped before the lookup. A row whose description has
 # no ` · ` (Claude Code's `default`, described as the model it resolves to)
@@ -29,6 +37,7 @@ source = "https://platform.claude.com/docs/en/about-claude/pricing"
 
 [[model]]
 id = "fable"
+slug = "anthropic/claude-fable-5.1"
 class = "Frontier"
 input = 10.0
 output = 50.0
@@ -37,6 +46,7 @@ speed = 0.5
 
 [[model]]
 id = "opus"
+slug = "anthropic/claude-opus-5"
 class = "Flagship"
 input = 5.0
 output = 25.0
@@ -45,6 +55,7 @@ speed = 0.6
 
 [[model]]
 id = "sonnet"
+slug = "anthropic/claude-sonnet-5"
 class = "Everyday"
 input = 2.0
 output = 10.0
@@ -53,8 +64,28 @@ speed = 0.8
 
 [[model]]
 id = "haiku"
+slug = "anthropic/claude-haiku-4.5"
 class = "Fast"
 input = 1.0
 output = 5.0
 intelligence = 0.4
 speed = 0.9
+
+# The local model, from `.fork/runs/localmodel-panel-2026-09-09/`: a
+# llama-server on this machine answering the panel through
+# `ANTHROPIC_BASE_URL`. Zero is the true price, and it draws an empty cost bar
+# rather than a `?` for the one honest reason -- a turn on this model costs no
+# tokens anybody bills. It has no `slug`: nothing in a public catalogue
+# describes a file on this disk, and the fetch must not invent one.
+#
+# The ranking is deliberately not the vendor tiers' scale. Gemma 4 12B picked a
+# tool, ran it and read the output back correctly on a one-step task (measured,
+# same run); nothing there says it holds for a long multi-step turn, and the
+# numbers say that rather than flattering it.
+[[model]]
+id = "gemma-4-12b"
+class = "Local"
+input = 0.0
+output = 0.0
+intelligence = 0.25
+speed = 0.7

@@ -220,6 +220,28 @@ impl Client {
         self.builder(self.wrapped.get(url), include_warp_headers, iap_token)
     }
 
+    /// A `GET` carrying none of Warp's own headers, for a host that is not
+    /// Warp's and has no business knowing anything about this machine.
+    ///
+    /// **Read [`add_warp_http_headers`] before assuming this is redundant.**
+    /// On every non-wasm target [`include_warp_http_headers`] returns `true`
+    /// unconditionally, so an ordinary [`Client::get`] to *any* host attaches
+    /// the client id, the app version and four fields describing the operating
+    /// system, down to the Linux kernel version. That is right for Warp's own
+    /// API and it is a fingerprint anywhere else — and in this fork the app
+    /// version is `v0.fork.<sha>`, which names the commit the binary was built
+    /// from. The wasm branch of that predicate already asks whether the
+    /// destination is Warp's; this is the same question asked by the caller,
+    /// on the one path that knows the answer is no.
+    ///
+    /// It is otherwise an ordinary request: it goes through
+    /// [`Client::execute_inner`] like every other verb, so the egress policy
+    /// sees it. This is not a way out of `Client`.
+    pub fn get_without_warp_headers<U: IntoUrl + Clone>(&self, url: U) -> RequestBuilder<'_> {
+        let iap_token = self.iap_token_for(url.clone());
+        self.builder(self.wrapped.get(url), false, iap_token)
+    }
+
     pub fn post<U: IntoUrl + Clone>(&self, url: U) -> RequestBuilder<'_> {
         let include_warp_headers = Self::include_warp_http_headers(url.clone());
         let iap_token = self.iap_token_for(url.clone());

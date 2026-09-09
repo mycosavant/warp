@@ -111,7 +111,7 @@
       <li><small>done</small>The picker against opencode's OpenRouter list. <em>365 rows, a pick sent and honoured, the same night.</em></li>
       <li><small>gate</small>A model runtime inside the distribution. <em>Needs a say-so: it is an install.</em></li>
       <li><small>done</small>A local model answers the panel. <em>It does; Warp held loopback only, and the agent's own process did not.</em></li>
-      <li><small>day 1&ndash;2</small>The specs card for a list the table cannot hand-cover: the fetch, opt-in, off.</li>
+      <li><small>done</small>The specs card for a list the table cannot hand-cover: the fetch, opt-in, off. <em>430 rows, and it agrees with the four hand-written ones exactly.</em></li>
       <li><small>day 2</small><code>authenticate</code> for Codex and Gemini: the refusal disclosed now, the send when a credential exists.</li>
       <li><small>between builds</small>Housekeeping that recurs: the record that outlives the process, the websocket check, the cron line, the stale boxes.</li>
       <li><small>a quiet hour</small>The clean-build test of <code>-j 8</code>. <em>Only when no Windows build runs.</em></li>
@@ -163,15 +163,17 @@
     </div>
   </article>
 
-  <article class="item" data-id="fetch">
+  <article class="item done" data-id="fetch">
     <div class="rank">4</div>
     <div class="body">
-      <div class="head"><h2>The specs card for a list the table cannot hand-cover</h2><span class="status">open</span></div>
-      <div class="meta"><span>T21.2, the deferred half</span><span><code>WARP_FORK_MODEL_PRICES=fetch</code></span></div>
-      <p>Four rows were written by hand from the vendor's page. Item 1 puts hundreds on offer, and a table cannot follow them. OpenRouter's public model list carries a price per row and needs no key, so the fetch the ticket parked earns its place here: <strong>opt-in, off by default, one request per launch at most</strong>, cached under the state directory with a thirty-day age printed on the card, and refused by name unless the variable is set. It is the fork's first outbound request to a party that is not the person's own agent, which is why it is a variable and not a default, and why the egress deny-list is not the layer that decides it.</p>
+      <div class="head"><h2>The specs card for a list the table cannot hand-cover</h2><span class="status">done 2026-09-09</span></div>
+      <div class="meta"><span>T21.4</span><span>run: <code>.fork/runs/pricefetch-2026-09-09/</code></span></div>
+      <p>Four rows were written by hand from the vendor's page. Item 1 puts hundreds on offer, and a table cannot follow them. OpenRouter's public model list carries a price per row and needs no key, so the fetch the ticket parked earns its place here: <strong>opt-in, off by default, one request per launch at most</strong>, cached under the state directory with its age in days printed on the card, and refused by name unless the variable is set. It is the first host <em>Warp's own HTTP client</em> dials by Warp's own choice &mdash; an earlier version of this line said &ldquo;a party that is not the person's own agent&rdquo;, which reads as a claim about the whole machine and is false, since the agent's process dials plenty. That is why it is a variable and not a default, and why the egress deny-list is not the layer that decides it.</p>
+      <p><strong>Measured:</strong> 430 rows, 58 vendors, no key. The fetched prices match all four hand-written rows exactly, two days after a person typed them off the vendor's page. Three live-data facts changed the code: five <code>openrouter/*</code> auto-routers quote <code>-1</code> where 21 other rows quote a real <code>0</code>, so a negative is dropped and zero is kept; every <code>anthropic/*</code> slug has a <code>:batch</code> twin at half price one colon away, so the lookup is exact-match; and prices arrive as per-token decimal strings.</p>
+      <p><strong>And reading the client turned up a disclosure the diff would not have shown.</strong> <code>http_client::Client::get</code> attaches the client id, the app version and four OS fields &mdash; down to the kernel version &mdash; to <em>every</em> host, because <code>include_warp_http_headers</code> is unconditionally <code>true</code> off wasm. In this fork the app version is <code>v0.fork.&lt;sha&gt;</code>. <code>get_without_warp_headers</code> is the fix; it still goes through <code>execute_inner</code>, so the egress policy sees it.</p>
       <div class="gates"><span class="k">Falsifier</span><ul>
-        <li>The fetch runs with the variable unset, on any path. One test pins that the request builder is never constructed without it.</li>
-        <li>An OpenRouter slug that does not map to the agent's id. The mapping table is still the design; the fetch only fills its numbers.</li>
+        <li><b>Did not fire.</b> The fetch runs with the variable unset. <code>Plan::of</code> returns <code>Off</code> across every cache state, and a second test pins that the module builds exactly one HTTP client and that it sits behind that decision &mdash; because the first pins the decision and only the second pins that there is nowhere else to ask from. Calibrated by failing: its first version counted the module doc that names the method it checks.</li>
+        <li><b>FIRED, as designed.</b> An OpenRouter slug that does not map to the agent's id: <code>opus</code> against <code>anthropic/claude-opus-5</code>, and no rule derives one from the other. That is why the table names the slug and the fetch only fills its numbers. An unknown slug falls back to the row's own figures, so switching the fetch on can add a price and cannot remove one.</li>
       </ul></div>
     </div>
   </article>

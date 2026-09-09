@@ -17,10 +17,19 @@
 //!
 //! The choice of a table over a fetch of a public price list is recorded in
 //! `.fork/tickets/T21-the-agents-models.md`: the mapping from the agent's ids
-//! to a price row is a table in either design, and the fetch would be the
-//! fork's first outbound request to a party that is not the person's own
-//! agent, through a deny-list that would let it pass. If the table goes stale
-//! often enough to matter, the fetch is the next step, behind a switch.
+//! to a price row is a table in either design, so only the numbers were ever
+//! in question. **T21.4 built the fetch beside it** ([`super::prices`],
+//! `WARP_FORK_MODEL_PRICES=fetch`, off by default), because four hand-written
+//! rows cannot cover a picker holding 365. The table did not go away and is
+//! not a fallback: a row still says what an agent's `opus` *is*, and the fetch
+//! only says what that model costs.
+//!
+//! An earlier version of this paragraph called the fetch *"the fork's first
+//! outbound request to a party that is not the person's own agent"*. The
+//! sentence was read, fairly, as claiming the machine makes no third-party
+//! requests, which is false — the agent's own process makes many, and
+//! `CLAUDE.md` says so. What is true is narrower and is what was meant: it is
+//! the first host **Warp's own HTTP client** dials by Warp's own choice.
 //!
 //! # What the numbers are
 //!
@@ -85,6 +94,13 @@ pub(crate) struct Row {
     pub(crate) id: String,
     #[serde(default)]
     pub(crate) class: Option<String>,
+    /// This model's slug in the public catalogue [`super::prices`] fetches,
+    /// when `WARP_FORK_MODEL_PRICES=fetch` is set. The fetch fills numbers
+    /// into this mapping and never replaces it: the catalogue knows what
+    /// `anthropic/claude-opus-5` costs and has no idea that this agent's
+    /// `opus` means that model today.
+    #[serde(default)]
+    pub(crate) slug: Option<String>,
     #[serde(default)]
     pub(crate) input: Option<f32>,
     #[serde(default)]
@@ -220,6 +236,41 @@ impl Table {
         find(first)
     }
 
+    /// This model's list price, and where it came from.
+    ///
+    /// Three ways, in order, and the third is the one item 4 was built for:
+    /// the row's `slug` looked up in the fetched catalogue, then the numbers
+    /// written in the row itself, then — for a model with no row at all — the
+    /// agent's own id treated as a catalogue slug. An agent that names its
+    /// models the way the catalogue does (anything backed by OpenRouter, which
+    /// is how `opencode` hands over 365 of them) is priced by that third rule
+    /// alone, with nothing to hand-write.
+    ///
+    /// A row that names a slug the catalogue does not carry falls back to its
+    /// own numbers rather than to nothing, so switching the fetch on can add
+    /// prices and cannot take one away.
+    pub(crate) fn price(&self, id: &str, description: Option<&str>) -> Option<Priced> {
+        let catalogue = super::prices::Catalogue::current();
+        let row = self.row(id, description);
+        if let Some(slug) = row.and_then(|row| row.slug.as_deref())
+            && let Some(price) = catalogue.price(slug)
+        {
+            return Some(Priced::fetched(price, &catalogue));
+        }
+        if let Some(row) = row
+            && let (Some(input), Some(output)) = (row.input, row.output)
+        {
+            return Some(Priced {
+                input,
+                output,
+                origin: Origin::Table,
+            });
+        }
+        catalogue
+            .price(id)
+            .map(|price| Priced::fetched(price, &catalogue))
+    }
+
     /// The three bars for one of the agent's models, with [`UNKNOWN`] where
     /// the table and the tagline are both silent, or `None` when all three
     /// are. `dearest` is the highest output price among the models the agent
@@ -231,7 +282,10 @@ impl Table {
         dearest: Option<f32>,
     ) -> Option<LLMSpec> {
         let row = self.row(id, description);
-        let cost = match (row.and_then(|row| row.output), dearest) {
+        let cost = match (
+            self.price(id, description).map(|price| price.output),
+            dearest,
+        ) {
             (Some(output), Some(dearest)) if dearest > 0.0 => (output / dearest).clamp(0.0, 1.0),
             _ => UNKNOWN,
         };
@@ -259,7 +313,7 @@ impl Table {
     ) -> Option<f32> {
         offered
             .into_iter()
-            .filter_map(|(id, description)| self.row(id, description)?.output)
+            .filter_map(|(id, description)| Some(self.price(id, description)?.output))
             .fold(None, |dearest: Option<f32>, output| {
                 Some(dearest.map_or(output, |dearest| dearest.max(output)))
             })
@@ -274,18 +328,76 @@ impl Table {
     /// has one: `$10 in · $50 out per million tokens, list price as of
     /// 2026-09-07`.
     pub(crate) fn price_line(&self, id: &str, description: Option<&str>) -> Option<String> {
-        let row = self.row(id, description)?;
-        let (input, output) = (row.input?, row.output?);
-        let as_of = self
-            .as_of
-            .as_deref()
-            .map(|date| format!(", list price as of {date}"))
-            .unwrap_or_default();
+        let price = self.price(id, description)?;
         Some(format!(
-            "${} in · ${} out per million tokens{as_of}",
-            dollars(input),
-            dollars(output)
+            "${} in · ${} out per million tokens{}",
+            dollars(price.input),
+            dollars(price.output),
+            self.provenance(&price)
         ))
+    }
+
+    /// What follows the two figures: for a hand-written row the date in the
+    /// file, for a fetched one the host and how old the cache is.
+    ///
+    /// **The age is not decoration.** A fetched number carries no date of its
+    /// own once it is in a file, and a price that was true a season ago reads
+    /// exactly like one that was true this morning — which is the stale-doc
+    /// defect this fork keeps finding in its own prose, drawn as a picture.
+    fn provenance(&self, price: &Priced) -> String {
+        match &price.origin {
+            Origin::Table => self
+                .as_of
+                .as_deref()
+                .map(|date| format!(", list price as of {date}"))
+                .unwrap_or_default(),
+            Origin::Fetched { age_days: None } => ", list price from openrouter.ai".to_owned(),
+            Origin::Fetched {
+                age_days: Some(days),
+            } => format!(
+                ", list price from openrouter.ai, fetched {}",
+                days_ago(*days)
+            ),
+        }
+    }
+}
+
+/// A price and where it came from, so the line under the card can say.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct Priced {
+    pub(crate) input: f32,
+    pub(crate) output: f32,
+    pub(crate) origin: Origin,
+}
+
+impl Priced {
+    fn fetched(price: super::prices::Price, catalogue: &super::prices::Catalogue) -> Self {
+        Self {
+            input: price.input,
+            output: price.output,
+            origin: Origin::Fetched {
+                age_days: catalogue.age_days(chrono::Utc::now()),
+            },
+        }
+    }
+}
+
+/// Which of the two sources a number came from.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum Origin {
+    /// `specs.default.toml`, or the person's file over it.
+    Table,
+    /// The catalogue [`super::prices`] fetched, with the age of the cache it
+    /// was read from.
+    Fetched { age_days: Option<i64> },
+}
+
+/// `today`, `yesterday`, `3 days ago`.
+fn days_ago(days: i64) -> String {
+    match days {
+        0 => "today".to_owned(),
+        1 => "yesterday".to_owned(),
+        days => format!("{days} days ago"),
     }
 }
 

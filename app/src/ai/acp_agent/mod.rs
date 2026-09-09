@@ -105,6 +105,7 @@ pub(crate) mod liveness;
 pub(crate) mod mode;
 pub(crate) mod model;
 pub(crate) mod picker;
+pub(crate) mod prices;
 pub(crate) mod registry;
 pub(crate) mod specs;
 mod translate;
@@ -736,6 +737,13 @@ async fn exchange(
             // hop is cheap, an unchanged list is not rewritten, and a picker
             // opened before any turn has run shows the last agent's list
             // rather than nothing (T14.14, second half).
+            // T21.4: at most one request per launch, and only when
+            // `WARP_FORK_MODEL_PRICES=fetch` is set. Awaited rather than
+            // detached because the card wants the numbers for the list this
+            // very turn publishes, and because a fetch nobody waits for is a
+            // fetch nobody notices failing; the client carries its own
+            // timeout, and every failure is a log line and the old numbers.
+            prices::refresh_once().await;
             if let Some(choices) = catalog.picker_choices(&specs::Table::load()) {
                 picker::publish(choices).await;
             }

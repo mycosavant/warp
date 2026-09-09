@@ -977,6 +977,50 @@ fn a_paired_device_says_yes_only_when_the_owner_says_so() {
     }
 }
 
+/// **The falsifier T21.4 was given: no request without the word.**
+///
+/// `WARP_FORK_MODEL_PRICES` is the fork's only outbound-request switch, and
+/// the one value that turns it on is `fetch`. Everything else — a typo, an
+/// affirmative word borrowed from the switch next door, an empty string — is
+/// off, and off is the state in which
+/// [`crate::ai::acp_agent::prices::Plan::of`] returns `Off` and no client is
+/// ever built.
+///
+/// `"1"`, `"on"` and `"true"` are in the negative list on purpose. They are
+/// the affirmative words of [`remote_approve_from`] a few lines up, so someone
+/// remembering the wrong switch writes one of them; the variable names its
+/// action instead, because a second value could mean something else later and
+/// `1` would have to be guessed at.
+///
+/// Asserted against the parser, not by setting the variable: env vars are
+/// process-wide and a test that sets one races every test beside it.
+#[test]
+fn model_prices_are_fetched_only_when_the_variable_says_fetch() {
+    for affirmative in ["fetch", "  fetch  ", "FETCH", "Fetch"] {
+        assert!(
+            model_prices_from(Some(affirmative)),
+            "{affirmative:?} should turn the fetch on"
+        );
+    }
+
+    for otherwise in [
+        None,
+        Some(""),
+        Some("1"),
+        Some("on"),
+        Some("true"),
+        Some("yes"),
+        Some("off"),
+        Some("fetch prices"),
+        Some("fetchh"),
+    ] {
+        assert!(
+            !model_prices_from(otherwise),
+            "{otherwise:?} should leave the fetch off"
+        );
+    }
+}
+
 /// **The transcript and the event log were world-readable, and this is the pin.**
 ///
 /// Measured on a live session 2026-08-31: `.warp/transcripts/*.md` and the event

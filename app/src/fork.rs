@@ -794,6 +794,46 @@ fn control_bind_from(value: Option<&str>) -> ControlBind {
     ControlBind::Additional(address, port)
 }
 
+/// Set to `fetch` to let the Model Specs card fill its prices from a public
+/// catalogue instead of the compiled-in table.
+const MODEL_PRICES_ENV_VAR: &str = "WARP_FORK_MODEL_PRICES";
+
+/// Whether the panel's Model Specs card may fetch prices from OpenRouter
+/// (T21.4).
+///
+/// **Off by default, and this is the first host Warp's own HTTP client dials
+/// by its own choice.** Every other request the fork makes is either loopback
+/// or the person's own agent talking to whatever the person pointed it at.
+/// That is worth a variable rather than a default, and the variable is the
+/// layer that decides: `egress_policy` is a *deny-list*, so `openrouter.ai`
+/// would pass it without ever being considered.
+///
+/// What is bought for it is narrow. The compiled-in table has four rows,
+/// hand-written from a vendor's page and dated; the picker can be handed
+/// hundreds (measured: 365 through `opencode` over OpenRouter, 2026-09-07),
+/// and a table cannot follow those. The fetch fills numbers into the mapping
+/// that already exists — it does not replace it, and it cannot tell you which
+/// model an agent's `opus` resolves to this month.
+///
+/// [`REMOTE_APPROVE_ENV_VAR`]'s parser shape, not [`CONTROL_BIND_ENV_VAR`]'s:
+/// there is nothing to fail closed about, because a typo is simply not the
+/// word, and the cost of being wrong is a stale number rather than a listener
+/// nobody asked for.
+pub(crate) fn model_prices_fetch() -> bool {
+    is_active() && model_prices_from(std::env::var(MODEL_PRICES_ENV_VAR).ok().as_deref())
+}
+
+/// Split from the environment so the decision can be asserted without setting
+/// a process-global variable from a test that runs beside others.
+fn model_prices_from(value: Option<&str>) -> bool {
+    matches!(
+        value
+            .map(|value| value.trim().to_ascii_lowercase())
+            .as_deref(),
+        Some("fetch")
+    )
+}
+
 /// Set to `1`, `on` or `true` to let a paired device say *yes* as well as *no*.
 const REMOTE_APPROVE_ENV_VAR: &str = "WARP_FORK_REMOTE_APPROVE";
 

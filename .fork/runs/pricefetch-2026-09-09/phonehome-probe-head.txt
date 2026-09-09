@@ -1,0 +1,3 @@
+{"kind":"initialized","payload":{"protocolVersion":1,"agentCapabilities":{"loadSession":true,"promptCapabilities":{"image":true,"audio":false,"embeddedContext":true},"mcpCapabilities":{"http":true,"ss
+{"kind":"session","payload":{"sessionId":"91626167-532c-4d47-9832-fa92e5444227","modes":{"currentModeId":"auto","availableModes":[{"id":"default","name":"Manual","description":"Always ask before makin
+{"kind":"update","payload":{"sessionUpdate":"available_commands_update","availableCommands":[{"name":"unslop","description":"Cut AI tells from writing. Always apply. (user)"},{"name":"add-feature-flag

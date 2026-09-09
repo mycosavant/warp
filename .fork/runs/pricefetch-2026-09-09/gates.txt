@@ -1,0 +1,9 @@
+# Gates for .fork/runs/pricefetch-2026-09-09, all run 2026-09-09.
+
+$ cargo check --workspace --all-targets    -> exit 0, no errors
+$ cargo test -p warp --lib --features gui acp_agent::   -> 148 passed; 0 failed
+$ cargo test -p warp --lib --features gui fork::tests   -> 47 passed; 0 failed
+$ ./script/format  -> clean; reverted one drive-by into crates/remote_server/src/manager_tests.rs
+
+# The one-door test failed on its first run, by design (it counted the
+# module doc that names the method it checks). Recorded in the README.
