@@ -434,9 +434,16 @@ block for a person who reads the script), and polls `instance list` for up to
   and `agent prompt` refuses with `target_state_conflict`. That reads as three
   separate product defects and is one mistake.
 - **The agent panel takes focus on launch.** Press Escape to reach the shell.
-- **`warpctrl acp probe --cwd` validates the path on the machine running
-  `warpctrl`**, so it cannot be used to test a Unix cwd from the Windows binary.
-  Use the panel for that.
+- **`warpctrl acp probe --cwd` takes a Unix path from the Windows binary**, so
+  it *can* be used to drive a WSL-side agent. This entry said the opposite until
+  2026-09-09 and had been wrong since T18: `session_directory` asks
+  `is_foreign_filesystem_path` **before** `is_dir()`, and a POSIX-rooted path
+  that this process does not see as absolute is passed through on the caller's
+  word. The order is the fix, not the check — asking after `is_dir()` meant
+  `/home/effatha/git/warp` resolving against the current drive, so an existing
+  `C:\home\...` made the check pass and handed back a directory on the wrong
+  machine, which is T20.1. An ordinary typo is still refused on a POSIX host,
+  where the same string really is absolute.
 
 Three things are worth knowing rather than discovering:
 

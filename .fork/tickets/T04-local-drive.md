@@ -516,6 +516,14 @@ Only the third spans the seam between the other two.
 
 ### What is left, and why it is the hard half
 
+**This heading was written and its body never was**, found empty 2026-09-09.
+What it was going to introduce is the four sections under it, each of which was
+subsequently built and documented here: the trigger (T4.4d), the two-way mirror
+(T4.4f), the alias that travels in the workflow's file (T4.4g), and what happens
+when git leaves a conflict behind (T4.4e). So the hard half is answered below
+rather than missing; only the paragraph promising it went unwritten. Kept rather
+than deleted, because "a section was planned here" is itself worth knowing.
+
 ### T4.4d as built — the trigger
 
 Two actions, `drive.sync.status` and `drive.sync.export`, bringing the catalog

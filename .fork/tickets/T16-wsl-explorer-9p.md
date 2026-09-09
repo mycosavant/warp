@@ -89,16 +89,24 @@ citing the ten-minute skeleton at `:1219`. The wiring was never built.
 
 ### What to build, ranked by cost
 
+**Boxes reconciled 2026-09-09.** (2) and (3) were built on 2026-09-02 and
+this list went on saying otherwise for a week, while the same file recorded
+both below — "Fix (2) measured" and "Phase 1 built and verified end to end".
+A ticket that contradicts itself is the fork's commonest defect wearing its
+own clothes. **(1) is genuinely still open**: the file says in as many words
+that "the seam still has no automated test", so it is left unticked rather
+than swept along with the two beside it.
+
 - [ ] **(1) `#[cfg(windows)]` unit test** on `matches_gitignores` — minutes,
       isolates the bug, fails today.
-- [ ] **(2) Skip `canonicalize` for non-symlink children** at `entry.rs:371-373`.
+- [x] **(2) Skip `canonicalize` for non-symlink children** at `entry.rs:371-373`.
       `read_dir` already returns the on-disk name joined to the parent's
       spelling, so this deletes the 13 ms op **and** makes child spelling equal
       root spelling by construction — one edit, fixes the bug and 65% of the
       cost. ~20 ms/entry → ~7 ms; this repo becomes ~55 s. Helps every UNC root.
       Pair with **(2a)**: canonicalize the root before `gitignores_for_directory`
       (`local_model.rs:1903`, `:1100`).
-- [ ] **(3) Route at the path seam.** In `location_for_path`, before the `Local`
+- [x] **(3) Route at the path seam.** In `location_for_path`, before the `Local`
       arm: if `session.wsl_name().is_some()` and the manager reports a host id,
       return `Remote(host_id, linux_cwd)`. ~15 lines, one file, gated on a
       connected server so nothing changes until `remote wsl connect` succeeds.

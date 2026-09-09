@@ -150,7 +150,7 @@
           <li>Build at <code>CARGO_BUILD_JOBS=8</code>, and not on both sides of the VM at once.</li>
         </ul>
       </div>
-      <p><strong>Landed 2026-09-04 as <code>b175101a2</code></strong>, by Opus 5. Six conflicts, both binaries built serially at <code>-j 8</code>, both green with only the four pre-existing warnings, both trees on the same commit. The sixteen crash fixes are merged and <em>unexercised</em>: neither binary has been run as a GUI yet. The drift check exists at <code>.fork/tools/drift-check.sh</code>; its cron line is written up in the README and not yet installed.</p>
+      <p><strong>Landed 2026-09-04 as <code>b175101a2</code></strong>, by Opus 5. Six conflicts, both binaries built serially at <code>-j 8</code>, both green with only the four pre-existing warnings, both trees on the same commit. The sixteen crash fixes are merged and <em>unexercised</em>: neither binary has been run as a GUI yet. The drift check exists at <code>.fork/tools/drift-check.sh</code>; its cron line is written up in <code>.fork/docs/manual.md</code> (this said &ldquo;the README&rdquo; until 2026-09-09, where only the script&rsquo;s name appears) and, as far as any file here can say, not yet installed.</p>
       <p>The drift check reports and never merges. <code>git merge-tree --write-tree</code> against a fresh fetch gives the conflict count without touching the tree; the overlap count is two lines of <code>comm</code>. A merge needs judgment every time it has been done, so the automation stops at the report.</p>
     </div>
   </article>

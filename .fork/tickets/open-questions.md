@@ -111,8 +111,13 @@ to Anthropic, in the clear in that `POST /v1/messages` body, because that is
 what an agent on your own subscription *is*. What does not happen is Warp
 learning anything about you.
 
-**Still unverified: T2.5, audio.** No proxy capture during a real recording;
-that needs a microphone and someone to speak into it. Unchanged by this.
+**~~Still unverified: T2.5, audio.~~ Measured 2026-09-05**, and this paragraph
+was stale for four days while the paragraph twelve lines below it said so. A
+real recording was captured through the decrypting proxy on the Windows release
+build: 151 KB of audio, multipart, to `127.0.0.1:8080` and to nothing else, and
+the transcription completed end to end. `.fork/runs/egress-windows-2026-09-05/`,
+"Voice: the audio goes to loopback and nowhere else". The microphone this was
+waiting for turned up in the same run that answered the rest of the question.
 
 **Platform: measured on both now (Windows added 2026-09-05).** The run above was
 Linux. The same measurement was repeated on the Windows release binary the
