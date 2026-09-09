@@ -4736,6 +4736,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "egress_policy"
+version = "0.1.0"
+
+[[package]]
 name = "either"
 version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6586,6 +6590,7 @@ dependencies = [
  "async-stream",
  "bytes",
  "cfg-if",
+ "egress_policy",
  "futures",
  "gloo",
  "http 1.4.0",
@@ -16950,6 +16955,7 @@ dependencies = [
  "async-tungstenite",
  "base64 0.22.1",
  "cfg-if",
+ "egress_policy",
  "futures",
  "futures-test-sink",
  "futures-util",

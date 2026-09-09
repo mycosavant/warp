@@ -1,0 +1,15 @@
+[package]
+name = "egress_policy"
+authors.workspace = true
+version = "0.1.0"
+edition = "2024"
+description = "Fork policy: which hosts this build must never talk to"
+publish.workspace = true
+license.workspace = true
+
+# Deliberately no dependencies. This crate sits under every client that has to
+# consult it, and the reason is a cycle rather than a preference: `http_client`
+# depends on `warp_core`, which depends on `websocket`, so a `websocket` that
+# reached for `http_client::egress` would not compile. A leaf with no
+# dependencies can be depended on by anything that opens a socket.
+[dependencies]

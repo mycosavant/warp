@@ -193,7 +193,7 @@
       <div class="facts"><table>
         <tr><th>what</th><th>where</th><th class="n">mentions</th></tr>
         <tr><td>A discovery record and broker socket outlive three clean <code>window close</code> shutdowns; unbisected</td><td>T15</td><td class="n">3</td></tr>
-        <tr><td>A third egress check, at socket construction in <code>crates/websocket</code>, with a test pinning the consumer list</td><td>T19</td><td class="n">2</td></tr>
+        <tr><td><s>A third egress check, at socket construction in <code>crates/websocket</code>, with a test pinning the consumer list</s> &mdash; <b>done 2026-09-09.</b> The policy moved to <code>crates/egress_policy</code>, a leaf crate, because <code>websocket &rarr; http_client</code> is a dependency cycle rather than merely bad layering. The consumer pin found a second door on its first run: <code>crates/graphql</code> declares <code>ws_stream_wasm</code> on the wasm target, now a listed exception with its reason.</td><td>T19</td><td class="n">2</td></tr>
         <tr><td><code>did_change_watched_files</code> advertised and never sent; two candidate fixes, the maintainer picks</td><td>T18</td><td class="n">2</td></tr>
         <tr><td>Stale boxes: T16 items 1&ndash;3 built and unticked; <code>open-questions.md</code> still says T2.5 audio is unverified; <code>manual.md</code> still documents the <code>acp probe --cwd</code> limitation T20.5 removed; <code>GOAL.md</code> lists T14.14 under <em>not this horizon</em>; T04 has an empty heading</td><td>the fork's commonest defect</td><td class="n">&mdash;</td></tr>
         <tr><td>The drift-check cron line, never installed</td><td>GOAL board item 1</td><td class="n">1</td></tr>

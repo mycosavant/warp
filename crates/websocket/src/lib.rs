@@ -33,6 +33,58 @@ use crate::sink_map_err::map_err;
 #[error(transparent)]
 pub struct Error(#[from] anyhow::Error);
 
+/// Fork policy: refuse a WebSocket to a host on the egress deny-list.
+///
+/// **The third of the fork's three egress enforcement points**, and the last to
+/// be built (2026-09-09). The other two are in `http_client`, and neither could
+/// ever see a WebSocket: this crate dials through `async-tungstenite` and
+/// `async-net` and has never had an `http_client` dependency. Repairing that by
+/// adding one **does not compile** — `http_client` depends on `warp_core`,
+/// which depends on this crate — so the lists and the switches live in
+/// [`egress_policy`], a leaf crate with no dependencies, and both clients
+/// consult it.
+///
+/// **This was not a live leak when it was closed, and that is the argument for
+/// closing it.** No host on either deny-list is a WebSocket target for any call
+/// site in this workspace, and the 2026-09-05 Windows egress run measured the
+/// one first-party subscription (Warp Drive's `CloudObjects::Listener`) failing
+/// in `get_or_refresh_access_token` *before any dial*, because this fork holds
+/// no credentials. So the path was gated by the account gate rather than by
+/// policy. "No call site does this today" and "the process has no token today"
+/// are both facts about today; a backstop is supposed to be a fact about the
+/// code. That reasoning is `egress.rs`'s own, from the `eventsource` bypass it
+/// found in itself, and this is the same shape one crate over.
+///
+/// # Why an error rather than `http_client`'s blackhole
+///
+/// `http_client` rewrites a blocked request to `0.0.0.0:0` because
+/// `reqwest::Error` has no public constructor, so it cannot manufacture a
+/// refusal and has to manufacture a failure instead. This path returns
+/// `anyhow::Result`, so it can say what refused it and name the switch that
+/// lifts it. Prefer that: a connection error at an unreachable port is
+/// indistinguishable from a network fault, and someone will eventually spend an
+/// hour on it.
+///
+/// A request with no host is passed through rather than refused. There is no
+/// host for a deny-list to have an opinion about, and the dialler below is
+/// about to reject it with a better message.
+fn refuse_if_blocked(host: Option<&str>) -> anyhow::Result<()> {
+    let Some(host) = host.filter(|host| egress_policy::blocks_host(host)) else {
+        return Ok(());
+    };
+
+    // Matches `http_client`'s two call sites, so one grep for `fork: blocked`
+    // finds all three enforcement points in a log.
+    log::warn!("fork: blocked telemetry egress (websocket) to {host}");
+    Err(anyhow!(
+        "fork egress policy refused a WebSocket connection to {host}. This \
+         build does not talk to that host; see the `egress_policy` crate, and \
+         `{}` / `{}` if you meant to lift it.",
+        egress_policy::ALLOW_ENV_VAR,
+        egress_policy::ALLOW_FIRST_PARTY_ENV_VAR,
+    ))
+}
+
 /// The message received / sent to the websocket.
 #[derive(Debug)]
 pub struct Message(imp::Message);
@@ -113,6 +165,8 @@ impl WebSocket {
                 .headers_mut()
                 .insert("Sec-WebSocket-Protocol", HeaderValue::from_str(&protocols)?);
         }
+        // Fork policy backstop, the third of three. See `refuse_if_blocked`.
+        refuse_if_blocked(request.uri().host())?;
         let socket = imp::connect(request).await?;
         Ok(Self(socket))
     }
@@ -123,6 +177,12 @@ impl WebSocket {
         url: impl AsRef<str>,
         protocols: impl IntoIterator<Item = &str>,
     ) -> anyhow::Result<Self> {
+        // Fork policy backstop, the third of three. See `refuse_if_blocked`.
+        // A URL this crate cannot parse is passed through unjudged rather than
+        // refused: `imp::connect` is about to reject it anyway, with a better
+        // message than this check could write.
+        let parsed = url::Url::parse(url.as_ref()).ok();
+        refuse_if_blocked(parsed.as_ref().and_then(|parsed| parsed.host_str()))?;
         let socket = imp::connect(url, protocols).await?;
         Ok(Self(socket))
     }
@@ -200,3 +260,7 @@ pub trait Stream: futures::Stream<Item = Result<Message, Error>> + Send + Unpin 
 impl<T> Sink for T where T: futures::Sink<Message, Error = Error> + Send + Unpin + 'static {}
 impl<T> Stream for T where T: futures::Stream<Item = Result<Message, Error>> + Send + Unpin + 'static
 {}
+
+#[cfg(test)]
+#[path = "lib_tests.rs"]
+mod tests;

@@ -130,17 +130,46 @@ egress deny-list's blind spot is unreachable without an account.
 
 ### Still open
 
-- [ ] **Third egress enforcement point — still the durable fix, now with a
-      measured reason it is not urgent.** The check at socket construction in
-      `crates/websocket` plus a test pinning the consumer list is the right shape
-      (an `http_client` dependency would invert the layering — pin the way
-      `the_symbol_map_leaves_by_exactly_one_call_site_and_it_is_guarded` pins a
-      count rather than trusting a guard). What changed is the urgency: the
-      2026-09-05 measurement shows the WebSocket path is gated by the
-      missing-credentials check before it opens a socket, so the deny-list's blind
-      spot is unreachable while the fork stays accountless. Build the third point
-      to make "cannot happen" independent of "has no token"; until then the gate
-      is the enforcement and this is the documented refusal.
+- [x] **Third egress enforcement point — built 2026-09-09.**
+      `websocket::WebSocket::connect` consults the deny-list before
+      `imp::connect`, and refuses with an error naming the host and the switch
+      rather than blackholing, because this path returns `anyhow::Result` and
+      can say what refused it where `reqwest` cannot.
+
+      **The shape this ticket recommended was right and its reason was too
+      weak.** It said an `http_client` dependency *"would invert the
+      layering"*, which is an opinion a later reader can weigh and overrule.
+      It is a **cycle**: `http_client` → `warp_core` → `websocket`, so the
+      dependency does not compile. The lists, the switches and the argument
+      moved to `crates/egress_policy`, a leaf with no dependencies, and both
+      clients consult it. `http_client::egress` keeps only what needs a
+      `reqwest::Request` in hand.
+
+      **The consumer-list pin found a second door on its first run**, which is
+      the whole case for pinning by count rather than trusting a guard.
+      `a_websocket_is_dialled_from_this_crate_alone` asserts that no crate but
+      `websocket` declares a WebSocket dialler, and `crates/graphql` does:
+      `ws_stream_wasm = "0.7"` at `Cargo.toml:34`, under
+      `cfg(target_family = "wasm")`. It is a listed exception, not a hole —
+      wasm-only in a fork that ships native, its real subscription path is the
+      guarded `WebSocket::connect_with_headers`, and its own source never names
+      the dialler, which a second assertion re-checks every run. Not removed:
+      deleting a dependency on a target family nothing here builds cannot be
+      verified from this side.
+
+      Four tests, each calibrated by making it fail rather than by watching it
+      pass, and the calibration earned its keep: deleting the guard from
+      `connect` left the structural test **green**, because the file's own
+      `fn refuse_if_blocked(` sat above both dials and satisfied the
+      "checked first" assertion. A structural test that cannot fail is worse
+      than none, because it gets cited.
+
+      What has not changed is the urgency argument recorded here on 2026-09-05,
+      and it is worth keeping: this was never a live leak. No host on either
+      list is a WebSocket target for any call site, and Warp Drive's
+      subscription fails in `get_or_refresh_access_token` before any dial
+      because this fork holds no credentials. The point of building it is to
+      make "cannot happen" independent of "has no token".
 - [x] **May a paired device submit a prompt?** Answered 2026-09-05 by the
       maintainer, and the answer is *a device paired for one conversation
       may*: not the watch scope, which stays as this ticket described it, but
