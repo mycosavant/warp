@@ -1,0 +1,1 @@
+{"id":"chatcmpl-722gU9jViC4uq2iDDf9h39xDL0MJy3EB","type":"message","role":"assistant","content":[{"type":"text","text":"Two plus two equals four."}],"model":"gemma-4-12b","stop_reason":"end_turn","stop_sequence":null,"usage":{"cache_read_input_tokens":0,"input_tokens":24,"output_tokens":7}}

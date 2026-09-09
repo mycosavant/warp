@@ -18,6 +18,20 @@ CLAUDE.md              21,941 words   ~29,000 tokens
 largest fixed cost the project has, and it is also the reason sessions get
 things right, so the answer is not to cut it — it is to *cache* it.
 
+**Measured on the wire 2026-09-09, and the whole-project figure is larger than
+the estimate above.** The same agent, the same prompt, two working directories:
+an empty one produced a **20,860-token** request and `/home/effatha/git/warp`
+produced **62,960**. So the project adds about **42,000 tokens to every
+request** — `CLAUDE.md`, the skill it `@`-includes, and the project skill
+listing together — on top of a 20,860-token floor that is Claude Code's own
+system prompt and tool definitions and belongs to no repository.
+
+That number stopped being an accounting curiosity the same day. A local
+12B on a 12 GB card has to be given **96k of context** to answer a single
+question in this repo, and at `serve.ps1`'s 12,288 default it cannot answer at
+all (`.fork/runs/localmodel-panel-2026-09-09/`). For a cloud model the prefix
+is a bill; for a local one it is a wall.
+
 Two consequences that are actionable today:
 
 - **A cached prefix must be byte-exact.** Editing `CLAUDE.md` invalidates that

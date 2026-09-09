@@ -1,0 +1,1 @@
+llama-server: gemma-4-12b on 127.0.0.1:8080, ctx 12288, thinking off

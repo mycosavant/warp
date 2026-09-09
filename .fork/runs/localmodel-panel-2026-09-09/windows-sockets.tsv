@@ -1,0 +1,17 @@
+﻿# started 2026-09-09T17:36:32.796Z interval 200ms names warp-oss.exe,curl.exe
+# ts	pid	name	proto	local	remote	state	sample
+2026-09-09T17:36:42.638Z	10708	warp-oss.exe	tcp	127.0.0.1:64959	0.0.0.0:0	Listen	29
+2026-09-09T17:36:42.644Z	10708	warp-oss.exe	tcp	100.82.213.46:41234	0.0.0.0:0	Listen	29
+2026-09-09T17:36:42.646Z	10708	warp-oss.exe	tcp	127.0.0.1:9282	0.0.0.0:0	Listen	29
+# heartbeat 2026-09-09T17:37:27.630Z sample 150 tcp_all 91 udp_all 38 watched_pids 7
+# heartbeat 2026-09-09T17:38:16.574Z sample 300 tcp_all 92 udp_all 38 watched_pids 7
+# heartbeat 2026-09-09T17:39:04.365Z sample 450 tcp_all 90 udp_all 38 watched_pids 8
+# heartbeat 2026-09-09T17:39:53.731Z sample 600 tcp_all 102 udp_all 38 watched_pids 11
+# heartbeat 2026-09-09T17:40:43.499Z sample 750 tcp_all 111 udp_all 39 watched_pids 11
+# heartbeat 2026-09-09T17:41:35.063Z sample 900 tcp_all 119 udp_all 38 watched_pids 15
+2026-09-09T17:41:40.248Z	23148	curl.exe	tcp	0.0.0.0:52448	0.0.0.0:0	Bound	915
+2026-09-09T17:41:40.250Z	23148	curl.exe	tcp	127.0.0.1:52448	127.0.0.1:52447	Established	915
+2026-09-09T17:41:40.251Z	23148	curl.exe	tcp	127.0.0.1:52447	127.0.0.1:52448	Established	915
+2026-09-09T17:41:40.603Z	23148	curl.exe	tcp	0.0.0.0:52449	0.0.0.0:0	Bound	916
+2026-09-09T17:41:40.605Z	23148	curl.exe	tcp	10.2.0.2:52449	104.20.23.154:443	Established	916
+# stopped 2026-09-09T17:41:49.515Z samples 941 elapsed_s 317 distinct_tuples 8

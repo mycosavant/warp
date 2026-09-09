@@ -1,0 +1,11 @@
+trace 1dea28a8-316e-4c04-bfba-1058597d7546 · warp 5 lines · claude-code 2.1.257, 21 lines (19 bookkeeping)
+  events   C:\Users\onemind\AppData\Local\warp\WarpOss\data\fork\events\1dea28a8-316e-4c04-bfba-1058597d7546.jsonl
+  harness  \\wsl.localhost\Ubuntu\home\effatha\.claude\projects\-home-effatha-git-warp\3a195e78-f630-4603-b6fa-c6cccce6ff69.jsonl
+
+17:39:47.497 P  In one sentence, what is 2+2?
+17:39:49.066 W  agent: @agentclientprotocol/claude-agent-acp 0.73.0 “Claude Agent”
+17:39:49.802 W  mode: current `auto`; offered `default` (“Always ask before making changes”); `acceptEdits` (“Automatically accept all file edits”); `plan` (“Create a plan before making changes”); `auto` (“Claude handles permission decisions”); `bypassPermissions` (“Accepts all permissions”)
+17:39:49.804 W  model: `model` “Model”, current `gemma-4-12b`
+17:39:51.384 A  2+2 is 4.
+17:39:51.384 H  usage: 1 assistant messages, 5 input, 8 output, 62790 cache read, 0 cache created
+17:39:51.589 W  stop

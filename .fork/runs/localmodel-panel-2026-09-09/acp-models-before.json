@@ -1,0 +1,141 @@
+{
+  "default_id": "opus[1m]",
+  "choices": [
+    {
+      "display_name": "Default (recommended)",
+      "base_model_name": "Default (recommended)",
+      "id": "default",
+      "reasoning_level": null,
+      "usage_metadata": {
+        "request_multiplier": 1,
+        "credit_multiplier": null
+      },
+      "description": "Opus (1M context)",
+      "disable_reason": null,
+      "vision_supported": true,
+      "spec": {
+        "cost": 1.0,
+        "quality": 0.85,
+        "speed": 0.6
+      },
+      "provider": "Unknown",
+      "host_configs": {},
+      "discount_percentage": null,
+      "context_window": {
+        "is_configurable": false,
+        "min": 0,
+        "max": 0,
+        "default_max": 0
+      }
+    },
+    {
+      "display_name": "Opus 5 with 1M context",
+      "base_model_name": "Opus 5 with 1M context",
+      "id": "opus[1m]",
+      "reasoning_level": null,
+      "usage_metadata": {
+        "request_multiplier": 1,
+        "credit_multiplier": null
+      },
+      "description": "Best for everyday, complex tasks",
+      "disable_reason": null,
+      "vision_supported": true,
+      "spec": {
+        "cost": 1.0,
+        "quality": 0.85,
+        "speed": 0.6
+      },
+      "provider": "Unknown",
+      "host_configs": {},
+      "discount_percentage": null,
+      "context_window": {
+        "is_configurable": false,
+        "min": 0,
+        "max": 0,
+        "default_max": 0
+      }
+    },
+    {
+      "display_name": "Fable 5.1",
+      "base_model_name": "Fable 5.1",
+      "id": "claude-fable-5-1[1m]",
+      "reasoning_level": null,
+      "usage_metadata": {
+        "request_multiplier": 1,
+        "credit_multiplier": null
+      },
+      "description": "Most capable for your hardest and longest-running tasks",
+      "disable_reason": null,
+      "vision_supported": true,
+      "spec": {
+        "cost": -1.0,
+        "quality": 1.0,
+        "speed": 0.25
+      },
+      "provider": "Unknown",
+      "host_configs": {},
+      "discount_percentage": null,
+      "context_window": {
+        "is_configurable": false,
+        "min": 0,
+        "max": 0,
+        "default_max": 0
+      }
+    },
+    {
+      "display_name": "Sonnet 5",
+      "base_model_name": "Sonnet 5",
+      "id": "sonnet",
+      "reasoning_level": null,
+      "usage_metadata": {
+        "request_multiplier": 1,
+        "credit_multiplier": null
+      },
+      "description": "Efficient for routine tasks",
+      "disable_reason": null,
+      "vision_supported": true,
+      "spec": {
+        "cost": 0.4,
+        "quality": 0.7,
+        "speed": 0.8
+      },
+      "provider": "Unknown",
+      "host_configs": {},
+      "discount_percentage": null,
+      "context_window": {
+        "is_configurable": false,
+        "min": 0,
+        "max": 0,
+        "default_max": 0
+      }
+    },
+    {
+      "display_name": "Haiku 4.5",
+      "base_model_name": "Haiku 4.5",
+      "id": "haiku",
+      "reasoning_level": null,
+      "usage_metadata": {
+        "request_multiplier": 1,
+        "credit_multiplier": null
+      },
+      "description": "Fastest for quick answers",
+      "disable_reason": null,
+      "vision_supported": true,
+      "spec": {
+        "cost": 0.2,
+        "quality": 0.4,
+        "speed": 0.9
+      },
+      "provider": "Unknown",
+      "host_configs": {},
+      "discount_percentage": null,
+      "context_window": {
+        "is_configurable": false,
+        "min": 0,
+        "max": 0,
+        "default_max": 0
+      }
+    }
+  ],
+  "preferred_codex_model_id": null
+}

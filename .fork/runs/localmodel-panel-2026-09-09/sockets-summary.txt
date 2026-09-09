@@ -1,0 +1,24 @@
+# Distilled socket census. Raw evidence: windows-sockets.tsv, wsl-sockets.tsv, socket-bytes.txt
+
+## Windows side, every warp-oss.exe socket, 941 samples over 317 s
+2026-09-09T17:36:42.638Z	10708	warp-oss.exe	tcp	127.0.0.1:64959	0.0.0.0:0	Listen	29
+2026-09-09T17:36:42.644Z	10708	warp-oss.exe	tcp	100.82.213.46:41234	0.0.0.0:0	Listen	29
+2026-09-09T17:36:42.646Z	10708	warp-oss.exe	tcp	127.0.0.1:9282	0.0.0.0:0	Listen	29
+
+## Windows control (proves the poller sees non-loopback)
+2026-09-09T17:41:40.248Z	23148	curl.exe	tcp	0.0.0.0:52448	0.0.0.0:0	Bound	915
+2026-09-09T17:41:40.250Z	23148	curl.exe	tcp	127.0.0.1:52448	127.0.0.1:52447	Established	915
+2026-09-09T17:41:40.251Z	23148	curl.exe	tcp	127.0.0.1:52447	127.0.0.1:52448	Established	915
+2026-09-09T17:41:40.603Z	23148	curl.exe	tcp	0.0.0.0:52449	0.0.0.0:0	Bound	916
+2026-09-09T17:41:40.605Z	23148	curl.exe	tcp	10.2.0.2:52449	104.20.23.154:443	Established	916
+
+## WSL side, first-seen per process/pid/peer during the two panel turns
+2026-09-09T17:36:37.454Z  claude  pid=208502  0         10.255.255.254:53      users:(("claude",pid=208502,fd=18))
+2026-09-09T17:36:37.454Z  claude  pid=208502  ESTAB     10.2.0.2:45106         160.79.104.10:443
+2026-09-09T17:39:49.876Z  claude  pid=322226  ESTAB     10.2.0.2:45956         160.79.104.10:443
+2026-09-09T17:39:50.328Z  claude  pid=322226  ESTAB     127.0.0.1:47738        127.0.0.1:8080
+2026-09-09T17:40:45.633Z  claude  pid=326427  ESTAB     10.2.0.2:45376         160.79.104.10:443
+2026-09-09T17:40:45.633Z  claude  pid=326427  SYN-SENT  10.2.0.2:45406         160.79.104.10:443
+2026-09-09T17:40:46.076Z  claude  pid=326427  ESTAB     127.0.0.1:46852        127.0.0.1:8080
+2026-09-09T17:41:41.042Z  node    pid=329734  SYN-SENT  10.2.0.2:45690         172.66.147.243:443
+2026-09-09T17:41:41.266Z  node    pid=329734  ESTAB     10.2.0.2:45690         172.66.147.243:443
