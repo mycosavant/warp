@@ -4102,17 +4102,65 @@ of software reaches it — which is why the fix is *not sleeping* rather than
 waking. And `powercfg /lastwake` reported the power button, meaning nothing was
 waking it remotely to begin with.
 
-### 2. Sessions die when the link drops — use `tmux`
+### 2. Sessions die when the link drops — `tmux` now, `mosh` for the flaky link
 
-Already installed. The connection dropping should cost nothing:
+**There are two remote surfaces and they do not fail the same way.** The console
+(a phone browser onto the running GUI Warp) depends on two fragile layers: the
+browser tab and the GUI process, and neither can be relaunched from the phone.
+A CLI agent (Claude Code, `opencode`) in a terminal depends on neither. So for
+*rock-solid* away-from-desk work, the durable surface is a CLI agent in `tmux`,
+reached over `mosh` — not the console. The console stays the richer view for
+when you are at the desk or want the consent surface and the trace. Measured
+2026-09-09: after a phone tab was closed, the GUI was still up and still serving
+the paired conversation (`instance list` showed the overnight pid; the console
+answered 200); "could not get back in" was the phone's web layer failing, not
+Warp. The console recovers by reloading its URL — the control pairing has no
+clock, so no re-pair.
+
+**`tmux` first, and it needs no ops.** Plain SSH plus `tmux` already survives a
+dropped link: the session and the agent inside it keep running, and you
+reattach.
 
 ```bash
-ssh warp -t tmux new -A -s main     # attach if it exists, create if not
+ssh warp -t tmux new -As mobile     # attach if it exists, create if not
 ```
 
-`-A` is the whole trick: one command that works the first time and every time
-after. A dropped phone connection leaves the work running; reconnecting with the
-same line lands back in it.
+Run the agent *inside* that tmux (`claude`, or this fork's CLI), not in the bare
+shell — then a dropped phone connection leaves the agent working, and the same
+line lands back in it. `-A` is the whole trick: one command, first time and
+every time after.
+
+**`mosh` for the flaky mobile link.** SSH over TCP freezes when the phone
+changes IP (Wi-Fi to cellular), sleeps, or idles behind carrier NAT, and you get
+a dead terminal. `mosh` is UDP with state sync: it reconnects instantly across
+IP changes, echoes locally, and survives long silences. It bootstraps over the
+same SSH (port 22, already open through the tailnet) and then wants one UDP port
+in 60000-61000 on the same host — which mirrored networking bridges to the
+tailnet address exactly as it does port 22.
+
+Two privileged steps, both at the desk (a `sudo` password and a UAC firewall
+prompt, neither answerable from the phone):
+
+```bash
+sudo apt install -y mosh                              # in WSL
+```
+```powershell
+# elevated PowerShell, once; scoped to the tailnet like the SSH rule
+New-NetFirewallRule -DisplayName 'Mosh from tailnet' -Direction Inbound `
+  -Action Allow -Protocol UDP -LocalPort 60000-61000 -RemoteAddress 100.64.0.0/10 -Profile Any
+```
+
+Then from Termux (`pkg install mosh openssh`), the one command that is also the
+reconnect command:
+
+```bash
+mosh --ssh="ssh -p 22" effatha@100.82.213.46 -- tmux new -As mobile
+```
+
+A drop: re-run the same line. `mosh` reconnects or restarts and `tmux` reattaches
+to the live session with the agent still running. If the first connect hangs
+after `mosh-server` prints its port, the UDP is not bridging — check the firewall
+rule and that mirrored networking is on.
 
 Worth adding server-side when someone next has `sudo` in hand, because a phone
 behind carrier NAT drops idle connections quickly:

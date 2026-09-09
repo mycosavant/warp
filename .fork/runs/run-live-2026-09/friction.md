@@ -36,3 +36,4 @@ finishes, the panel has no repository, and the fallback text blames WSL. The
 maintainer restated the requirement the same day: WSL is a remote server, and
 nothing user-facing goes through 9p. Diffs, the editor's language servers and
 the clipboard are the surfaces named.
+| 2026-09-09 | a9 | Closed the phone's Firefox tab and could not get back into the console; it read as Warp being fragile. Measured: Warp never went down (overnight pid still up, console answered 200, pairing held), and the block was the phone's Tailscale DNS making the web layer flaky. The real fragility is that the console is a browser onto a GUI, neither relaunchable from the phone | no | manual "Sessions die when the link drops" rewritten: durable remote work is a CLI agent in tmux over mosh, console is the desk view; reach.html gets the "Use Tailscale DNS off" fix for slow web |
