@@ -38,6 +38,17 @@ fresh session after the maintainer answered the spec's four decisions
 person with a phone, and the checklist at its top is that run. Live while the
 work is open; it moves to `archive/` when the last step is measured.
 
+**`HANDOFF-SPECSFETCH.md` is the live handoff**, written 2026-09-09 for the
+session after `runs/localmodel-panel-2026-09-09/`. It carries `next.html` item
+4, the specs card's opt-in price fetch, and **three decisions the maintainer
+owns before it** — the largest being what to do about the agent's own
+connections to `api.anthropic.com` during a fully local turn, which last
+night's run measured and which no `warpctrl` change can close.
+
+**`HANDOFF-LOCALMODEL.md` is done** (2026-09-09) and is kept for its recipe:
+the agent line that points `claude-agent-acp` at a local runtime, and the
+census method. Its result is `runs/localmodel-panel-2026-09-09/`.
+
 ## docs/ — one page per surface, current truth
 
 Each opens with *as of <date>* and a state table, then how to use the thing,

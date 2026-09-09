@@ -8,6 +8,17 @@ Read `CLAUDE.md` first, as always. This file is the run, not the method.
 
 ---
 
+> **DONE 2026-09-09. Result: `.fork/runs/localmodel-panel-2026-09-09/`.**
+> Three of the four criteria held. The fourth fired the falsifier: Warp made
+> zero non-loopback connections, and the *agent's* process opened four TLS
+> connections to `api.anthropic.com` on every turn. What is still worth reading
+> here is the recipe — the agent line, the aliases, the census tools. What is
+> stale is the context figure implied by `serve.ps1`'s default: this repository
+> needs **`-Ctx 98304`**, not 12288, or the local model cannot answer at all.
+> The live handoff is `.fork/HANDOFF-SPECSFETCH.md`.
+
+---
+
 ## Why this is runnable from a phone today, when it was not yesterday
 
 Friction line **a7** (2026-09-09) said: *"the running Warp is the surface, so
