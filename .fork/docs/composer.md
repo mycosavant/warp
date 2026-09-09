@@ -1339,6 +1339,35 @@ pane, which follows the keyboard, so the first run photographed Sonnet's
 card five times under five highlights. `keys.ps1` knows the arrow keys
 now and the script walks the rows with them.
 
+**And since 2026-09-09 the prices can come off a public catalogue instead of
+the table (T21.4, `87d4d2049`).** `WARP_FORK_MODEL_PRICES=fetch` — off by
+default, refused unless the value is that word — makes one request per launch
+to OpenRouter's model list, cached under `fork::state_dir()`, and the line
+under the header then reads *"$5 in · $25 out per million tokens, list price
+from openrouter.ai, fetched 3 days ago"* instead of naming a date in the file.
+**The age is not decoration**: a fetched number has no date once it is in a
+file, and one that was true a season ago reads exactly like one that was true
+this morning.
+
+**The table did not go away and is not a fallback.** A row now names its
+catalogue `slug`, and the fetch fills that row's two numbers; the row still
+says what an agent's `opus` *is*, which no catalogue knows. What the fetch adds
+is the case the table was never going to serve: an agent whose model ids *are*
+catalogue slugs is priced with no row at all, which covers the 365 rows
+`opencode` hands over and every card that drew `?` in the run above. A slug the
+catalogue does not carry falls back to the row's own figures, so switching this
+on can add a price and cannot remove one.
+
+Two things measured against the live list the day it was built. The fetched
+prices match all four hand-written rows exactly, two days after a person typed
+them off the vendor's page. And every `anthropic/*` slug has a `:batch` twin at
+half price, one colon away and adjacent in the list, so the lookup is exact-
+match — a prefix rule would have drawn every Anthropic cost bar at half width
+and looked entirely plausible doing it.
+
+`gemma-4-12b` has a row too, from `.fork/runs/localmodel-panel-2026-09-09/`:
+zero in and out, so the cost bar is empty for the one honest reason.
+
 Not done on the card: the settings page's copy draws `LLMSpec` straight
 into a clamped bar, so an unknown there is an empty bar under the same
 honest header. The *Full Terminal Use* tab is still empty.

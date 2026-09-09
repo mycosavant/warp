@@ -366,6 +366,23 @@ upstream and rebasable.
 | `app/src/local_control/`, `crates/local_control/`, `crates/warp_cli/src/local_control/` | the `warpctrl` control plane, 115 actions. The count is pinned by **two** tests in different crates — update both, and never loosen either. **This line said 109 for two phases**: T11.2 took it to 110, T11.4 to 111, T11.5 to 114 and item 6's `agent.trace` to 115, and each updated the pins without updating this table. Read the count off the test, never off prose — and grep for `fn catalog_has_exactly`, because the test's own name embeds the number and so goes stale on exactly the schedule this warning is about. |
 | `app/src/remote_server/wsl_transport.rs`, `crates/remote_server/src/wsl.rs` | the second `RemoteTransport`: Warp's remote-development server, in a WSL distro instead of over SSH. |
 
+**Every request through `http_client::Client::get` tells the destination what
+this machine is, whoever the destination is.** Found 2026-09-09 while building
+the fork's first deliberate third-party request (T21.4). `include_warp_http_headers`
+returns `true` **unconditionally** on every non-wasm target — only the wasm
+branch asks whether the destination is Warp's — so `get`, `post` and every
+other verb attach the client id, the app version and four fields describing the
+operating system down to the Linux kernel version. In this fork the app version
+is `v0.fork.<sha>`, which names the commit the binary was built from.
+
+For Warp's own API that is correct and is what the headers are for. Anywhere
+else it is a fingerprint, and **nothing in a new module's diff shows it** —
+the disclosure is in a function the call site does not mention.
+`Client::get_without_warp_headers` is the one door that omits them; it still
+runs through `execute_inner`, so the egress policy sees it. Before adding any
+request to a host that is not Warp's, ask which of the two you want, and
+remember that the ordinary-looking one is the disclosing one.
+
 **The fork no longer talks to Warp's servers at all, and the two things that
 were stopping it were both accidents.** Closed 2026-09-04, from a question about
 why the About page reads `v#.##.###`.
@@ -610,6 +627,15 @@ same parser: a language server for a `\\wsl$\<distro>\...` workspace runs
 -- rust-analyzer`, and a routed buffer gets a path the LSP stack accepts. Set
 it off for upstream's Windows-side server over 9p. Built 2026-09-05, measured
 end to end the same night; `.fork/docs/wsl.md`, "Language servers, as built"),
+`WARP_FORK_MODEL_PRICES` (`fetch`, and nothing else — the parser is
+`WARP_FORK_REMOTE_APPROVE`'s, so a typo is simply not consent and costs a stale
+number. **The only variable that makes Warp's own HTTP client dial a host of
+Warp's choosing**: one request per launch to OpenRouter's public model list,
+which fills prices into the Model Specs card's existing id→row mapping and
+never replaces the mapping. Off by default. The deny-list is *not* the layer
+that decides this — `openrouter.ai` is on neither list and would pass without
+being considered — which is the general point about a deny-list stated as a
+switch. T21.4, `.fork/runs/pricefetch-2026-09-09/`),
 `WARP_FORK_FRAME_LOG` (`on`, or a threshold in ms — slow-frame accounting to
 the local log; **reach for this before theorising about why something feels
 slow**), `WARP_FORK_EVENT_LOG` (`on`, or a directory — one JSONL file per
@@ -1103,6 +1129,26 @@ refused, and the split is the argument rather than a convenience:
   reopens through bash exactly the hole that grant closes. Note also that
   `egress.rs` is **Warp's** HTTP client, not the agent's — so the agent's own
   API channel is an exfil path the deny-list does not cover.
+
+  **And the agent dials that channel even when the model is local, which was
+  measured twice and cannot be configured away by the obvious means.** During a
+  turn answered entirely by a `llama-server` on this machine,
+  `claude-agent-acp` opens a TLS connection to `api.anthropic.com` *before* it
+  opens the one to the model (2026-09-09, `.fork/runs/localmodel-panel-2026-09-09/`).
+  `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` does not remove it. Anthropic's
+  docs name exactly two things that variable does not cover — the WebFetch
+  domain safety check (`skipWebFetchPreflight`) and official marketplace
+  auto-install (`CLAUDE_CODE_DISABLE_OFFICIAL_MARKETPLACE_AUTOINSTALL`) — and
+  **the marketplace one was tested and is not it**
+  (`.fork/runs/pricefetch-2026-09-09/`). The WebFetch check is untested because
+  it fires only when WebFetch is used.
+
+  Two things worth carrying from that. **It reproduces with no Warp process at
+  all** — `warpctrl acp probe` inside the distribution shows the same
+  connection, so this is a fact about the agent and never about the panel, and
+  measuring it needs no GUI, no relaunch and four minutes. And **the fix, if
+  one is wanted, is not a `warpctrl` change**: it is a firewall rule or a
+  network namespace around the agent, which is a decision rather than a bug.
 - **`ls` and `wc` leak metadata and counts, not contents.** `wc -l
   ~/.ssh/id_ed25519` discloses that the file exists and is 27 lines. That is a
   real cost, and it is the one worth paying, because these two are precisely the
@@ -1480,12 +1526,61 @@ the command. And the sampler recorded the **maximum** single `rustc` RSS when
 the quantity that kills the VM is the **sum**; `MemAvailable` is what actually
 answered the question, and it was in the sampler by luck rather than design.
 
+**The instrument behind every number in this section counted `rust-analyzer` as
+a compiler, found 2026-09-09.** `.fork/tools/memsample.sh` selected processes
+with `ps -C rustc`, which on this procps is **not** an exact match — it also
+selects `rust-analyzer`, and one over this workspace holds **15-16.5 GB**. Every
+sample taken with an editor open added that to the totals and reported it as the
+heaviest single compiler. The fix is `ps -p $(pgrep -x rustc)`.
+
+The tell sat in the output for twenty minutes and was read past: rust-analyzer
+has no `--crate-name`, so its crate column reads `?`. **A row whose `max_crate`
+is `?` is not describing a compiler** — which is also why the rows above
+survive, since their peak sample names the `warp` crate and a rust-analyzer
+cannot.
+
+**Re-measured the same evening on a clean build with the corrected sampler, and
+the shape is the finding.** The `-j 8` parallel front — seven concurrent
+compilers — peaked at a **summed 3,287 MB**, heaviest single 911 MB. The `warp`
+crate then compiled **alone**, climbing 1.5 GB → **14,975 MB** over four minutes
+and still rising when the build was stopped, so that is a floor and not a peak.
+
+**The closest the machine came to the wall was while exactly one compiler was
+running**: `MemAvailable` bottomed at **8,198 MB** during the single-crate
+phase, against ~19,300 MB throughout the parallel one. So `-j 8` is not what
+stands between this build and the edge, and no value of `-j` would be — the
+ceiling is one crate that compiles by itself. What is still unmeasured is an
+*uncapped* front half: eight jobs averaged ~470 MB each here, and thirty-two of
+them together is the question the cap was actually chosen for.
+`.fork/runs/pricefetch-2026-09-09/memsample-fixed.tsv`.
+
 **The specific hazard to keep in view is not the VM's size, it is the host's.**
 Windows-side tests and builds draw on the same 64 GB, so an uncapped WSL build
 concurrent with a Windows build is the exact scenario that took the guest down —
 and it is the one case the extra guest headroom does not help with, because the
 pressure is one level up. Treat "am I building on both sides at once?" as the
 question, not "how much has WSL got?".
+
+**And that question has an answer you can run, which is the half this paragraph
+was missing until 2026-09-09.** A clean build was started that day on the
+strength of `free -m` *inside the guest* — 22 GB available, which reads as a
+green light — while the host was at **60 GB of 64**. The maintainer said so and
+that is how it was caught. The guest structurally cannot see the hazard; that
+is what makes it one. From inside WSL:
+
+```bash
+powershell.exe -NoProfile -Command "$os = Get-CimInstance Win32_OperatingSystem;
+  ($os.TotalVisibleMemorySize - $os.FreePhysicalMemory)/1MB"
+```
+
+Measured the same evening, after the build and the language server were killed:
+host 63.8 GB total, 43.6 used, `vmmemWSL` still holding **19.5 GB** it had not
+returned, and `llama-server` holding **10.2 GB** by design and permanently.
+Two consequences. WSL gives memory back slowly, so the host number lags what
+the guest freed, and a build started on a fresh `free -m` can be starting into
+an occupied host. And **the guest's own residents have to go first** — a 15 GB
+rust-analyzer beside a build is not merely pressure, it is a confound that
+makes the measurement meaningless even when the build finishes.
 
 **Cap the release build: `CARGO_BUILD_JOBS=8 cargo build --release …`.**
 Measured 2026-08-29 on WSL: an uncapped release build **took the whole VM down**

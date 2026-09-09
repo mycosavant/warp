@@ -95,8 +95,25 @@ Cost row, because the inline menu's height does not follow its details
 pane; the second is the one that counts.
 
 **Still open on this item:** the settings page's empty-bar-for-unknown; the
-*Full Terminal Use* tab; the fetch behind a switch, if the table goes stale
-often enough to matter. None is scheduled.
+*Full Terminal Use* tab. Both unscheduled.
+
+**T21.4, the fetch behind a switch, was built 2026-09-09**
+(`.fork/runs/pricefetch-2026-09-09/`) — not because the four rows went stale
+but because item 1 put 365 on offer and no hand-written table follows that.
+`WARP_FORK_MODEL_PRICES=fetch`, off by default, one request per launch to
+OpenRouter's public list, cached with its age in days on the card. **The
+mapping stays**: a row names its catalogue `slug` and the fetch fills that
+row's numbers, while an agent whose ids *are* slugs is priced with no row at
+all. The fetched prices matched all four hand-written rows exactly.
+
+Two things that ticket's own framing got wrong, corrected there and here. The
+fetch is **not** *"the fork's first outbound request to a party that is not the
+user's own agent"* — read plainly that claims the machine makes no third-party
+requests, and the agent's process makes many. It is the first host **Warp's own
+HTTP client** dials by Warp's own choice. And the table-versus-fetch row that
+said the deny-list *"would let it pass by default"* understated it: a deny-list
+does not consider an unlisted host at all, so the variable is the only consent
+in the design.
 
 #### The design, as written before the decision
 
@@ -223,7 +240,7 @@ Items, none started:
       search box is unmeasured: posted characters never reach it, so the
       instrument cannot type. The specs card draws `?` on every row, as
       designed for an id the table does not know; the fetch that would fill
-      365 rows is `.fork/next.html` item 4. One trap for the launch: a login
+      365 rows is T21.4, **built 2026-09-09**. One trap for the launch: a login
       shell started by `wsl.exe` has no nvm on its PATH, so name the agent by
       its absolute path or `initialize` closes the transport with nothing in
       the panel saying why.

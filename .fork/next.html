@@ -205,12 +205,35 @@
     </div>
   </article>
 
+  <article class="item" data-id="kode-rs">
+    <div class="rank">8</div>
+    <div class="body">
+      <div class="head"><h2>kode-rs as a third harness</h2><span class="status">recon done 2026-09-09 &middot; the maintainer's call</span></div>
+      <div class="meta"><span>raised by the maintainer</span><span><code>~/dev/kode-rs</code>, HEAD <code>7c0cbc5</code>, 2026-08-10</span></div>
+      <p>&ldquo;Another point of infra that we own.&rdquo; The fork's seam is agent-agnostic on purpose &mdash; <code>WARP_FORK_ACP_COMMAND</code> names a command and that is the whole switch &mdash; so a third agent costs no Warp code, and this one is the maintainer's own.</p>
+      <p><strong>Its ACP side is real and on the main branch</strong>, not only in a worktree: <code>crates/kode-engine/src/acp.rs</code>, 1,176 lines, a 210-line protocol test and a design doc. Hand-rolled v1 subset, no <code>agent-client-protocol</code> dependency, exposed as <code>kode-engine acp</code>. It handles <code>initialize</code>, <code>session/new</code>, <code>session/prompt</code> and <code>session/cancel</code>, and sends <code>session/update</code> and <code>session/request_permission</code> &mdash; the last being the one the fork's consent surface actually needs.</p>
+      <p><strong>What it does not have decides how much of this fork it lights up</strong>, and its own design doc is explicit about the omissions: no <code>session/load</code>, no <code>authenticate</code>, no <code>fs/*</code>, no mode or config-option updates. So permission requests would reach the panel and a paired phone; <code>WARP_FORK_ACP_MODE</code> would have nothing to set, which is fine because unset sends nothing; and <b>the model chip is dead</b> &mdash; no <code>configOptions</code>, no <code>session/set_config_option</code>. The specs card would draw <code>?</code>, which is what it is for. It already carries <code>kode-models/openrouter_catalog.rs</code> and <code>pricing.rs</code>, so it solved item 4's problem on its own side, independently.</p>
+      <p><strong>Not built and not run.</strong> A month stale, 58 GB on disk mostly target output, and the OpenAI Codex angle the maintainer raised alongside it (first-class third-party providers, likely better UX than <code>opencode</code>) is a separate question about which <em>agent</em> to name, not about Warp. The honest summary: the two missing methods are exactly the two the fork's newest work depends on, and both are small additions to a file that already speaks the protocol.</p>
+      <div class="gates"><span class="k">Before this becomes work</span><ul>
+        <li>Does it still build? A month stale against a moving toolchain is unmeasured.</li>
+        <li>Which question is being answered &mdash; &ldquo;an agent we control end to end&rdquo; or &ldquo;a better agent than opencode&rdquo;? Codex answers the second and not the first.</li>
+      </ul></div>
+    </div>
+  </article>
+
   <article class="item" data-id="clean-build">
     <div class="rank">7</div>
     <div class="body">
       <div class="head"><h2>The clean-build test of <code>-j 8</code></h2><span class="status">a quiet hour</span></div>
       <div class="meta"><span>GOAL standing constraint</span><span>30+ minutes, carries the risk it measures</span></div>
       <p>Two sampled builds measured the tail of the graph, where the app crate compiles alone at 15 to 17 GB, and neither was the many-large-crates front that took the guest down. The cap is <em>unresolved, not lifted</em> until a clean build is sampled the same way. It runs only when the maintainer says no Windows build is running, because the host's 64 GB is the quantity that matters and both sides draw on it.</p>
+      <p><strong>Attempted 2026-09-09, stopped part-way, and it is more open than before.</strong> <code>target/release</code> was wiped and the build started; two things went wrong. <b>The sampler was counting <code>rust-analyzer</code> as a compiler</b> &mdash; <code>ps -C rustc</code> is not an exact match on this procps, and a rust-analyzer over this workspace holds 15&ndash;16.5 GB. Corrected, the same moment read 2&ndash;3 GB across seven compilers, heaviest 847 MB.</p>
+      <p><strong>The corrected sampler then reached the app crate before the build was stopped, and it mostly answers this item.</strong> The <code>-j 8</code> front &mdash; seven concurrent compilers &mdash; peaked at a summed <b>3,287 MB</b>, heaviest single 911 MB. The <code>warp</code> crate then compiled <em>alone</em>, climbing to <b>14,975 MB</b> and still rising when killed. So the 15&ndash;17 GB figure above is <b>confirmed, not suspect</b> &mdash; and the doubt raised here an hour earlier was wrong, since a rust-analyzer reports <code>?</code> for its crate and that sample named <code>warp</code>. The real finding is the shape: <b><code>MemAvailable</code> bottomed at 8,198 MB while exactly one compiler was running</b>, against 19,300 MB through the parallel phase. <code>-j 8</code> is not what stands between this build and the wall, and no value of <code>-j</code> would be.</p>
+      <p>And the build should not have started: the check run was <code>free -m</code> <em>inside the guest</em>, which said 22 GB available, while the host was at <b>60 GB of 64</b>. The maintainer caught it. The precondition is now three things: read the host with <code>powershell.exe Get-CimInstance Win32_OperatingSystem</code>, kill the guest's own residents first (a 15 GB language server is a confound, not just pressure), and account for <code>llama-server</code>'s permanent 10.2 GB.</p>
+      <div class="gates"><span class="k">What this now has to answer</span><ul>
+        <li>The clean-build peak, on a corrected sampler &mdash; the original question.</li>
+        <li><b>An uncapped front half.</b> That is now the only part still unmeasured: eight jobs averaged ~470 MB each, and what thirty-two of them do together is the question the cap was actually chosen for.</li>
+      </ul></div>
     </div>
   </article>
 

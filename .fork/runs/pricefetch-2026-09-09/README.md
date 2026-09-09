@@ -262,9 +262,88 @@ on, and both are small additions to a file that already speaks the protocol.
 | `cargo check --workspace --all-targets` | see `gates.txt` |
 | `cargo test -p warp --lib acp_agent:: fork_tests` | see `gates.txt` |
 | `./script/format` | clean; one drive-by into `crates/remote_server/src/manager_tests.rs` reverted |
-| the clean-build test of `-j 8` (item 7) | `memsample.tsv`, its own section below |
+| the clean-build test of `-j 8` (item 7) | **started and abandoned**, section 7 |
 
 ---
+
+## 7. Item 7: started, abandoned, and it taught more than it would have measured
+
+The maintainer said yes, so `target/release` was wiped (68.3 GiB) and a clean
+`CARGO_BUILD_JOBS=8 cargo build --release --features gui,warp_control_cli`
+started under `.fork/tools/memsample.sh`. **It was stopped part-way and item 7
+stays open.** Two things went wrong, in this order.
+
+### The sampler was counting a language server as a compiler
+
+`memsample.sh` selected processes with `ps -C rustc`. On this procps that is
+**not** an exact match: it also selects `rust-analyzer`, which over this
+workspace holds **15–16.5 GB**. So for twenty minutes every sample added that
+to `sum_rss_mb`, reported `16098` as the heaviest single "compiler", and
+inflated `n_rustc` by one.
+
+Corrected mid-run to `ps -p $(pgrep -x rustc)`, the same moment read **2–3 GB
+across seven compilers, heaviest 847 MB** (`warp_graphql`).
+
+**The tell was in the output the whole time.** rust-analyzer has no
+`--crate-name`, so the crate column read `?` — and it read `?` on every row,
+for twenty minutes, while being copied into a summary. A row whose `max_crate`
+is `?` is not describing a compiler.
+
+`memsample-contaminated.tsv` is the bad stream, kept; `memsample-fixed.tsv` is
+the corrected one.
+
+**It does not invalidate the numbers in `CLAUDE.md`, and the first draft of
+this section said it might.** Those entries name the `warp` crate in their peak
+sample, and a rust-analyzer cannot supply a crate name — the `?` is exactly the
+discriminator. The doubt was raised here for an hour and is withdrawn.
+
+### And the corrected sampler reached the app crate, which mostly answers item 7
+
+Before the build was stopped it ran 31 corrected samples through both phases:
+
+| phase | what it held |
+|---|---|
+| the `-j 8` parallel front, 7 compilers | **summed 3,287 MB** at peak, heaviest single 911 MB (`tantivy`) |
+| the `warp` crate, **alone** | 1.5 GB → **14,975 MB** over four minutes, still climbing when killed |
+| lowest `MemAvailable` | **8,198 MB**, during the single-crate phase; ~19,300 MB throughout the parallel one |
+
+Two things follow. **`CLAUDE.md`'s 15-17 GB for the app crate is confirmed**,
+independently and on a corrected instrument. And **the closest this machine came
+to the wall was while exactly one compiler was running**, which is the opposite
+of the picture the cap was chosen against: `-j 8` is not what stands between
+this build and the edge, and no value of `-j` would be, because the ceiling is a
+single crate compiling by itself.
+
+What is still unmeasured is the *uncapped* front half. Eight jobs averaged
+~470 MB each here; thirty-two of them together is the question `-j 8` was
+actually chosen for, and it is the only part of item 7 left.
+
+### And the machine was at 60 GB of 64 while it ran
+
+The maintainer said so, which is how it was caught. Measured after the build
+and the language server were killed: host 63.8 GB total, 43.6 used, with
+`vmmemWSL` still holding 19.5 GB and `llama-server` permanently holding 10.2.
+Before the kills the WSL side was the bulk of ~60 GB.
+
+**The check that was run was `free -m` inside the guest**, which said 22 GB
+available and looked like a green light. `CLAUDE.md` names this exact error two
+paragraphs before the one that authorised the build: *"The specific hazard to
+keep in view is not the VM's size, it is the host's."* The guest cannot see the
+hazard; that is what makes it a hazard.
+
+So the precondition for item 7 is now three things, not one:
+
+1. **Read the host, not the guest** — `Get-CimInstance Win32_OperatingSystem`
+   from `powershell.exe`, which works from inside WSL.
+2. **Clear the guest's own residents first.** A 15 GB rust-analyzer beside the
+   build is not just pressure, it is a confound that would have made the
+   result meaningless even if the build had finished.
+3. **Account for `llama-server`'s 10.2 GB**, which is resident by design and
+   is not going anywhere.
+
+`target/release` is now empty and the WSL release binary is gone. Nothing
+depends on it — the maintainer's running Warp is the Windows build — and the
+next `build.sh` restores it.
 
 ## Files
 
@@ -277,3 +356,6 @@ on, and both are small additions to a file that already speaks the protocol.
 | `phonehome-probe-head.txt` | the agent's own `initialize` reply, version read off the wire |
 | `optout-probe.sh` | the probe-plus-census script, kept because it needs no Warp |
 | `gates.txt` | the test and check output |
+| `memsample-contaminated.tsv` | the sampler's output while it was counting `rust-analyzer` as a compiler; every row's `max_crate` is `?` |
+| `memsample-fixed.tsv` | the corrected sampler, same build: 2-3 GB across seven compilers where the other file says 20 |
+| `cleanbuild.sh`, `cleanbuild.txt` | the abandoned clean build and its log |

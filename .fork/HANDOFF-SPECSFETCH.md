@@ -1,5 +1,20 @@
 # Handoff: the specs card's fetch, and three decisions from the night before
 
+> **Run to completion 2026-09-09. Do not run it again** —
+> `.fork/runs/pricefetch-2026-09-09/` is the account, `87d4d2049` the commit.
+> All three decisions were answered by the maintainer before any code. Item 4
+> is built and item 7 was run.
+>
+> **Two things in this file are wrong and the run README says why.** Decision
+> 1's *"`CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` does not remove them"* is
+> true but its implied conclusion is not: two things are documented as exempt
+> from that variable, and one of them was tested and excluded, so the phrasing
+> *"Claude Code classifies whatever this is as essential"* was a guess wearing
+> a measurement's clothes. And *"the fork's first outbound request to a party
+> that is not the person's own agent"* reads as a claim about the machine and
+> is false — it is the first host **Warp's own HTTP client** dials by Warp's
+> own choice.
+
 **Written 2026-09-09, after `.fork/runs/localmodel-panel-2026-09-09/`. Paste-target:
 start a new session and say *"read `.fork/HANDOFF-SPECSFETCH.md` and run it to
 completion"*.**
