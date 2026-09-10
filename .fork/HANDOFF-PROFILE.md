@@ -147,9 +147,17 @@ describing a compiler** — see the traps.
   profile with `-Console`, console on the tailnet bind
   `https://100.82.213.46:41234`. Relaunched at 19:51 after the previous one was
   found down.
-- **`llama-server`** on `127.0.0.1:8080`, `gemma-4-12b`, `-Ctx 98304`, holding
-  **10.2 GB** of VRAM and of the host's RAM. It is resident by design; count it
-  in every memory budget. `Get-Process llama-server | Stop-Process` frees it.
+- **`llama-server`** on `127.0.0.1:8080`, `gemma-4-12b`, `n_ctx_slot = 98304`,
+  holding **10.2 GB** of VRAM and of the host's RAM. It is resident by design;
+  count it in every memory budget. `Get-Process llama-server | Stop-Process`
+  frees it, and `ps1 -File 'C:\dev\llama\serve.ps1'` restores it — the
+  context default was raised to 98304 on 2026-09-09, so no `-Ctx` argument is
+  needed any more.
+
+  **Check it is actually up before trusting the four small AI features.** It
+  died silently once on 2026-09-09 with no crash line in its own log and no
+  cause established, and nothing in Warp announces its absence:
+  `curl -s -m 5 http://127.0.0.1:8080/v1/models`.
 
 ---
 
