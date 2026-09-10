@@ -6,7 +6,16 @@
 #   echo '<toml block>' | .fork/tools/profile-variant.sh <name> <outdir>
 #
 # The block is spliced into Cargo.toml between two markers, so a variant is one
-# heredoc and never a hand edit.
+# heredoc and never a hand edit. **The markers are not in Cargo.toml** -- the
+# 2026-09-09 sweep removed them when it applied its answer, so before reusing
+# this, put these two lines back where the variant block should go:
+#
+#     # >>> profile-sweep
+#     # <<< profile-sweep
+#
+# The script asserts they are there and stops if they are not, which is the
+# behaviour you want: a splice that silently no-ops gives you a clean build,
+# no error, and a variant identical to the baseline.
 #
 # TWO instruments, because the first one is not good enough on its own:
 #
