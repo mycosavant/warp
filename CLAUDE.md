@@ -1554,6 +1554,47 @@ ceiling is one crate that compiles by itself. What is still unmeasured is an
 them together is the question the cap was actually chosen for.
 `.fork/runs/pricefetch-2026-09-09/memsample-fixed.tsv`.
 
+**And every number above is a 10-second sampler's, so every one of them is
+low.** Measured 2026-09-09, ten builds, `.fork/runs/profile-2026-09-09/`.
+Adjacent ticks near the app crate's peak swing 1.7 GB, so where the sampler
+lands decides the answer: two readings of *the same build* gave 15,587 MB and
+14,978 MB. **The exact peak is 15,809 MB**, and it comes from `/usr/bin/time
+-v`, which reports the heaviest single descendant's RSS out of
+`getrusage(RUSAGE_CHILDREN)` with no sampling window at all — calibrated three
+levels deep against a program allocating a known 700 MB. Two identical
+baselines under it agreed to **6 MB** and produced byte-identical binaries. Use
+it for anything comparing one build to another; `memsample.sh` is still what
+gives the *sum* across compilers and the `MemAvailable` trace, and it takes
+`MEMSAMPLE_INTERVAL` now.
+
+**The app crate is bounded since 2026-09-09, and it took two lines.**
+`[profile.release.package.warp]` in the root `Cargo.toml` sets `debug = 0` and
+`codegen-units = 64`: **15,809 MB → 11,342 MB (−28.3%)**, 378 s → 305 s, and a
+binary 125 MB smaller. `opt-level = 2` (−567 MB) and `split-debuginfo =
+"unpacked"` (−359 MB, and it moved 45 KB of a 777 MB binary) were measured and
+refused. The argument for all four is in `Cargo.toml` beside the block, at
+length, because the next person to read a two-line profile override will
+otherwise assume it was guessed.
+
+Three things from it worth having outside that comment. **`debug = 0` on a
+*package* costs less than it reads** — `readelf` on the result shows full line
+tables for every dependency crate and **zero entries for `app/src`**, so a
+backtrace loses file/line in the app crate and keeps it everywhere else.
+**`codegen-units = 64`'s runtime cost is unmeasured**, and it is the first line
+to remove if a regression ever appears in the app crate; `debug = 0` alone
+still holds 2,302 MB of the 4,467. And **a per-package profile override cannot
+be delivered by an environment variable, silently**:
+`CARGO_PROFILE_RELEASE_PACKAGE_warp_DEBUG=0` is ignored with no error and rustc
+still gets `-C debuginfo=1`, while the whole-profile `CARGO_PROFILE_RELEASE_DEBUG=0`
+works and reaches every crate in the graph, so toggling it costs a full rebuild
+instead of one crate.
+
+**None of which is the largest lever available.** The same crate had 22,795 MB
+of headroom with no `rust-analyzer` resident and 8,198 MB with one. Killing an
+editor's language server is worth 14.6 GB — three times the whole profile
+sweep — so kill it before measuring anything, and report any profile saving
+against that or it will look better than it is.
+
 **The specific hazard to keep in view is not the VM's size, it is the host's.**
 Windows-side tests and builds draw on the same 64 GB, so an uncapped WSL build
 concurrent with a Windows build is the exact scenario that took the guest down —

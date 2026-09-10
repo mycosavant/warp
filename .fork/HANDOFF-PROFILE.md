@@ -1,5 +1,20 @@
 # Handoff: bound the app crate, and the four open threads behind it
 
+> **The run is done, 2026-09-09.** `[profile.release.package.warp]` with
+> `debug = 0` and `codegen-units = 64`: **15,809 MB → 11,342 MB (−28.3%)**,
+> 378 s → 305 s, binary −125 MB. Applied, with the argument in `Cargo.toml`.
+> `opt-level = 2` and `split-debuginfo = "unpacked"` were measured and refused.
+> Full account in `.fork/runs/profile-2026-09-09/README.md`; the answer is
+> folded into the decision file this handoff pointed at.
+>
+> **Its baseline was wrong and the run's first act was to catch that.** The
+> 15,587 MB below is a 10-second sampler's reading of a peak whose adjacent
+> ticks swing 1.7 GB. Read §1 of the run README before trusting any memory
+> number in this file.
+>
+> **The four threads at the bottom are still open** and are why this file is
+> kept rather than deleted.
+
 **Written 2026-09-09, after `.fork/runs/pricefetch-2026-09-09/`. Paste-target:
 start a new session and say *"read `.fork/HANDOFF-PROFILE.md` and run it to
 completion"*.**

@@ -450,6 +450,52 @@ debug = 1
 # Force the rust compiler to create a dSYM. Starting in 1.53 the default on MacOS is "unpacked".
 split-debuginfo = "packed"
 
+# Bound the `warp` crate, which is the only thing in this workspace that comes
+# close to the wall: it compiles ALONE for most of a warm release build and a
+# single rustc on it held 15,809 MB (measured 2026-09-09, exact peak from
+# getrusage, not a sampler). `-j` cannot touch that -- the parallel front of
+# the same build peaks at a summed 3.3 GB across seven compilers. See
+# .fork/decisions/2026-09-09-the-j-cap-is-not-what-holds-the-line.md.
+#
+# Together these two take the peak to 11,342 MB (-28.3%) and the build to
+# 305s (-19%), and shrink the binary by 125 MB. Measured against a 6 MB
+# noise floor -- two identical builds agreed to 6 MB and produced
+# byte-identical binaries -- so every number here is well outside it.
+#
+# `debug = 0` costs less than it reads. [profile.release]'s own comment
+# justifies keeping line tables to "symbolicate panics and Sentry stack
+# traces", and this fork force-disables Sentry (app/src/fork.rs). What is
+# left is local panic backtraces, and a PACKAGE override reaches only this
+# crate: the binary still carries full line tables for every dependency
+# (verified with readelf -- crates/warpui_core, crates/warp_core,
+# crates/warp_terminal and the rest are all still there), and zero entries
+# for app/src. So a backtrace loses file/line for app/src frames and keeps
+# it everywhere else. Worth 2,302 MB and 133 MB of binary.
+#
+# `codegen-units = 64` (default 16) is smaller LLVM modules. The curve is
+# 16 -> 32 -> 64 -> 256 saving 0 / 2,221 / 2,933 / 3,199 MB while the binary
+# grows 778 -> 785 -> 792 -> 811 MB, so 64 is the knee. Its cost is less
+# cross-unit optimization IN THIS CRATE ONLY, and that is UNMEASURED. The
+# argument that it is cheap is that the hot code is not here: upstream's own
+# [profile.dev.package] raises opt-level for warp_terminal, ttf-parser and
+# the rest, never for `warp`, which is wiring. If a runtime regression ever
+# shows up in the app crate, this line is the first thing to try removing.
+#
+# Two levers were measured and REJECTED. `opt-level = 2` saved 567 MB and
+# cost runtime; `split-debuginfo = "unpacked"` saved 359 MB and moved 45 KB
+# of a 777 MB binary, so it is close to inert on Linux -- the current
+# "packed" is a macOS setting and stays one.
+#
+# This cannot be delivered by environment variable.
+# CARGO_PROFILE_RELEASE_PACKAGE_warp_DEBUG=0 is **silently ignored** -- no
+# error, rustc still gets -C debuginfo=1 (calibrated on a scratch crate).
+# The whole-profile CARGO_PROFILE_RELEASE_DEBUG=0 does work and is the wrong
+# tool: it reaches every crate and invalidates the entire graph, so toggling
+# it costs a full rebuild instead of one crate.
+[profile.release.package.warp]
+debug = 0
+codegen-units = 64
+
 [profile.dev]
 # Use line-tables-only to speed up dev builds. Change to `debug = true` if you
 # need full debuginfo for step-through debugging (gdb/lldb).

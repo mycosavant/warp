@@ -29,6 +29,12 @@
 # rust-analyzer has no `--crate-name`, so it reports its crate as `?`. **A row
 # whose `max_crate` is `?` is not describing a compiler.**
 out="$1"
+# Sample interval in seconds. The default 10 under-reads a jagged peak: two
+# runs of the same app-crate compile, 372s and 373s, reported 15,587 MB and
+# 14,978 MB purely from where the ticks landed (2026-09-09). For anything
+# comparing one build against another, set this to 2 and read the exact
+# single-process peak from `/usr/bin/time -v` instead.
+interval="${MEMSAMPLE_INTERVAL:-10}"
 echo -e "epoch\tn_rustc\tsum_rss_mb\tmax_rss_mb\tmax_crate\tavail_mb\tswap_used_mb" > "$out"
 while pgrep -x cargo >/dev/null || pgrep -x rustc >/dev/null; do
   n=$(pgrep -x rustc | wc -l)
@@ -52,5 +58,5 @@ while pgrep -x cargo >/dev/null || pgrep -x rustc >/dev/null; do
   avail=$(awk '/MemAvailable/{print int($2/1024)}' /proc/meminfo)
   swap=$(awk '/SwapTotal/{t=$2}/SwapFree/{f=$2}END{print int((t-f)/1024)}' /proc/meminfo)
   printf '%s\t%s\t%s\t%s\t%s\n' "$(date +%s)" "$n" "$line" "$avail" "$swap" >> "$out"
-  sleep 10
+  sleep "$interval"
 done
