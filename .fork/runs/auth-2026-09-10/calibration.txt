@@ -1,0 +1,35 @@
+########## 1. key on the advertised list instead of the error code
+test ai::acp_agent::auth::tests::an_agent_that_names_no_way_to_sign_in_says_that_instead_of_listing_nothing ... ok
+test ai::acp_agent::auth::tests::a_method_with_no_description_is_rendered_without_a_trailing_colon ... ok
+test ai::acp_agent::auth::tests::a_credential_refusal_quotes_the_agent_and_lists_what_it_named ... ok
+test ai::acp_agent::auth::tests::the_credential_refusal_explains_itself_without_protocol_jargon ... ok
+test ai::acp_agent::auth::tests::the_two_credential_arms_are_distinguishable ... ok
+test ai::acp_agent::auth::tests::an_agent_that_words_it_its_own_way_is_quoted_not_normalised ... ok
+test ai::acp_agent::auth::tests::a_refusal_that_is_not_about_a_credential_gets_no_credential_advice ... FAILED
+test ai::acp_agent::auth::tests::the_measured_control_is_left_to_the_explainer_that_owns_it ... FAILED
+test result: FAILED. 6 passed; 2 failed; 0 ignored; 0 measured; 7192 filtered out; finished in 0.00s
+error: test failed, to rerun pass `-p warp --lib`
+########## 2. the second arm returns the first arm's text
+test ai::acp_agent::auth::tests::a_method_with_no_description_is_rendered_without_a_trailing_colon ... ok
+test ai::acp_agent::auth::tests::a_credential_refusal_quotes_the_agent_and_lists_what_it_named ... ok
+test ai::acp_agent::auth::tests::the_credential_refusal_explains_itself_without_protocol_jargon ... ok
+test ai::acp_agent::auth::tests::an_agent_that_names_no_way_to_sign_in_says_that_instead_of_listing_nothing ... FAILED
+test ai::acp_agent::auth::tests::a_refusal_that_is_not_about_a_credential_gets_no_credential_advice ... ok
+test ai::acp_agent::auth::tests::the_measured_control_is_left_to_the_explainer_that_owns_it ... ok
+test ai::acp_agent::auth::tests::an_agent_that_words_it_its_own_way_is_quoted_not_normalised ... ok
+test ai::acp_agent::auth::tests::the_two_credential_arms_are_distinguishable ... ok
+test result: FAILED. 7 passed; 1 failed; 0 ignored; 0 measured; 7192 filtered out; finished in 0.00s
+error: test failed, to rerun pass `-p warp --lib`
+########## 3. stop naming the variable that does not exist yet
+test ai::acp_agent::auth::tests::an_agent_that_names_no_way_to_sign_in_says_that_instead_of_listing_nothing ... ok
+test ai::acp_agent::auth::tests::a_refusal_that_is_not_about_a_credential_gets_no_credential_advice ... ok
+test ai::acp_agent::auth::tests::a_method_with_no_description_is_rendered_without_a_trailing_colon ... ok
+test ai::acp_agent::auth::tests::the_measured_control_is_left_to_the_explainer_that_owns_it ... ok
+test ai::acp_agent::auth::tests::an_agent_that_words_it_its_own_way_is_quoted_not_normalised ... ok
+test ai::acp_agent::auth::tests::the_two_credential_arms_are_distinguishable ... ok
+test ai::acp_agent::auth::tests::a_credential_refusal_quotes_the_agent_and_lists_what_it_named ... FAILED
+test ai::acp_agent::auth::tests::the_credential_refusal_explains_itself_without_protocol_jargon ... ok
+test result: FAILED. 7 passed; 1 failed; 0 ignored; 0 measured; 7192 filtered out; finished in 0.00s
+error: test failed, to rerun pass `-p warp --lib`
+########## restored, diff against HEAD's working copy should be empty
+identical

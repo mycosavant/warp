@@ -112,7 +112,7 @@
       <li><small>gate</small>A model runtime inside the distribution. <em>Needs a say-so: it is an install.</em></li>
       <li><small>done</small>A local model answers the panel. <em>It does; Warp held loopback only, and the agent's own process did not.</em></li>
       <li><small>done</small>The specs card for a list the table cannot hand-cover: the fetch, opt-in, off. <em>430 rows, and it agrees with the four hand-written ones exactly.</em></li>
-      <li><small>day 2</small><code>authenticate</code> for Codex and Gemini: the refusal disclosed now, the send when a credential exists.</li>
+      <li><small>half done</small><code>authenticate</code> for Codex and Gemini: the refusal is disclosed, in the agent's words and on the agent's own error code. <em>The send waits on a credential, and the credential is the maintainer's.</em></li>
       <li><small>between builds</small>Housekeeping that recurs: the record that outlives the process, the websocket check, the cron line, the stale boxes.</li>
       <li><small>a quiet hour</small>The clean-build test of <code>-j 8</code>. <em>Only when no Windows build runs.</em></li>
     </ol>
@@ -181,9 +181,11 @@
   <article class="item" data-id="auth">
     <div class="rank">5</div>
     <div class="body">
-      <div class="head"><h2><code>authenticate</code>, disclosed now and sent later</h2><span class="status">open</span></div>
-      <div class="meta"><span>handoff: <code>.fork/HANDOFF-AUTH.md</code></span><span>T21.3d</span><span>run: <code>.fork/runs/acp-survey-2026-09-07/</code></span></div>
-      <p>Codex and Gemini both answer <code>initialize</code> with <code>authMethods</code> and refuse <code>session/new</code> without one; the fork never sends <code>authenticate</code>. Half of this needs no credential: when <code>session/new</code> is refused and the agent listed methods, the panel says so in the agent's words and names the variable. The other half, sending the method <code>WARP_FORK_ACP_AUTH</code> names, is a small addition measured only when a credential exists, and the credential is the maintainer's to supply or decline. Choosing the method is not Warp's, for the reason <code>WARP_FORK_ACP_MODE</code> has no default.</p>
+      <div class="head"><h2><code>authenticate</code>, disclosed now and sent later</h2><span class="status">half 1 done 2026-09-10</span></div>
+      <div class="meta"><span>T21.3d</span><span>run: <code>.fork/runs/auth-2026-09-10/</code></span><span>survey: <code>.fork/runs/acp-survey-2026-09-07/</code></span></div>
+      <p>Codex and Gemini both answer <code>initialize</code> with <code>authMethods</code> and refuse <code>session/new</code> without one; the fork never sends <code>authenticate</code>. <b>The half that needs no credential shipped 2026-09-10</b> as <code>app/src/ai/acp_agent/auth.rs</code>: the refusal is quoted in the agent's own words, its own list of ways in is rendered from the wire with id, name and description, and the sentence names <code>WARP_FORK_ACP_AUTH</code> as a variable that does not exist yet &mdash; naming is not parsing, and a variable that is read and does nothing would be worse than one that is absent.</p>
+      <p><b>It keys on the error code, not on the advertised list, and that is a change from the handoff.</b> Measured on the wire the same day, because <code>warpctrl acp probe</code> prints an <code>Error</code>'s <code>Display</code> and drops the code: <b>both agents send <code>-32000</code></b>, <code>ErrorCode::AuthRequired</code>, Gemini included, whose message is its own prose. The rule the handoff proposed &mdash; advertised methods plus a refusal &mdash; is right three times out of three on this machine and still wrong, because <code>initialize</code> is answered before the agent has seen the request: Codex names all three methods whether or not a key is set. The first <code>session/new</code> failure after a credential arrives here is the WSL cwd one, and that rule would answer it with <em>&ldquo;sign in&rdquo;</em>. The control is in the run: <code>claude-agent-acp</code> 0.73.0, signed in, <code>-32602</code>, <code>authMethods: []</code>.</p>
+      <p><b>Half 2 &mdash; sending the method &mdash; is unbuilt and is the maintainer's.</b> Choosing a method id is choosing where a credential comes from, which is not Warp's for the reason <code>WARP_FORK_ACP_MODE</code> has no default, and there is no credential on this machine, so its success criterion would be <em>&ldquo;it compiles&rdquo;</em>.</p>
     </div>
   </article>
 

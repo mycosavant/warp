@@ -169,9 +169,11 @@ describing a compiler** — see the traps.
   context default was raised to 98304 on 2026-09-09, so no `-Ctx` argument is
   needed any more.
 
-  **Check it is actually up before trusting the four small AI features.** It
-  died silently once on 2026-09-09 with no crash line in its own log and no
-  cause established, and nothing in Warp announces its absence:
+  **Check it is actually up before trusting the four small AI features.**
+  ~~It died silently once on 2026-09-09~~ — corrected 2026-09-10: it did not
+  die, the maintainer stopped it, both that time and the next. The durable
+  half is unchanged and is the reason to run the check: nothing in Warp
+  announces its absence, whoever caused it.
   `curl -s -m 5 http://127.0.0.1:8080/v1/models`.
 
 ---

@@ -73,12 +73,32 @@
 //!
 //! # Also not done
 //!
-//! **A second turn is refused**, honestly and out loud, because every turn starts
-//! a fresh session and an agent with no memory of the conversation above it is
-//! worse than no answer. See [`Turn::from_request`].
+//! **Two sentences here were true when they were written and stopped being
+//! true beside code added in this same module**, found 2026-09-10 by asking the
+//! question `CLAUDE.md` says to ask of any file being edited. They are
+//! corrected rather than deleted, because what they used to say is the design
+//! that was tried.
 //!
-//! `/compact` (the protocol has no compaction), model selection, attachments,
-//! MCP context, and Warp's own tools. Those fall through untouched.
+//! **A second turn is refused for an agent that cannot resume one**, honestly
+//! and out loud, because an agent with no memory of the conversation above it
+//! is worse than no answer. This said *every* second turn until T14.7 gave the
+//! agents that declare `loadSession` a `session/load`; [`cannot_resume`]'s own
+//! doc records that correction twenty lines below, and this paragraph did not.
+//!
+//! **Model selection is done** (T14.14, 2026-09-07): the agent's own
+//! `config_options` become the panel's list, the pick rides `params.model`, and
+//! it is re-sent every turn because a resumed session reports one model and
+//! runs it until told otherwise. See [`model`]. This paragraph listed it as
+//! falling through untouched for three days after that shipped.
+//!
+//! **Authentication is half done, deliberately** (T21 item 5): a `session/new`
+//! refused because the agent wants a credential is explained, in the agent's
+//! own words and with the agent's own list of ways in. Warp never sends
+//! `authenticate` and holds no credential — see [`auth`] for why choosing a
+//! method is not Warp's to do.
+//!
+//! Still untouched, and falling through: `/compact` (the protocol has no
+//! compaction), attachments, MCP context, and Warp's own tools.
 //!
 //! **The agent's process inherits Warp's working directory**, because
 //! `AcpAgentConfig` carries a command, args and env and no cwd. The *session*
@@ -101,6 +121,7 @@
 //! configuration works — but nothing here may imply otherwise either, which is
 //! the T14.3 rule. See `.fork/tickets/` T14.6.
 
+pub(crate) mod auth;
 pub(crate) mod liveness;
 pub(crate) mod mode;
 pub(crate) mod model;
@@ -632,10 +653,49 @@ async fn exchange(
             let config_options;
             let session_id = match resume {
                 None => {
-                    let opened = connection
+                    // **A `match` rather than `?`, for the reason the resume
+                    // arm below is one, plus one this arm has to itself.** `?`
+                    // hands the failure to `spawn_failure_or`, which sees an
+                    // `Error`'s `Display` -- its `message` alone. The fact that
+                    // decides whether this was a credential refusal is the
+                    // `code`, and `Display` drops it. Gemini is the case that
+                    // makes that matter: its message is its own prose and its
+                    // code is the protocol's `-32000` (`auth`).
+                    let opened = match connection
                         .send_request(NewSessionRequest::new(cwd))
                         .block_task()
-                        .await?;
+                        .await
+                    {
+                        Ok(opened) => opened,
+                        Err(error) => {
+                            match auth::refused_for_a_credential(
+                                &program,
+                                error.code,
+                                &error.message,
+                                &hello.auth_methods,
+                            ) {
+                                Some(sentence) => {
+                                    // Before the return, for the reason
+                                    // `mode::Decision` logs before its own
+                                    // refusal: the turn that did not run is the
+                                    // one a later reader is asking about.
+                                    auth::log(
+                                        &conversation_id,
+                                        &program,
+                                        &cwd_text,
+                                        &error.message,
+                                        &hello.auth_methods,
+                                    );
+                                    return Err(anyhow!(sentence).into());
+                                }
+                                // Handed back untouched. `spawn_failure_or`
+                                // owns the non-credential failures and has a
+                                // better answer than anything this arm could
+                                // write -- it is what names the WSL boundary.
+                                None => return Err(error),
+                            }
+                        }
+                    };
                     advertised = opened.modes.clone();
                     config_options = opened.config_options.clone();
                     opened.session_id
