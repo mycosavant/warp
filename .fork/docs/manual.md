@@ -4590,8 +4590,17 @@ in no conflict at all.
 Weekly, from your own crontab (`crontab -e`) — 9am Mondays:
 
 ```cron
-0 9 * * 1 /home/effatha/git/warp/.fork/tools/drift-check.sh >> $HOME/.local/state/warp-fork/drift.log 2>&1
+0 9 * * 1 mkdir -p $HOME/.local/state/warp-fork && /home/effatha/git/warp/.fork/tools/drift-check.sh >> $HOME/.local/state/warp-fork/drift.log 2>&1
 ```
+
+**The `mkdir` is not belt-and-braces, and this recipe carried the version
+without it until 2026-09-10.** The script creates that directory itself
+(`drift-check.sh:56`), but a redirection is opened by the shell *before* the
+command runs, so on a machine where the directory does not exist yet the append
+fails, the script never starts, and there is no log to notice its absence in.
+Found by installing the line and then looking: the directory was missing, and
+`cron` here has no MTA to complain to. Verified after the fix by running the
+exact line — exit 0, and the report in the file.
 
 `cron` runs here under systemd, so this fires whenever WSL is up. When WSL is
 down at the appointed hour the run is simply missed, and the report says so on

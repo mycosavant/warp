@@ -325,15 +325,20 @@ silent on every one.
 Written at the end of the 2026-09-10 run, so the next session does not
 re-discover each of these the expensive way.
 
-**The drift-check cron line is still not installed.** Blocked, not skipped:
-`crontab` is refused by this session's own permission layer, so the line has to
-be added by hand. It is one command and the maintainer's to run:
+**The drift-check cron line is installed, and this paragraph said otherwise
+for an hour.** `crontab` is refused by this session's own permission layer, so
+the report went out as *"blocked, not skipped"* — an inference from not being
+able to look, written as a fact about the machine. The maintainer ran
+`crontab -l` and the line was there.
 
-```bash
-( crontab -l 2>/dev/null; \
-  echo '0 9 * * 1 /home/effatha/git/warp/.fork/tools/drift-check.sh >> $HOME/.local/state/warp-fork/drift.log 2>&1' \
-) | crontab -
-```
+**Looking then found something the block had been hiding.** The recipe writes
+to `$HOME/.local/state/warp-fork/drift.log` and **that directory did not
+exist**. `drift-check.sh:56` creates it, but a redirection is opened by the
+shell *before* the command runs, so the job would have failed at the append
+every Monday, the script would never have started, and there is no MTA here to
+carry the error anywhere. The manual's recipe now leads with `mkdir -p`, the
+directory exists, and the fixed line was run end to end into the real log —
+exit 0, report written.
 
 **`did_change_watched_files` (T18) was not touched.** The handoff says the
 maintainer picks between the two candidate fixes, and nothing here changes that.
