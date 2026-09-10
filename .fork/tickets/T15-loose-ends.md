@@ -37,11 +37,28 @@
       synthesised, so the claim that Return means yes rests on Claude Code's
       documentation rather than on this fork having watched one. The cheapest
       check is answering one real prompt with `warpctrl agent approve`.
-- [ ] **The discovery record that outlives the process.** Across three clean
-      `warpctrl window close` shutdowns during T11.5 the discovery record and
-      broker socket were left in the scratch directory with no process alive —
-      which contradicts `CLAUDE.md`'s claim that ordinary shutdown cleans both.
-      Unbisected. Nothing in T11.5 touches discovery.
+- [x] **The discovery record that outlives the process — bisected 2026-09-10,
+      and it outlives the *scan*.** A specimen was already on disk:
+      `~/.warp/local-control/` held a record and broker socket written
+      2026-08-28, naming a pid that had been dead for thirteen days. One
+      `env -u XDG_RUNTIME_DIR warpctrl instance list` removed both immediately.
+      `discovery_dir()` answers `$XDG_RUNTIME_DIR/warp/local-control` when that
+      variable is set and `$HOME/.warp/local-control` when it is not, so **one
+      user on one machine has two registries** and the environment a process was
+      launched from decides which. The pruner does exactly what `CLAUDE.md` says,
+      on every scan, in the directory it was given — and nothing had ever given
+      it that one.
+
+      The litter is not the cost. The same split makes a *running* Warp
+      registered in one directory invisible to `warpctrl` in the other, which
+      showed as `no_instance` for a Warp alive on screen. That message now names
+      the directory it searched and the variable that decides it (`242592160`).
+
+      **Two things this did not settle**, kept here rather than assumed away:
+      whether it is the cause of T11.5's three shutdowns, which were in a scratch
+      directory and were not re-run; and T13.1's guess that the split is whether
+      an instance ran agents, which is neither supported nor refuted — two
+      launches in one shell share an environment. `.fork/runs/discovery-2026-09-10/`.
 - [ ] **`kode-engine` and Tusk's pure cores extracted as MIT/Apache crates**
       (§10 step 1). Not work in this repo, but a *dependency* of T13 and of any
       later migration, and §12 forbids the migration until it is done.

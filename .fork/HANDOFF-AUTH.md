@@ -1,5 +1,14 @@
 # Handoff: the auth disclosure, the housekeeping, and three decisions that are not yours
 
+> **RUN 2026-09-10. Spent — do not run this again.** Part 1 shipped
+> (`79b3d2deb`, `.fork/runs/auth-2026-09-10/`) and part 2's top item is bisected
+> and fixed (`242592160`, `.fork/runs/discovery-2026-09-10/`). What is left of
+> part 2 is listed under *"What this run did not do"* at the bottom, and every
+> item there is either the maintainer's or blocked on something this session
+> could not do. **The handoff's proposed rule for part 1 was wrong** and the run
+> says why — it is kept below unedited so the correction has something to point
+> at.
+
 **Written 2026-09-10, after `.fork/runs/profile-2026-09-09/`. Paste-target:
 start a new session and say *"read `.fork/HANDOFF-AUTH.md` and run it to
 completion"*.**
@@ -32,8 +41,8 @@ this file. Do not run one of them because it was the first file you opened.
 | 2 · a model runtime reachable from both sides | done 2026-09-07 |
 | 3 · a local model answers the panel | done 2026-09-09 |
 | 4 · the specs card's fetch | done 2026-09-09, `87d4d2049` |
-| 5 · `authenticate`, disclosed now and sent later | **open — this run** |
-| 6 · housekeeping that has recurred | **open — the second half of this run** |
+| 5 · `authenticate`, disclosed now and sent later | **half 1 done 2026-09-10**, `79b3d2deb`. Half 2 is the maintainer's |
+| 6 · housekeeping that has recurred | **T15 done 2026-09-10**, `242592160`. The other three are below |
 | 7 · the clean-build test of `-j 8` | one part left, and it is a decision |
 | 7b · bound the `warp` crate | **done 2026-09-09**, `c25c8fbc2`, −28.3% |
 | 8 · kode-rs as a third harness | recon done, the maintainer's call |
@@ -167,10 +176,13 @@ evening; none needs the desk. **Do these between builds, not instead of part 1.*
   authority). Its `app_version` is `v0.fork.2e1552fc0` — **eleven commits behind
   `dev`**, because `C:\dev\warp` is a separate checkout nothing syncs.
 
-- **`llama-server` is DOWN.** Second silent disappearance in two days, and
-  `c26879b66` already recorded the first: no crash line, no cause, and
-  `C:\dev\llama` contains **no log file at all**, so there is nothing to read.
-  Nothing in Warp announces its absence. **The four small AI features are dead
+- **`llama-server` is DOWN, and it did not die — the maintainer stopped it.**
+  Said by them 2026-09-10, of this stop and of the one `c26879b66` recorded as
+  a silent death two days earlier. So that commit's *"no cause established"*
+  had a cause the session could not see, and the memory-pressure guess beside
+  it was a guess at a cause that did not exist. **A deliberate stop and a crash
+  leave the same absence**, and only the person at the keyboard knows which it
+  was. Nothing in Warp announces either. **The four small AI features are dead
   until it is restarted**, and a panel session pointed at the local model will
   fail in a way that reads as a Warp fault.
 
@@ -180,8 +192,10 @@ evening; none needs the desk. **Do these between builds, not instead of part 1.*
   ```
 
   It holds ~7-10 GB of host RAM and of VRAM by design. Count it in every memory
-  budget. **That it has now died twice unobserved is itself the argument for
-  the watcher T21 named and nobody built.**
+  budget. **The watcher T21 named has a better argument now than the one it was
+  given**: the stop is routine — the maintainer reclaims ~10 GB by killing it —
+  so a `warpctrl` read saying whether the endpoint answers would be for an
+  expected event rather than a rare one. Still unbuilt, still their call.
 
 - **Host at 12.4 GB used of 65.4**, `vmmemWSL` down to 2.6 GB — WSL has fully
   reclaimed, so this is the cleanest starting state in days. No `rustc`, no
@@ -303,3 +317,45 @@ doc comment here now claim something the code below it does not do?"** Fourteen
 of those have been found, every one written carefully and falsified later by a
 change beside it. `cargo check`, `cargo test` and `./script/format` are all
 silent on every one.
+
+---
+
+## What this run did not do, and why
+
+Written at the end of the 2026-09-10 run, so the next session does not
+re-discover each of these the expensive way.
+
+**The drift-check cron line is still not installed.** Blocked, not skipped:
+`crontab` is refused by this session's own permission layer, so the line has to
+be added by hand. It is one command and the maintainer's to run:
+
+```bash
+( crontab -l 2>/dev/null; \
+  echo '0 9 * * 1 /home/effatha/git/warp/.fork/tools/drift-check.sh >> $HOME/.local/state/warp-fork/drift.log 2>&1' \
+) | crontab -
+```
+
+**`did_change_watched_files` (T18) was not touched.** The handoff says the
+maintainer picks between the two candidate fixes, and nothing here changes that.
+
+**Windows Developer Mode was not enabled.** It needs an elevated prompt.
+
+**The Windows checkout was synced but not rebuilt.** `C:\dev\warp` is now at
+`242592160`; `target\release\warp-oss.exe` is still the 2026-09-08 binary. A
+rebuild was not started because the host was at 42 GB of 63.8 with `vmmemWSL`
+holding 31 GB it had not returned after this session's own builds — which is
+`CLAUDE.md`'s named hazard, read from the host rather than the guest. **A
+release rebuild is the first thing a quiet session should do**: only the root
+`Cargo.toml` profile block, `app/src` and `crates/http_client/src` changed, so
+it is `http_client`'s dependents plus the app crate, and the app crate is
+bounded at 11.3 GB since `c25c8fbc2`.
+
+**One Warp instance is still running and it is the one from 2026-09-09**, pid
+5808 (with its recovery sibling 10228), started 19:51:50 on 9 September. The
+maintainer believed they had killed it; both processes were alive throughout
+this session and were left alone deliberately, because the standing constraint
+asks for exactly one working instance and this is it. It predates every commit
+below `e43400632`, so it has none of this session's work in it.
+
+**`llama-server` is down and was stopped on purpose** — see the correction
+above. Restart with `powershell.exe -File 'C:\dev\llama\serve.ps1'`.
