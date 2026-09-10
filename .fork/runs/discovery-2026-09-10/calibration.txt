@@ -1,0 +1,9 @@
+########## revert the message to the one that did not say where it looked
+test selection::tests::active_selector_rejects_ambiguity ... ok
+test selection::tests::active_selector_rejects_no_instances ... ok
+test selection::tests::selects_instance_by_id ... ok
+test selection::tests::the_empty_answer_names_the_directory_it_looked_in ... FAILED
+test result: FAILED. 3 passed; 1 failed; 0 ignored; 0 measured; 39 filtered out; finished in 0.00s
+error: test failed, to rerun pass `-p local_control --lib`
+########## restored
+identical

@@ -1,0 +1,5 @@
+total 36
+drwx------ 2 effatha effatha  4096 Aug 28 20:15 .
+drwx------ 4 effatha effatha  4096 Sep  2 23:00 ..
+srw------- 1 effatha effatha     0 Aug 28 20:15 inst_17c9b4e94f45432a8317be79858cc692.broker.sock
+-rw------- 1 effatha effatha 26980 Aug 28 20:15 inst_17c9b4e94f45432a8317be79858cc692.json

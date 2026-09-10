@@ -1100,7 +1100,11 @@ fn run_events_tail(args: TargetArgs, output_format: OutputFormat) -> Result<(), 
         )
     })?;
     let records = local_control::discovery::list_instances(&ChannelState::channel().to_string());
-    let instance = select_instance(&records, &instance_selector(&args))?;
+    let instance = select_instance(
+        &records,
+        &instance_selector(&args),
+        &local_control::discovery::discovery_dir(),
+    )?;
     local_control::client::stream_events(&instance, &stream.url, |event| {
         match event.name {
             // Stream-level frames go to stderr, so `warpctrl events tail | jq`
@@ -1363,7 +1367,11 @@ pub(super) fn send_action<T: Serialize>(
     let selector = instance_selector(args);
     let records = local_control::discovery::list_instances(&ChannelState::channel().to_string());
     let target = target_selector(args)?;
-    let instance = select_instance(&records, &selector)?;
+    let instance = select_instance(
+        &records,
+        &selector,
+        &local_control::discovery::discovery_dir(),
+    )?;
     let mut request = RequestEnvelope::new(Action::with_params(action, params)?);
     request.target = target;
     let response = local_control::client::send_request(&instance, &request)?;

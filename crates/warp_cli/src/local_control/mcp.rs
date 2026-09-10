@@ -768,8 +768,12 @@ fn call_tool(params: &Value) -> Result<Value, String> {
     let records = local_control::discovery::list_instances(
         &warp_core::channel::ChannelState::channel().to_string(),
     );
-    let instance = local_control::selection::select_instance(&records, &instance_selector)
-        .map_err(describe_error)?;
+    let instance = local_control::selection::select_instance(
+        &records,
+        &instance_selector,
+        &local_control::discovery::discovery_dir(),
+    )
+    .map_err(describe_error)?;
 
     let mut request = RequestEnvelope::new(
         Action::with_params(action, Value::Object(action_params)).map_err(describe_error)?,
