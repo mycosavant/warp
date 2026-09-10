@@ -1618,6 +1618,23 @@ docs are silent on it; the other remedy is `jobs = 8` under `[build]` in a
 cargo config, which retires the prefix and this instruction with it. Neither is
 a Warp change. Account in `.fork/runs/classifier/README.md`.
 
+**`cargo clean --release` breaks the WSL remote-development server, and it
+surfaces as a network error.** Measured 2026-09-09.
+`~/.warp-dev/remote-server/warp-oss` is a **symlink into
+`target/release/warp-oss`** — the manual's staging recipe, because on the Oss
+channel there is nothing to install from. Clean the target and the symlink
+dangles, so every WSL pane's auto-connect fails at spawn with *"Response channel
+closed before receiving a reply"*, which Warp's banner renders as **"Failed to
+start SSH extension"** and which reads like a broken tunnel. File browsing and
+code review in WSL panes fall back to 9p until a release build exists again.
+
+Two things follow. **Before `cargo clean --release`, know that you are also
+uninstalling the daemon** — and a warm `target/release` is what makes an
+app-crate re-measurement cost four minutes instead of half an hour, so cleaning
+is expensive twice over. And **when that banner appears, read the log rather
+than the network**: `grep -i 'remote server' <log>` names the real failure on
+the line above.
+
 **Never share `CARGO_TARGET_DIR` between two checkouts of this workspace.**
 Measured 2026-08-24: running a baseline in a `git worktree` with the main tree's
 target directory (to save disk) left artifacts that did not match either tree,

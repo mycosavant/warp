@@ -341,9 +341,95 @@ So the precondition for item 7 is now three things, not one:
 3. **Account for `llama-server`'s 10.2 GB**, which is resident by design and
    is not going anywhere.
 
-`target/release` is now empty and the WSL release binary is gone. Nothing
-depends on it — the maintainer's running Warp is the Windows build — and the
-next `build.sh` restores it.
+### The repair build, which also answered the question item 7 left open
+
+Rebuilt at the maintainer's say-so, `-j 8`, sampled: **5m58s** with the
+dependency graph warm — one crate and a link, not a rebuild. And because it
+*finished*, it gives the number the abandoned run could only bound:
+
+| | clean run (killed mid-crate) | repair run (finished) |
+|---|---|---|
+| `warp` crate peak | ≥ 14,975 MB | **15,587 MB** |
+| lowest `MemAvailable` | 8,198 MB | **22,795 MB** |
+
+Same crate, same flags, and **14.6 GB more headroom purely because
+`rust-analyzer` was not resident.** That is the "kill it first" rule with a
+number on it, and it is a larger effect than any profile lever is likely to be.
+
+**The version handshake does not threaten the staged daemon on this channel,
+and a first reading of `.fork/docs/wsl.md` says it does.** That page's run-1
+finding 2 describes the repair deleting the symlink; two paragraphs later it
+records the fix, `1a42ecdb8`, which makes `version_is_compatible` answer `true`
+unconditionally for `Channel::Oss` (`crates/remote_server/src/manager.rs:273`).
+Confirmed live: daemon `v0.fork.f2551c707-dirty` against client
+`v0.fork.2e1552fc0` produced one `[WARN] Remote server version differs from the
+client`, then `initialize handshake complete`, `connected`, `ready`, with the
+symlink untouched. The doc was right and reading half of it was not.
+
+One thing the repair got wrong first: it was run as a bare `cargo build`, so no
+`warp-oss.version` sidecar was written and the daemon would have reported no
+version at all. `.fork/tools/build.sh` writes it, took 0.55s over the finished
+build, and is the only thing that does.
+
+### The clean was not free, and "nothing depends on it" was wrong
+
+That sentence stood here for an hour and the maintainer found the counterexample
+by looking at their own screen: a banner reading **"Couldn't connect to the Warp
+SSH extension … Failed to start SSH extension. Response channel closed before
+receiving a reply."**
+
+`~/.warp-dev/remote-server/warp-oss` is a **symlink into
+`target/release/warp-oss`** — the manual's staging recipe, because the Oss
+channel has nothing to install from. `cargo clean --release` left it dangling,
+so every WSL pane's auto-connect failed at spawn and Warp rendered a transport
+error that names neither WSL nor the daemon. The log had it one line above, as
+`Remote server setup failed … falling back to ControlMaster`.
+
+**Two things worth carrying.** Cleaning the release target *uninstalls the WSL
+daemon*, which is not a connection anyone would draw from the command. And a
+warm `target/release` is what makes an app-crate re-measurement cost four
+minutes instead of half an hour — 1,123 rlibs survived the kill, so the repair
+build was one crate and a link, not a rebuild. Recorded in `CLAUDE.md` and
+`.fork/docs/wsl.md`.
+
+### And the maintainer's two standing questions
+
+**"How in the world did we get up to 60 GB?"** Three things stacked, and only
+one was the build:
+
+| | GB |
+|---|---|
+| `rust-analyzer` in the guest, spawned by this session's own editor | 15.0–16.5 |
+| the `warp` crate's single `rustc` | ~15.0 |
+| `llama-server`, resident by design | 10.2 |
+| Windows, Warp, browsers | ~10 |
+| guest page cache from wiping and rewriting 68 GB of `target` | the rest |
+
+Two amplifiers. WSL claims memory as the guest touches it and returns it
+slowly, so `vmmemWSL` is a high-water mark rather than a current reading — it
+still held 19.5 GB after everything was killed. And a clean-and-rebuild pushes
+tens of GB through the guest's page cache, which counts against the VM.
+
+**The largest single contributor was not part of the build at all.** Killing
+the language server recovered 15.4 GB instantly.
+
+**"Is there a way to bound the compilation for just the one most demanding
+crate?"** Yes — `[profile.release.package.warp]`, stable cargo, reaching only
+that crate. Four candidates, **none measured**: `debug = 0`, `opt-level = 2`, a
+`codegen-units` bump, and `split-debuginfo = "unpacked"` in place of the
+current macOS-oriented `"packed"`. The existing `[profile.release]` comment is
+the best evidence in the repo that this works at all — it already dropped full
+debuginfo for exactly this reason, naming CI OOM kills.
+
+`debug = 0` carries an argument upstream cannot make: that comment justifies
+line tables by *"symbolicate panics and **Sentry** stack traces"*, and this fork
+force-disables Sentry. Half the justification does not apply here; the other
+half, local panic backtraces, does.
+
+**The run is cheap and that is the point.** With the dependency graph warm each
+variant is one app-crate compile of about four minutes, so the sweep is under
+half an hour. `.fork/HANDOFF-PROFILE.md` is the run; `.fork/next.html` item 7b
+is the board entry.
 
 ## Files
 

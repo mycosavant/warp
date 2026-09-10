@@ -38,12 +38,21 @@ fresh session after the maintainer answered the spec's four decisions
 person with a phone, and the checklist at its top is that run. Live while the
 work is open; it moves to `archive/` when the last step is measured.
 
-**`HANDOFF-SPECSFETCH.md` is the live handoff**, written 2026-09-09 for the
-session after `runs/localmodel-panel-2026-09-09/`. It carries `next.html` item
-4, the specs card's opt-in price fetch, and **three decisions the maintainer
-owns before it** — the largest being what to do about the agent's own
-connections to `api.anthropic.com` during a fully local turn, which last
-night's run measured and which no `warpctrl` change can close.
+**`HANDOFF-PROFILE.md` is the live handoff**, written 2026-09-09. It carries
+the maintainer's question — **can the one demanding crate be bounded?** — after
+item 7 established that the ceiling is the `warp` crate compiling *alone* at
+14,975 MB and that `-j` cannot touch it. `[profile.release.package.warp]` is
+the lever, four candidates are unmeasured, and with the dependency graph warm
+each is a four-minute compile. It also carries the four threads still open,
+including the one decision the maintainer owns.
+
+**`HANDOFF-SPECSFETCH.md` is done** (2026-09-09), superseded by the file above
+and kept for its record: `next.html` item 4 and three decisions, the largest
+being what to do about the agent's own connections to `api.anthropic.com`
+during a fully local turn. **That decision is still the maintainer's** — the
+hypothesis the run brought to it was tested and killed. Its own header now
+names the two things in it that turned out to be wrong. Result:
+`runs/pricefetch-2026-09-09/`.
 
 **`HANDOFF-LOCALMODEL.md` is done** (2026-09-09) and is kept for its recipe:
 the agent line that points `claude-agent-acp` at a local runtime, and the

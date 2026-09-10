@@ -254,6 +254,37 @@ never had one either, and on the Oss channel there is nothing to install from
 the manual's recipe is a symlink). A distribution without the staged binary
 fails at spawn, in the log.
 
+**Since `1a42ecdb8` the version repair cannot delete the symlink on Oss, so
+`cargo clean --release` is the way it actually dies.** Measured 2026-09-09,
+and the first half of finding 2 below is what a hurried reader takes away:
+`version_is_compatible` returns `true` unconditionally for `Channel::Oss`
+(`crates/remote_server/src/manager.rs:273`), so only the informational warning
+fires. Confirmed live the same evening -- daemon `v0.fork.f2551c707-dirty`
+against client `v0.fork.2e1552fc0`, one `[WARN] Remote server version differs
+from the client`, then `connected` and `ready`, symlink untouched. What is staged is
+`~/.warp-dev/remote-server/warp-oss -> <repo>/target/release/warp-oss`, so
+cleaning the target leaves a dangling link and the connect fails at spawn. The
+banner says **"Couldn't connect to the Warp SSH extension ... Failed to start
+SSH extension. Response channel closed before receiving a reply"**, which names
+neither WSL nor the daemon and reads like a tunnel problem. The log has it one
+line up:
+
+```
+[WARN] Remote server setup failed for session SessionId(...), falling back to
+       ControlMaster: Response channel closed before receiving a reply
+```
+
+A release build restores it with no other step, and the daemon needs no
+matching version to be accepted. **Check the symlink's target before believing
+anything about the network** — `ls -la ~/.warp-dev/remote-server/` shows a
+dangling link in red and settles it in one command.
+
+Build it with `.fork/tools/build.sh`, not a bare `cargo build`: only the script
+writes the `warp-oss.version` sidecar, and an unstamped daemon reports no
+version at all. It still connects on Oss, but the log line that tells you which
+two builds are talking goes blank, which is the one thing this handshake is
+good for.
+
 **Run 1, 2026-09-05 11:39, debug build `ea61116e1` under
 `WARP_DATA_PROFILE=wslauto`** (a second instance beside the product one;
 `WARP_DATA_PROFILE` is honoured by debug builds only, gives its own

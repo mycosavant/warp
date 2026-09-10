@@ -205,6 +205,18 @@
     </div>
   </article>
 
+  <article class="item" data-id="profile">
+    <div class="rank">7b</div>
+    <div class="body">
+      <div class="head"><h2>Bound the <code>warp</code> crate</h2><span class="status">open &middot; the maintainer's question</span></div>
+      <div class="meta"><span>handoff: <code>.fork/HANDOFF-PROFILE.md</code></span><span><code>[profile.release.package.warp]</code></span></div>
+      <p>Item 7 established that the ceiling is <b>one crate compiling alone</b> at 14,975 MB &mdash; and that is a floor, since the build was killed mid-crate. <code>-j</code> cannot touch it. So the question worth asking is the maintainer's: can that one crate be bounded?</p>
+      <p>Yes, and <code>[profile.release.package.warp]</code> reaches only it. <strong>The release profile already fought this once</strong>: it sets <code>debug = 1</code> with a comment saying full debuginfo <em>&ldquo;was OOM-killing release builds on CI&rdquo;</em>, which names the mechanism as DWARF and codegen rather than job count. Four unmeasured candidates: <code>debug = 0</code>, <code>opt-level = 2</code>, a <code>codegen-units</code> bump, and <code>split-debuginfo = "unpacked"</code> (the current <code>"packed"</code> is a macOS setting).</p>
+      <p><code>debug = 0</code> carries a fork-specific argument upstream cannot make: that comment justifies line tables by <em>&ldquo;symbolicate panics and <b>Sentry</b> stack traces&rdquo;</em>, and this fork force-disables Sentry. Half the justification does not apply here. The other half &mdash; local panic backtraces &mdash; does.</p>
+      <p><strong>And the run is cheap, which is the thing to exploit.</strong> With the dependency graph warm (1,123 rlibs on disk now) each variant is one app-crate compile of about four minutes, so the whole sweep is under half an hour. <b>Do not <code>cargo clean</code></b> &mdash; it throws that away, and it also uninstalls the WSL daemon, whose staged binary is a symlink into <code>target/release</code>.</p>
+    </div>
+  </article>
+
   <article class="item" data-id="kode-rs">
     <div class="rank">8</div>
     <div class="body">
