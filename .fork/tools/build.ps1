@@ -78,9 +78,28 @@ $code = $LASTEXITCODE
 Write-Output "=== cargo exit $code at $(Get-Date -Format HH:mm:ss) ==="
 
 if ($code -eq 0 -and (Test-Path $binary)) {
-    # After a successful build only, so a failed one leaves binary and sidecar
-    # agreeing. The path is `<binary without .exe>.version`, which is what
+    # After a successful build only, so a *failed* one leaves binary and sidecar
+    # agreeing -- cargo never relinks, and both stay at the previous build's
+    # version. The path is `<binary without .exe>.version`, which is what
     # `version_sidecar_path` computes from the running executable.
+    #
+    # **That invariant has one hole and it was walked into 2026-09-10.** The gap
+    # between cargo's link and this write is unprotected: kill the script in it
+    # -- a closed terminal, an agent session ending, Ctrl-C -- and you get a
+    # complete, working binary carrying the *previous* build's version. Measured:
+    # `warp-oss.exe` relinked at 18:50, `--version` answered `v0.fork.2e1552fc0`
+    # from twelve commits earlier, and `--warpctrl instance list` worked fine.
+    #
+    # That is worse than no version, because it is a confident wrong one. The
+    # recorded way to tell whether a Windows build ran is to check the commit
+    # rather than the clock, and this failure defeats exactly that check: a
+    # later session compares `--version` against HEAD, sees the old sha, and
+    # concludes the build never happened.
+    #
+    # The remedy costs nothing: **re-run this script.** Cargo finds everything
+    # fingerprinted and exits in seconds, and the sidecar is written on the way
+    # out. Confirmed the same day -- `cargo exit 0` with the binary's timestamp
+    # unmoved, then `v0.fork.7a5a3028e`.
     $sidecar = [System.IO.Path]::ChangeExtension($binary, 'version')
     Set-Content -Path $sidecar -Value $version -NoNewline -Encoding ascii
     Write-Output "=== sidecar $sidecar = $version ==="
