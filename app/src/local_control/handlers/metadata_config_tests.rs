@@ -67,8 +67,10 @@ fn a_tab_write_resolves_the_single_window_when_the_platform_reports_no_focus() {
 /// `mock_workspace` opens a window per call (`view_tests.rs` calls it twice for
 /// the same reason), so this is two real windows, not two tabs.
 ///
-/// Calibrate by changing `active_or_single_window_id`'s `_ =>` arm to
-/// `Ok(window_ids[0])`: both assertions redden.
+/// Calibrate by inserting `[first, ..] => Ok(*first),` ahead of
+/// `active_or_single_window_id`'s refusal arm: the first assertion reddens.
+/// The first panic hides the second, so swap them to see the other half go
+/// red too; both were observed 2026-09-12.
 #[test]
 fn two_windows_with_no_reported_focus_refuse_as_ambiguous_on_both_paths() {
     App::test((), |mut app| async move {
