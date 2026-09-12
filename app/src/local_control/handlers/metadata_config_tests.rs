@@ -1,9 +1,10 @@
-use ::local_control::InstanceId;
 use ::local_control::protocol::TargetSelector;
+use ::local_control::{ErrorCode, InstanceId};
 use warpui::App;
 
 use super::tab_reset_name;
 use crate::local_control::LocalControlBridge;
+use crate::local_control::handlers::metadata::session_inspect;
 use crate::workspace::view::tests::{initialize_app, mock_workspace};
 
 /// A tab *write* must resolve the same way a read does when the platform
@@ -57,5 +58,42 @@ fn a_tab_write_resolves_the_single_window_when_the_platform_reports_no_focus() {
             value["tab_id"].is_string(),
             "the resolved tab must be named back: {value}"
         );
+    });
+}
+
+/// The other half of the fallback: with two windows and no reported focus
+/// there is a real choice, and neither path may make it silently.
+///
+/// `mock_workspace` opens a window per call (`view_tests.rs` calls it twice for
+/// the same reason), so this is two real windows, not two tabs.
+///
+/// Calibrate by changing `active_or_single_window_id`'s `_ =>` arm to
+/// `Ok(window_ids[0])`: both assertions redden.
+#[test]
+fn two_windows_with_no_reported_focus_refuse_as_ambiguous_on_both_paths() {
+    App::test((), |mut app| async move {
+        initialize_app(&mut app);
+        let _first = mock_workspace(&mut app);
+        let _second = mock_workspace(&mut app);
+        assert_eq!(
+            app.window_ids().len(),
+            2,
+            "the fixture must open two windows"
+        );
+        let bridge = app.add_singleton_model(LocalControlBridge::new);
+        let instance_id = InstanceId("inst_test".to_owned());
+
+        let (write, read) = bridge.update(&mut app, |bridge, ctx| {
+            bridge.set_instance_id(instance_id.clone());
+            (
+                tab_reset_name(&Some(instance_id.clone()), &TargetSelector::default(), ctx),
+                session_inspect(&TargetSelector::default(), ctx),
+            )
+        });
+
+        let read = read.expect_err("a read must not pick one of two windows on its own");
+        assert_eq!(read.code, ErrorCode::AmbiguousTarget, "{read:?}");
+        let write = write.expect_err("a write must not pick one of two windows on its own");
+        assert_eq!(write.code, ErrorCode::AmbiguousTarget, "{write:?}");
     });
 }
