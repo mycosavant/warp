@@ -21,10 +21,22 @@ the easy one to make, because the account is what you have just finished
 learning. This rule has been in the file since 2026-09-10, at the bottom, where
 it was read after the damage; it is here now for the obvious reason.
 
-**It is over budget: 154,434 characters against Claude Code's 150,000-character
-memory-file warning, plus an 8,735-character skill that loads with it.** Treat
-every addition as needing a removal to pay for it. `.fork/docs/model-economy.md`
-has the threshold's formula and why it is 5% of the active context window.
+**The budget is enforced, not remembered.** Writing the rule above and then
+not moving the account is exactly what happened the day after it was written
+— 2026-09-11 added 49 lines of account with nobody consulting it, and the
+convention section's own cost ate most of the trim that followed. A rule that
+relies on being read by a session under time pressure is not a fix; a check
+that fails the gate already run before every push is. `.fork/tools/claude-md-budget.sh`
+runs in `script/presubmit` and checks **two** budgets, because they answer
+different questions: a cloud-tier margin under Claude Code's own
+150,000-character memory-file warning (currently clear), and a local-tier
+number — whether a genuinely local model's fixed floor (its system prompt
+plus this file) fits inside a realistic local context window *at all*. This
+file currently fails the local tier by over 100,000 characters, and no amount
+of moving accounts elsewhere closes that gap while this stays a rules index
+for a fork this size — `.fork/docs/model-economy.md` has the table and the
+two env-var levers that exist below the file's own size. Run the script
+yourself before you believe you're done: `./.fork/tools/claude-md-budget.sh`.
 
 **Retract in place, and leave the wrong claim visible.** This file's value is
 that it records what was believed and what falsified it, so a reader can tell a

@@ -71,4 +71,8 @@ echo "Running doc tests..."
 cargo test --doc
 echo "Tests succeeded..."
 
+echo "Checking CLAUDE.md's size budget..."
+./.fork/tools/claude-md-budget.sh
+echo "CLAUDE.md budget check succeeded..."
+
 echo "Congrats! All presubmits checks passed."

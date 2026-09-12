@@ -170,6 +170,108 @@ cache is thrown away for a one-line change.
 
 ---
 
+## Whether a genuinely local model can fit this file at all, measured 2026-09-12
+
+**Compaction solves the Claude Code warning. It does not solve this.** Three
+splits (`environment.md`, `build.md`, the console/SSH account moved into
+`remote-control.md` and `away-from-desk.md`) took `CLAUDE.md` from 154,873 to
+121,737 characters — comfortably under the 140,000-char margin this repo keeps
+under Claude Code's own 150,000-char warning. That is the right fix for a
+cloud session, where the file rides a 1M-token window and the warning is the
+only ceiling that exists.
+
+**A genuinely local model's ceiling is a different number, and it is much
+lower than "1M times 5%."** Most consumer-GPU local models run at 8k-32k
+context natively; this repo's own measured case (`.fork/runs/localmodel-panel-2026-09-09/`)
+needed 96k just for llama.cpp to answer one question with a 12B model, and
+that is the *generous* end. Before a single word of conversation, a session
+pays a fixed floor: Claude Code's own system prompt and tool definitions
+(**20,860 tokens**, measured on the wire 2026-09-09 against an empty
+directory) plus this file. At today's size, that floor alone against a few
+realistic local windows:
+
+| local context | floor (system + `CLAUDE.md`) | left for the conversation and answer |
+|---|---|---|
+| 8,192 | 61,249 tokens | **-53,057** — does not fit |
+| 32,768 | 61,249 tokens | **-28,481** — does not fit |
+| 128,000 | 61,249 tokens | 66,751 (52%) |
+| 200,000 | 61,249 tokens | 138,751 (69%) |
+
+(At 3 chars/token, this file's own tokenizer reading; `CLAUDE_MD_BUDGET`'s
+sibling env vars let `.fork/tools/claude-md-budget.sh` recompute this with a
+different local-context assumption.)
+
+**So the premise is sharper than "3-4x the recommended ratio," and in the
+opposite direction from what a 200k-context model suggests.** At 128k-200k
+(a generous local window) the file fits with real room to spare. At 8k-32k —
+what most people actually run locally — the fixed floor alone exceeds the
+window. There is no amount of trimming *this file* that reaches a local-safe
+budget while it keeps being a rules index for a fork this size: closing the
+gap at 32k means getting `CLAUDE.md` under roughly **18,000 characters**, which
+is smaller than `## How to write in this file` plus `## Commits` combined.
+Continuing the docs-split pattern is still worth doing for the cloud budget
+and for readability, but it will not clear this bar, and no further session
+should spend a night assuming it will.
+
+**Two real levers exist below the file, found by reading the CLI binary the
+way the 150,000-char threshold was found** (`.local/share/claude/versions/`,
+grep for the env var, read the call site, don't trust the name alone):
+
+- **`CLAUDE_CODE_DISABLE_CLAUDE_MDS=1`** skips loading memory entirely —
+  global, project and nested. Verified at two call sites: `BMr` (the project
+  memory loader) returns `[]` immediately when the variable is set, and `AMr`
+  (nested memory attachment) clears its trigger list and returns empty too.
+  This is all-or-nothing: it does not trim `CLAUDE.md`, it removes it, along
+  with every other memory file. For a local-model session doing execution-
+  shaped work in a known directory — the kind this repo's own model-economy
+  table already routes to a cheaper model — that may be an acceptable trade;
+  for anything where the fork's safety and process rules matter, it is not.
+  **Not yet wired into any launch recipe. A decision for whoever runs the
+  next local-model session, not a default.**
+- **`CLAUDE_CODE_DISABLE_UNKNOWN_MODEL_WINDOW_ENFORCEMENT=1` paired with
+  `CLAUDE_CODE_MAX_CONTEXT_TOKENS=<the model's real window>`** doesn't shrink
+  the floor, but stops Claude Code clamping an unrecognized model id (which is
+  exactly what a local model behind `ANTHROPIC_BASE_URL` looks like) to a
+  conservative default window instead of trusting the one the maintainer
+  actually configured in `serve.ps1`. The CLI's own help string for the first
+  variable: *"restores the previous wait-for-the-API behavior."* **Read from
+  the binary, not yet run against a live local session — the next local-model
+  run should set both and confirm the effective window matches `serve.ps1`'s
+  `n_ctx_slot` rather than some smaller default.**
+
+**The structural fix, if one is wanted, is not more trimming — it's a second,
+generated file.** A script that extracts just the bold-lead sentence of every
+rule in `CLAUDE.md` (dropping every account, every retraction narrative, every
+`.fork/docs/` citation) would produce an index an order of magnitude smaller —
+rough arithmetic: roughly 150 rules across the file, each lead sentence
+80-150 characters, puts a generated excerpt in the 15,000-20,000 character
+range, close to the 32k-context budget above. It would need to regenerate on
+every `CLAUDE.md` change (wire it into `script/presubmit` beside the budget
+check, so it cannot drift the way a hand-maintained second copy would) and a
+local-model session would need to read it instead of `CLAUDE.md` — which
+`CLAUDE_CODE_DISABLE_CLAUDE_MDS=1` plus pointing the agent at the generated
+file by hand, or a second worktree whose `CLAUDE.md` *is* the generated
+excerpt, could both do. **Not built.** It is a real design decision — how much
+of the narrative a local-model session should lose in exchange for fitting —
+and belongs with whoever is about to run the next local-model session, the
+same way `PAIRABLE_ACTIONS` widenings belong with whoever is about to widen
+them.
+
+**Considered and set aside for that excerpt, if it gets built: Simplified
+Technical English (ASD-STE100) or a fixed-vocabulary controlled language in
+its family.** Wrong axis — STE's ~900-word dictionary and mandatory full
+grammar exist to make aircraft manuals safe for non-native-speaking mechanics
+and machine translation, and both constraints *lengthen* prose more often
+than they shorten it. Its own literature's warning is the more relevant part:
+a checker enforces conformance, not correctness, and STE text can pass every
+rule while still being wrong — the same trap `claude-md-budget.sh` is built to
+avoid by checking size only and leaving nuance to a human diff, sentence by
+sentence, every time content moves. If that excerpt is built, plain-language
+discipline (short sentences, active voice, one idea each — what `unslop`
+already pushes toward) is the closer fit; a fixed word list is not.
+
+---
+
 ## The short version
 
 1. Batch `CLAUDE.md` edits into one commit per session.
