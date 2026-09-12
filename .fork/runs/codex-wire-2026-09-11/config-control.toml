@@ -1,0 +1,11 @@
+# NEGATIVE CONTROL: identical to the watched config except that the telemetry
+# opt-outs are REMOVED. If the wire is unchanged, the flags were never what
+# was keeping codex-acp quiet.
+model = "openai/gpt-4o-mini"
+model_provider = "openrouter"
+
+[model_providers.openrouter]
+name = "OpenRouter"
+base_url = "https://openrouter.ai/api/v1"
+env_key = "OPENROUTER_API_KEY"
+wire_api = "responses"

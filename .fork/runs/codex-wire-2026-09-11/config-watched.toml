@@ -1,0 +1,25 @@
+# Scratch CODEX_HOME for the 2026-09-11 wire-watch. The maintainer's own
+# ~/.codex is deliberately untouched.
+
+model = "openai/gpt-4o-mini"
+model_provider = "openrouter"
+
+[model_providers.openrouter]
+name = "OpenRouter"
+base_url = "https://openrouter.ai/api/v1"
+env_key = "OPENROUTER_API_KEY"
+wire_api = "responses"
+
+# The flag the recon named. Necessary, and -- per the static read -- not the
+# thing that matters here, because codex-acp never constructs the analytics
+# client at all.
+[analytics]
+enabled = false
+
+# Belt and braces: the Statsig metrics default is the one `[analytics]` does
+# NOT cover. Named explicitly so the config states the posture rather than
+# relying on codex-acp not reaching otel_init.
+[otel]
+exporter = "none"
+trace_exporter = "none"
+metrics_exporter = "none"

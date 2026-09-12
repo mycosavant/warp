@@ -1,5 +1,15 @@
 # Codex as an ACP agent: the OpenRouter key fits, the telemetry does not
 
+> **Superseded in part, 2026-09-11 evening, by `.fork/runs/codex-wire-2026-09-11/`.**
+> Left unedited below, per the rule that a run record is not rewritten. Two of its
+> claims are now measured wrong, and both were read from `openai/codex` HEAD when
+> what runs is codex-acp 0.16.0's pinned `rust-v0.137.0`: `wire_api = "chat"` is
+> **refused at config load** (use `responses`), and the telemetry it describes is
+> **not reachable in the codex-acp binary at all**, so `[analytics] enabled = false`
+> is neither necessary nor sufficient there. What it says about *codex proper* still
+> holds, and the Statsig metrics default it suspected is real.
+
+
 Asked 2026-09-11 during the decide run, from two of the maintainer's questions:
 *can the OpenRouter key opencode already holds be passed to codex*, and *what is
 the stock release build's telemetry posture* — named as the one off-thesis thing
