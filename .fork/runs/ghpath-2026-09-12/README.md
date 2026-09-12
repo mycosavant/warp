@@ -1,5 +1,56 @@
 # Setting `PATH` on a child does not choose the child
 
+> **CORRECTION, same day, a few hours later. The headline above is too strong
+> and the body below overstates what was wrong upstream. Read this first.**
+>
+> Measured with a four-case probe (`command::r#async::Command`, rustc 1.92.0,
+> glibc 2.39, Linux):
+>
+> | program | on the parent's `PATH`? | first on the child's `PATH`? | which ran |
+> |---|---|---|---|
+> | `gh` | yes, `/usr/bin/gh` | yes, a fake | **the parent's** |
+> | `warp-only-here` | no | yes, a fake | **the child's** |
+>
+> Both held with and without `current_dir`, and with the full
+> `run_gh_command` command shape. So the rule is **precedence, not
+> exclusion**: the parent's `PATH` is searched first, and the child's is
+> consulted only when the parent's search finds nothing.
+>
+> Three things follow, and the second is the one I got wrong.
+>
+> 1. **The test finding stands unchanged.** A fake that shadows a real binary
+>    never runs, which is exactly the five tests here — `gh` is installed on
+>    this machine. Everything in *What was measured* and *Calibrated by
+>    breaking it* below is unaffected.
+> 2. **APP-4188's `gh` half did work for the case it was written for.** Under
+>    macOS launchd, `gh` is *absent* from the inherited `PATH` and present on
+>    the captured interactive one — the second row above, where the child's
+>    `PATH` is consulted and the tool is found. The section *"What this cost
+>    upstream"* below says it never worked; that is wrong. What was really
+>    broken is narrower: when the tool exists in **both** places, the
+>    inherited one wins over the user's shell's, silently.
+> 3. **The fix is still right, and is now a precedence fix rather than a
+>    repair.** Resolving through `path_env` makes the user's shell
+>    authoritative, which is what the spec asked for and what
+>    `docker_sandbox.rs` already did. It changes behaviour only in the
+>    both-exist case; the fallback keeps every other case identical.
+>
+> And the two upstream call sites named at the bottom are **probably not
+> defects at all**. On Windows `CreateProcessW` has no child-`PATH` fallback,
+> so `node_runtime`'s platform split — `cmd.exe /c` on Windows, plain spawn
+> elsewhere — is consistent with the rule above rather than a half-fix, and
+> the same goes for `crates/lsp/command_builder.rs`. A direct probe of
+> `CommandBuilder::command` on Linux ran the fake, because the probe binary
+> existed nowhere else; that is the second row again, not a bug.
+> **The Windows half is reasoned, not measured — there is no Rust probe of
+> `CreateProcessW` in this record.**
+>
+> How this was got wrong: one observation (the real `gh` running) was
+> generalised into a mechanism without testing the other case, and the
+> mechanism then read as an explanation for two other files. The probe that
+> settled it took four minutes.
+
+
 **2026-09-12.** Closes Task 1 of `.fork/HANDOFF-GHTESTS.md`, and answers the
 question that handoff left open about `run_git_command`.
 

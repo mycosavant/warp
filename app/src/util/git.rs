@@ -807,14 +807,15 @@ pub async fn get_repository_info(
 /// Runs a `gh` CLI command and returns stdout on success.
 ///
 /// `path_env`, when `Some`, is both searched for `gh` and set as the child's
-/// `PATH`. Searching it is the half that was missing until 2026-09-12: setting
-/// `PATH` on a child changes what that child sees *after* it starts, and
-/// program resolution happens against the **parent**'s `PATH`. So the case
-/// this argument was added for — a Homebrew `gh` under a macOS GUI launch,
-/// where launchd's minimal `PATH` excludes `/opt/homebrew/bin` — could not
-/// work, and the same applies to the WSL daemon, which computes an
-/// interactive-shell `PATH` precisely so tools resolve as the user's shell
-/// resolves them.
+/// `PATH`. Searching it is the half that was missing until 2026-09-12.
+///
+/// Setting `PATH` on a child is a **fallback, not an override**: measured on
+/// Linux, the parent's `PATH` is searched first and the child's is consulted
+/// only when that finds nothing. So a Homebrew `gh` under a macOS GUI launch
+/// *was* found — launchd's minimal `PATH` has none, so the captured one is
+/// reached — but wherever `gh` exists in both places, the inherited one won
+/// and the user's shell was silently ignored. This resolves `path_env` first,
+/// which is what the WSL daemon computes an interactive-shell `PATH` for.
 ///
 /// Resolution falls back to the bare name when `gh` is not on `path_env`, so a
 /// caller passing an incomplete `PATH` keeps the old behaviour and

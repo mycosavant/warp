@@ -790,16 +790,19 @@ symlink recipe for Developer Mode's Git-for-Windows/PowerShell split.
 `bash -c` matches its own argv. Match something narrower, or check the thing
 you actually care about.
 
-**Setting `PATH` on a child process never decides which binary runs.** Lookup
-happens against the *parent's* `PATH` (measured 2026-09-12), so
-`Command::new("gh").env("PATH", user_path)` runs the `gh` Warp inherited, or
-none. The daemon's interactive-shell `PATH` reaches only what that child
-*itself* spawns — a git **hook** does get it, which is why APP-4188's git half
-works and its `gh` half never did. Resolve first, with
-`warp_util::path::resolve_executable_in_path`. The sting is in the tests: **a
-test that plants a fake binary on a child `PATH` exercises the real one**, and
-five here did, green because the fake imitated the real error.
-`.fork/runs/ghpath-2026-09-12/`.
+**Setting `PATH` on a child is a fallback, not an override.** The parent's
+`PATH` is searched first; the child's is consulted only when that finds nothing
+(measured 2026-09-12, Linux/glibc — **the Windows half is reasoned, not run**,
+and `CreateProcessW` is said to have no fallback at all). So
+`Command::new("gh").env("PATH", user_path)` runs the inherited `gh` whenever
+there is one, and the user's only when there is not. Two consequences. **A test
+that plants a fake binary on a child `PATH` exercises the real one** whenever
+that name is installed — five here did, green for months because the fake
+imitated the real error. And a tool present in both places silently ignores the
+user's shell, which `warp_util::path::resolve_executable_in_path` fixes at the
+call site. This line said *never decides* and that APP-4188's `gh` half **never
+worked**; both were wrong within hours, from generalising one observation
+without probing the other case. `.fork/runs/ghpath-2026-09-12/`.
 
 **Diff test-failure *membership*, not counts.** A 9-failure swing between runs
 is normal weather here (`-p warp --lib`'s known flaky set, mostly shared
