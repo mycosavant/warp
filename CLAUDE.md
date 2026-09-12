@@ -484,11 +484,35 @@ is:
 | `opencode acp` | **yes** | **no** — no further output at all, turn over, even when the prompt says what to do instead |
 | `claude-agent-acp`, no mode set | **no** — session mode `auto`, its classifier answers first and Warp is never in the loop | n/a |
 | `claude-agent-acp` + `WARP_FORK_ACP_MODE=default` | **yes** | **yes** — *"I can't run that — you denied permission. So, 2+2 is 4."* |
+| `codex-acp` (Zed's wrapper) + a provider key | **yes** — opens in `read-only`, no variable needed | not measured |
 
 So **the recommended configuration is the third row**, and it is a pairing:
 either half of it alone is worse than `opencode`. Warp sends the identical
 per-call rejection (`{"outcome": "selected", "optionId": "reject"}`, never
 `Cancelled`) in every case, so the difference is entirely the agent's.
+
+**The fourth row is new on 2026-09-11 and it is the first agent that needs no
+mode variable to ask.** `@zed-industries/codex-acp` opens its session in
+`read-only` — Warp was asked about the one `execute` in a three-tool turn and not
+about the list or the read — where `claude-agent-acp` opens in `auto` and answers
+by classifier. It runs on the maintainer's **own OpenRouter key** through
+codex's `model_providers` config, so no `authenticate` is ever sent, and it
+advertises a `configOptions` model list the panel's chip can populate. Watched on
+the wire across four runs it reached **openrouter.ai and nothing else**.
+`.fork/runs/codex-wire-2026-09-11/`. Two traps in the config: at the pinned
+codex, `wire_api` accepts **only** `responses` (`chat` is refused at load, and
+OpenRouter does serve `/v1/responses`), and a `CODEX_HOME` under `/tmp` makes
+codex warn and carry on without its helper binaries.
+
+**Two rules from that run that are not about codex.** *Ask the question of the
+pinned tree, not of HEAD* — a wrapper vendors a version, and codex-acp 0.16.0
+pins `rust-v0.137.0`, three months behind the `main` a recon had read, which is
+how a config block was published that the binary refuses. And *linked is not
+reached*: the analytics and OpenTelemetry crates are compiled into that binary
+(208 `codex_otel` symbols) while its telemetry endpoints are absent, because
+nothing calls them and `--gc-sections` takes the unreferenced chain's strings
+with it. **A dependency graph answers a different question from a call graph**,
+and the first one reads like the alarming answer.
 
 **On the Windows build, name the agent so it starts *inside* the distribution, or
 every turn in a WSL pane fails before it begins.** Measured 2026-09-02, end to
