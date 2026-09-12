@@ -280,6 +280,12 @@ the four `list`s reach it only when given an active or index selector.
 and is unaffected either way. No mutation run establishes the four-versus-eight
 split; the `session_inspect` integration test covers one of the four.
 
+**Driven live on Windows 2026-09-12**, pre-fix and post-fix debug builds under a
+scratch profile, with another application frontmost: post-fix `tab reset-name`
+answers `ok`, pre-fix answers `missing_target`, and `app active` names no window
+in both (`.fork/runs/focus-live-2026-09-12/`). A launch usually takes
+foreground, so check `app active` before believing a pre-fix pass.
+
 **`app.active` is the deliberate exception**, and says so in place. Its question
 is literally what holds focus, so an all-`None` chain is the true answer there,
 and a single-window fallback would be a lie the caller cannot detect. A caller

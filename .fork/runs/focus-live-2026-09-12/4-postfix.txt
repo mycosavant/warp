@@ -1,0 +1,66 @@
+exe: C:\dev\warp\target\debug\warp-oss.exe
+version: 
+up: True after 5s
+focus mode: focused at launch; helper window pid 16812 started
+--- warpctrl app active (exit 0, try 1)
+{
+  "action": "app.active",
+  "active": {
+    "instance_id": "inst_b0f37f8f77c741e68ad5c8556f03450e"
+  }
+}
+--- warpctrl window list (exit 0, try 1)
+{
+  "action": "window.list",
+  "windows": [
+    {
+      "window_id": "0",
+      "index": 0,
+      "is_active": false,
+      "is_hotkey_window": false,
+      "has_workspace": true
+    }
+  ]
+}
+--- warpctrl tab reset-name (exit 0, try 1)
+{
+  "action": "tab.reset_name",
+  "ok": true,
+  "instance_id": "inst_b0f37f8f77c741e68ad5c8556f03450e",
+  "window_id": "0",
+  "tab_id": "1769"
+}
+--- warpctrl session inspect (exit 0, try 1)
+{
+  "action": "session.inspect",
+  "session": {
+    "session_id": "Pane Pane Terminal (2159)",
+    "pane_id": "Pane Pane Terminal (2159)",
+    "pane_index": 0,
+    "tab_id": "1769",
+    "tab_index": 0,
+    "window_id": "0",
+    "window_index": 0,
+    "is_active": true,
+    "filesystem": {
+      "where": "local"
+    }
+  }
+}
+--- warpctrl app active (exit 0, try 1)
+{
+  "action": "app.active",
+  "active": {
+    "instance_id": "inst_b0f37f8f77c741e68ad5c8556f03450e"
+  }
+}
+--- warpctrl window close (exit 0, try 1)
+{
+  "action": "window.close",
+  "ok": true,
+  "instance_id": "inst_b0f37f8f77c741e68ad5c8556f03450e",
+  "close": "requested",
+  "cancellable": true,
+  "verify": "a cancellable close can be refused and this result does not observe the outcome; poll `instance list` until this instance is gone. If it stays, end any CLI agent running in a pane and cancel any in-flight agent turn, then close again."
+}
+instances after close: 0

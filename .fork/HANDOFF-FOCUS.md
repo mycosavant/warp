@@ -55,7 +55,20 @@ cp target/release/warp-oss /tmp/warp-oss-prefix-7d8e21b76
 
 ---
 
-## Task 1 — the `manager_tests.rs` format drift (about a minute)
+> **Progress, 2026-09-12 evening.** Task 1 done (`79e6ffe3f`). Task 2 done:
+> driven live on Windows, the fix holds and `app.active` stayed null
+> (`.fork/runs/focus-live-2026-09-12/`). Task 3: workspace check green, the
+> ambiguous-branch test written and mutation-calibrated (`dcdc80494`); the
+> twice-run full-lib baseline is the one item left. Task 4 done: the count
+> (`bb0af075d`) and the GHTESTS audit (`41e77d9ef`). Windows checkout synced
+> to `bb0af075d` and both Windows binaries rebuilt; pre-fix copies kept in
+> `C:\dev\prefix-debug-7d8e21b76` and `C:\dev\prefix-release-76d8b07e6`.
+>
+> **New, found by the live run:** the Windows credential broker intermittently
+> refuses a call with `0x80070558`, impersonating a pipe before reading from
+> it. See the run record; not fixed.
+
+## ~~Task 1 — the `manager_tests.rs` format drift (about a minute)~~ done, `79e6ffe3f`
 
 `./script/format` rewrites `crates/remote_server/src/manager_tests.rs` on a
 clean tree, every time. It moved `use warp_core::channel::Channel;` up into the
@@ -107,7 +120,7 @@ Recipe, with exactly **one** Warp window open:
 4. From a shell, three calls in this order:
 
 ```
-warpctrl tab reset_name      # the subject
+warpctrl tab reset-name      # the subject (this said reset_name, which clap rejects)
 warpctrl session inspect     # control: worked since 619c345a6
 warpctrl app active          # control: MUST still report a null window_id
 ```

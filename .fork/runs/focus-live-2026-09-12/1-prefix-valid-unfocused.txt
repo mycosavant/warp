@@ -1,0 +1,57 @@
+exe: C:\dev\prefix-debug-7d8e21b76\warp-oss.exe
+version: 
+up: True after 8s
+--- warpctrl app active (exit 0)
+{
+  "action": "app.active",
+  "active": {
+    "instance_id": "inst_b0fa3e815912410dbb94a47ece45b937"
+  }
+}
+--- warpctrl window list (exit 0)
+{
+  "action": "window.list",
+  "windows": [
+    {
+      "window_id": "0",
+      "index": 0,
+      "is_active": false,
+      "is_hotkey_window": false,
+      "has_workspace": true
+    }
+  ]
+}
+--- warpctrl tab reset-name (exit 1)
+{
+  "ok": false,
+  "error": {
+    "code": "missing_target",
+    "message": "tab.reset_name requires an active Warp window"
+  }
+}
+--- warpctrl session inspect (exit 1)
+{
+  "ok": false,
+  "error": {
+    "code": "unauthorized_local_client",
+    "message": "failed to identify local-control credential broker peer",
+    "details": "Unable to impersonate using a named pipe until data has been read from that pipe. (0x80070558)"
+  }
+}
+--- warpctrl app active (exit 0)
+{
+  "action": "app.active",
+  "active": {
+    "instance_id": "inst_b0fa3e815912410dbb94a47ece45b937"
+  }
+}
+--- warpctrl window close (exit 0)
+{
+  "action": "window.close",
+  "ok": true,
+  "instance_id": "inst_b0fa3e815912410dbb94a47ece45b937",
+  "close": "requested",
+  "cancellable": true,
+  "verify": "a cancellable close can be refused and this result does not observe the outcome; poll `instance list` until this instance is gone. If it stays, end any CLI agent running in a pane and cancel any in-flight agent turn, then close again."
+}
+instances after close: 0
