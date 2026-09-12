@@ -31,6 +31,7 @@ use crate::util::git::{self, Commit, PrInfo, get_branch_commit_messages, get_dif
 ///
 /// When the chain creates a PR, `ai_client` (when `Some`) generates the
 /// title/body with a `--fill` fallback; pass `None` to skip AI entirely.
+#[allow(clippy::too_many_arguments)]
 pub async fn run_commit_chain(
     repo_path: &Path,
     mode: CommitChainMode,
@@ -38,22 +39,66 @@ pub async fn run_commit_chain(
     include_unstaged: bool,
     branch: &str,
     ai_client: Option<&dyn AIClient>,
+    pr: PrStage,
     path_env: Option<&str>,
-) -> anyhow::Result<(Vec<Commit>, Option<String>, Option<PrInfo>)> {
+) -> anyhow::Result<CommitChainOutcome> {
     git::run_commit(repo_path, message, include_unstaged, path_env).await?;
-    let pr_info = match mode {
-        CommitChainMode::CommitOnly => None,
+    let mut pr_info = None;
+    let mut pr_inputs = None;
+    match mode {
+        CommitChainMode::CommitOnly => {}
         CommitChainMode::CommitAndPush => {
             git::run_push(repo_path, branch, path_env).await?;
-            None
         }
         CommitChainMode::CommitAndCreatePr => {
             git::run_push(repo_path, branch, path_env).await?;
-            Some(create_pr(repo_path, branch, ai_client, path_env).await?)
+            // After the push, and that ordering is load-bearing: the PR diff
+            // is taken against `origin/<branch>`, so inputs computed before
+            // this point would describe the branch without the commit just
+            // made.
+            match pr {
+                PrStage::Create(content) => {
+                    pr_info =
+                        Some(create_pr(repo_path, branch, ai_client, content, path_env).await?);
+                }
+                PrStage::ReturnInputs => {
+                    pr_inputs = Some(pr_content_inputs(repo_path).await?);
+                }
+            }
         }
-    };
+    }
     let (commits, upstream_ref) = git::compute_unpushed_state(repo_path).await;
-    Ok((commits, upstream_ref, pr_info))
+    Ok(CommitChainOutcome {
+        commits,
+        upstream_ref,
+        pr_info,
+        pr_inputs,
+    })
+}
+
+/// What the commit chain does at its PR stage, once the commit and push have
+/// landed. Only consulted for [`CommitChainMode::CommitAndCreatePr`].
+pub enum PrStage {
+    /// Create the PR — from `content` when the caller generated it, otherwise
+    /// from the chain's `ai_client`, otherwise `--fill`.
+    Create(Option<PrContent>),
+    /// Create nothing. Compute what a title and body would be generated from
+    /// and hand them back, for the caller to generate and then call
+    /// [`create_pr`] itself.
+    ///
+    /// This is the fork's path, and it cannot be replaced by generating
+    /// before the chain: see the ordering note above.
+    ReturnInputs,
+}
+
+/// What a commit chain produced. `pr_info` and `pr_inputs` are mutually
+/// exclusive, and which one is set follows the [`PrStage`] the caller asked
+/// for; both are `None` for the two modes that create no PR.
+pub struct CommitChainOutcome {
+    pub commits: Vec<Commit>,
+    pub upstream_ref: Option<String>,
+    pub pr_info: Option<PrInfo>,
+    pub pr_inputs: Option<PrContentInputs>,
 }
 
 /// Pushes `branch` (setting upstream) and returns the refreshed
@@ -67,18 +112,26 @@ pub async fn run_push(
     Ok(git::compute_unpushed_state(repo_path).await)
 }
 
-/// Creates a PR for `branch`. When `ai_client` is `Some`, generates the
-/// title/body via AI with a `gh pr create --fill` fallback; otherwise creates
-/// the PR with `--fill`.
+/// Creates a PR for `branch`.
+///
+/// Three ways in, in precedence order: `content` the caller already generated,
+/// an `ai_client` to generate it here (with a `gh pr create --fill` fallback),
+/// or neither, which is `--fill`.
+///
+/// `content` exists because the process holding the repository and the process
+/// holding the model configuration are not always the same one — see
+/// `fork::remote_pr_content_generated_locally`.
 pub async fn create_pr(
     repo_path: &Path,
     branch: &str,
     ai_client: Option<&dyn AIClient>,
+    content: Option<PrContent>,
     path_env: Option<&str>,
 ) -> anyhow::Result<PrInfo> {
-    match ai_client {
-        Some(ai) => create_pr_with_ai_content(repo_path, branch, ai, path_env).await,
-        None => git::create_pr(repo_path, None, None, path_env).await,
+    match (content, ai_client) {
+        (Some(c), _) => git::create_pr(repo_path, Some(&c.title), Some(&c.body), path_env).await,
+        (None, Some(ai)) => create_pr_with_ai_content(repo_path, branch, ai, path_env).await,
+        (None, None) => git::create_pr(repo_path, None, None, path_env).await,
     }
 }
 
@@ -136,21 +189,58 @@ pub async fn generate_commit_message(
     generate_commit_message_from_diff(diff, branch_name, ai_client).await
 }
 
-/// Generates PR title and body via AI (in parallel) and creates the PR.
-/// Falls back to `gh pr create --fill` if AI generation fails or returns
-/// empty content, so AI-assisted and manual PR creation produce PRs the same
-/// way.
-async fn create_pr_with_ai_content(
-    repo_path: &Path,
-    branch_name: &str,
-    code_review_ai: &dyn AIClient,
-    path_env: Option<&str>,
-) -> anyhow::Result<PrInfo> {
+/// The two things a PR's title and body are generated from.
+///
+/// Split out so the halves can run in different processes, exactly as
+/// [`commit_message_diff`] is: computing these needs the repository, and
+/// generating from them needs a model. The remote-server daemon has the first
+/// and, in this fork, not the second.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct PrContentInputs {
+    /// `merge_base(main, HEAD)..origin/<branch>` — so it is only complete
+    /// after the branch has been pushed, which is why the commit chain
+    /// computes it *after* its push rather than before the whole chain.
+    pub diff: String,
+    pub commit_messages: Vec<String>,
+}
+
+/// A PR's title and body, generated.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PrContent {
+    pub title: String,
+    pub body: String,
+}
+
+/// Reads what a PR's title and body would be generated from. Needs the
+/// repository and no model.
+pub async fn pr_content_inputs(repo_path: &Path) -> anyhow::Result<PrContentInputs> {
     let diff = get_diff_for_pr(repo_path).await?;
+    // Deliberately not fatal, matching the behaviour this was split out of: a
+    // branch with no readable commit subjects still gets a PR from its diff.
     let commit_messages = get_branch_commit_messages(repo_path)
         .await
         .unwrap_or_default();
+    Ok(PrContentInputs {
+        diff,
+        commit_messages,
+    })
+}
 
+/// Generates a PR title and body from inputs already in hand. Needs a model
+/// and no repository.
+///
+/// Empty content is an `Err` rather than an empty [`PrContent`], because both
+/// callers want the same thing when the model gives them nothing useful --
+/// `gh pr create --fill` -- and an empty title makes `gh` fail outright.
+pub async fn generate_pr_content(
+    inputs: PrContentInputs,
+    branch_name: &str,
+    code_review_ai: &dyn AIClient,
+) -> anyhow::Result<PrContent> {
+    let PrContentInputs {
+        diff,
+        commit_messages,
+    } = inputs;
     let title_req = GenerateCodeReviewContentRequest {
         output_type: OutputType::PrTitle,
         diff: diff.clone(),
@@ -164,27 +254,39 @@ async fn create_pr_with_ai_content(
         commit_messages,
     };
 
-    match futures::try_join!(
+    let (title_resp, body_resp) = futures::try_join!(
         code_review_ai.generate_code_review_content(title_req),
         code_review_ai.generate_code_review_content(body_req),
-    ) {
-        Ok((title_resp, body_resp))
-            if !title_resp.content.trim().is_empty() && !body_resp.content.trim().is_empty() =>
-        {
+    )?;
+    if title_resp.content.trim().is_empty() || body_resp.content.trim().is_empty() {
+        anyhow::bail!("AI PR content generation returned an empty title or body");
+    }
+    Ok(PrContent {
+        title: title_resp.content,
+        body: body_resp.content,
+    })
+}
+
+/// Generates PR title and body via AI (in parallel) and creates the PR.
+/// Falls back to `gh pr create --fill` if AI generation fails or returns
+/// empty content, so AI-assisted and manual PR creation produce PRs the same
+/// way.
+async fn create_pr_with_ai_content(
+    repo_path: &Path,
+    branch_name: &str,
+    code_review_ai: &dyn AIClient,
+    path_env: Option<&str>,
+) -> anyhow::Result<PrInfo> {
+    let inputs = pr_content_inputs(repo_path).await?;
+    match generate_pr_content(inputs, branch_name, code_review_ai).await {
+        Ok(content) => {
             git::create_pr(
                 repo_path,
-                Some(&title_resp.content),
-                Some(&body_resp.content),
+                Some(&content.title),
+                Some(&content.body),
                 path_env,
             )
             .await
-        }
-        Ok(_) => {
-            // Empty title/body would make `gh pr create` fail; fall back to --fill.
-            log::warn!(
-                "AI PR content generation returned empty title/body, falling back to --fill"
-            );
-            git::create_pr(repo_path, None, None, path_env).await
         }
         Err(err) => {
             log::warn!("AI PR content generation failed, falling back to --fill: {err}");

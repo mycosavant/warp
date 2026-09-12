@@ -1038,23 +1038,8 @@ pub async fn create_pr(
     let base = detect_main_branch(repo_path).await?;
     let base = base.trim();
     let base = base.strip_prefix("origin/").unwrap_or(base);
-    let sanitized_title;
-    let args: Vec<&str> = match (title, body) {
-        (Some(t), Some(b)) => {
-            sanitized_title = sanitize_pr_title(t);
-            vec![
-                "pr",
-                "create",
-                "--base",
-                base,
-                "--title",
-                &sanitized_title,
-                "--body",
-                b,
-            ]
-        }
-        _ => vec!["pr", "create", "--base", base, "--fill"],
-    };
+    let args = pr_create_args(base, title, body);
+    let args: Vec<&str> = args.iter().map(String::as_str).collect();
     let stdout = run_gh_command(repo_path, &args, path_env).await?;
     // `gh pr create` prints the PR URL on success.
     let url = stdout.trim().to_string();
@@ -1071,6 +1056,40 @@ pub async fn create_pr(
         draft: false,
         base_branch: base.to_string(),
     })
+}
+
+/// Builds the `gh pr create` argument list.
+///
+/// Extracted from [`create_pr`] so the title/body-versus-`--fill` decision can
+/// be asserted without running `gh`. That is not a convenience: `gh` is
+/// resolved through the *parent* process's `PATH`, so a fake one placed on the
+/// `path_env` handed to the child is never executed on a machine that has a
+/// real `gh` — every test here that writes a fake `gh` is running the real one
+/// and passing because the fake imitates its error (measured 2026-09-12).
+///
+/// Both a title and a body, or neither: `gh pr create --title` without
+/// `--body` opens an editor, which would hang a daemon.
+#[cfg(feature = "local_fs")]
+fn pr_create_args(base: &str, title: Option<&str>, body: Option<&str>) -> Vec<String> {
+    match (title, body) {
+        (Some(t), Some(b)) => vec![
+            "pr".to_string(),
+            "create".to_string(),
+            "--base".to_string(),
+            base.to_string(),
+            "--title".to_string(),
+            sanitize_pr_title(t),
+            "--body".to_string(),
+            b.to_string(),
+        ],
+        _ => vec![
+            "pr".to_string(),
+            "create".to_string(),
+            "--base".to_string(),
+            base.to_string(),
+            "--fill".to_string(),
+        ],
+    }
 }
 
 /// Trims an AI-generated PR title to a single line and caps its length.

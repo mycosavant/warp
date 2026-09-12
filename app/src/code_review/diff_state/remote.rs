@@ -11,7 +11,9 @@
 use std::sync::Arc;
 
 use instant::Instant;
-use remote_server::manager::{CommitMessageOutcome, RemoteServerManager, RemoteServerManagerEvent};
+use remote_server::manager::{
+    CommitMessageOutcome, CreatePrOutcome, RemoteServerManager, RemoteServerManagerEvent,
+};
 use warp_core::{HostId, SessionId, send_telemetry_from_ctx};
 use warp_util::remote_path::RemotePath;
 use warp_util::standardized_path::StandardizedPath;
@@ -53,6 +55,26 @@ pub struct RemoteDiffStateModel {
     metadata: Option<DiffMetadata>,
     /// Start time for the latest caller-tracked full diff snapshot request.
     tracked_diff_load_start_time: Option<Instant>,
+    /// Set while this side is finishing a PR the daemon deliberately did not
+    /// create. See [`PendingPr`].
+    pending_pr: Option<PendingPr>,
+}
+
+/// A PR the client is completing on the daemon's behalf.
+///
+/// Under fork policy the daemon returns the *inputs* for a PR title and body
+/// rather than generating them, because the model configuration lives in this
+/// process. That turns one round trip into two, and this is what has to be
+/// remembered across the gap: nothing in the second response says which
+/// branch it was for, or which completion event the dialog is waiting on.
+struct PendingPr {
+    /// Passed to the model as context, and back to the daemon on the create.
+    branch: String,
+    /// `true` when a commit chain asked for the inputs. The chain's commit and
+    /// push have already happened; the dialog is waiting for
+    /// [`GitOpResult::CommitChain`], not [`GitOpResult::PrCreated`], and
+    /// emitting the wrong one leaves it open.
+    from_commit_chain: bool,
 }
 
 impl warpui::Entity for RemoteDiffStateModel {
@@ -107,6 +129,7 @@ impl RemoteDiffStateModel {
             state: InternalRemoteDiffState::Loading,
             metadata: None,
             tracked_diff_load_start_time: None,
+            pending_pr: None,
         }
     }
 
@@ -197,7 +220,9 @@ impl RemoteDiffStateModel {
                 host_id,
                 repo_path,
                 result,
+                branch,
             } if self.remote_path.matches(host_id, repo_path) => {
+                let _ = branch;
                 self.handle_create_pr_response(result, ctx);
             }
             RemoteServerManagerEvent::GenerateCommitMessageResponse {
@@ -666,6 +691,35 @@ impl RemoteDiffStateModel {
                 ctx.emit(DiffStateModelEvent::MetadataRefreshed(Box::new(
                     metadata.clone(),
                 )));
+                // The commit and the push landed; the PR did not, because we
+                // asked for its inputs instead. Refresh the header — that part
+                // is real — but hold the completion event until the PR exists.
+                if let Some(inputs) = success.pr_inputs.as_ref() {
+                    let Some(branch) = self
+                        .pending_pr
+                        .as_ref()
+                        .map(|pending| pending.branch.clone())
+                    else {
+                        log::error!(
+                            "RemoteDiffStateModel: chain returned PR inputs with no pending PR"
+                        );
+                        ctx.emit(DiffStateModelEvent::GitOpCompleted(
+                            super::GitOpResult::CommitChainCompleted(Err(
+                                "committed and pushed, but the PR request was lost".to_string(),
+                            )),
+                        ));
+                        return;
+                    };
+                    self.generate_pr_content_and_create(
+                        git_actions::PrContentInputs {
+                            diff: inputs.diff.clone(),
+                            commit_messages: inputs.commit_messages.clone(),
+                        },
+                        branch,
+                        ctx,
+                    );
+                    return;
+                }
                 Ok(pr_info)
             }
             Err(msg) => Err(msg.clone()),
@@ -694,13 +748,52 @@ impl RemoteDiffStateModel {
 
     fn handle_create_pr_response(
         &mut self,
-        result: &Result<remote_server::proto::PrInfo, String>,
+        result: &Result<CreatePrOutcome, String>,
         ctx: &mut ModelContext<Self>,
     ) {
+        // The daemon returned the inputs instead of a PR: generate here and
+        // come back. Nothing is emitted yet — the dialog is still waiting.
+        if let Ok(CreatePrOutcome::Inputs(inputs)) = result {
+            let Some(pending) = self.pending_pr.as_ref() else {
+                // Inputs nobody asked for. Emitting an error is better than
+                // silence, which would leave the dialog spinning forever.
+                log::error!("RemoteDiffStateModel: PR inputs arrived with no pending PR");
+                ctx.emit(DiffStateModelEvent::GitOpCompleted(
+                    super::GitOpResult::PrCreated(Err(
+                        "received PR content with no request outstanding".to_string(),
+                    )),
+                ));
+                return;
+            };
+            let branch = pending.branch.clone();
+            self.generate_pr_content_and_create(
+                git_actions::PrContentInputs {
+                    diff: inputs.diff.clone(),
+                    commit_messages: inputs.commit_messages.clone(),
+                },
+                branch,
+                ctx,
+            );
+            return;
+        }
+
         let domain_result = match result {
-            Ok(proto_pr) => Ok(PrInfo::from(proto_pr)),
+            Ok(CreatePrOutcome::Created(proto_pr)) => Ok(PrInfo::from(proto_pr)),
+            Ok(CreatePrOutcome::Inputs(_)) => unreachable!("handled above"),
             Err(msg) => Err(msg.clone()),
         };
+        // A PR that finishes a commit chain has to complete the *chain*, or
+        // the dialog keeps waiting for an event that never comes.
+        let from_commit_chain = self
+            .pending_pr
+            .take()
+            .is_some_and(|pending| pending.from_commit_chain);
+        if from_commit_chain {
+            ctx.emit(DiffStateModelEvent::GitOpCompleted(
+                super::GitOpResult::CommitChainCompleted(domain_result.map(Some)),
+            ));
+            return;
+        }
         ctx.emit(DiffStateModelEvent::GitOpCompleted(
             super::GitOpResult::PrCreated(domain_result),
         ));
@@ -735,7 +828,7 @@ impl RemoteDiffStateModel {
     /// arrives as a `CommitChainResponse` manager event, handled above.
     #[allow(clippy::too_many_arguments)]
     pub fn git_commit_chain(
-        &self,
+        &mut self,
         mode: CommitChainMode,
         message: String,
         include_unstaged: bool,
@@ -743,6 +836,20 @@ impl RemoteDiffStateModel {
         autogenerate_pr_content: bool,
         ctx: &mut ModelContext<Self>,
     ) {
+        // The chain's PR stage has the same problem as the standalone create,
+        // plus an ordering constraint: the PR diff is taken against
+        // `origin/<branch>`, so the inputs cannot be computed until the
+        // chain's own commit and push have landed. The daemon therefore runs
+        // the chain, stops before the PR, and hands the inputs back.
+        let generate_here = matches!(mode, CommitChainMode::CommitAndCreatePr)
+            && autogenerate_pr_content
+            && fork::remote_pr_content_generated_locally();
+        if generate_here {
+            self.pending_pr = Some(PendingPr {
+                branch: branch.clone(),
+                from_commit_chain: true,
+            });
+        }
         let host_id = self.remote_path.host_id.clone();
         let repo_path = self.remote_path.path.clone();
         RemoteServerManager::handle(ctx).update(ctx, |mgr, ctx| {
@@ -754,6 +861,7 @@ impl RemoteDiffStateModel {
                 include_unstaged,
                 branch,
                 autogenerate_pr_content,
+                generate_here,
                 ctx,
             );
         });
@@ -843,16 +951,87 @@ impl RemoteDiffStateModel {
     /// `gh pr create --fill`); `branch` is passed as context for that generation.
     #[allow(clippy::too_many_arguments)]
     pub fn create_pr(
-        &self,
+        &mut self,
         branch: String,
         autogenerate_content: bool,
+        ctx: &mut ModelContext<Self>,
+    ) {
+        // Under fork policy, ask for the inputs and generate here. Only when
+        // the caller wanted generated content at all: a plain create still
+        // goes in one trip and still gets `gh pr create --fill`.
+        let generate_here = autogenerate_content && fork::remote_pr_content_generated_locally();
+        if generate_here {
+            self.pending_pr = Some(PendingPr {
+                branch: branch.clone(),
+                from_commit_chain: false,
+            });
+        }
+        let host_id = self.remote_path.host_id.clone();
+        let repo_path = self.remote_path.path.clone();
+        RemoteServerManager::handle(ctx).update(ctx, |mgr, ctx| {
+            mgr.git_create_pr(
+                host_id,
+                repo_path,
+                branch,
+                autogenerate_content,
+                None,
+                generate_here,
+                ctx,
+            );
+        });
+    }
+
+    /// Asks the daemon to create the PR, with content this side generated.
+    /// The second of the two trips; `autogenerate_content` is false because
+    /// the generating is done.
+    fn create_pr_with_content(
+        &self,
+        branch: String,
+        content: Option<(String, String)>,
         ctx: &mut ModelContext<Self>,
     ) {
         let host_id = self.remote_path.host_id.clone();
         let repo_path = self.remote_path.path.clone();
         RemoteServerManager::handle(ctx).update(ctx, |mgr, ctx| {
-            mgr.git_create_pr(host_id, repo_path, branch, autogenerate_content, ctx);
+            mgr.git_create_pr(host_id, repo_path, branch, false, content, false, ctx);
         });
+    }
+
+    /// Generates a PR title and body here, from inputs the daemon computed,
+    /// then asks it to create the PR.
+    ///
+    /// A generation failure is **not** an error: it sends the create with no
+    /// content, which is `gh pr create --fill`. That is the same fallback the
+    /// daemon-side generator has always had, kept because losing the PR
+    /// entirely because a model was unreachable would be a worse trade than
+    /// a title git wrote.
+    fn generate_pr_content_and_create(
+        &self,
+        inputs: git_actions::PrContentInputs,
+        branch: String,
+        ctx: &mut ModelContext<Self>,
+    ) {
+        let ai_client = ServerApiProvider::handle(ctx).as_ref(ctx).get_ai_client();
+        let branch_for_generate = branch.clone();
+        ctx.spawn(
+            async move {
+                git_actions::generate_pr_content(inputs, &branch_for_generate, ai_client.as_ref())
+                    .await
+            },
+            move |me, result, ctx| {
+                let content = match result {
+                    Ok(content) => Some((content.title, content.body)),
+                    Err(err) => {
+                        log::warn!(
+                            "RemoteDiffStateModel: PR content generation failed, \
+                             falling back to --fill: {err}"
+                        );
+                        None
+                    }
+                };
+                me.create_pr_with_content(branch, content, ctx);
+            },
+        );
     }
 
     // ── Write API ────────────────────────────────────────────────────

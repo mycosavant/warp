@@ -352,6 +352,16 @@ message GitCommitChainRequest {
   // daemon (get_diff_for_pr + generate_code_review_content), falling back to
   // `gh pr create --fill`. Ignored for the other modes.
   bool autogenerate_pr_content = 6;
+  // When mode is COMMIT_AND_CREATE_PR: commit and push as usual, then return
+  // the PR inputs in `pr_inputs` and create no PR. The client generates and
+  // calls GitCreatePr with the title and body.
+  //
+  // This has to happen inside the chain rather than before it. The PR diff is
+  // taken against `origin/<branch>`, so inputs computed before the commit and
+  // push would describe the branch without the change being committed.
+  // Ignored for the other modes, and ignored when autogenerate_pr_content is
+  // false — a caller that wanted `--fill` still gets it in one round trip.
+  bool return_pr_inputs = 7;
 }
 
 // What to run after the commit succeeds.
@@ -373,6 +383,9 @@ message GitCommitChainResponse {
 message GitCommitChainSuccess {
   GitOpDelta delta = 1;
   optional PrInfo pr_info = 2;
+  // Set instead of pr_info when the request asked for `return_pr_inputs`.
+  // The commit and the push have happened; the PR has not.
+  optional GitPrContentInputs pr_inputs = 3;
 }
 
 // Client → server: push `branch` to origin, setting upstream tracking.
@@ -391,20 +404,47 @@ message GitPushResponse {
 // Client → server: create a PR for the current branch (must be pushed).
 // Absent title/body => `gh pr create --fill`, unless autogenerate_content is
 // set (then the daemon generates the title/body via AI first).
+// What a PR title and body are generated from. Computed where the repository
+// is; generated wherever the model configuration is.
+message GitPrContentInputs {
+  // `merge_base(main, HEAD)..origin/<branch>`, so it is only complete once
+  // the branch has been pushed.
+  string diff = 1;
+  repeated string commit_messages = 2;
+}
+
 message GitCreatePrRequest {
   string repo_path = 1;
-  // Current branch name, passed as context to daemon-side AI generation.
+  // Current branch name, passed as context to AI generation on whichever
+  // side runs it.
   string branch = 2;
   // When true and title/body are both absent, the daemon generates the PR
   // title + body via AI (get_diff_for_pr + generate_code_review_content)
   // before running `gh pr create`, falling back to `--fill` on failure.
   bool autogenerate_content = 3;
+  // Title and body the *client* generated. When both are set the daemon runs
+  // `gh pr create` with them and calls no model. Set by the fork, because the
+  // daemon inside the WSL distribution has no endpoint, model or keychain —
+  // the same reason `GitGenerateCommitMessageRequest` carries
+  // `return_diff_only`. Until 2026-09-12 this message had no such fields
+  // while the daemon's handler already claimed in a comment that it honoured
+  // them.
+  optional string title = 4;
+  optional string body = 5;
+  // When set, create nothing: compute the inputs above and return them in the
+  // `inputs` response variant, for the client to generate from and then send
+  // back in `title`/`body`. Two round trips, deliberately — the diff has to be
+  // read beside the files and the model has to be called beside its
+  // configuration.
+  bool return_inputs_only = 6;
 }
 
 message GitCreatePrResponse {
   oneof result {
     PrInfo success = 1;
     GitOpError error = 2;
+    // Returned when `return_inputs_only` was set. No PR was created.
+    GitPrContentInputs inputs = 3;
   }
 }
 

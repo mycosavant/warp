@@ -284,6 +284,33 @@ pub fn remote_commit_message_generated_locally() -> bool {
     local_ai_completions_enabled()
 }
 
+/// Whether a *remote* repository's PR title and body are generated on this
+/// side, from inputs the daemon returns, instead of by the daemon.
+///
+/// Same fact as [`remote_commit_message_generated_locally`] and the same
+/// cause — the model is configured in this process and the daemon inside the
+/// WSL distribution has none of it — but it hid for longer, and the reason is
+/// worth keeping. The commit dialog went **blank**, so it was filed within a
+/// day. `create_pr` falls back to `gh pr create --fill`, so the same broken
+/// generator produced a real PR with a title git wrote, and nobody noticed
+/// for five days. **A fallback is not a fix; it is a defect that stopped
+/// reporting itself.**
+///
+/// That fallback is kept on this path too: when generation here fails, the
+/// create is sent with no content and `--fill` still applies. Losing the PR
+/// because a local model was down would be a worse trade than a plain title.
+///
+/// Costs a second round trip, unlike the commit message, because something
+/// has to run afterwards. For the commit chain it also has to happen *inside*
+/// the chain: the PR diff is taken against `origin/<branch>`, so inputs
+/// computed before the chain's own commit and push would describe the branch
+/// without the change being committed.
+///
+/// Consumed by `code_review::diff_state::remote`.
+pub fn remote_pr_content_generated_locally() -> bool {
+    local_ai_completions_enabled()
+}
+
 /// Set to `1`, `on` or `true` to answer agent conversations from the local
 /// `claude` CLI instead of `api.warp.dev`.
 const LOCAL_AGENT_ENV_VAR: &str = "WARP_FORK_LOCAL_AGENT";

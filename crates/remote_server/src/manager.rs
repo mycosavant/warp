@@ -144,7 +144,12 @@ pub enum RemoteServerOperation {
 #[derive(Clone, Debug)]
 pub struct CommitChainSuccess {
     pub delta: GitOpDelta,
+    /// The PR the daemon created, when it created one.
     pub pr_info: Option<PrInfo>,
+    /// Set instead of `pr_info` when the request asked for `return_pr_inputs`:
+    /// the commit and the push have happened and the PR has not. The client
+    /// generates a title and body from these and calls `git_create_pr`.
+    pub pr_inputs: Option<crate::proto::GitPrContentInputs>,
 }
 
 #[derive(Clone, Copy, Debug, Serialize)]
@@ -417,6 +422,20 @@ pub enum CommitMessageOutcome {
     Diff(String),
 }
 
+/// What a `GitCreatePr` request came back with — the created PR, or the
+/// inputs for this side to generate a title and body from.
+///
+/// [`CreatePrOutcome::Inputs`] is only ever reached by a client that set
+/// `return_inputs_only`, which is the fork's path and costs a second round
+/// trip: the diff must be read beside the files, and the model must be called
+/// beside its configuration. See [`CommitMessageOutcome`], which is the same
+/// split with one fewer trip because nothing has to run afterwards.
+#[derive(Clone, Debug, PartialEq)]
+pub enum CreatePrOutcome {
+    Created(crate::proto::PrInfo),
+    Inputs(crate::proto::GitPrContentInputs),
+}
+
 /// Events emitted by [`RemoteServerManager`].
 #[derive(Clone, Debug)]
 pub enum RemoteServerManagerEvent {
@@ -605,11 +624,16 @@ pub enum RemoteServerManagerEvent {
         repo_path: StandardizedPath,
         result: Result<GitOpDelta, String>,
     },
-    /// Response to a standalone create-PR.
+    /// Response to a standalone create-PR: the PR, or the inputs to generate
+    /// its title and body from.
     CreatePrResponse {
         host_id: HostId,
         repo_path: StandardizedPath,
-        result: Result<PrInfo, String>,
+        result: Result<CreatePrOutcome, String>,
+        /// The branch the request carried, echoed so a client generating from
+        /// returned inputs still has the context the daemon would have passed
+        /// to the model. Nothing else in the event supplies it.
+        branch: String,
     },
     /// Response to a commit-message generation request. `Ok` carries either
     /// the daemon-generated message or the raw diff for the client to generate
@@ -1130,7 +1154,8 @@ impl HostRequestHandle {
         include_unstaged: bool,
         branch: String,
         autogenerate_pr_content: bool,
-    ) -> Result<(crate::proto::GitOpDelta, Option<crate::proto::PrInfo>), HostRequestError> {
+        return_pr_inputs: bool,
+    ) -> Result<CommitChainSuccess, HostRequestError> {
         let msg = self
             .send(crate::proto::host_scoped_request::Message::GitCommitChain(
                 crate::proto::GitCommitChainRequest {
@@ -1140,6 +1165,7 @@ impl HostRequestHandle {
                     branch,
                     mode: mode as i32,
                     autogenerate_pr_content,
+                    return_pr_inputs,
                 },
             ))
             .await?;
@@ -1147,7 +1173,11 @@ impl HostRequestHandle {
             Some(crate::proto::server_message::Message::GitCommitChainResponse(resp)) => {
                 match resp.result {
                     Some(crate::proto::git_commit_chain_response::Result::Success(success)) => {
-                        Ok((success.delta.unwrap_or_default(), success.pr_info))
+                        Ok(CommitChainSuccess {
+                            delta: success.delta.unwrap_or_default(),
+                            pr_info: success.pr_info,
+                            pr_inputs: success.pr_inputs,
+                        })
                     }
                     Some(crate::proto::git_commit_chain_response::Result::Error(e)) => {
                         Err(HostRequestError::OperationFailed(e.message))
@@ -1203,13 +1233,22 @@ impl HostRequestHandle {
         repo_path: &StandardizedPath,
         branch: String,
         autogenerate_content: bool,
-    ) -> Result<crate::proto::PrInfo, HostRequestError> {
+        content: Option<(String, String)>,
+        return_inputs_only: bool,
+    ) -> Result<CreatePrOutcome, HostRequestError> {
+        let (title, body) = match content {
+            Some((t, b)) => (Some(t), Some(b)),
+            None => (None, None),
+        };
         let msg = self
             .send(crate::proto::host_scoped_request::Message::GitCreatePr(
                 crate::proto::GitCreatePrRequest {
                     repo_path: repo_path.to_string(),
                     branch,
                     autogenerate_content,
+                    title,
+                    body,
+                    return_inputs_only,
                 },
             ))
             .await?;
@@ -1217,7 +1256,10 @@ impl HostRequestHandle {
             Some(crate::proto::server_message::Message::GitCreatePrResponse(resp)) => {
                 match resp.result {
                     Some(crate::proto::git_create_pr_response::Result::Success(pr_info)) => {
-                        Ok(pr_info)
+                        Ok(CreatePrOutcome::Created(pr_info))
+                    }
+                    Some(crate::proto::git_create_pr_response::Result::Inputs(inputs)) => {
+                        Ok(CreatePrOutcome::Inputs(inputs))
                     }
                     Some(crate::proto::git_create_pr_response::Result::Error(e)) => {
                         Err(HostRequestError::OperationFailed(e.message))
@@ -3294,6 +3336,7 @@ impl RemoteServerManager {
         include_unstaged: bool,
         branch: String,
         autogenerate_pr_content: bool,
+        return_pr_inputs: bool,
         ctx: &mut ModelContext<Self>,
     ) {
         let handle = self.host_request_handle(&host_id);
@@ -3305,7 +3348,9 @@ impl RemoteServerManager {
             .spawn(async move {
                 // Single round trip: the daemon runs commit (+ optional push +
                 // optional create-PR) host-local and returns the final delta
-                // plus any created PR (see `handle_git_commit_chain`).
+                // plus any created PR (see `handle_git_commit_chain`). Under
+                // `return_pr_inputs` it stops after the push and the client
+                // spends a second trip on `git_create_pr`.
                 let result = handle
                     .git_commit_chain(
                         &repo_path,
@@ -3314,9 +3359,9 @@ impl RemoteServerManager {
                         include_unstaged,
                         branch,
                         autogenerate_pr_content,
+                        return_pr_inputs,
                     )
                     .await
-                    .map(|(delta, pr_info)| CommitChainSuccess { delta, pr_info })
                     .map_err(|e| e.to_string());
                 let _ = spawner
                     .spawn(move |_me, ctx| {
@@ -3375,17 +3420,26 @@ impl RemoteServerManager {
         repo_path: StandardizedPath,
         branch: String,
         autogenerate_content: bool,
+        content: Option<(String, String)>,
+        return_inputs_only: bool,
         ctx: &mut ModelContext<Self>,
     ) {
         let handle = self.host_request_handle(&host_id);
 
         let repo_path_for_event = repo_path.clone();
         let host_id_for_event = host_id.clone();
+        let branch_for_event = branch.clone();
         let spawner = self.spawner.clone();
         ctx.background_executor()
             .spawn(async move {
                 let result = handle
-                    .git_create_pr(&repo_path, branch, autogenerate_content)
+                    .git_create_pr(
+                        &repo_path,
+                        branch,
+                        autogenerate_content,
+                        content,
+                        return_inputs_only,
+                    )
                     .await
                     .map_err(|e| e.to_string());
                 let _ = spawner
@@ -3394,6 +3448,7 @@ impl RemoteServerManager {
                             host_id: host_id_for_event,
                             repo_path: repo_path_for_event,
                             result,
+                            branch: branch_for_event,
                         });
                     })
                     .await;

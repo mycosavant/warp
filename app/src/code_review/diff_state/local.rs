@@ -1302,13 +1302,21 @@ impl LocalDiffStateModel {
                     include_unstaged,
                     &branch,
                     ai_client.as_deref(),
+                    // The local path holds the model configuration in this
+                    // same process, so it generates here as it always has.
+                    git_actions::PrStage::Create(None),
                     path_env.as_deref(),
                 )
                 .await
             },
             |me, result, ctx| {
                 let domain_result = match result {
-                    Ok((commits, upstream_ref, pr_info)) => {
+                    Ok(git_actions::CommitChainOutcome {
+                        commits,
+                        upstream_ref,
+                        pr_info,
+                        ..
+                    }) => {
                         // Apply the delta for an immediate header refresh. Local
                         // PR info is sourced from `GitRepoStatusModel`, so it is
                         // not written to metadata here.
@@ -1379,6 +1387,7 @@ impl LocalDiffStateModel {
                     &repo_path,
                     &branch,
                     ai_client.as_deref(),
+                    None,
                     path_env.as_deref(),
                 )
                 .await

@@ -439,3 +439,64 @@ async fn detached_tag_display_returns_short_sha() {
         "expected {full_sha} to start with {result}"
     );
 }
+
+/// A supplied title and body become `--title`/`--body`, and suppress `--fill`.
+///
+/// The contract the remote PR path depends on: under fork policy the client
+/// generates the content and the daemon must use it rather than letting git
+/// write a title over the top. Asserted on the argument list rather than by
+/// running `gh`, because `gh` is resolved through the parent process's `PATH`
+/// — a fake one on the child's `path_env` is never executed when a real `gh`
+/// is installed (measured 2026-09-12, and it is why every fake-`gh` test in
+/// this file is running the real binary).
+#[cfg(feature = "local_fs")]
+#[test]
+fn supplied_pr_content_becomes_title_and_body_args() {
+    let args = super::pr_create_args("main", Some("Add the probe"), Some("Body text."));
+    assert_eq!(
+        args,
+        vec![
+            "pr",
+            "create",
+            "--base",
+            "main",
+            "--title",
+            "Add the probe",
+            "--body",
+            "Body text.",
+        ]
+    );
+}
+
+/// A multi-line model answer is cut to its first line for the title.
+///
+/// `gh pr create --title` takes one line; the rest of a model's answer
+/// belongs in the body. This is the sanitising the client now relies on,
+/// since the content it sends comes straight from a model's output.
+#[cfg(feature = "local_fs")]
+#[test]
+fn a_multi_line_generated_title_is_cut_to_its_first_line() {
+    let args = super::pr_create_args("main", Some("First line\nsecond line"), Some("Body."));
+    assert_eq!(args[5], "First line");
+}
+
+/// Missing either half falls back to `--fill`.
+///
+/// Both halves or neither: `gh pr create --title` with no `--body` opens an
+/// editor, which would hang the daemon waiting on a terminal nobody is at.
+#[cfg(feature = "local_fs")]
+#[test]
+fn a_missing_title_or_body_falls_back_to_fill() {
+    for (title, body) in [
+        (None, None),
+        (Some("only a title"), None),
+        (None, Some("only a body")),
+    ] {
+        let args = super::pr_create_args("main", title, body);
+        assert_eq!(
+            args,
+            vec!["pr", "create", "--base", "main", "--fill"],
+            "title={title:?} body={body:?} must not reach gh half-specified"
+        );
+    }
+}

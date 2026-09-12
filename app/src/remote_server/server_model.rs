@@ -49,20 +49,21 @@ use super::proto::{
     GitGenerateCommitMessageRequest, GitGenerateCommitMessageResponse,
     GitGetCommittedBranchFilesRequest, GitGetCommittedBranchFilesResponse,
     GitGetCommittedBranchFilesSuccess, GitHubPrInfoPush, GitHubRepositoryInfoPush, GitOpDelta,
-    GitOpError, GitPushRequest, GitPushResponse, GitStatusPush, HomeSkillMetadata, IndexCodebase,
-    Initialize, InitializeResponse, MissingFragmentMetadata, NavigatedToDirectory,
-    NavigatedToDirectoryResponse, OpenBuffer, OpenBufferResponse, ReadFileContextResponse,
-    RemoteAgentContextSnapshot, RemoteContextFileProto, RemoteSkillProto, ResolveConflict,
-    ResolveConflictResponse, ResolveConflictSuccess, ResyncCodebase, RipgrepSearchRequest,
-    RunCommandError, RunCommandErrorCode, RunCommandRequest, RunCommandResponse, RunCommandSuccess,
-    SaveBuffer, SaveBufferResponse, SaveBufferSuccess, ServerMessage, SessionBootstrapped,
-    TextEdit, UpdateGitHubPrInfo, UpdateGitHubRepoInfo, UpdateGitStatus, UploadHandoffSnapshot,
-    WriteFile, WriteFileResponse, WriteFileSuccess, client_message, delete_file_response,
-    discard_files_response, get_diff_state_response, get_fragment_metadata_from_hash_response,
-    git_commit_chain_response, git_create_pr_response, git_generate_commit_message_response,
-    git_get_committed_branch_files_response, git_push_response, host_scoped_request, notification,
-    remote_skill_proto, resolve_conflict_response, run_command_response, save_buffer_response,
-    server_message, session_scoped_request, write_file_response,
+    GitOpError, GitPrContentInputs, GitPushRequest, GitPushResponse, GitStatusPush,
+    HomeSkillMetadata, IndexCodebase, Initialize, InitializeResponse, MissingFragmentMetadata,
+    NavigatedToDirectory, NavigatedToDirectoryResponse, OpenBuffer, OpenBufferResponse,
+    ReadFileContextResponse, RemoteAgentContextSnapshot, RemoteContextFileProto, RemoteSkillProto,
+    ResolveConflict, ResolveConflictResponse, ResolveConflictSuccess, ResyncCodebase,
+    RipgrepSearchRequest, RunCommandError, RunCommandErrorCode, RunCommandRequest,
+    RunCommandResponse, RunCommandSuccess, SaveBuffer, SaveBufferResponse, SaveBufferSuccess,
+    ServerMessage, SessionBootstrapped, TextEdit, UpdateGitHubPrInfo, UpdateGitHubRepoInfo,
+    UpdateGitStatus, UploadHandoffSnapshot, WriteFile, WriteFileResponse, WriteFileSuccess,
+    client_message, delete_file_response, discard_files_response, get_diff_state_response,
+    get_fragment_metadata_from_hash_response, git_commit_chain_response, git_create_pr_response,
+    git_generate_commit_message_response, git_get_committed_branch_files_response,
+    git_push_response, host_scoped_request, notification, remote_skill_proto,
+    resolve_conflict_response, run_command_response, save_buffer_response, server_message,
+    session_scoped_request, write_file_response,
 };
 use super::server_buffer_tracker::{PendingBufferRequestKind, ServerBufferTracker};
 use super::{diff_state_proto, ripgrep_search};
@@ -75,6 +76,14 @@ use crate::terminal::local_shell::LocalShellState;
 use crate::terminal::shell::ShellType;
 
 /// How long the daemon waits with no connections before exiting.
+/// What `handle_create_pr` produced. Never crosses the wire as itself — it
+/// picks which `GitCreatePrResponse` variant to send — so it lives here rather
+/// than beside the client's own outcome type in `remote_server::manager`.
+enum CreatePrOutcome {
+    Created(crate::util::git::PrInfo),
+    Inputs(git_actions::PrContentInputs),
+}
+
 pub const GRACE_PERIOD: std::time::Duration = std::time::Duration::from_secs(10 * 60);
 
 /// Server-side cap on the number of branches returned by `GetBranches`.
@@ -3169,9 +3178,24 @@ impl ServerModel {
         // asked for it. Capture the client on the main thread (ctx isn't
         // available inside the spawned future) and only for the PR mode, so
         // commit-only / commit-and-push never touch the AI path.
+        //
+        // Unless the client asked for the inputs instead, which is the fork's
+        // path: then no model is called here at all and the chain stops after
+        // the push. `return_pr_inputs` is only honoured alongside
+        // `autogenerate_pr_content`, so a caller that wanted `--fill` still
+        // gets it without a second round trip.
+        let return_pr_inputs = matches!(mode, GitCommitChainMode::CommitAndCreatePr)
+            && msg.autogenerate_pr_content
+            && msg.return_pr_inputs;
         let ai_client = (matches!(mode, GitCommitChainMode::CommitAndCreatePr)
-            && msg.autogenerate_pr_content)
+            && msg.autogenerate_pr_content
+            && !return_pr_inputs)
             .then(|| ServerApiProvider::handle(ctx).as_ref(ctx).get_ai_client());
+        let pr_stage = if return_pr_inputs {
+            git_actions::PrStage::ReturnInputs
+        } else {
+            git_actions::PrStage::Create(None)
+        };
         let chain_mode = CommitChainMode::from(mode);
         let path_future = Self::interactive_path_future(ctx);
         let request_id_for_response = request_id.clone();
@@ -3196,13 +3220,19 @@ impl ServerModel {
                     include_unstaged,
                     &branch,
                     ai_client.as_deref(),
+                    pr_stage,
                     path_env,
                 )
                 .await
             },
             move |me, result, _ctx| {
                 let message = match result {
-                    Ok((commits, upstream_ref, pr_info)) => {
+                    Ok(git_actions::CommitChainOutcome {
+                        commits,
+                        upstream_ref,
+                        pr_info,
+                        pr_inputs,
+                    }) => {
                         server_message::Message::GitCommitChainResponse(GitCommitChainResponse {
                             result: Some(git_commit_chain_response::Result::Success(
                                 GitCommitChainSuccess {
@@ -3214,6 +3244,10 @@ impl ServerModel {
                                         upstream_ref,
                                     }),
                                     pr_info: pr_info.as_ref().map(super::proto::PrInfo::from),
+                                    pr_inputs: pr_inputs.map(|i| GitPrContentInputs {
+                                        diff: i.diff,
+                                        commit_messages: i.commit_messages,
+                                    }),
                                 },
                             )),
                         })
@@ -3315,9 +3349,17 @@ impl ServerModel {
         // dialog uses, so local and remote PRs are produced identically
         // (AI-with-`--fill`-fallback). The daemon's `ServerApiProvider` is
         // authenticated with the user's forwarded bearer token.
-        let ai_client = msg
-            .autogenerate_content
+        //
+        // "didn't already supply them" was aspirational until 2026-09-12: the
+        // request had no title/body fields at all, so this comment described a
+        // precedence that could not happen. It can now, and `content` wins.
+        let content = match (msg.title, msg.body) {
+            (Some(title), Some(body)) => Some(git_actions::PrContent { title, body }),
+            _ => None,
+        };
+        let ai_client = (msg.autogenerate_content && content.is_none())
             .then(|| ServerApiProvider::handle(ctx).as_ref(ctx).get_ai_client());
+        let return_inputs_only = msg.return_inputs_only;
         let path_future = Self::interactive_path_future(ctx);
         let request_id_for_response = request_id.clone();
         let handle = self.spawn_request_handler(
@@ -3329,16 +3371,40 @@ impl ServerModel {
                         "another git operation is in progress (merge, rebase, cherry-pick, or a lock file is present)"
                     );
                 }
-                git_actions::create_pr(&repo_path, &branch, ai_client.as_deref(), path_env.as_deref())
-                    .await
+                if return_inputs_only {
+                    return git_actions::pr_content_inputs(&repo_path)
+                        .await
+                        .map(CreatePrOutcome::Inputs);
+                }
+                git_actions::create_pr(
+                    &repo_path,
+                    &branch,
+                    ai_client.as_deref(),
+                    content,
+                    path_env.as_deref(),
+                )
+                .await
+                .map(CreatePrOutcome::Created)
             },
             move |me, result, _ctx| {
                 let message = match result {
-                    Ok(pr) => server_message::Message::GitCreatePrResponse(GitCreatePrResponse {
-                        result: Some(git_create_pr_response::Result::Success(
-                            super::proto::PrInfo::from(&pr),
-                        )),
-                    }),
+                    Ok(CreatePrOutcome::Created(pr)) => {
+                        server_message::Message::GitCreatePrResponse(GitCreatePrResponse {
+                            result: Some(git_create_pr_response::Result::Success(
+                                super::proto::PrInfo::from(&pr),
+                            )),
+                        })
+                    }
+                    Ok(CreatePrOutcome::Inputs(inputs)) => {
+                        server_message::Message::GitCreatePrResponse(GitCreatePrResponse {
+                            result: Some(git_create_pr_response::Result::Inputs(
+                                GitPrContentInputs {
+                                    diff: inputs.diff,
+                                    commit_messages: inputs.commit_messages,
+                                },
+                            )),
+                        })
+                    }
                     Err(e) => server_message::Message::GitCreatePrResponse(GitCreatePrResponse {
                         result: Some(git_create_pr_response::Result::Error(GitOpError {
                             message: format!("{e:#}"),

@@ -1558,3 +1558,82 @@ fn the_client_asks_for_the_diff_under_fork_policy_and_only_the_client_decides() 
          invisible in review and blank in the dialog"
     );
 }
+
+/// A remote repository's PR title and body are generated on this side exactly
+/// when fork policy is active.
+///
+/// Asserted against `is_active()` for the reason given on
+/// [`the_local_owner_exists_only_under_fork_policy`]. Tied to the commit
+/// message's predicate because it is the same fact — the model is configured
+/// in this process — and a test that let them drift would be asserting a
+/// distinction nobody intends.
+#[test]
+fn remote_pr_content_is_generated_on_this_side_under_fork_policy() {
+    assert_eq!(
+        remote_pr_content_generated_locally(),
+        is_active(),
+        "which side calls the model must follow which side holds its configuration"
+    );
+    assert_eq!(
+        remote_pr_content_generated_locally(),
+        remote_commit_message_generated_locally(),
+        "both are the same fact about where the endpoint and key live"
+    );
+}
+
+/// Generating PR content here must not cost the `--fill` fallback, and the
+/// fallback must not be reachable only through an error path nobody runs.
+///
+/// Pinned by source text because the alternative is a live daemon plus a
+/// GitHub remote. The failure this catches is the tempting cleanup: a
+/// generation failure turned into an emitted error instead of a create with
+/// no content. That would trade "a PR titled by git" for "no PR", which is
+/// the worse half of the trade the daemon-side generator has always made.
+///
+/// Calibrated by breaking it: replacing the `None` arm with an emitted error
+/// reddens the first assertion.
+#[test]
+fn a_failed_pr_generation_still_creates_the_pr_with_fill() {
+    let source = include_str!("code_review/diff_state/remote.rs");
+
+    let (_, after) = source
+        .split_once("fn generate_pr_content_and_create")
+        .expect("the client-side generator exists");
+    let body = after
+        .split_once("\n    /// ")
+        .map_or(after, |(body, _)| body);
+    assert!(
+        body.contains("falling back to --fill") && body.contains("None"),
+        "a generation failure must send the create with no content, not an error"
+    );
+    assert!(
+        body.contains("create_pr_with_content"),
+        "both arms must still reach the daemon; a failure that returns early \
+         leaves the dialog waiting for an event that never comes"
+    );
+}
+
+/// The chain's PR stage asks the daemon for inputs rather than pre-generating.
+///
+/// The ordering is the point and it is invisible in a diff: the PR diff is
+/// taken against `origin/<branch>`, so content generated before the chain's
+/// own commit and push describes the branch without the change. A future
+/// simplification that hoists generation earlier would look tidier and be
+/// wrong, and `the_pr_inputs_do_not_see_an_uncommitted_change` is the
+/// behavioural half of this pin.
+#[test]
+fn the_commit_chain_asks_for_pr_inputs_rather_than_generating_first() {
+    let source = include_str!("code_review/diff_state/remote.rs");
+
+    let (before, _) = source
+        .split_once("mgr.git_commit_chain(")
+        .expect("the chain is dispatched here");
+    assert!(
+        before.contains("fork::remote_pr_content_generated_locally()"),
+        "the chain must consult the policy seam to decide which side generates"
+    );
+    assert!(
+        !before.contains("generate_pr_content_and_create(") || before.contains("PendingPr"),
+        "generation before the chain's own push would describe the wrong branch"
+    );
+}

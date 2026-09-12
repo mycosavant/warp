@@ -73,11 +73,16 @@ configuration for.
 pane (`"where": "host"`), dialog fills in, model requests 3 → 4, and the
 message names a function added minutes before the run, so the diff travelled
 rather than the sentence merely reading well. Unrouted re-run as a control,
-because the fix refactored a function the local path shares. **The same defect is still live in
-the two PR-content call sites** (`GitCreatePrRequest.autogenerate_content`,
-`GitCommitChainRequest.autogenerate_pr_content`), where it degrades to
-`gh pr create --fill` rather than going blank, which is probably why nobody
-filed it.
+because the fix refactored a function the local path shares.
+
+**The two PR-content paths had the same defect and were fixed the same day**:
+`title`/`body`/`return_inputs_only`
+on `GitCreatePrRequest`, `return_pr_inputs` on `GitCommitChainRequest`. They
+hid five days longer than the commit message because `create_pr` falls back to
+`gh pr create --fill` — a fallback is not a fix, it is a defect that stopped
+reporting itself. **Not driven live**: doing so means opening a real pull
+request, which the standing constraints forbid. Pinned instead by
+`pr_create_args` tests and calibrated source pins.
 
 ### 3 · kode-rs framing (board item 8) — parked, the maintainer's call
 

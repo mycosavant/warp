@@ -30,6 +30,7 @@ impl RemoteDiffStateModel {
             state,
             metadata,
             tracked_diff_load_start_time: None,
+            pending_pr: None,
         }
     }
 }

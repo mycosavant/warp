@@ -424,13 +424,15 @@ upstream and rebasable.
 
 **A routed pane's daemon has none of this process's configuration**, so
 anything `fork.rs` re-points at the user's own model or keychain is dead there
-until the *client* does the work. The commit dialog opened blank from 2026-09-07
-to 2026-09-12 because upstream has the daemon both compute the diff and call
-the model, and the endpoint, model and key live here. Fixed by `return_diff_only`
-on the request: the daemon returns the diff, the client generates — measured
-end to end 2026-09-12, with the unrouted case re-run as a control. **The two
-PR-content call sites still generate on the daemon** and fall back to
-`gh pr create --fill`, which is why nobody filed them. `.fork/docs/wsl.md`.
+until the *client* does the work. Upstream has the daemon both read the repo
+and call the model; the endpoint, model and key live here. Fixed 2026-09-12 by
+handing the client the inputs — `return_diff_only` for the commit message,
+`return_pr_inputs` and `title`/`body` for the two PR paths, which cost a
+second round trip because something runs after the model. **The PR paths hid
+five days longer, and that is the rule: the commit dialog went blank and was
+filed in a day, while `create_pr` falls back to `gh pr create --fill`, so the
+same broken generator kept shipping real PRs titled by git. A fallback is not
+a fix — it is a defect that stopped reporting itself.** `.fork/docs/wsl.md`.
 
 **Every request through `http_client::Client::get` tells the destination what
 this machine is, whoever the destination is.** Found 2026-09-09 while building
