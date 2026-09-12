@@ -6,7 +6,10 @@ method and the working rules are in `CLAUDE.md` at the repo root. This file is
 the map of `.fork/`, one line per thing, laid out on 2026-09-05.
 
 **Read `GOAL.md` first if it exists.** It is the standing horizon and it
-outranks everything else here while it stands.
+outranks everything else here while it stands. **Absent as of 2026-09-12**:
+the 2026-09-04 horizon was retired, met — archived at
+`.fork/archive/GOAL-2026-09-04.md` for the reasoning, its one decision moved to
+`.fork/decisions/`. No standing horizon right now; `next.html` is the live plan.
 
 **`board.html` is the ranked board the horizon points at**: static,
 self-contained, status chips remembered per browser. Open it, do not publish
@@ -125,7 +128,7 @@ preamble and the selection.
 
 The five from the old board's *Decisions on record*, split by bullet. Two are
 undated in the source and say so in their filename. Later decisions live in
-`GOAL.md` until it is retired, then here.
+`GOAL.md` until it is retired, then here — as of 2026-09-12, all six.
 
 ## runs/ — data, never edited after the run
 
