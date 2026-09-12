@@ -66,7 +66,14 @@ cp target/release/warp-oss /tmp/warp-oss-prefix-7d8e21b76
 >
 > **New, found by the live run:** the Windows credential broker intermittently
 > refuses a call with `0x80070558`, impersonating a pipe before reading from
-> it. See the run record; not fixed.
+> it. See the run record; not fixed. The order is read from the code, not
+> guessed: `handle_credential_broker_connection` calls `ensure_same_user_peer`
+> (`app/src/local_control/mod.rs:841`) before `read_broker_request` (`:842`),
+> deliberately, per its doc comment. The likely fix is read the framed bytes,
+> then impersonate, then decode, which still checks identity before anything
+> caller-sent is interpreted. It reorders an authentication boundary, so send
+> it through fable-reviewer and calibrate it live with the driver in the run
+> record, which retries and logs this error.
 
 ## ~~Task 1 — the `manager_tests.rs` format drift (about a minute)~~ done, `79e6ffe3f`
 
