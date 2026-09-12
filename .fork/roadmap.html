@@ -289,10 +289,37 @@
   </div>
 </div>
 
+<div class="item done">
+  <div class="rank">10</div>
+  <div class="body">
+    <div class="head"><h2>Real PR drive against a live GitHub repo</h2><span class="status">done · 2026-09-12</span></div>
+    <div class="meta"><span>effort: small</span><span>impact: high</span></div>
+    <p>Approved against the maintainer's own <code>mycosavant/pocket-tts</code>
+    &mdash; a real doc worth having committed (the "Eleven Utterances" test
+    report, converted from its published artifact form to Markdown), not a
+    throwaway repo. Found a real bug: the chain's push never sets upstream
+    tracking and its <code>gh pr create</code> call never passes
+    <code>--head</code>, so <code>gh</code> refuses a branch that is
+    genuinely already on the remote with the right content &mdash;
+    reproduced twice (a brand-new branch and an already-pushed one, ruling
+    out "never pushed before" as the condition), diagnosed precisely via
+    <code>git ls-remote</code> showing the content really was there, and
+    confirmed by fixing it the narrow way: <code>gh pr create --head</code>
+    succeeded immediately. The generated PR title/body itself didn't
+    survive the chain's failure to be captured anywhere, so the resulting
+    PR (<a href="https://github.com/mycosavant/pocket-tts/pull/11">#11</a>,
+    left open per instruction) carries content assembled from the real
+    AI-generated commit messages instead of the lost PR-content generation.
+    Screenshot capability was denied mid-run by the permission classifier
+    for an unclear reason and approved on request; noted, not chased
+    further.</p>
+    <p class="src">Source: <code>.fork/runs/pockettts-pr-2026-09-12/</code>.</p>
+  </div>
+</div>
+
 <h3 class="section">Blocked on you &mdash; not rankable by priority/effort alone</h3>
 <div class="parked">
   <ul>
-    <li><b>Real PR drive (route 3)</b><span>The only way to prove an actual GitHub PR gets created with the generated title. Needs a throwaway private repo and your explicit say-so &mdash; the standing constraint is no PR without sign-off. Trivial once granted; not actionable before that.</span></li>
     <li><b>kode-rs framing</b><span>A swarm of agents built a lot of it in a misconfigured <code>/loop</code>; parts were lost when worktrees were torn down unmerged. There's a "built-not-wired" document and a trail of notes, none tested lately. Whether to build on that tree at all is your call, recorded as parked on 2026-09-11.</span></li>
   </ul>
 </div>
