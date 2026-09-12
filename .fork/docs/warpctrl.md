@@ -235,3 +235,40 @@ present, stay silent on the known absent), and confirm on a second instrument
 when one exists, which is the general form of *take the screenshot before
 believing `warpctrl agent read`*.
 
+## No focused window is the ordinary case, not an error
+
+**`ctx.windows().active_window()` is `None` whenever no Warp window holds OS
+focus**, and for a control plane invoked from a shell that is most of the time.
+On the winit backend it is literally
+`windows.find(|w| w.has_focus() && w.is_visible())`
+(`crates/warpui/src/windowing/winit/window.rs:193`), and the test platform
+returns `None` unconditionally
+(`crates/warpui_core/src/platform/test/delegate.rs:100`). Whoever runs
+`warpctrl` is looking at a terminal, or at another monitor. Found 2026-09-12
+when the maintainer, watching a run, clicked the desktop on a second monitor
+and asked why that should matter to a CLI.
+
+Two separate bugs came out of that in one day, and they are easy to confuse
+because the symptom is a targeting error either way:
+
+| fixed in | error | cause |
+|---|---|---|
+| `03bf98fd0` | `ambiguous_target` | `session_inspect` did not default its own target, leaving pane selection unscoped across every tab. Nothing to do with restore — `is_active` is one pane per `PaneGroup`, so N open tabs give N actives however they were opened. |
+| `619c345a6`, `fc2a9bb46` | `missing_target` | the resolver demanded an OS-reported active window, and there is none whenever Warp is not frontmost. |
+
+`active_or_single_window_id` (`app/src/local_control/resolver.rs`) answers the
+second: the reported window when there is one, the single open window when
+there is not, and `ambiguous_target` only on a genuine choice among 2+. Both
+the read path (`metadata.rs::select_window_entries`) and the write path
+(`metadata_config.rs::select_window_ids`) resolve through it — but only since
+`fc2a9bb46`. `619c345a6` unified the read half alone, so for a day `tab.rename`
+answered `missing_target` in the same instance, at the same moment, that
+`session inspect` resolved fine. The two files each have their own private
+`select_tab_entries`, which is what hid it: a grep on the function name
+suggests one chain and there are two.
+
+**`app.active` is the deliberate exception**, and says so in place. Its question
+is literally what holds focus, so an all-`None` chain is the true answer there,
+and a single-window fallback would be a lie the caller cannot detect. A caller
+that means "the window I would be working in" wants `session inspect`.
+

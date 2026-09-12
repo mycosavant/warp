@@ -294,9 +294,9 @@ non-obvious parts it already handles:
 
 ## Task 4 — loose ends, smallest first
 
-~~**Version skew is unexercised**, still — the 2026-09-12 PR drive also ran
-  both halves at the same commit deliberately. Both halves were deliberately the same
-  commit. The claim that an older daemon degrades to upstream behaviour rests
+- ~~**Version skew is unexercised**, still — the 2026-09-12 PR drive also ran
+  both halves at the same commit deliberately. The claim that an older daemon
+  degrades to upstream behaviour rests
   on prost skipping an unknown field — read, not measured. Cheap to test: run
   a new GUI against a daemon binary built before `036bcccac`.~~ **Measured
   live 2026-09-12**, `.fork/runs/version-skew-2026-09-12/`: an old daemon

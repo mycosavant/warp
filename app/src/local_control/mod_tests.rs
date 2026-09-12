@@ -686,8 +686,17 @@ fn enable_local_control_for_test(app: &mut warpui::App) {
     .expect("local control should enable");
 }
 
+/// A positive test, so it catches only a guard that wrongly *refuses*.
+///
+/// Named `..._through_every_guard` until 2026-09-12, which overclaimed: delete
+/// `validate_action_target`, `ensure_action_allowed` or the
+/// `confine::ensure_within` block and this stays green, because all three
+/// return `Ok` for an unconfined `app.ping` with a default target. It is a
+/// smoke test for the composition, and worth keeping as one. The refusal side
+/// -- the half the fork's remote-control posture actually rests on -- is
+/// covered by `handle_request_refuses_a_confined_grant_naming_the_wrong_conversation`.
 #[test]
-fn handle_request_dispatches_a_valid_unconfined_request_through_every_guard() {
+fn handle_request_dispatches_a_valid_unconfined_request_without_any_guard_refusing() {
     let _flag = FeatureFlag::WarpControlCli.override_enabled(true);
     warpui::App::test((), |mut app| async move {
         enable_local_control_for_test(&mut app);

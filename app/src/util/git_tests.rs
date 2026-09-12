@@ -51,10 +51,15 @@ fn truncate_on_char_boundary_walks_back_out_of_a_multi_byte_character() {
 #[test]
 fn truncate_on_char_boundary_handles_the_edges() {
     let s = "hello";
+    // Said "must not underflow at zero" until 2026-09-12, naming a guard that
+    // cannot fire: `cut > 0` in `truncate_on_char_boundary` is unreachable as
+    // protection, because `is_char_boundary(0)` is true for every `&str`, so
+    // the loop body never runs at a cap of zero. Delete that condition and this
+    // still passes. What it does pin is the return value.
     assert_eq!(
         truncate_on_char_boundary(s, 0),
         "",
-        "must not underflow at zero"
+        "a zero cap must yield an empty string"
     );
     assert_eq!(
         truncate_on_char_boundary(s, 100),
