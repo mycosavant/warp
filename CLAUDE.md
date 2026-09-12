@@ -71,6 +71,7 @@ do"*:
 | `registry.rs` | `waiting_for` returns *"everything currently waiting"* | it filters to one conversation — **one missing blank line** had glued `waiting()`'s doc onto it, leaving `waiting()` undocumented |
 | `graph.rs` | the fingerprint holds *"everything the runner actually uses"* | `compose_prompt` uses the workspace and its own doc says a page later that it is excluded deliberately |
 | `warp_features` (upstream) | `LSPAsATool` — *"we expose LSP as a tool to the agent"* | gates `LspRepoWatcher::ensure`/`teardown` only; no agent-facing LSP path exists and `ToolType` has no LSP variant |
+| `CLAUDE.md` itself, the TUI bullet | the TUI *"is not a fork surface"*, the account-gate bypass *"simply absent there"* | `crates/warp_tui` depends on the **app** crate, and `e4f52077a` had lifted the gate eleven days earlier — the TUI opens *"Not signed in"* and a fork ACP agent answers |
 | `acp_agent/mod.rs` header | *"A second turn is refused"* | true of an agent that cannot resume; T14.7 gave the others a `session/load`, and `cannot_resume`'s doc records that correction **twenty lines below** |
 | the same header, same list | *"model selection … falls through untouched"* | T14.14 built the model chip 2026-09-07 — three days before this was read |
 
@@ -1848,12 +1849,39 @@ time 2026-08-30; nothing in this repo's docs had mentioned it.
   I20**: the spinner is a device-code OAuth account gate, not a model
   credential — `--set-provider-api-key <openai|anthropic|google|grok>` and
   `--api-key` (`WARP_API_KEY`) are a separate path and do not bypass it.
-- **It is not a fork surface.** `grep -rn "fork::" crates/warp_tui/src/` returns
-  **nothing**, and so does a grep for `acp_agent`, `local_agent` and
-  `generate_multi_agent_output`. So `WARP_FORK_ACP_COMMAND`, the account-gate
-  bypass, `FORCE_ENABLED` and every predicate in `app/src/fork.rs` are simply
-  absent there. Do not assume a fork behaviour holds in the TUI because it holds
-  in the GUI.
+- **It was not a fork surface, and this bullet said so for eleven days after it
+  stopped being true.** The evidence was a grep: `fork::`, `acp_agent`,
+  `local_agent` and `generate_multi_agent_output` return **nothing** in
+  `crates/warp_tui/src/`. All four greps still return nothing, and the
+  conclusion drawn from them was wrong, because **`crates/warp_tui` depends on
+  the app crate** — `warp = { workspace = true, features = ["tui"] }` at
+  `Cargo.toml:73`. The binary's entry point is `app/src/tui/mod.rs`, where
+  `fork::` is in scope and always was. A grep over the library answered a
+  question about the library; the question asked was about the binary.
+
+  **I20 lifted the account gate in `e4f52077a`.** `initial_login_phase` consults
+  `fork::account_gate_bypassed() && fork_agent_will_answer()` — deliberately
+  conjoined, because the gate is load-bearing for Warp's own cloud agent and
+  merely cosmetic for the fork's transports, which intercept before `ServerApi`
+  is reached. Measured with it in place: the TUI opens on *"Not signed in"*, 22
+  skills discovered, **a fork ACP agent answers, and a permission request parks
+  correctly.** The consent architecture was intact in a binary the fork had
+  never run.
+
+  What is still absent is `warpctrl`: `LocalControlServer` is registered behind
+  a `matches!` on `LaunchMode` with no TUI arm (`app/src/lib.rs`), and
+  `warp_control_cli` is not among `crates/warp_tui`'s features — which forward
+  to the app crate (`voice_input = ["warp/voice_input"]` is the pattern). So a
+  parked request in the TUI names a command that cannot exist in that process,
+  and `fork::local_control_serving()` is what makes the note say *"Nothing in
+  this session can answer it"* instead. **Read I20 before scoping anything
+  here**; it names the cheap path and the hazard (type-ahead: an Enter already
+  in the terminal's input buffer when a prompt takes focus is a yes nobody
+  gave).
+
+  The old sentence is kept above rather than deleted because its *rule* is still
+  right and only its example rotted: do not assume a fork behaviour holds in the
+  TUI because it holds in the GUI. Check `app/src/tui/`, not `crates/warp_tui/`.
 - **The one thing that does carry over is the important one.** The telemetry
   deny-list is in `crates/egress_policy` (it was `http_client`'s own
   `egress.rs` until 2026-09-09), consulted from `http_client` at `lib.rs:378`,
