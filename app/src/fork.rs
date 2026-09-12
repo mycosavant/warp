@@ -158,10 +158,33 @@ const FORCE_DISABLED: &[FeatureFlag] = &[
 /// even on Windows it is off in anything you build yourself. Measured false in
 /// every build made here. A user preference outranks both `cfg`s, so this is
 /// one line where the alternative was two cargo features.
+///
+/// `LSPAsATool` is here under protest at its own name, and the name is the
+/// thing to get right before reading the entry. Its upstream doc says *"when
+/// enabled, we expose LSP as a tool to the agent"*, and that is not what it
+/// does: its only three call sites are `LspRepoWatcher::ensure`/`teardown`
+/// (`crates/lsp/src/model.rs:305,335,409`), and `ToolType` — generated from
+/// `warp-proto-apis` — has no LSP variant at all, so a tool Warp *runs* cannot
+/// exist without a protocol change. Turning this on gives agents nothing. What
+/// it gives is the **sender** for `workspace/didChangeWatchedFiles`.
+///
+/// It is on because Warp was advertising a capability it never honoured.
+/// `default_client_capabilities` (`crates/lsp/src/config.rs:446`) tells every
+/// language server *"register your globs with me"*, the server registers, and
+/// with the watcher off nothing is ever sent. The other channel,
+/// `did_change_document`, fires only for **open editor buffers** — so a file
+/// written by an agent, or by `git checkout`, was invisible to the server. In a
+/// fork whose whole point is agents editing files on disk, that is the common
+/// case rather than the edge one, which is why this was chosen over the cheaper
+/// fix of dropping the advertisement.
+///
+/// The cost is repo-scoped file watching wherever a language server is running,
+/// which is work upstream already wrote and already gates behind this flag.
 const FORCE_ENABLED: &[FeatureFlag] = &[
     FeatureFlag::AgentHarness,
     FeatureFlag::APIKeyManagement,
     FeatureFlag::LocalClaudeCodexChildHarnesses,
+    FeatureFlag::LSPAsATool,
     FeatureFlag::SoloUserByok,
     FeatureFlag::SkipFirebaseAnonymousUser,
     FeatureFlag::WarpControlCli,

@@ -835,6 +835,44 @@ fn dragging_a_tab_out_of_the_strip_depends_on_a_forced_flag() {
     );
 }
 
+/// Warp advertises `did_change_watched_files` to every language server, and
+/// until 2026-09-11 it never sent one. This pins the entry that closed that.
+///
+/// The trap this guards is the flag's **name**. `LSPAsATool`'s upstream doc
+/// says it exposes LSP as a tool to the agent; it does not, and `ToolType` has
+/// no LSP variant to expose one through. Its three call sites are
+/// `LspRepoWatcher::ensure`/`teardown`, which is the sender for
+/// `workspace/didChangeWatchedFiles` and nothing else. A reader who trusts the
+/// name will either delete this entry as an off-thesis agent feature or keep it
+/// for a capability the fork does not have. It is neither.
+///
+/// The `cfg!` is the evidence that the force is the *primary* enabler rather
+/// than belt-and-braces, the same shape as
+/// [`the_index_that_uploads_source_is_forced_off_not_merely_absent`]: the flag
+/// appears in `features::enabled_features` only under
+/// `#[cfg(feature = "lsp_as_a_tool")]`, and that feature is in no `default`
+/// list. If it ever goes on, this entry stops being the thing doing the work.
+///
+/// **What this test does not reach**, stated because the gap is the interesting
+/// half: `default_client_capabilities` is private to `crates/lsp`, so nothing
+/// here asserts the advertisement is still made. If that advertisement is ever
+/// dropped, this entry loses its reason and no test will say so.
+#[test]
+fn the_watcher_that_honours_an_advertised_capability_is_forced_on() {
+    assert!(
+        !cfg!(feature = "lsp_as_a_tool"),
+        "the cargo feature has gone on -- `features::enabled_features` now lists \
+         the flag itself, so this FORCE_ENABLED entry is belt-and-braces rather \
+         than the thing switching the watcher on"
+    );
+    assert!(
+        FORCE_ENABLED.contains(&FeatureFlag::LSPAsATool),
+        "without this, `LspRepoWatcher::ensure` never runs and every server that \
+         registered a glob against our advertised capability is told nothing -- \
+         including when an agent writes a file, which is the common case here"
+    );
+}
+
 /// The wide bind is off unless an address is named, and a value that cannot be
 /// honoured is refused rather than guessed at.
 ///
