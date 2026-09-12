@@ -240,12 +240,23 @@ session did not have it. So the run must stop after `gh` is invoked.
    the only route that proves a PR is actually created with the generated
    title. Ask; do not assume.~~ **Done 2026-09-12, with say-so**, against the
    maintainer's own `mycosavant/pocket-tts` rather than a throwaway repo (a
-   real doc worth having committed, not a disposable test artifact). Found a
-   real bug on the way: the chain's push never sets upstream tracking and its
-   `gh pr create` call never passes `--head`, so `gh` refuses a branch that
-   is genuinely already on the remote with the right content — reproduced
-   twice, fixed manually both flags at once by calling `gh pr create --head`
-   directly. **The generated PR title/body itself was lost** when the chain
+   real doc worth having committed, not a disposable test artifact).
+   ~~Found a real bug on the way: the chain's push never sets upstream
+   tracking and its `gh pr create` call never passes `--head`, so `gh` refuses
+   a branch that is genuinely already on the remote with the right content —
+   reproduced twice, fixed manually both flags at once by calling `gh pr
+   create --head` directly.~~ **Retracted the same day, 2026-09-12.** The push
+   does pass `--set-upstream` (`app/src/util/git.rs:711`, upstream's code
+   since `0dbd3d567`) and the tracking config was set — `~/scratch-pockettts`
+   still carries it. That clone is `--depth 1`, so its refspec is
+   `+refs/heads/main:refs/remotes/origin/main` and the push created no
+   `refs/remotes/origin/docs/eleven-utterances`; `gh` decides whether a branch
+   was pushed by looking for exactly that ref. `git branch -vv` prints its
+   `[origin/x]` bracket from the ref rather than the config, which is what
+   made the wrong reading look measured. Reproduced from scratch both ways.
+   No code fix followed: an ordinary clone gets the ref, and a blanket
+   `--head` would break the fork workflow it is meant to help.
+   **The generated PR title/body itself was lost** when the chain
    failed before displaying or persisting it; the resulting PR
    (https://github.com/mycosavant/pocket-tts/pull/11, left open) carries
    content assembled from the real AI-generated commit messages instead.

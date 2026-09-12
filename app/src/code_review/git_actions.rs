@@ -268,9 +268,18 @@ pub async fn generate_commit_message(
 /// and, in this fork, not the second.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct PrContentInputs {
-    /// `merge_base(main, HEAD)..origin/<branch>` — so it is only complete
-    /// after the branch has been pushed, which is why the commit chain
+    /// `<default branch>..origin/<branch>`, which is why the commit chain
     /// computes it *after* its push rather than before the whole chain.
+    ///
+    /// Two corrections, 2026-09-12. This said `merge_base(main, HEAD)..` until
+    /// then: [`get_diff_for_pr`] builds `{base}..{end_ref}` and passes it to
+    /// `git diff`, which compares the two endpoints and does not take a merge
+    /// base. And "only complete after the branch has been pushed" overstates
+    /// it — when `origin/<branch>` does not resolve, `end_ref` silently falls
+    /// back to `HEAD`, so an unpushed branch yields a diff rather than an
+    /// error. That fallback is what carried the 2026-09-12 live run, whose
+    /// shallow clone had no remote-tracking ref at all:
+    /// `.fork/runs/pockettts-pr-2026-09-12/`.
     pub diff: String,
     pub commit_messages: Vec<String>,
 }

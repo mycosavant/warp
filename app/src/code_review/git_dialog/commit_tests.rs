@@ -53,6 +53,35 @@ fn a_real_gh_auth_failure_still_asks_for_a_login() {
     assert_eq!(advice, "GitHub CLI not authenticated. Run `gh auth login`.");
 }
 
+/// What `gh pr create` answered on 2026-09-12 after the chain had committed
+/// and pushed successfully, in a `--depth 1` clone whose refspec covers only
+/// `main`.
+const GH_NO_TRACKING_REF: &str = "gh command failed: aborted: you must first push the current \
+     branch to a remote, or use the --head flag";
+
+/// The failure that reads as a push problem and is not one.
+///
+/// `gh` looks for `refs/remotes/<remote>/<branch>`; a shallow or
+/// single-branch clone never gets one, however many times the push succeeds.
+/// Left generic, this said "Git operation failed." and a whole session went
+/// looking at the push.
+///
+/// Calibrated by making the arm unmatchable: this reddened, and the other
+/// seven in this file did not. A second test asserting the message is read as
+/// neither an auth failure nor a missing remote was written alongside it and
+/// **deleted**, because that break left it green too — the message shares no
+/// phrase with either arm, so no plausible edit could fail it. It asserted the
+/// absence of a collision that cannot happen.
+#[test]
+fn a_push_that_landed_but_left_no_tracking_ref_says_so() {
+    let advice = user_facing_git_error(GH_NO_TRACKING_REF);
+    assert!(
+        advice.contains("shallow or single-branch"),
+        "the mechanism is the whole value of this arm: {advice}"
+    );
+    assert_ne!(advice, "Git operation failed.");
+}
+
 /// The case a `committed: bool` gets wrong in the other direction, and the
 /// reason the stage is an enum: the commit is in the repository, so telling
 /// the user it failed would have them remake it and be answered "nothing to

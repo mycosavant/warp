@@ -297,15 +297,26 @@
     <p>Approved against the maintainer's own <code>mycosavant/pocket-tts</code>
     &mdash; a real doc worth having committed (the "Eleven Utterances" test
     report, converted from its published artifact form to Markdown), not a
-    throwaway repo. Found a real bug: the chain's push never sets upstream
-    tracking and its <code>gh pr create</code> call never passes
+    throwaway repo. <del>Found a real bug: the chain's push never sets
+    upstream tracking and its <code>gh pr create</code> call never passes
     <code>--head</code>, so <code>gh</code> refuses a branch that is
     genuinely already on the remote with the right content &mdash;
     reproduced twice (a brand-new branch and an already-pushed one, ruling
     out "never pushed before" as the condition), diagnosed precisely via
     <code>git ls-remote</code> showing the content really was there, and
     confirmed by fixing it the narrow way: <code>gh pr create --head</code>
-    succeeded immediately. The generated PR title/body itself didn't
+    succeeded immediately.</del> <strong>That diagnosis was wrong and is
+    retracted the same day.</strong> The push does pass
+    <code>--set-upstream</code> and the tracking config was set. The scratch
+    clone is <code>--depth 1</code>, so its refspec covers only
+    <code>main</code> and the push created no
+    <code>refs/remotes/origin/&lt;branch&gt;</code> &mdash; which is the ref
+    <code>gh</code> looks for to decide a branch was pushed.
+    <code>git branch -vv</code> prints its bracket from that ref rather than
+    from the config, so the instrument read as "no tracking configured".
+    Reproduced from scratch both ways; no code fix followed, because an
+    ordinary clone gets the ref and a blanket <code>--head</code> would
+    misdirect a fork workflow. The generated PR title/body itself didn't
     survive the chain's failure to be captured anywhere, so the resulting
     PR (<a href="https://github.com/mycosavant/pocket-tts/pull/11">#11</a>,
     left open per instruction) carries content assembled from the real

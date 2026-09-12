@@ -1,5 +1,50 @@
 # The real PR drive, against a real GitHub repo, and the bug it found
 
+> **Superseded the same day, 2026-09-12, by a review of this record.** The bug
+> named in *"The bug, precisely"* below does not exist as stated. The body is
+> left exactly as written, per the never-rewrite rule; read this header instead
+> of it.
+>
+> **Both halves of the diagnosis are false.** The chain's push does pass
+> `--set-upstream` — `app/src/util/git.rs:711`, unchanged since upstream's
+> `0dbd3d567` — and the tracking config was set. `~/scratch-pockettts` still
+> carries `branch.docs/eleven-utterances.remote origin` and its matching
+> `.merge` today.
+>
+> **What actually failed.** That clone is `--depth 1`, so its refspec is
+> `+refs/heads/main:refs/remotes/origin/main`. `git push` updates a
+> remote-tracking ref only for refs the refspec matches, so
+> `refs/remotes/origin/docs/eleven-utterances` was never created — `show-ref`
+> in that clone lists only `origin/HEAD` and `origin/main`. gh 2.100.0 decides
+> whether a branch was pushed by running `ShowRefs` over
+> `refs/remotes/<remote>/<branch>` and matching hashes against HEAD, not by
+> reading branch config. The missing ref is what it refused on. Reproduced from
+> scratch both ways: a full clone gets the ref, a `--depth 1` clone does not,
+> and both get the config.
+>
+> **How the reading went wrong.** `git branch -vv` prints its `[origin/x]`
+> bracket by resolving the tracking *ref*. Config present and ref absent prints
+> no bracket at all, which reads exactly like "no upstream configured". The
+> instrument answered a question about refs while the question was about
+> config.
+>
+> **And step 5's rule-out is backwards.** A second attempt failing with commits
+> already on the remote is not evidence against a stale-remote theory — it is
+> what the refspec explanation predicts, because no number of pushes creates a
+> ref the refspec does not cover.
+>
+> **The quoted error text predates its own fix.** `launch.txt` records a binary
+> older than the tree at `76d8b07e6`, which is the commit that replaced
+> `Commit failed` with a staged message four hours earlier the same day. The
+> `Commit failed: gh command failed: ...` quoted below is pre-fix behaviour,
+> not current behaviour.
+>
+> **What still stands, unchanged:** the commit and the push both landed, the
+> two model calls fired, the generated PR title and body are discarded on a
+> `gh` failure with nothing logging them, and PR #11 is open. The exposure is
+> shallow and `--single-branch` clones only. An ordinary `git clone` creates
+> the ref on push and `gh` needs no help.
+
 Closes the last unverified piece of the routed commit/PR work
 (`.fork/runs/routedpr-2026-09-12/` proved the chain against a local bare
 remote deliberately, to avoid opening a real PR without sign-off; that

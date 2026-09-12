@@ -169,6 +169,18 @@ fn user_facing_git_error(raw: &str) -> &'static str {
         // authenticated — wrong advice, and it will not help. Measured on a
         // repository whose only remote was a local bare one, 2026-09-12.
         "No GitHub remote for this repository."
+    } else if lower.contains("you must first push the current branch") {
+        // `gh` decides a branch was pushed by looking for
+        // `refs/remotes/<remote>/<branch>` and matching its hash against HEAD
+        // — not by reading `branch.<name>.remote`. A shallow or
+        // `--single-branch` clone fetches one refspec, so `git push` writes no
+        // tracking ref for any other branch and `gh` refuses a branch that is
+        // genuinely on the remote with the right content. Measured 2026-09-12
+        // in a `--depth 1` clone, where it cost a session: the generic
+        // "Git operation failed." sent the reader to the push, which had
+        // worked. `.fork/runs/pockettts-pr-2026-09-12/`.
+        "Push the branch first. If you already did, a shallow or single-branch \
+         clone leaves gh no tracking ref to find."
     } else if lower.contains("not logged in")
         || lower.contains("authentication required")
         || lower.contains("gh auth login")
