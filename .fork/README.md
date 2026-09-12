@@ -71,7 +71,8 @@ changes the answer; the story of the finding stays in the ticket it cites.
 | `docs/observability.md` | the viewer spec: the harness's own transcript is the record, Warp adds what it alone knows |
 | `docs/remote-control.md` | `/remote-control` the fork's way: one conversation handed to a phone, which may drive it and nothing else |
 | `docs/classifier.md` | a local permission classifier, and why "a model deciding is not consent" does two jobs |
-| `docs/model-economy.md` | which model and how much effort for each kind of work here, what the 29k-token `CLAUDE.md` prefix costs, and the caching habits that follow |
+| `docs/environment.md` | **the account behind every `WARP_FORK_*` variable**: what each default was chosen against, the two parser shapes and which one a variable gets. The index is the table in `CLAUDE.md`; this is the argument |
+| `docs/model-economy.md` | which model and how much effort for each kind of work here, what the `CLAUDE.md` prefix costs, the 150k-character warning it crossed on 2026-09-10, and the caching habits that follow |
 | `docs/away-from-desk.md` | **the command reference for driving this machine from a phone**: which of the three shells a command runs in, restarting Warp remotely, what still works with the desk locked, symptom-to-command troubleshooting |
 | `docs/manual.md` | the operating manual, whole: building and launching on each platform, `warpctrl`, Warp Drive, remote access, the gotchas. Large; navigate by heading. To be cut into surface pages one at a time as each is next touched |
 

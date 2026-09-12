@@ -32,6 +32,29 @@ question in this repo, and at `serve.ps1`'s 12,288 default it cannot answer at
 all (`.fork/runs/localmodel-panel-2026-09-09/`). For a cloud model the prefix
 is a bill; for a local one it is a wall.
 
+**And the file hit a second, harder ceiling on 2026-09-10: Claude Code's own
+per-memory-file warning.** The threshold is
+`max(40000, round(context_window x 0.05 x chars_per_token))` — read off the CLI
+binary at 2.1.268, with `chars_per_token` 3 for this model — so at a 1M context
+it is **150,000 characters**, and `CLAUDE.md` crossed it at 150,927. It is a
+warning, not a truncation; the whole file still arrives. The number to know is
+that the threshold is **5% of whatever context window is active**, so on a
+200k-context model it drops to the 40,000 floor and the same file is 3.7x over.
+
+**The first compaction ran the same day** and is the shape the rest should take:
+the environment-variable list had become a single 11,587-character paragraph
+naming 16 variables, with **10,211 of those characters inside parentheses**. The
+rules became a 17-row table and the accounts moved to
+`.fork/docs/environment.md`: **150,230 -> 144,156 characters**, nothing deleted.
+
+Two honest caveats on that number. The **word** count went *up* by about 960,
+because a table is many short cells where prose was few long ones — so the token
+saving is smaller than the character saving, and possibly much smaller, since
+pipes and backticks tokenize badly. And the 42,000-token wire figure above
+predates the split; **it has not been re-measured.** Treat it as a 2026-09-09
+reading, per this repo's own rule about dated claims, and re-run the two-directory
+comparison before quoting a saving to anyone.
+
 Two consequences that are actionable today:
 
 - **A cached prefix must be byte-exact.** Editing `CLAUDE.md` invalidates that

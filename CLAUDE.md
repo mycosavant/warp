@@ -467,9 +467,11 @@ And it broke three upstream autoupdate tests on its first placement, in
 drives directly. The guard belongs at `check_for_update`, where the request is
 spawned.
 
-Environment variables the fork adds: `WARP_FORK_ACP_COMMAND` (**name an agent and
-it answers the agent panel**; naming the command *is* the switch, there is no
-second flag, and it outranks `WARP_FORK_LOCAL_AGENT`.
+**`WARP_FORK_ACP_COMMAND` names an agent and it answers the agent panel.** Naming
+the command *is* the switch, there is no second flag, and it outranks
+`WARP_FORK_LOCAL_AGENT`. The table at the end of this section is the index of
+every variable the fork adds; `.fork/docs/environment.md` carries the account
+behind each.
 
 **Which agent to name, measured 2026-08-31 rather than preferred.** This line
 used `"opencode acp"` as its only example for months. Both agents were then put
@@ -607,132 +609,45 @@ cost a whole turn's answer while the conversation still reported
 `status: success`. With the pairing above, seven consecutive turns raised zero
 refusals and lost nothing. `opencode` remains perfectly usable and is what most of
 this file's other measurements were taken against — it is named second now, not
-removed. **The
-session cwd comes from the pane, and that is where the agent finds its own
+removed.
+
+**The session cwd comes from the pane, and that is where the agent finds its own
 config — so the pane's directory decides whether the user's permission rules
 load at all.** Measured: the same agent in a directory without its config file
 ran a shell command in `$HOME` and sent no permission request; in a directory
 with one it asked, and Warp denied. This corrects an earlier claim here that the
-config came from wherever Warp was launched), `WARP_FORK_POLICY` (set `0`/`off`/`false`
-to run stock upstream behaviour without rebuilding — use this to A/B a suspected
-fork regression), `WARP_FORK_ACP_MODE` (**the session mode to ask the ACP agent for, by that agent's own id for it** — `default` for `claude-agent-acp`, which is how you make it ask rather than let its `auto` classifier answer. Unset by default and deliberately so: ids are opaque and vendor-specific, so Warp discloses the mode in force and never chooses one. An id the agent did not advertise **refuses the turn** — it is not sent and the turn does not run. This line said "reported, not sent" until 2026-08-31, and so did `mode.rs`'s own module header; both were describing a first cut that `Decision::Refuse` records as wrong and replaced, because a note scrolls and what it is a note *about* is a session running under a policy nobody chose. The parser shape here is `WARP_FORK_CONTROL_BIND`'s — a typo would otherwise silently mean something — and unlike that one, refusing costs only the turn. **And the mode does not survive a resume, measured 2026-09-01: it is re-sent on every turn because every `session/load` brings the session back in the agent's own mode.** `session_mode`, written from the agent's reply, read `current auto` on all four turns of one conversation, each after Warp had set `default` the turn before, while the agent asked for permission on every one — which `auto` does not do. So that per-turn re-send is load-bearing, and removing it as redundant would put every turn after the first back under the agent's classifier with an event log of **zero** permission requests, which reads as "nothing needed asking" and means "Warp was not in the loop". Not separable from outside: whether the agent truly reverts or merely reports its opening mode on load), `WARP_FORK_LOCAL_AGENT`, `WARP_FORK_AGENT_SPAWN_DEPTH`,
-`WARP_FORK_ALLOW_TELEMETRY_EGRESS`, `WARP_FORK_ALLOW_WARP_EGRESS` (**lifts the
-first-party block only** — `warp.dev` and its subdomains. Separate from the
-telemetry switch on purpose, and needed because `WARP_FORK_POLICY=0` cannot
-reach `http_client`: without it, the documented way to A/B a suspected fork
-regression would fail at the socket with no clue why), `WARP_FORK_HARNESS_DIR` (the agent's
-`.claude/projects` directory for `agent.trace`, when the instance's own search
--- this home, then a WSL session's guest homes -- does not find it; unset by
-default), `WARP_FORK_QUAKE_VISOR` (the one that
-defaults **on** — set it off to get upstream's terminal in the hotkey window),
-`WARP_FORK_WSL_AUTO_CONNECT` (**also defaults on**, same parser: a WSL pane
-attaches Warp's remote-development server to its own distribution when its
-shell bootstraps, so the tree, the buffer, search and the git chip route inside
-the distribution instead of over 9p. Set it off to get the manual behaviour
-back — palette action or `warpctrl remote wsl connect`. A failed connect is a
-log line and a not-routed pane; `warpctrl session inspect` says which you have.
-Built 2026-09-05, `.fork/docs/wsl.md`), `WARP_FORK_WSL_LSP` (**defaults on**,
-same parser: a language server for a `\\wsl$\<distro>\...` workspace runs
-*inside* the distribution, spawned as `wsl.exe -d <distro> --shell-type login
--- rust-analyzer`, and a routed buffer gets a path the LSP stack accepts. Set
-it off for upstream's Windows-side server over 9p. Built 2026-09-05, measured
-end to end the same night; `.fork/docs/wsl.md`, "Language servers, as built"),
-`WARP_FORK_MODEL_PRICES` (`fetch`, and nothing else — the parser is
-`WARP_FORK_REMOTE_APPROVE`'s, so a typo is simply not consent and costs a stale
-number. **The only variable that makes Warp's own HTTP client dial a host of
-Warp's choosing**: one request per launch to OpenRouter's public model list,
-which fills prices into the Model Specs card's existing id→row mapping and
-never replaces the mapping. Off by default. The deny-list is *not* the layer
-that decides this — `openrouter.ai` is on neither list and would pass without
-being considered — which is the general point about a deny-list stated as a
-switch. T21.4, `.fork/runs/pricefetch-2026-09-09/`),
-`WARP_FORK_FRAME_LOG` (`on`, or a threshold in ms — slow-frame accounting to
-the local log; **reach for this before theorising about why something feels
-slow**), `WARP_FORK_EVENT_LOG` (`on`, or a directory — one JSONL file per
-agent session, appended as events arrive; **reach for this before theorising
-about what an agent did**. T14.9 gave the ACP path tool events, so the "no tool
-events at all" recorded here from T14.7 is **no longer true**. It was also
-briefly true-looking for a worse reason: until T14.15 an ACP turn wrote **two**
-files that never named each other — `session_start`/`stop` under the
-conversation id, tool events under the agent's session id — so opening the
-obvious one showed a session with nothing between its ends. Now everything for a
-turn is filed under **Warp's conversation id**, the way `local_agent` always
-did, with the agent's own id on each line as `linked_session_id`. One turn, one
-file. **T14.17 added `permission_request`/`permission_replied` to that path** —
-the `tool_input` that was shown, what was decided
-(`allowed`/`denied`/`unanswered`), which surface answered, and on the ask whether
-Warp had a *yes* to offer at all. **Read a zero here carefully**: T14.18 measured
-a panel session producing zero permission requests because the agent's own
-classifier answered first, so no lines means *Warp was not in the loop*, never
-that nothing was decided. **`unanswered` is what a cancelled turn leaves**, and
-it did not exist until an agent reviewing T14.17 in the panel found that the
-value was written by a unit test and unreachable on the real path: the ask is
-logged synchronously and the answer from a task cancellation drops mid-`await`,
-so the trail kept the question and lost its ending. Measured both ways after the
-fix — a cancelled ask writes it, an answered one does not. **And read the file
-in timestamp order**: the path files per conversation, so `cat *.jsonl` gives
-filename order and a reader inferring causality from line order will be
-wrong), `WARP_FORK_TRANSCRIPT` (**owner-only since 2026-08-31, and `0644` before that** —
-the file holds the user's prompts verbatim and inherited the umask, as did the
-event log's `*.jsonl` with its `tool_input` previews; both now go through
-`fork::create_private_dir`/`create_private_file`, which put the mode on the
-`open` rather than chmod-ing after it, because the window between the two is
-exactly when the first line is written. `discovery.rs` had the right instinct
-from the start with `0700`/`0600`; these two never got it. **Verified by running,
-which exposed a residual reading would have missed:** a transcript written by a
-*pre-fix* build keeps `0644` until that conversation is next written, because the
-transcript is rewritten whole per conversation and a dormant one is never
-rewritten. An active conversation self-heals on its next turn; the event log
-self-heals via `tighten_existing` on reopen. Deliberately **not** swept: a sweep
-would chmod files the fork is not otherwise touching, in a directory that follows
-the pane's cwd and can therefore be anywhere. `chmod 600` on an old transcript is
-the user's call, and this sentence is how they learn it is theirs to make. `on` writes to
-**`.warp/transcripts/` under the pane's own directory** — not `state_dir`, because outside the session's directory the
-agent's read of the file arrives as `tool: other` and *no* answer exists, so the
-tidy location is the unusable one. `.warp/` is upstream's project directory and
-is tracked, so `/.warp/transcripts/` is gitignored. Any other value is taken as
-the directory, and the caller owns reachability. **Writes the conversation to disk so the agent can grep
-back what its own compaction discarded — measured across two real compactions:
-the agent answered "I DO NOT HAVE IT" from memory and then found the same detail
-in the file, with zero permission requests.** Note *what* it recovers: compaction
-is not indiscriminate, and a fact flagged as important survives inside the
-summary. What is lost, and what this is for, is the bulky incidental detail a
-working session is actually made of**. Off by default, because persisting what
-was said is not something a no-telemetry fork should start doing unasked. The
-pointer rides every prompt as its own content block, so your text is never
-edited; the panel says once that it is happening **on both agent paths, and only
-since 2026-08-31**. The writer (`transcript::observe`) always hung off the shared
-`BlocklistAIHistoryModel`, which both paths feed, while the pointer and the
-announcement were injected only in `acp_agent`. Measured both ways before the
-fix: an ACP conversation carried one `[Warp]` line, a `local_agent` one carried
-**zero**, and the file was written either way — so that path put the user's
-prompts on disk, told nobody, and handed the agent nothing. **The fix's first cut
-also measured zero**, and the reason is worth keeping: a note is an
-`AddMessagesToTask`, and on this transport the task is created by the agent
-stream's own `init` event, so a note queued ahead of the stream names a task that
-does not exist and is dropped. Its unit test passed throughout. Ordering against
-a stream is not something a unit test on the message can see. And Warp's own
-asides are
-marked `[Warp]` and kept out of the file so an agent never reads them as its own
-words. **What it holds that the agent's own store does not is the reason a call
-failed**: measured, `opencode` records a denied command as `status=error` with no
-notion that anything refused it, so an agent reading its own history sees a
-failure where there was a decision. Warp keeps the refusal),
-`WARP_FORK_CONTROL_BIND` (**the only one
-that reaches off the machine** — one literal IP address, optionally with a port
-(`192.168.1.5:41234`, `[fd00::1]:41234`; pin one if you want the console on a
-home screen, because an ephemeral port makes a saved URL dead on the next
-launch). A hostname, a wildcard, or a typo leaves the wide listener shut and
-loopback serving, because refusing to start would take out `warpctrl window
-close`),
-`WARP_FORK_REMOTE_APPROVE` (lets a *paired* device run `agent.approve` — say
-**yes** to a CLI agent's permission prompt from a phone. Off unless it is
-literally `1`/`on`/`true`/`yes`; `agent.deny` needs no switch, because saying no
-can only ever make less happen. Note the opposite parser shape to
-`WARP_FORK_CONTROL_BIND`: there a typo must be *refused loudly* because it would
-otherwise silently mean something, here a typo is simply not consent).
+config came from wherever Warp was launched.
+
+### The variables, and the one fact each
+
+| variable | default | what it does, and what not to get wrong |
+|---|---|---|
+| `WARP_FORK_ACP_COMMAND` | unset | names the ACP agent that answers the panel. Naming it *is* the switch, and it outranks `WARP_FORK_LOCAL_AGENT`. Everything above. |
+| `WARP_FORK_LOCAL_AGENT` | off | `1`/`on`/`true`: answer conversations from the local `claude` CLI instead of `api.warp.dev`. |
+| `WARP_FORK_ACP_MODE` | unset | the session mode to ask the agent for, **in that agent's own id for it** — `default` for `claude-agent-acp`, which is what makes it ask instead of letting its `auto` classifier answer. An id the agent did not advertise **refuses the turn**. Re-sent every turn, deliberately. |
+| `WARP_FORK_POLICY` | on | `0`/`off`/`false` runs stock upstream without rebuilding — the way to A/B a suspected fork regression. **Cannot reach `http_client`**, so pair it with the row below; and a policy-off instance publishes no discovery record, so plan the shutdown first. |
+| `WARP_FORK_ALLOW_WARP_EGRESS` | off | lifts the **first-party** block only — `warp.dev` and its subdomains. A separate switch from the next row on purpose. |
+| `WARP_FORK_ALLOW_TELEMETRY_EGRESS` | off | lifts the telemetry-vendor deny-list. Nothing legitimate sets this. |
+| `WARP_FORK_AGENT_SPAWN_DEPTH` | `2` | how deep `warpctrl agent spawn` may nest. Bounds depth, not breadth. |
+| `WARP_FORK_QUAKE_VISOR` | **on** | the fork's visor in the hotkey window; off gives upstream's terminal there. |
+| `WARP_FORK_WSL_AUTO_CONNECT` | **on** | a WSL pane attaches the remote-development server to its own distribution at shell bootstrap, so files route inside it instead of over 9p. `warpctrl session inspect` says which you have. |
+| `WARP_FORK_WSL_LSP` | **on** | a language server for a `\\wsl$\<distro>\...` workspace runs *inside* the distribution. |
+| `WARP_FORK_MODEL_PRICES` | off | `fetch`, and nothing else. **The only variable that makes Warp's own HTTP client dial a host of Warp's choosing** — OpenRouter's public model list, once per launch. Neither deny-list would have stopped it. |
+| `WARP_FORK_FRAME_LOG` | off | `on`, or a threshold in ms. Slow-frame accounting to the local log — **reach for this before theorising about why something feels slow**. |
+| `WARP_FORK_EVENT_LOG` | off | `on`, or a directory. One JSONL file per agent session — **reach for this before theorising about what an agent did**. **Read a zero carefully**: no permission lines means Warp was not in the loop, not that nothing was decided. Read in timestamp order, never filename order. |
+| `WARP_FORK_TRANSCRIPT` | off | `on` writes the conversation under the pane's own `.warp/transcripts/`, so an agent can grep back what its compaction discarded. **Holds the user's prompts verbatim**; owner-only since 2026-08-31. Any other value is taken as the directory. |
+| `WARP_FORK_HARNESS_DIR` | unset | the agent's `.claude/projects` directory for `agent.trace`, when the instance's own search does not find it. |
+| `WARP_FORK_CONTROL_BIND` | loopback | **the only one that reaches off the machine.** One literal IP, optionally with a port — pin the port. A hostname, a wildcard or a typo leaves the wide listener shut and loopback serving. |
+| `WARP_FORK_REMOTE_APPROVE` | off | lets a *paired* device run `agent.approve` — say **yes** to an agent's prompt from a phone. Only a literal `1`/`on`/`true`/`yes`; `agent.deny` needs no switch, because saying no can only make less happen. |
+
 Tab→pane drag has no variable of its own; `WARP_FORK_POLICY=0` puts the tab's
 horizontal-only drag axis back.
+
+**The accounts are in `.fork/docs/environment.md`** — what each default was
+chosen against, what was measured, what was retracted, and why
+`WARP_FORK_CONTROL_BIND` refuses a typo loudly while `WARP_FORK_REMOTE_APPROVE`
+treats one as simply not consent. Read it before changing a parser or adding a
+variable.
 
 ---
 
@@ -2150,9 +2065,17 @@ and not them:
   the page before touching the surface: `wsl.md` before anything about a WSL
   pane, `composer.md` before anything the panel draws, `observability.md`
   before adding any capture to the event log, `classifier.md` before repeating
-  the line that a model deciding permissions is not consent. `manual.md` is the
-  operating manual, still whole; reach for it to *use* something rather than
-  change it.
+  the line that a model deciding permissions is not consent,
+  `environment.md` before changing a `WARP_FORK_*` parser or adding a variable.
+  `manual.md` is the operating manual, still whole; reach for it to *use*
+  something rather than change it.
+- **This file is the index and those pages are the accounts.** A finding lands
+  here as a *rule*, in as few lines as the rule needs, and its account goes to
+  the surface page. That convention is new on 2026-09-10 and it exists because
+  the file crossed Claude Code's 150,000-character memory-file warning — the
+  environment-variable list alone had become one 11,587-character paragraph with
+  10,211 of those characters inside parentheses. `.fork/docs/model-economy.md`
+  has the threshold's formula and why it is 5% of the active context window.
 - **`.fork/tickets/`** — the work, one file per ticket (`T01`–`T20`) and one per
   idea (`I00`–`I22`), split out of the old `TASKS.md` and `IDEAS.md` with no
   sentence changed. **Mostly historic**: read the one you are about to touch,
