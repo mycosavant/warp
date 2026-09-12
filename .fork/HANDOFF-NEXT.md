@@ -69,9 +69,11 @@ generated code to check in, and the daemon already computed the diff beside
 the files — the only half it could not do was call a model it has no
 configuration for.
 
-**Not verified live.** Five unit tests, each calibrated by breaking it, and
-the routed commit dialog has not been opened since. The 10-second check is:
-routed WSL pane, code review panel, Commit. **The same defect is still live in
+**Verified live 2026-09-12**, `.fork/runs/routedcommit-2026-09-12/`: routed
+pane (`"where": "host"`), dialog fills in, model requests 3 → 4, and the
+message names a function added minutes before the run, so the diff travelled
+rather than the sentence merely reading well. Unrouted re-run as a control,
+because the fix refactored a function the local path shares. **The same defect is still live in
 the two PR-content call sites** (`GitCreatePrRequest.autogenerate_content`,
 `GitCommitChainRequest.autogenerate_pr_content`), where it degrades to
 `gh pr create --fill` rather than going blank, which is probably why nobody

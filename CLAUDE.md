@@ -427,7 +427,8 @@ anything `fork.rs` re-points at the user's own model or keychain is dead there
 until the *client* does the work. The commit dialog opened blank from 2026-09-07
 to 2026-09-12 because upstream has the daemon both compute the diff and call
 the model, and the endpoint, model and key live here. Fixed by `return_diff_only`
-on the request: the daemon returns the diff, the client generates. **The two
+on the request: the daemon returns the diff, the client generates — measured
+end to end 2026-09-12, with the unrouted case re-run as a control. **The two
 PR-content call sites still generate on the daemon** and fall back to
 `gh pr create --fill`, which is why nobody filed them. `.fork/docs/wsl.md`.
 

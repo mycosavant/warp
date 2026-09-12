@@ -1,0 +1,35 @@
+[14:36:14] === routed commit message, live ===
+[14:36:14] gui:    v0.fork.036bcccac
+[14:36:14] daemon: v0.fork.036bcccac
+[14:36:14] server: {"models":[{"name":"gemma-4-12b","model":"gemma-4-12b","modified_at":"","size":"","digest":"","type"
+[14:36:14] server requests before: 0
+0
+[14:36:25] instance: {"instances":[{"instance_id":"inst_b541678f342649bbba001cc8e90e8fab","pid":38188,"channel":"warp-oss","app_id":"dev.warp.WarpOss","app_version":"v0.fork.036bcccac","protocol_version":1}]}
+[14:36:35] session inspect: {"ok":false,"error":{"code":"ambiguous_target","message":"session.inspectresolvedmultipletargetsbyactivesession"}}
+[14:36:42] server requests after the pane: 3
+explicit inspect of the driven pane:
+{
+  "action": "session.inspect",
+  "session": {
+    "session_id": "Pane Pane Terminal (5361)",
+    "pane_id": "Pane Pane Terminal (5361)",
+    "pane_index": 0,
+    "tab_id": "4971",
+    "tab_index": 5,
+    "window_id": "0",
+    "window_index": 0,
+    "is_active": true,
+    "filesystem": {
+      "where": "host",
+      "host_id": "5f2e3401-5bfc-4752-9f35-ee52d0794ec9"
+    }
+  }
+}
+[14:37:22] code review panel: {"action":"surface.code_review.open","ok":true,"instance_id":"inst_b541678f342649bbba001cc8e90e8fab"}
+[14:37:28] server requests after the panel: 3
+[14:37:41] commit button at 967,65: CLICKED window(967,65) -> client(967,65) pid=38188
+[14:37:57] server requests after the dialog: 4
+[14:39:24] === control: the SAME click with the pane UNROUTED (WARP_FORK_WSL_AUTO_CONNECT=0) ===
+[14:39:24] server requests before: 4
+[14:39:43] sessions:       7 "where":"local" 
+[14:40:07] server requests after the unrouted dialog: 6
