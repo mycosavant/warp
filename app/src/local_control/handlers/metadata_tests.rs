@@ -1,11 +1,16 @@
+use ::local_control::InstanceId;
 use ::local_control::protocol::{SessionSelector, SessionTarget, TabTarget, TargetSelector};
 use warp_core::HostId;
+use warpui::App;
 
 use super::{
-    SessionFilesystem, SurfaceDestination, filesystem_value, session_inspect_target,
-    surface_unavailable_reason,
+    SessionFilesystem, SurfaceDestination, filesystem_value, session_inspect,
+    session_inspect_target, surface_unavailable_reason,
 };
 use crate::features::FeatureFlag;
+use crate::local_control::LocalControlBridge;
+use crate::local_control::handlers::layout::create_tab;
+use crate::workspace::view::tests::{initialize_app, mock_workspace};
 
 #[test]
 fn agent_management_surface_reports_feature_flag_unavailable() {
@@ -51,6 +56,54 @@ fn an_unreachable_session_is_not_reported_as_local() {
 fn a_pane_with_no_session_yet_says_unknown_rather_than_local() {
     let value = filesystem_value(None);
     assert_eq!(value["where"], "unknown");
+}
+
+/// The regression `session_inspect_target`'s own unit tests can name but not
+/// witness: `select_tab_entries's own cascade widens this` is a comment on a
+/// field the pure test asserts is `None`, which proves the *shape* of the fix
+/// but not that a real multi-tab workspace actually resolves through it. This
+/// drives the real handler against a real second tab, the way `warpctrl
+/// session inspect` is actually called.
+///
+/// Reproduced live 2026-09-12 against two real tabs before this fix
+/// (`ambiguous_target`) and after (resolves to one) --
+/// `.fork/runs/` from that session has the transcript; this is the
+/// same shape, pinned as an automated test using the pattern
+/// `layout_tests.rs` already established for this handler family.
+#[test]
+fn session_inspect_resolves_the_active_tab_when_a_profile_has_several_tabs() {
+    App::test((), |mut app| async move {
+        initialize_app(&mut app);
+        let _workspace = mock_workspace(&mut app);
+        let bridge = app.add_singleton_model(LocalControlBridge::new);
+        let instance_id = InstanceId("inst_test".to_owned());
+
+        let response = bridge.update(&mut app, |bridge, ctx| {
+            bridge.set_instance_id(instance_id.clone());
+            create_tab(
+                &Some(instance_id.clone()),
+                &serde_json::json!({}),
+                &TargetSelector::default(),
+                ctx,
+            )
+            .expect("tab.create handler succeeds");
+
+            session_inspect(&TargetSelector::default(), ctx).expect(
+                "must resolve to the active tab's session, not ambiguous_target, \
+                 now that two tabs each have their own is_active pane",
+            )
+        });
+
+        assert_eq!(response["action"], "session.inspect");
+        assert!(
+            response["session"]["session_id"].is_string(),
+            "must resolve to exactly one session: {response}"
+        );
+        assert_eq!(
+            response["session"]["is_active"], true,
+            "the resolved session must be the active tab's, not an arbitrary one: {response}"
+        );
+    });
 }
 
 // The regression this whole group pins: `warpctrl session inspect` with no

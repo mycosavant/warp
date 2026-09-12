@@ -168,7 +168,13 @@ pub(crate) fn require_active_window_id_for_action(
     })
 }
 
-fn active_or_single_window_id(
+/// Resolves "the active window" without requiring the platform to report one.
+/// OS-level window focus (`ctx.windows().active_window()`) is unavailable or
+/// unreliable in some real launch paths and always `None` under the test
+/// platform, but a Warp instance overwhelmingly has exactly one window open —
+/// so with no OS-reported focus, a single window is used without complaint,
+/// and only a genuine choice among 2+ windows is refused as ambiguous.
+pub(crate) fn active_or_single_window_id(
     ctx: &mut ModelContext<LocalControlBridge>,
     action: ActionKind,
 ) -> Result<WindowId, ControlError> {

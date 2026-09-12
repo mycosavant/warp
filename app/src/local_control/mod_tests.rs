@@ -3,8 +3,8 @@ use std::sync::{Arc, Mutex};
 
 use ::local_control::auth::{CredentialGrant, CredentialRequest};
 use ::local_control::protocol::{
-    Action, ActionKind, PaneSelector, PaneTarget, TabSelector, TabTarget, TargetSelector,
-    WindowSelector, WindowTarget,
+    Action, ActionKind, ControlResponse, PaneSelector, PaneTarget, TabSelector, TabTarget,
+    TargetSelector, WindowSelector, WindowTarget,
 };
 use ::local_control::{ErrorCode, InstanceId, RequestEnvelope};
 use axum::body::Bytes;
@@ -662,5 +662,103 @@ fn disabling_scripting_invalidates_existing_grant_and_prevents_new_grants() {
             .await
             .expect_err("disabled scripting should prevent new grants");
         assert_eq!(err.code, ErrorCode::LocalControlDisabled);
+    });
+}
+
+// `bridge.handle_request` runs seven guards in sequence before dispatch --
+// feature gate, protocol version, instance identity, `validate_request_authority`,
+// `ensure_action_allowed`, `validate_action_target`, `confine::ensure_within` --
+// and each is tested alone elsewhere in this file. Their *composition* had no
+// test caller anywhere. That matters beyond tidiness: `confine::ensure_within`
+// is what stops a phone paired to one conversation from reaching another, so
+// "each guard works alone" was never the claim the fork's remote-control
+// posture actually rests on -- this is.
+
+fn enable_local_control_for_test(app: &mut warpui::App) {
+    crate::test_util::settings::initialize_settings_for_tests(app);
+    app.update(|ctx| {
+        LocalControlSettings::handle(ctx).update(ctx, |settings, ctx| {
+            settings
+                .local_control_mode
+                .set_value(LocalControlMode::Enabled, ctx)
+        })
+    })
+    .expect("local control should enable");
+}
+
+#[test]
+fn handle_request_dispatches_a_valid_unconfined_request_through_every_guard() {
+    let _flag = FeatureFlag::WarpControlCli.override_enabled(true);
+    warpui::App::test((), |mut app| async move {
+        enable_local_control_for_test(&mut app);
+
+        let instance_id = InstanceId("inst_test".to_owned());
+        let bridge = app.add_singleton_model(LocalControlBridge::new);
+        let grant = CredentialGrant::new(
+            instance_id.clone(),
+            ActionKind::AppPing,
+            Duration::minutes(5),
+        );
+        let request = RequestEnvelope::new(Action::new(ActionKind::AppPing));
+
+        let response = bridge.update(&mut app, |bridge, ctx| {
+            bridge.set_instance_id(instance_id.clone());
+            bridge.handle_request(request, grant, ctx)
+        });
+
+        match response.response {
+            ControlResponse::Ok { .. } => {}
+            ControlResponse::Error { error } => {
+                panic!("a valid unconfined request must dispatch: {error:?}")
+            }
+        }
+    });
+}
+
+#[test]
+fn handle_request_refuses_a_confined_grant_naming_the_wrong_conversation() {
+    // The negative case is the one that matters: a device paired for one
+    // conversation must not be able to read another's trace by naming it in
+    // the request, and that refusal has to happen inside `handle_request`
+    // itself -- not merely be true of `confine::ensure_within` in isolation,
+    // which every other guard's own unit test already assumed was enough.
+    let _flag = FeatureFlag::WarpControlCli.override_enabled(true);
+    warpui::App::test((), |mut app| async move {
+        enable_local_control_for_test(&mut app);
+
+        let instance_id = InstanceId("inst_test".to_owned());
+        let bridge = app.add_singleton_model(LocalControlBridge::new);
+        let grant = CredentialGrant::new(
+            instance_id.clone(),
+            ActionKind::AgentTrace,
+            Duration::minutes(5),
+        )
+        .confined_to(Some("conv-a".to_owned()));
+        let request = RequestEnvelope::new(
+            Action::with_params(
+                ActionKind::AgentTrace,
+                serde_json::json!({ "conversation_id": "conv-b" }),
+            )
+            .expect("params serialize"),
+        );
+
+        let response = bridge.update(&mut app, |bridge, ctx| {
+            bridge.set_instance_id(instance_id.clone());
+            bridge.handle_request(request, grant, ctx)
+        });
+
+        match response.response {
+            ControlResponse::Error { error } => {
+                assert_eq!(error.code, ErrorCode::InsufficientPermissions);
+                assert!(
+                    error.message.contains("conv-a"),
+                    "must name the conversation this device was actually paired for: {}",
+                    error.message
+                );
+            }
+            ControlResponse::Ok { data } => {
+                panic!("a confined device must not read another conversation's trace: {data}")
+            }
+        }
     });
 }

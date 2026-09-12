@@ -18,7 +18,7 @@ use warpui::{AppContext, ModelContext, SingletonEntity, ViewHandle, WindowId};
 use crate::drive::settings::WarpDriveSettings;
 use crate::features::FeatureFlag;
 use crate::local_control::LocalControlBridge;
-use crate::local_control::resolver::{reject_target_families, require_active_window_id_for_action};
+use crate::local_control::resolver::{active_or_single_window_id, reject_target_families};
 use crate::pane_group::{PaneGroup, PaneId};
 use crate::settings::{AISettings, CodeSettings};
 use crate::terminal::model::session::filesystem::SessionFilesystem;
@@ -702,8 +702,7 @@ fn select_window_entries(
     let entries = window_entries(ctx);
     match target.window.as_ref() {
         None if force_active_default => {
-            let active =
-                require_active_window_id_for_action(ctx.windows().active_window(), action)?;
+            let active = active_or_single_window_id(ctx, action)?;
             explicit_matches(
                 entries
                     .into_iter()
@@ -716,8 +715,7 @@ fn select_window_entries(
         }
         None => Ok(entries),
         Some(WindowTarget::Active) => {
-            let active =
-                require_active_window_id_for_action(ctx.windows().active_window(), action)?;
+            let active = active_or_single_window_id(ctx, action)?;
             explicit_matches(
                 entries
                     .into_iter()
