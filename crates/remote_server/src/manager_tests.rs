@@ -1,5 +1,6 @@
 use futures::channel::oneshot;
 use warp_core::SessionId;
+use warp_core::channel::Channel;
 use warp_util::standardized_path::StandardizedPath;
 use warpui_core::App;
 
@@ -10,7 +11,6 @@ use super::{
 use crate::HostId;
 use crate::proto::{ClientMessage, RemoteAgentContextSnapshot, WriteFile, host_scoped_request};
 use crate::protocol::RequestId;
-use warp_core::channel::Channel;
 
 #[test]
 fn abort_host_request_removes_pending_request_and_resolves_caller() {
