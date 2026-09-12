@@ -314,14 +314,29 @@ non-obvious parts it already handles:
 - **CLAUDE.md reduction** — **the maintainer considers this largely done**, with
   possible polish later. Do not start a fresh reduction pass. Keep paying for
   additions with removals.
-- **Voice** — **split, and only one half is available.** Read-aloud, TTS and the
-  mobile entry point are the maintainer's own current work: do not touch them.
-  The half that is open is **openwhispr, fully local dictation into the GUI and
-  the TUI**. Note before starting: `crates/warp_tui` already has a `voice_input`
-  cargo feature with rendering tests, and the fork's `LocalTranscriber` already
-  has `http` and `command` backends that openwhispr may fit unchanged — so
-  **measure what already works before building anything**. `.fork/docs/voice.md`
-  and `.fork/tickets/T02` are the index.
+- ~~**Voice** — **split, and only one half is available.** Read-aloud, TTS and
+  the mobile entry point are the maintainer's own current work: do not touch
+  them. The half that is open is **openwhispr, fully local dictation into the
+  GUI and the TUI**. Note before starting: `crates/warp_tui` already has a
+  `voice_input` cargo feature with rendering tests, and the fork's
+  `LocalTranscriber` already has `http` and `command` backends that openwhispr
+  may fit unchanged — so **measure what already works before building
+  anything**.~~ **Narrowed and corrected 2026-09-12, in the maintainer's own
+  words.** "Do not touch" was about `pocket-tts`'s own codebase specifically —
+  they were reviewing it themselves when another session wanted to merge PRs
+  into it, not a ban on this fork's dictation work or on discussing voice
+  architecture here. Separately: the maintainer would "highly prefer that we
+  use what is already built and on-thesis here rather than mess with another
+  fork" — own the stack end-to-end where reasonably possible. `openwhispr`
+  isn't theirs (no commits made to it); `franken_whisper`, checked as an
+  alternative, is a friend's project and stale. Neither is worth chasing as a
+  dependency. **The dictation half is already done and already
+  self-contained**: `LocalTranscriber` has generic `Http`/`Command` backend
+  contracts that point at *any* local engine the maintainer runs themselves —
+  there is no fork-side integration task waiting here. `pocket-tts` (Android,
+  sherpa-onnx, voice "alba") stays a separate personal workflow project; the
+  only bridge this fork needs is the already-built `warpctrl agent trace` read
+  primitive. `.fork/docs/voice.md` and `.fork/tickets/T02` remain the index.
 - ~~**End-to-end park-and-approve inside a TUI session** — never verified.~~
   **Verified live 2026-09-12**, `.fork/runs/tui-approve-2026-09-12/`.
 

@@ -12,7 +12,7 @@ detail. Nothing here restates their documentation.
 | half | where the work is | state |
 |---|---|---|
 | speech **out** — read-aloud | `mycosavant/pocket-tts` | built, on a device, tested end to end |
-| speech **in** — transcription | `.fork/tickets/T02`, `mycosavant/openwhispr` | T2.1/T2.2 built in this fork; the maintainer ranks it high |
+| speech **in** — transcription | `.fork/tickets/T02` | T2.1/T2.2 built and self-contained in this fork; the maintainer ranks it high; not chasing openwhispr/franken_whisper as dependencies |
 
 ---
 
@@ -173,6 +173,13 @@ base64 audio to `api.warp.dev` regardless of provider.
 
 `mycosavant/openwhispr` is the neighbouring work outside this repo, local
 Parakeet/Whisper with BYOK cloud models.
+
+**Not a fork dependency, and not worth chasing as one (2026-09-12).** The
+maintainer doesn't own openwhispr and prefers this fork stay self-contained
+rather than take on a dependency on another project — `LocalTranscriber`'s
+`Http`/`Command` contracts already work with any local engine pointed at
+them, unmodified. `franken_whisper` (a friend's project, stale) was checked
+for the same reason and set aside for the same reason.
 
 **A note on how this half was nearly mis-filed.** Grepping `voice` in this
 repository returns ~23 hits and reads as covered; all of it is transcription.
