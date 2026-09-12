@@ -32,7 +32,8 @@ different questions: a cloud-tier margin under Claude Code's own
 150,000-character memory-file warning (currently clear), and a local-tier
 number — whether a genuinely local model's fixed floor (its system prompt
 plus this file) fits inside a realistic local context window *at all*. This
-file currently fails the local tier by over 100,000 characters, and no amount
+file currently fails the local tier by 61,362 characters (the script,
+2026-09-12; this said "over 100,000", which it never printed), and no amount
 of moving accounts elsewhere closes that gap while this stays a rules index
 for a fork this size — `.fork/docs/model-economy.md` has the table and the
 two env-var levers that exist below the file's own size. Run the script

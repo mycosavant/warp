@@ -8,6 +8,23 @@ when its list is empty.
 `.fork/HANDOFF-NEXT.md` is still the standing board and is **not** superseded —
 its items 1, 3, 5 and 6 were not touched. This file adds to it.
 
+> **Audited 2026-09-12 evening, after `HANDOFF-FOCUS.md`; the body is left as
+> written.** Three false claims about `PATH` are struck in place below (Task 1
+> twice, Task 3 route 2). What is merely stale is listed here rather than
+> edited throughout:
+> - item 5 of `HANDOFF-NEXT.md` was narrowed in `dbae77ca1` and item 6
+>   verified in `9b58f8eda`, as this file's own later sections say;
+> - the binary table and the release-build warning: Windows release is
+>   `v0.fork.76d8b07e6` (has both fixes), Windows debug and Linux release
+>   are `v0.fork.7d8e21b76`; the release question is closed;
+> - `~/scratch-localai` is at `3c46a5a` on `88d5105`, left by the PR drive
+>   in `a5e50790a`; no `routed_commit_probe` exists, and `main.rs` is dirty;
+> - `util::git` is 26 tests since `9acd842eb`, `code_review::git_actions`
+>   is 10; the unpushed count has moved past 219;
+> - the `manager_tests.rs` format drift is fixed in `79e6ffe3f`;
+> - the `wsl.md` diff-panel row said the PR paths were not driven live,
+>   corrected there.
+
 ---
 
 ## Read these first, in this order
@@ -59,9 +76,12 @@ already existed and which `docker_sandbox.rs` was already using for this.
 `.fork/runs/ghpath-2026-09-12/`. The `run_git_command` question this task
 raised is answered there too: same mechanism, and it is **fine**, because git's
 `path_env` exists for hooks and hooks do inherit the child environment
-(measured). Two upstream call sites still carry the defect and were left alone
+(measured). ~~Two upstream call sites still carry the defect and were left alone
 — `node_runtime` and `crates/lsp/command_builder.rs`, neither measured to fail
-for a real user. The account below is kept as written.
+for a real user.~~ **Retracted by `06ab3578c` the same day**: under the
+corrected rule below both call sites are consistent, and a Linux probe of
+`CommandBuilder::command` ran its fake. The account below is kept as written
+**and its mechanism is wrong** — read the correction at its head first.
 
 
 **The finding, measured 2026-09-12.** `app/src/util/git_tests.rs` has five
@@ -74,9 +94,17 @@ let mut cmd = Command::new("gh");
 if let Some(path_env) = path_env { cmd.env("PATH", path_env); }
 ```
 
-Program resolution happens against the **parent** process's `PATH`. Setting
+~~Program resolution happens against the **parent** process's `PATH`. Setting
 `PATH` in the child's environment changes what the child sees *after* it
-starts; it does not change which file gets executed.
+starts; it does not change which file gets executed.~~ **False, retracted by
+`06ab3578c` (2026-09-12 13:13) and not carried here until the audit that
+followed `HANDOFF-FOCUS.md`.** A four-case probe: on Linux the parent's `PATH`
+is searched first and the child's is the fallback, so a fake that shadows an
+installed `gh` never runs while a fake with a unique name does; on Windows the
+child's `PATH` decides. The five tests below still never ran their fakes,
+because `gh` is installed here. The paragraph that follows proves only the
+shadowing case. Rule and table: `CLAUDE.md`, *Setting `PATH` on a child*;
+`.fork/runs/ghpath-2026-09-12/`.
 
 **How it was established, because the first reading was a guess.** Narrow
 `path_env` to the fake directory *alone* and run it. If lookup used the child's
@@ -228,9 +256,12 @@ session did not have it. So the run must stop after `gh` is invoked.
    repository point to a known GitHub host"*. **This is the recommended route.**
    It proves the half that changed and creates nothing. `git_actions_tests.rs`
    has `init_repo_with_origin`, which sets exactly this up — copy its shape.
-2. **Shadow `gh` in the distribution.** Because of the Task 1 finding, a fake
+2. **Shadow `gh` in the distribution.** ~~Because of the Task 1 finding, a fake
    `gh` must be on the **daemon's own inherited `PATH`**, not on the `path_env`
-   it passes down. `crates/remote_server/src/wsl.rs` spawns the daemon through
+   it passes down.~~ **Moot, audited 2026-09-12**: the premise is the retracted
+   `PATH` rule, and since `7d8e21b76` `run_gh_command` resolves `gh` against
+   `path_env` explicitly (`app/src/util/git.rs`), so a fake on `path_env` is
+   what runs. The rest of this route is kept as written. `crates/remote_server/src/wsl.rs` spawns the daemon through
    `wsl.exe` with **no env hook** (checked: no `.env(` / `.envs(` / `WSLENV` in
    that file), so the only lever is a directory already early on the login
    shell's `PATH`. That means shadowing the maintainer's real `gh` for every
