@@ -1,0 +1,1 @@
+/home/effatha/git/warp/target/release/warp-oss

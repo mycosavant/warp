@@ -1,0 +1,16 @@
+warpdev: ~/.warpdev is no longer read (profiles are per launch); delete it when convenient.
+warpdev: profile PRODUCT
+  WARP_FORK_ACP_COMMAND    = wsl.exe -d Ubuntu -- npx -y @agentclientprotocol/claude-agent-acp@0.73.0
+                             the agent panel answers from this agent, started inside WSL so a pane cwd resolves
+  WARP_FORK_EVENT_LOG      = on
+                             one JSONL per conversation, the record the console draws a run from
+  cleared: WARP_FORK_ACP_MODE, WARP_FORK_TRANSCRIPT, WARP_FORK_CONTROL_BIND
+  note: a Warp started any other way gets none of this.
+warpdev: binary C:\dev\warp\target\debug\warp-oss.exe
+warpdev: tree at 76d8b07e6 fork: a chain that fails at the PR says so, and gh's hint stops reading as a diagnosis (COMPOSER)
+warpdev: the binary predates the tree's last source commit; rebuild with C:\dev\build.ps1 -Release
+warpdev: Windows checkout is 4 commit(s) behind WSL dev
+  sync:    git -C C:\dev\warp fetch origin dev; git -C C:\dev\warp merge --ff-only FETCH_HEAD
+  rebuild: C:\dev\build.ps1 -Release   (a launch never syncs for you: tree newer than binary is the mismatch above)
+warpdev: launching PRODUCT
+warpdev: up - inst_4e01c6740f4a4c35a19b63a584550d90 (pid 29708, channel warp-oss, app dev.warp.WarpOss, protocol 1)

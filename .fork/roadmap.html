@@ -180,17 +180,24 @@
   </div>
 </div>
 
-<div class="item next">
+<div class="item done">
   <div class="rank">5</div>
   <div class="body">
-    <div class="head"><h2>Test version skew: older daemon, newer GUI</h2><span class="status">next · small</span></div>
+    <div class="head"><h2>Test version skew: older daemon, newer GUI</h2><span class="status">done · 2026-09-12</span></div>
     <div class="meta"><span>effort: small</span><span>impact: medium</span></div>
-    <p>The claim that an older remote-server daemon degrades gracefully against a
-    newer GUI rests on "prost skips unknown fields" — read, never measured. The
-    2026-09-12 PR drive ran both halves at the same commit on purpose, so this is
-    still open. Cheap to close: build a daemon at a commit before
-    <code>036bcccac</code>, run one GUI action against it.</p>
-    <p class="src">Source: <code>.fork/HANDOFF-GHTESTS.md</code>, Task 4.</p>
+    <p>Built the pre-<code>return_diff_only</code> commit in an isolated
+    worktree, swapped the live <code>~/.warp-dev/remote-server/warp-oss</code>
+    symlink to it just long enough to drive one routed commit dialog, then
+    restored it and killed the old daemon by PID &mdash; the one item this
+    session where "isolated" meant a temporary change to shared, live
+    infrastructure rather than a scratch profile, done with a recorded
+    before/after and an immediate restore. Result matched every prediction:
+    <em>"No AI endpoint is configured"</em> (the identical pre-fix message),
+    dialog resolved rather than hung, one informational version-mismatch WARN
+    in the log and nothing else &mdash; no decode error, no disconnect, no
+    daemon exit. Confirmed the same run also hit the <code>ambiguous_target</code>
+    bug from item 3 independently, in a GUI binary built before that fix.</p>
+    <p class="src">Source: <code>.fork/runs/version-skew-2026-09-12/</code>.</p>
   </div>
 </div>
 

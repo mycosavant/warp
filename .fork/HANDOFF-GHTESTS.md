@@ -272,11 +272,18 @@ non-obvious parts it already handles:
 
 ## Task 4 — loose ends, smallest first
 
-- **Version skew is unexercised**, still — the 2026-09-12 PR drive also ran
+~~**Version skew is unexercised**, still — the 2026-09-12 PR drive also ran
   both halves at the same commit deliberately. Both halves were deliberately the same
   commit. The claim that an older daemon degrades to upstream behaviour rests
   on prost skipping an unknown field — read, not measured. Cheap to test: run
-  a new GUI against a daemon binary built before `036bcccac`.
+  a new GUI against a daemon binary built before `036bcccac`.~~ **Measured
+  live 2026-09-12**, `.fork/runs/version-skew-2026-09-12/`: an old daemon
+  (the commit before `return_diff_only`) against the current GUI produced
+  exactly the predicted pre-fix behaviour — *"No AI endpoint is
+  configured"*, dialog resolved rather than hung, one informational
+  version-mismatch WARN in the log and nothing else. Only the commit-message
+  path was driven; the PR-content path has the same shape but wasn't
+  separately tested.
 ~~**The truncation budget is now computed on one side and never rechecked on
   the other.** `get_diff_for_commit_message` truncates to `MAX_DIFF_CHARS_FOR_AI`
   on the daemon, and the client sends what it is given. A diff that large has
