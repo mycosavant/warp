@@ -61,6 +61,17 @@ names the two things in it that turned out to be wrong. Result:
 the agent line that points `claude-agent-acp` at a local runtime, and the
 census method. Its result is `runs/localmodel-panel-2026-09-09/`.
 
+**`HANDOFF-FOCUS.md` is a live handoff**, written 2026-09-12 by the session
+that reviewed that afternoon's four commits and found a real bug underneath a
+wrong one: `warpctrl` demanded an OS-reported active window, and there is none
+whenever Warp is not frontmost — the ordinary state for a control plane driven
+from a shell, and the maintainer's own observation. The fix shipped for reads
+and writes (`fc2a9bb46`); what is open is the live pass on the Windows build,
+a workspace check and a full-lib baseline nobody ran, and a standing rustfmt
+drift in `manager_tests.rs`. It also lists four claims retracted that day, with
+their falsifiers, so the next session does not re-derive them. The account is
+the last section of `docs/warpctrl.md`.
+
 ## docs/ — one page per surface, current truth
 
 Each opens with *as of <date>* and a state table, then how to use the thing,
