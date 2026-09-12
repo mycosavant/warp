@@ -169,11 +169,29 @@ pub(crate) fn require_active_window_id_for_action(
 }
 
 /// Resolves "the active window" without requiring the platform to report one.
-/// OS-level window focus (`ctx.windows().active_window()`) is unavailable or
-/// unreliable in some real launch paths and always `None` under the test
-/// platform, but a Warp instance overwhelmingly has exactly one window open —
-/// so with no OS-reported focus, a single window is used without complaint,
-/// and only a genuine choice among 2+ windows is refused as ambiguous.
+///
+/// `ctx.windows().active_window()` is `None` whenever no Warp window holds OS
+/// focus. On the winit backend it is literally
+/// `windows.find(|w| w.has_focus() && w.is_visible())`
+/// (`crates/warpui/src/windowing/winit/window.rs:193`), and the test platform
+/// returns `None` unconditionally
+/// (`crates/warpui_core/src/platform/test/delegate.rs:100`). For a control
+/// plane invoked from a shell that is **the normal case, not an edge one**:
+/// whoever runs `warpctrl` is usually looking at a terminal, or another
+/// monitor, and not at Warp. Observed live 2026-09-12 by the maintainer, who
+/// watched a click on a second monitor take focus away mid-run.
+///
+/// A Warp instance overwhelmingly has exactly one window open, so with no
+/// OS-reported focus a single window is used without complaint, and only a
+/// genuine choice among 2+ windows is refused as ambiguous.
+///
+/// Until 2026-09-12 this said focus was unavailable "in some real launch
+/// paths", which understated a condition that holds most of the time, and the
+/// commit that added it cited a `--window 0` workaround during the version-skew
+/// run. `.fork/runs/version-skew-2026-09-12/` contains no such thing: it
+/// records `--tab` and `ambiguous_target`, which is the different bug fixed in
+/// `03bf98fd0`. The mechanism above is read from the code and observed; the
+/// citation was not.
 pub(crate) fn active_or_single_window_id(
     ctx: &mut ModelContext<LocalControlBridge>,
     action: ActionKind,

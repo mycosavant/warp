@@ -654,6 +654,13 @@ fn active_chain(
     ctx: &mut ModelContext<LocalControlBridge>,
 ) -> Result<ActiveTargetChain, ControlError> {
     let instance_id = instance_id.as_ref().map(|id| id.0.clone());
+    // Deliberately *not* `active_or_single_window_id`, unlike the selectors
+    // below it since 2026-09-12. `app.active` is the one action whose question
+    // is literally "what holds focus right now", so when the platform reports
+    // no focused Warp window, an all-`None` chain is the true answer and a
+    // single-window fallback would be a lie the caller cannot detect. A caller
+    // that means "the window I would be working in" wants `session inspect`,
+    // which does fall back.
     let Some(window_id) = ctx.windows().active_window() else {
         return Ok(ActiveTargetChain {
             instance_id,

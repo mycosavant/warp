@@ -192,8 +192,12 @@ async fn the_pr_inputs_do_not_see_an_uncommitted_change() {
 
 /// Overwrites a tracked file with `line_count` lines, each long enough that
 /// the diff comfortably clears `MAX_DIFF_CHARS_FOR_AI`. Verified rather than
-/// assumed: 1,000 lines of similar filler produced a 160,891-byte `git diff`
-/// on this machine, ten times the 16,000-byte budget.
+/// assumed: 1,000 lines of similar filler produced a 124,891-byte `git diff`
+/// on this machine, about 7.8x the 16,000-byte budget.
+///
+/// This said 160,891 and "ten times" until 2026-09-12. `9acd842eb`'s own commit
+/// body carried the right number; the comment beside the code was never
+/// updated, and re-running the construction gives 124,891.
 fn write_oversized_file(path: &Path, line_count: usize) {
     let mut content = String::new();
     for i in 0..line_count {

@@ -306,7 +306,7 @@ non-obvious parts it already handles:
   version-mismatch WARN in the log and nothing else. Only the commit-message
   path was driven; the PR-content path has the same shape but wasn't
   separately tested.
-~~**The truncation budget is now computed on one side and never rechecked on
+- ~~**The truncation budget is now computed on one side and never rechecked on
   the other.** `get_diff_for_commit_message` truncates to `MAX_DIFF_CHARS_FOR_AI`
   on the daemon, and the client sends what it is given. A diff that large has
   not been tried, on either the commit-message or the PR path.~~ **Corrected
@@ -318,11 +318,17 @@ non-obvious parts it already handles:
   `truncate_on_char_boundary` for the multi-byte cut-point case neither
   integration test could reach precisely. All four calibrated by breaking:
   each redress reddened only the test it targets.
-- **`warpctrl session inspect` with no argument answers `ambiguous_target`
+- ~~**`warpctrl session inspect` with no argument answers `ambiguous_target`
   whenever a profile restores several tabs**, because *every* restored tab
   reports `is_active: true`. Six tabs, six actives. That reads as a routing
   failure and is a targeting failure. Worth deciding whether more than one
-  active session is itself the bug.
+  active session is itself the bug.~~ **Diagnosed, fixed and the framing
+  corrected 2026-09-12 in `03bf98fd0`**: nothing to do with restore — `is_active`
+  is one pane per `PaneGroup`, so N open tabs give N actives however they were
+  opened. More than one active session is not the bug; `session_inspect` failing
+  to default its own target was. The commit corrected its own body and the code
+  comments and left this bullet standing, which is the half the fork's own rule
+  asks for: the correction belongs in the doc that was wrong.
 - ~~**`detached_tag_display_returns_short_sha`**~~ — done, see Task 1's last
   section.
 - **The Windows release build is stale**, see the state table.

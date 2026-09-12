@@ -750,9 +750,19 @@ fn handle_request_refuses_a_confined_grant_naming_the_wrong_conversation() {
         match response.response {
             ControlResponse::Error { error } => {
                 assert_eq!(error.code, ErrorCode::InsufficientPermissions);
+                // Both ids appear in the refusal, so `contains("conv-a")` alone
+                // is satisfied by either one being in either role: swap them in
+                // `confine::refuse` and this still passed while the message told
+                // the device owner it was paired for the conversation it had
+                // just been refused. Assert each id in the role it belongs to.
                 assert!(
-                    error.message.contains("conv-a"),
+                    error.message.contains("paired for conversation conv-a"),
                     "must name the conversation this device was actually paired for: {}",
+                    error.message
+                );
+                assert!(
+                    error.message.contains("read conversation conv-b"),
+                    "must name the conversation it was refused: {}",
                     error.message
                 );
             }

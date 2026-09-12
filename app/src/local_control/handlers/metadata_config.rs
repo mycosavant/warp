@@ -1,4 +1,7 @@
 //! Metadata/configuration mutation handlers for local-control actions.
+#[cfg(test)]
+#[path = "metadata_config_tests.rs"]
+mod tests;
 use std::str::FromStr as _;
 
 use ::local_control::protocol::{
@@ -20,7 +23,7 @@ use super::settings_surfaces::{
 use crate::WindowSettings;
 use crate::local_control::LocalControlBridge;
 use crate::local_control::handlers::ack;
-use crate::local_control::resolver::{require_active_window_id_for_action, workspace_for_window};
+use crate::local_control::resolver::{active_or_single_window_id, workspace_for_window};
 use crate::pane_group::PaneId;
 use crate::settings::{AccessibilitySettings, FontSettings, InputSettings, ThemeSettings};
 use crate::tab::SelectedTabColor;
@@ -406,10 +409,15 @@ fn select_window_ids(
     ctx: &mut ModelContext<LocalControlBridge>,
 ) -> Result<Vec<WindowId>, ControlError> {
     match target.window.as_ref() {
-        None | Some(WindowTarget::Active) => Ok(vec![require_active_window_id_for_action(
-            ctx.windows().active_window(),
-            action,
-        )?]),
+        // The same fallback the read path uses in
+        // `metadata.rs::select_window_entries`. Requiring OS-reported focus here
+        // meant `tab.rename` answered `missing_target` whenever Warp was not the
+        // frontmost application — in the same instance, at the same moment, that
+        // `session inspect` resolved fine. That asymmetry was a half-done
+        // unification in `619c345a6`, not a policy that writes should be
+        // stricter: the fallback fires only when exactly one window exists,
+        // which is no more ambiguous for a rename than for an inspect.
+        None | Some(WindowTarget::Active) => Ok(vec![active_or_single_window_id(ctx, action)?]),
         Some(WindowTarget::Id { id }) => ctx
             .window_ids()
             .find(|window_id| window_id.to_string() == id.0)

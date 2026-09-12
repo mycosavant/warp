@@ -78,9 +78,9 @@ fn session_inspect_resolves_the_active_tab_when_a_profile_has_several_tabs() {
         let bridge = app.add_singleton_model(LocalControlBridge::new);
         let instance_id = InstanceId("inst_test".to_owned());
 
-        let response = bridge.update(&mut app, |bridge, ctx| {
+        let (created, response) = bridge.update(&mut app, |bridge, ctx| {
             bridge.set_instance_id(instance_id.clone());
-            create_tab(
+            let created = create_tab(
                 &Some(instance_id.clone()),
                 &serde_json::json!({}),
                 &TargetSelector::default(),
@@ -88,10 +88,11 @@ fn session_inspect_resolves_the_active_tab_when_a_profile_has_several_tabs() {
             )
             .expect("tab.create handler succeeds");
 
-            session_inspect(&TargetSelector::default(), ctx).expect(
+            let response = session_inspect(&TargetSelector::default(), ctx).expect(
                 "must resolve to the active tab's session, not ambiguous_target, \
                  now that two tabs each have their own is_active pane",
-            )
+            );
+            (created, response)
         });
 
         assert_eq!(response["action"], "session.inspect");
@@ -99,9 +100,16 @@ fn session_inspect_resolves_the_active_tab_when_a_profile_has_several_tabs() {
             response["session"]["session_id"].is_string(),
             "must resolve to exactly one session: {response}"
         );
+        // Asserting `is_active` here would prove nothing, and did until
+        // 2026-09-12: `select_session_entries`' `Active` arm filters on exactly
+        // that field, so every entry reaching this response carries it by
+        // construction. It also cannot say *which* tab, since `is_active` is
+        // one pane per `PaneGroup` -- the background tab's session reports
+        // `true` too, so a regression that resolved the wrong tab passed. Pin
+        // the tab the resolved session actually lives in instead.
         assert_eq!(
-            response["session"]["is_active"], true,
-            "the resolved session must be the active tab's, not an arbitrary one: {response}"
+            response["session"]["tab_id"], created["tab"]["id"],
+            "must resolve to the newly created, active tab's session: {response}"
         );
     });
 }
