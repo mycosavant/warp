@@ -12,8 +12,10 @@ the same way when its own list is empty.
    the index; accounts live in `.fork/docs/` and `.fork/runs/`. The file is
    **over its character budget** and every addition needs a removal to pay for
    it. The retraction convention is stated there and this project depends on it.
-2. **`.fork/GOAL.md`** — the standing horizon, *live in the build*. It outranks
-   ticket ordering while it stands.
+2. ~~**`.fork/GOAL.md`** — the standing horizon, *live in the build*. It outranks
+   ticket ordering while it stands.~~ **The file does not exist** (checked
+   2026-09-12, `ls .fork/GOAL.md`; first noted in `HANDOFF-FOCUS.md`). Per
+   `CLAUDE.md`, absent means no standing horizon and `.fork/tickets/` is the plan.
 3. **`.fork/next.html`** — the board, with status chips. Open it in a browser.
 5. **`.fork/HANDOFF-GHTESTS.md`** — added 2026-09-12. The open work left by the
    routed commit-message and PR-content fixes: five tests that never run their

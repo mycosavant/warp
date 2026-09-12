@@ -267,6 +267,19 @@ answered `missing_target` in the same instance, at the same moment, that
 `select_tab_entries`, which is what hid it: a grep on the function name
 suggests one chain and there are two.
 
+**How many actions the read half covers.** `619c345a6`'s body says *"all seven
+read/inspect actions"* and names none; a review counted eight plus `agent.rs`.
+Traced 2026-09-12 from `bridge.rs`'s dispatch, not run: **eight** actions route
+through `select_window_entries` — `window`, `tab`, `pane` and `session`, each as
+`list` and `inspect`. That the call is *routed* does not mean the fallback is
+*reached*. On an argument-less call only the four `inspect`s reach
+`active_or_single_window_id`, because each defaults its own target to `Active`;
+the four `list`s reach it only when given an active or index selector.
+`agent.rs::surface_locations` (nine callers across `agent.rs`, `approvals.rs`,
+`trace.rs`) passes `TargetSelector::default()`, so it takes `None => Ok(entries)`
+and is unaffected either way. No mutation run establishes the four-versus-eight
+split; the `session_inspect` integration test covers one of the four.
+
 **`app.active` is the deliberate exception**, and says so in place. Its question
 is literally what holds focus, so an all-`None` chain is the true answer there,
 and a single-window fallback would be a lie the caller cannot detect. A caller
