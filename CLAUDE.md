@@ -1372,6 +1372,31 @@ git -C C:\dev\warp fetch origin dev; git -C C:\dev\warp merge --ff-only FETCH_HE
 
 The launcher's own hint uses the PowerShell form because that is where it runs.
 
+**A symlink in that checkout needs two things, and Developer Mode is only one of
+them.** Found 2026-09-12. `core.symlinks = false` is written into
+`C:\dev\warp/.git/config` by git at **clone** time when the machine could not
+make symlinks, and it is **sticky** — turning Developer Mode on later fixes
+nothing already on disk, and `.claude/skills` stays a 17-byte text file whose
+contents are the link target. Both halves are needed: `git config core.symlinks
+true`, then re-materialise the path.
+
+**And the obvious recovery fails in a way that reads like the opposite of the
+truth.** `git checkout -- <path>` restores from the **index**, not from HEAD, so
+once `git rm --cached` has run the path is gone from the index and checkout says
+*"did not match any file(s) known to git"* — while HEAD has been holding it as
+mode `120000` the whole time. The order that works is `git reset HEAD <path>`,
+delete the plain file, then `git checkout -- <path>`.
+
+**The capability test for this is a false negative in PowerShell.** `New-Item
+-ItemType SymbolicLink` answers *"Administrator privilege required"* with
+Developer Mode **on**, because PowerShell 5.1 does not pass
+`SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE` and Git for Windows does. So test
+with `git` — a throwaway repo, `update-index --add --cacheinfo 120000,<sha>,link`,
+then `checkout` — and read `LinkType`. This is the curl-versus-browser lesson
+already recorded above, running the other way: the narrow stand-in **failed**
+where the real client succeeds, which is the shape that talks you out of a fix
+that would have worked.
+
 `.fork/docs/manual.md` documents the clone and never says to update it, which is how
 a two-tree setup reads as one tree for months. Worth stating in general: a build
 that reports success and changes nothing is indistinguishable from a build that
