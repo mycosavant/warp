@@ -128,6 +128,15 @@ async fn init_repo() -> (TempDir, std::path::PathBuf) {
     git(&path, &["init", "-b", "main"]).await;
     git(&path, &["config", "user.email", "test@test.com"]).await;
     git(&path, &["config", "user.name", "Test"]).await;
+    // The developer's global config reaches a temp repo. `tag.gpgsign = true`
+    // turns a lightweight `git tag v1.0` into an annotated one, which fails
+    // non-interactively with "no tag message?" -- so the tag is never created,
+    // the checkout that follows never detaches, and a test asserting detached
+    // behaviour sees the branch it started on. Measured 2026-09-12 against the
+    // maintainer's own config; `commit.gpgsign` is off here for the same
+    // reason, though ssh signing happens to succeed unattended.
+    git(&path, &["config", "commit.gpgsign", "false"]).await;
+    git(&path, &["config", "tag.gpgsign", "false"]).await;
     git(&path, &["commit", "--allow-empty", "-m", "initial"]).await;
 
     (dir, path)
@@ -444,11 +453,15 @@ async fn detached_tag_display_returns_short_sha() {
 ///
 /// The contract the remote PR path depends on: under fork policy the client
 /// generates the content and the daemon must use it rather than letting git
-/// write a title over the top. Asserted on the argument list rather than by
-/// running `gh`, because `gh` is resolved through the parent process's `PATH`
-/// — a fake one on the child's `path_env` is never executed when a real `gh`
-/// is installed (measured 2026-09-12, and it is why every fake-`gh` test in
-/// this file is running the real binary).
+/// write a title over the top. Asserted on the argument list, with no
+/// subprocess in it at all.
+///
+/// This comment said until 2026-09-12 that a fake `gh` *could not* be
+/// executed, `run_gh_command` having resolved the program through the parent's
+/// `PATH`. That was true of the code as it stood that morning and is the
+/// reason these assertions were extracted; `run_gh_command` now searches
+/// `path_env` for the program, so the fake-`gh` tests in this file do run
+/// their fakes.
 #[cfg(feature = "local_fs")]
 #[test]
 fn supplied_pr_content_becomes_title_and_body_args() {

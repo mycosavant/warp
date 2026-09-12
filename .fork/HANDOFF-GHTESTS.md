@@ -50,7 +50,19 @@ by ~60k, which is standing and not something this session changed materially
 
 ---
 
-## Task 1 — five tests that never run the thing they are testing
+## Task 1 — five tests that never run the thing they are testing — **DONE 2026-09-12**
+
+**Closed the same day, route 2 as recommended.** `run_gh_command` resolves `gh`
+against `path_env` with `warp_util::path::resolve_executable_in_path`, which
+already existed and which `docker_sandbox.rs` was already using for this.
+`util::git` is **24 passed, 0 failed**; both calibrations are in
+`.fork/runs/ghpath-2026-09-12/`. The `run_git_command` question this task
+raised is answered there too: same mechanism, and it is **fine**, because git's
+`path_env` exists for hooks and hooks do inherit the child environment
+(measured). Two upstream call sites still carry the defect and were left alone
+— `node_runtime` and `crates/lsp/command_builder.rs`, neither measured to fail
+for a real user. The account below is kept as written.
+
 
 **The finding, measured 2026-09-12.** `app/src/util/git_tests.rs` has five
 tests that write a fake `gh` into a temp directory and pass that directory at
@@ -125,7 +137,15 @@ with no `gh` installed. They already pass three different ways (real `gh`
 erroring, fake erroring, `gh` absent and `is_gh_missing_error` catching it);
 adding a fourth is not progress.
 
-### The sixth failure is not part of this
+### The sixth failure is not part of this — **DIAGNOSED 2026-09-12, environmental**
+
+Not a product defect. The maintainer's global `tag.gpgsign = true` turns the
+test's `git tag v1.0` into an annotated tag, which fails non-interactively with
+`fatal: no tag message?`; the tag is never created, the checkout never
+detaches, and `detect_current_branch_display` correctly reports `main`. Both
+`init_repo` helpers now disable commit and tag signing locally. The paragraph
+below is the original, which was right to ask for a diagnosis first.
+
 
 `detached_tag_display_returns_short_sha` fails for an unrelated reason and
 touches no `gh`: after `git tag v1.0 && git checkout v1.0`,
@@ -247,7 +267,8 @@ non-obvious parts it already handles:
   reports `is_active: true`. Six tabs, six actives. That reads as a routing
   failure and is a targeting failure. Worth deciding whether more than one
   active session is itself the bug.
-- **`detached_tag_display_returns_short_sha`** — see Task 1's last section.
+- ~~**`detached_tag_display_returns_short_sha`**~~ — done, see Task 1's last
+  section.
 - **The Windows release build is stale**, see the state table.
 
 ## Still open from `.fork/HANDOFF-NEXT.md`, with the maintainer's 2026-09-12 steer
@@ -289,7 +310,7 @@ cargo check --workspace --all-targets            # --bin compiles neither tests 
 ./script/format                                  # then git status; revert drive-bys
 cargo test -p warp --lib fork::                  # 53 at last count
 cargo test -p warp --lib code_review::git_actions # 5
-cargo test -p warp --lib util::git               # 18 pass, 6 fail — that is the baseline
+cargo test -p warp --lib util::git               # 24 pass, 0 fail since 2026-09-12 (was 18/6)
 ```
 
 **`./script/format` reformats `crates/remote_server/src/manager_tests.rs`
@@ -297,8 +318,9 @@ every single time**, because rustfmt follows the `#[path]` edge from
 `manager.rs`. It is an unrelated import reorder. Revert it; it caught me twice
 in one session.
 
-**Diff test-failure membership, not counts.** The `util::git` six are the
-current baseline and five of them are Task 1. Stash and re-run if you are
+**Diff test-failure membership, not counts.** The `util::git` six were the
+baseline until 2026-09-12; all six are now fixed, so any failure there is
+yours. Stash and re-run if you are
 unsure whether a failure is yours — it costs two builds and settles it.
 
 ## What "done" looks like for a finding here

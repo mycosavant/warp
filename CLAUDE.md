@@ -120,13 +120,11 @@ do"*:
 | `acp_agent/mod.rs` header | *"A second turn is refused"* | true of an agent that cannot resume; T14.7 gave the others a `session/load`, and `cannot_resume`'s doc records that correction **twenty lines below** |
 | the same header, same list | *"model selection … falls through untouched"* | T14.14 built the model chip 2026-09-07 — three days before this was read |
 
-**The last two rows are the fifteenth and sixteenth** — the fourteenth is in
-prose further down, not in this table — **and they arrived together, in one
-header, in a file somebody was already editing** (2026-09-10). Neither was
-noticed; both came out of asking the question below out loud, which is the
-argument for asking it, since `cannot_resume`'s own doc had been carrying the
-correction to one of them for weeks and nobody had looked up. Read the rest of
-this passage as being about the first thirteen.
+**The last two rows arrived together, in one header, in a file somebody was
+already editing** (2026-09-10). Neither was noticed until the question below
+was asked out loud, which is the argument for asking it: `cannot_resume`'s own
+doc had carried the correction to one of them for weeks and nobody looked up.
+The ordinals the rest of this passage counts stop at the thirteenth row.
 
 **Thirteen, and the last five are the instructive ones**: none is a careless
 comment. Each was written carefully, was true when written, and was falsified by a
@@ -792,6 +790,17 @@ symlink recipe for Developer Mode's Git-for-Windows/PowerShell split.
 `bash -c` matches its own argv. Match something narrower, or check the thing
 you actually care about.
 
+**Setting `PATH` on a child process never decides which binary runs.** Lookup
+happens against the *parent's* `PATH` (measured 2026-09-12), so
+`Command::new("gh").env("PATH", user_path)` runs the `gh` Warp inherited, or
+none. The daemon's interactive-shell `PATH` reaches only what that child
+*itself* spawns — a git **hook** does get it, which is why APP-4188's git half
+works and its `gh` half never did. Resolve first, with
+`warp_util::path::resolve_executable_in_path`. The sting is in the tests: **a
+test that plants a fake binary on a child `PATH` exercises the real one**, and
+five here did, green because the fake imitated the real error.
+`.fork/runs/ghpath-2026-09-12/`.
+
 **Diff test-failure *membership*, not counts.** A 9-failure swing between runs
 is normal weather here (`-p warp --lib`'s known flaky set, mostly shared
 login-state tests in `ai::mcp::file_based_manager` that pass serially and
@@ -852,26 +861,20 @@ That number is the early warning, and it is what makes a soft fork cheap; the
 cost is not paid when divergence is incurred but when a merge is deferred.
 
 **Prose in this repo is exempt from the global `unslop` rule against em
-dashes, and from that rule only.** Sampled 2026-09-04: of seven em dashes drawn
-at random from this file, one was a true mid-sentence parenthetical that no
-other punctuation handles, two were colons introducing a list or a quotation,
-one was a definition item, and three were a period or a comma dressed up. So
-roughly one in seven earns its place and the rest would read better fixed four
-different ways, not replaced by one substitute. That is a reason to use fewer,
-not a reason to ban them, and the ones that survive are load-bearing: they mark
-a correction as an aside rather than as a fresh claim, which is most of what
-this file does.
+dashes, and from that rule only.** Sampled 2026-09-04: of seven drawn at random
+from this file, one was a parenthetical no other punctuation handles and three
+were a period or a comma dressed up. So use fewer, rather than banning them —
+the survivors are load-bearing, marking a correction as an aside rather than as
+a fresh claim, which is most of what this file does.
 
-Every other `unslop` rule applies here in full. The three that bite hardest on
-this file are *say the concrete thing*, *shorten or split dense sentences*, and
-*significance inflation*, because the real cost of this document is not its
-punctuation. It is that every paragraph opens with a bolded thesis and almost
-every passage is built as a reversal, so nothing is allowed to be a quiet
-supporting detail and the reader is asked for a small revelation every few
-hundred words. That structure makes retractions stick, which is why it took
-hold and why it stays. At this length it also buries the lookup-shaped facts
-inside the narrative ones, and those are the facts people actually come here
-for.
+Every other `unslop` rule applies in full, and the three that bite hardest are
+*say the concrete thing*, *shorten or split dense sentences*, and *significance
+inflation*. The real cost of this document is not its punctuation: every
+paragraph opens with a bolded thesis and asks the reader for a small revelation,
+so nothing is allowed to be a quiet supporting detail. That structure makes
+retractions stick, which is why it stays — and at this length it buries the
+lookup-shaped facts inside the narrative ones, which are the facts people come
+here for.
 
 **Formatting: run `./script/format`, and disregard `AGENTS.md` on this point.**
 Measured 2026-08-21: `cargo fmt` with the project's config wants to change **11

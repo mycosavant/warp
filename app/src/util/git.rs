@@ -804,11 +804,25 @@ pub async fn get_repository_info(
     Err(anyhow!("Not supported without local_fs"))
 }
 
-/// Runs a `gh` CLI command and returns stdout on success. `path_env`, when
-/// `Some`, is set as the child's `PATH` so a Homebrew-installed `gh` is
-/// findable from macOS GUI launches (launchd's minimal `PATH` excludes it).
+/// Runs a `gh` CLI command and returns stdout on success.
+///
+/// `path_env`, when `Some`, is both searched for `gh` and set as the child's
+/// `PATH`. Searching it is the half that was missing until 2026-09-12: setting
+/// `PATH` on a child changes what that child sees *after* it starts, and
+/// program resolution happens against the **parent**'s `PATH`. So the case
+/// this argument was added for — a Homebrew `gh` under a macOS GUI launch,
+/// where launchd's minimal `PATH` excludes `/opt/homebrew/bin` — could not
+/// work, and the same applies to the WSL daemon, which computes an
+/// interactive-shell `PATH` precisely so tools resolve as the user's shell
+/// resolves them.
+///
+/// Resolution falls back to the bare name when `gh` is not on `path_env`, so a
+/// caller passing an incomplete `PATH` keeps the old behaviour and
+/// [`is_gh_missing_error`] still sees the same `ENOENT` text.
 #[cfg(feature = "local_fs")]
 async fn run_gh_command(repo_path: &Path, args: &[&str], path_env: Option<&str>) -> Result<String> {
+    use std::ffi::{OsStr, OsString};
+
     use command::Stdio;
     use command::r#async::Command;
 
@@ -817,7 +831,14 @@ async fn run_gh_command(repo_path: &Path, args: &[&str], path_env: Option<&str>)
         args.join(" ")
     );
 
-    let mut cmd = Command::new("gh");
+    let program = path_env
+        .and_then(|path_env| {
+            warp_util::path::resolve_executable_in_path("gh", OsStr::new(path_env))
+        })
+        .map(|resolved| resolved.into_owned().into_os_string())
+        .unwrap_or_else(|| OsString::from("gh"));
+
+    let mut cmd = Command::new(program);
     cmd.args(args)
         .current_dir(repo_path)
         .stdin(Stdio::null())
@@ -1061,11 +1082,13 @@ pub async fn create_pr(
 /// Builds the `gh pr create` argument list.
 ///
 /// Extracted from [`create_pr`] so the title/body-versus-`--fill` decision can
-/// be asserted without running `gh`. That is not a convenience: `gh` is
-/// resolved through the *parent* process's `PATH`, so a fake one placed on the
-/// `path_env` handed to the child is never executed on a machine that has a
-/// real `gh` — every test here that writes a fake `gh` is running the real one
-/// and passing because the fake imitates its error (measured 2026-09-12).
+/// be asserted without running `gh`. Worth keeping even now that a fake `gh`
+/// does run: this asserts the mapping itself, with no subprocess in it.
+///
+/// Until 2026-09-12 this comment said a fake `gh` *could not* be executed,
+/// because [`run_gh_command`] resolved the program through the parent's
+/// `PATH` — true when written that morning, fixed that afternoon in the same
+/// file. See [`run_gh_command`] for what the fix changed in production.
 ///
 /// Both a title and a body, or neither: `gh pr create --title` without
 /// `--body` opens an editor, which would hang a daemon.

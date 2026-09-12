@@ -60,6 +60,15 @@ async fn init_repo() -> (TempDir, std::path::PathBuf) {
     git(&path, &["init", "-b", "main"]).await;
     git(&path, &["config", "user.email", "test@test.com"]).await;
     git(&path, &["config", "user.name", "Test"]).await;
+    // The developer's global config reaches a temp repo. `tag.gpgsign = true`
+    // turns a lightweight `git tag v1.0` into an annotated one, which fails
+    // non-interactively with "no tag message?" -- so the tag is never created,
+    // the checkout that follows never detaches, and a test asserting detached
+    // behaviour sees the branch it started on. Measured 2026-09-12 against the
+    // maintainer's own config; `commit.gpgsign` is off here for the same
+    // reason, though ssh signing happens to succeed unattended.
+    git(&path, &["config", "commit.gpgsign", "false"]).await;
+    git(&path, &["config", "tag.gpgsign", "false"]).await;
     git(&path, &["commit", "--allow-empty", "-m", "initial"]).await;
 
     (dir, path)
