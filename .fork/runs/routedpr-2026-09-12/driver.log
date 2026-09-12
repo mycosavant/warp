@@ -1,0 +1,28 @@
+[16:57:04] === routed PR content, live ===
+[16:57:04] gui:    v0.fork.7d8e21b76
+[16:57:04] daemon: v0.fork.7d8e21b76
+[16:57:04] server: {"models":[{"name":"gemma-4-12b","model":"gemma-4-12b","modified_at":"","size":"","digest":"","type"
+[16:57:04] repo branch: pr-probe-20260912, ahead of main by 1
+[16:57:04] gh refuses this repo: none of the git remotes configured for this repository point to a known GitHub h
+[16:57:04] server requests before: 0
+0
+[16:57:14] instance: {"instances":[{"instance_id":"inst_1c41f46957b44e8ab11c95fb6eb09df7","pid":43500,"channel":"warp-oss","app_id":"dev.warp.WarpOss","app_version":"v0.fork.7d8e21b76","protocol_version":1}]}
+[16:57:29] session inspect: {"action":"session.inspect","session":{"session_id":"PanePaneTerminal(4956)","pane_id":"PanePaneTerminal(4956)","pane_index":0,"tab_id":"4566","tab_index":0,"window_id":"0","window_index":0,"is_active":true,"filesystem":{"where":"host","host_id":"9fcd8b1e-a3a9-4b0f-80c7-27d345bdd268"}}}
+[16:57:36] server requests after the pane: 4
+[16:57:44] code review panel: {"action":"surface.code_review.open","ok":true,"instance_id":"inst_1c41f46957b44e8ab11c95fb6eb09df7"}
+[16:57:50] server requests after the panel: 4
+[16:58:03] click 1019,65 (pr-3-create-pr-dialog): CLICKED window(1019,65) -> client(1019,65) pid=43500
+[16:58:19] server requests after pr-3-create-pr-dialog: 4
+[16:58:32] click 658,488 (pr-4-confirmed): CLICKED window(658,488) -> client(658,488) pid=43500
+[16:58:48] server requests after pr-4-confirmed: 6
+[16:59:31] uncommitted marker: chain_probe_20260912_165931
+[16:59:36] code review panel: {"action":"surface.code_review.open","ok":true,"instance_id":"inst_1c41f46957b44e8ab11c95fb6eb09df7"}
+[16:59:45] server requests after the panel: 8
+[16:59:55] click 1008,65 (pr-5-commit-menu): CLICKED window(1008,65) -> client(1008,65) pid=43500
+[17:00:11] server requests after pr-5-commit-menu: 8
+[17:00:24] click 948,92 (pr-6-commit-dialog): CLICKED window(948,92) -> client(948,92) pid=43500
+[17:00:40] server requests after pr-6-commit-dialog: 9
+[17:00:56] click 531,541 (pr-7-chain-selected): CLICKED window(531,541) -> client(531,541) pid=43500
+[17:01:12] server requests after pr-7-chain-selected: 9
+[17:01:20] click 669,592 (pr-8-chain-confirmed): CLICKED window(669,592) -> client(669,592) pid=43500
+[17:01:39] server requests after pr-8-chain-confirmed: 11

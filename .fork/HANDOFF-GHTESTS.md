@@ -188,7 +188,22 @@ where everything reddens is usually a break that is too broad to mean much.
 
 ---
 
-## Task 3 — drive the PR path live
+## Task 3 — drive the PR path live — **DONE 2026-09-12**
+
+**Route 1, as recommended, and both paths driven.**
+`.fork/runs/routedpr-2026-09-12/`. Model requests rose at each confirm (4 → 6
+standalone, 9 → 11 for the chain), each pair being a 10-token title and a
+118-token body from an identical 369-token prompt; both runs then stopped at
+`gh` with *"none of the git remotes ... known GitHub host"*, which is the
+failure the handoff named as passing rather than falsifying. The chain's dialog
+resolved in seven seconds rather than hanging, and its commit and push both
+landed first. No pull request was created and none could be.
+
+One defect found on the way and **not fixed**: the chain reports a failed PR
+creation as `Commit failed:` when the commit succeeded and is pushed.
+
+The account below is kept as written.
+
 
 **What is already proven**, and do not re-prove it: the commit-message half is
 measured end to end (`.fork/runs/routedcommit-2026-09-12/`), and the
@@ -254,7 +269,8 @@ non-obvious parts it already handles:
 
 ## Task 4 — loose ends, smallest first
 
-- **Version skew is unexercised.** Both halves were deliberately the same
+- **Version skew is unexercised**, still — the 2026-09-12 PR drive also ran
+  both halves at the same commit deliberately. Both halves were deliberately the same
   commit. The claim that an older daemon degrades to upstream behaviour rests
   on prost skipping an unknown field — read, not measured. Cheap to test: run
   a new GUI against a daemon binary built before `036bcccac`.

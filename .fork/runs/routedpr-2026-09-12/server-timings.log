@@ -1,0 +1,18 @@
+82:2.47.346.069 I slot print_timing: id  0 | task 141 |       total time =    3355.19 ms /   606 tokens
+83:2.47.346.070 I slot print_timing: id  0 | task 141 |    graphs reused =        144
+86:3.34.198.736 I slot launch_slot_: id  3 | task 174 | processing task, is_child = 0
+87:3.35.993.429 I slot print_timing: id  3 | task 174 | prompt eval time =     642.95 ms /   330 tokens (    1.95 ms per token,   513.26 tokens per second)
+88:3.35.993.435 I slot print_timing: id  3 | task 174 |        eval time =     777.74 ms /    34 tokens (   23.57 ms per token,    42.43 tokens per second)
+89:3.35.993.436 I slot print_timing: id  3 | task 174 |       total time =    1420.69 ms /   364 tokens
+90:3.35.993.437 I slot print_timing: id  3 | task 174 |    graphs reused =        176
+93:4.32.248.966 I slot launch_slot_: id  1 | task 211 | processing task, is_child = 0
+95:4.32.391.930 I slot launch_slot_: id  2 | task 212 | processing task, is_child = 0
+96:4.34.567.577 I slot print_timing: id  1 | task 211 | prompt eval time =    1886.22 ms /   369 tokens (    5.11 ms per token,   195.63 tokens per second)
+97:4.34.567.583 I slot print_timing: id  1 | task 211 |        eval time =     289.12 ms /    10 tokens (   32.12 ms per token,    31.13 tokens per second)
+98:4.34.567.584 I slot print_timing: id  1 | task 211 |       total time =    2175.34 ms /   379 tokens
+99:4.34.567.585 I slot print_timing: id  1 | task 211 |    graphs reused =        184
+101:4.37.293.807 I slot print_timing: id  2 | task 212 | n_gen =    118, tg =  38.81 t/s, tg_3s =  39.14 t/s
+102:4.38.198.603 I slot print_timing: id  2 | task 212 | prompt eval time =    1865.98 ms /   369 tokens (    5.06 ms per token,   197.75 tokens per second)
+103:4.38.198.610 I slot print_timing: id  2 | task 212 |        eval time =    3919.33 ms /   154 tokens (   25.62 ms per token,    39.04 tokens per second)
+104:4.38.198.611 I slot print_timing: id  2 | task 212 |       total time =    5785.32 ms /   523 tokens
+105:4.38.198.612 I slot print_timing: id  2 | task 212 |    graphs reused =        326

@@ -1,0 +1,1321 @@
+2026-09-12T16:57:03Z [INFO] [warp] Using DXC for DirectX shader compilation
+2026-09-12T16:57:03Z [INFO] [warp_server_auth::auth_state] Unable to read user from secure storage: SecureStorageError(NotFound)
+2026-09-12T16:57:03Z [WARN] [warp::persistence::sqlite] SQLite error 283 (A WAL mode database file was recovered): recovered 441 frames from WAL file C:\Users\onemind\AppData\Local\warp\WarpOss-localai\data\warp.sqlite-wal
+2026-09-12T16:57:03Z [INFO] [warp::persistence::sqlite] Connecting to SQLite database
+2026-09-12T16:57:03Z [INFO] [warp::autoupdate::windows] No autoupdate logs found
+2026-09-12T16:57:03Z [INFO] [warp] Starting warp with channel state ChannelState { channel: Oss, additional_features: {DebugMode, RuntimeFeatureFlags}, config: ChannelConfig { app_id: AppId { qualifier: "dev", organization: "warp", application_name: "WarpOss" }, logfile_name: "warp-oss.log", server_config: WarpServerConfig { server_root_url: "https://app.warp.dev", rtc_server_url: "wss://rtc.app.warp.dev/graphql/v2", session_sharing_server_url: Some("wss://sessions.app.warp.dev"), firebase_auth_api_key: "AIzaSyBdy3O3S9hrdayLJxJ7mriBR4qgUaUygAs", iap_config: None }, oz_config: OzConfig { oz_root_url: "https://oz.warp.dev", workload_audience_url: None }, telemetry_config: None, autoupdate_config: None, crash_reporting_config: None, mcp_static_config: None } } and version Some("v0.fork.7d8e21b76")
+2026-09-12T16:57:03Z [INFO] [warp::server::telemetry] Not sending telemetry event because telemetry is disabled.
+2026-09-12T16:57:03Z [INFO] [warpui_core::fonts] Computing available system fonts
+2026-09-12T16:57:03Z [INFO] [warp::app_services] Initializing app services
+2026-09-12T16:57:03Z [INFO] [warp::server::cloud_objects::update_manager] Local-first Warp Drive: treating the SQLite store as the initial load
+2026-09-12T16:57:03Z [INFO] [warp::ai::mcp::templatable_manager::native] Converting 0 legacy MCP servers into templatable MCP servers
+2026-09-12T16:57:03Z [INFO] [warp::server::cloud_objects::listener] Attempting to start websocket connection in CloudObjects::Listener
+2026-09-12T16:57:03Z [INFO] [warp::ai::execution_profiles::profiles] Initialized execution profile model with state: Unsynced, file_backed_profiles: true
+2026-09-12T16:57:03Z [ERROR] [http_server] Failed to bind local HTTP server on 127.0.0.1:9282: Only one usage of each socket address (protocol/network address/port) is normally permitted. (os error 10048)
+2026-09-12T16:57:03Z [INFO] [warp::local_control] local-control server started at http://127.0.0.1:62773/v1/control
+2026-09-12T16:57:03Z [INFO] [warpui_core::core::app] dispatching global action for root_view:open_from_restored
+2026-09-12T16:57:03Z [INFO] [warp::server::telemetry] Not sending telemetry event because telemetry is disabled.
+2026-09-12T16:57:03Z [INFO] [warp::server::telemetry] Not sending telemetry event because telemetry is disabled.
+2026-09-12T16:57:03Z [INFO] [warpui_core::fonts] Computing available system fonts
+2026-09-12T16:57:04Z [INFO] [warp::server::telemetry] Not sending telemetry event because telemetry is disabled.
+2026-09-12T16:57:04Z [INFO] [warp::terminal::local_tty::terminal_manager] Creating terminal model with 0 restored blocks
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [INFO] [warp::terminal::local_tty::terminal_manager] Creating terminal model with 12 restored blocks
+2026-09-12T16:57:04Z [INFO] [warp::terminal::model::block] Block finished with new state DoneWithExecution
+2026-09-12T16:57:04Z [INFO] [warp::terminal::model::block] Block finished with new state DoneWithExecution
+2026-09-12T16:57:04Z [INFO] [warp::terminal::model::block] Block finished with new state DoneWithExecution
+2026-09-12T16:57:04Z [INFO] [warp::terminal::model::block] Block finished with new state DoneWithExecution
+2026-09-12T16:57:04Z [INFO] [warp::terminal::model::block] Block finished with new state DoneWithExecution
+2026-09-12T16:57:04Z [INFO] [warp::terminal::model::block] Block finished with new state DoneWithExecution
+2026-09-12T16:57:04Z [INFO] [warp::terminal::model::block] Block finished with new state DoneWithExecution
+2026-09-12T16:57:04Z [INFO] [warp::terminal::model::block] Block finished with new state DoneWithExecution
+2026-09-12T16:57:04Z [INFO] [warp::terminal::model::block] Block finished with new state DoneWithExecution
+2026-09-12T16:57:04Z [INFO] [warp::terminal::model::block] Block finished with new state DoneWithExecution
+2026-09-12T16:57:04Z [INFO] [warp::terminal::model::block] Block finished with new state DoneWithExecution
+2026-09-12T16:57:04Z [INFO] [warp::terminal::model::block] Block finished with new state DoneWithExecution
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [INFO] [warp::terminal::view::load_ai_conversation] Restoring 3 conversations on view creation: [AIConversationId(446ad7e6-dc57-4f79-a565-f5059000297b), AIConversationId(74c788a5-a566-448a-95e0-0fbd1be8bbcb), AIConversationId(57f9fb8c-0106-4dbb-86c6-82cb1a1c99ae)]
+2026-09-12T16:57:04Z [INFO] [warp::terminal::view::load_ai_conversation] Successfully restored 3 AI blocks on view creation for conversations: [AIConversationId(446ad7e6-dc57-4f79-a565-f5059000297b), AIConversationId(74c788a5-a566-448a-95e0-0fbd1be8bbcb), AIConversationId(57f9fb8c-0106-4dbb-86c6-82cb1a1c99ae)]
+2026-09-12T16:57:04Z [INFO] [warp::terminal::view::load_ai_conversation] Restoring agent view for conversation: 57f9fb8c-0106-4dbb-86c6-82cb1a1c99ae
+2026-09-12T16:57:04Z [INFO] [warp::terminal::local_tty::terminal_manager] Creating terminal model with 2 restored blocks
+2026-09-12T16:57:04Z [INFO] [warp::terminal::model::block] Block finished with new state DoneWithExecution
+2026-09-12T16:57:04Z [INFO] [warp::terminal::model::block] Block finished with new state DoneWithExecution
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [INFO] [warp::terminal::local_tty::terminal_manager] Creating terminal model with 2 restored blocks
+2026-09-12T16:57:04Z [INFO] [warp::terminal::model::block] Block finished with new state DoneWithExecution
+2026-09-12T16:57:04Z [INFO] [warp::terminal::model::block] Block finished with new state DoneWithExecution
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [INFO] [warp::terminal::local_tty::terminal_manager] Creating terminal model with 2 restored blocks
+2026-09-12T16:57:04Z [INFO] [warp::terminal::model::block] Block finished with new state DoneWithExecution
+2026-09-12T16:57:04Z [INFO] [warp::terminal::model::block] Block finished with new state DoneWithExecution
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [INFO] [warp::terminal::local_tty::terminal_manager] Creating terminal model with 2 restored blocks
+2026-09-12T16:57:04Z [INFO] [warp::terminal::model::block] Block finished with new state DoneWithExecution
+2026-09-12T16:57:04Z [INFO] [warp::terminal::model::block] Block finished with new state DoneWithExecution
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [INFO] [warp::terminal::local_tty::terminal_manager] Creating terminal model with 1 restored blocks
+2026-09-12T16:57:04Z [INFO] [warp::terminal::model::block] Block finished with new state DoneWithExecution
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [INFO] [warpui_core::core::app] dispatching typed action: warp::pane_group::PaneGroupAction::HandleFocusChange
+2026-09-12T16:57:04Z [WARN] [warpui_core::core::app] Action HandleFocusChange was dispatched, but no view handled it
+2026-09-12T16:57:04Z [INFO] [warp::event_log] fork event log: writing to C:\Users\onemind\AppData\Local\warp\WarpOss-localai\data\fork\events
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [INFO] [warpui_core::core::app] dispatching typed action: warp::pane_group::PaneGroupAction::HandleFocusChange
+2026-09-12T16:57:04Z [WARN] [warpui_core::core::app] Action HandleFocusChange was dispatched, but no view handled it
+2026-09-12T16:57:04Z [INFO] [warpui_core::core::app] dispatching typed action: warp::pane_group::PaneGroupAction::HandleFocusChange
+2026-09-12T16:57:04Z [WARN] [warpui_core::core::app] Action HandleFocusChange was dispatched, but no view handled it
+2026-09-12T16:57:04Z [INFO] [warpui_core::core::app] dispatching typed action: warp::pane_group::PaneGroupAction::HandleFocusChange
+2026-09-12T16:57:04Z [WARN] [warpui_core::core::app] Action HandleFocusChange was dispatched, but no view handled it
+2026-09-12T16:57:04Z [INFO] [warpui_core::core::app] dispatching typed action: warp::pane_group::PaneGroupAction::HandleFocusChange
+2026-09-12T16:57:04Z [WARN] [warpui_core::core::app] Action HandleFocusChange was dispatched, but no view handled it
+2026-09-12T16:57:04Z [INFO] [warpui_core::core::app] dispatching typed action: warp::pane_group::PaneGroupAction::HandleFocusChange
+2026-09-12T16:57:04Z [WARN] [warpui_core::core::app] Action HandleFocusChange was dispatched, but no view handled it
+2026-09-12T16:57:04Z [INFO] [warpui_core::core::app] dispatching typed action: warp::pane_group::PaneGroupAction::HandleFocusChange
+2026-09-12T16:57:04Z [WARN] [warpui_core::core::app] Action HandleFocusChange was dispatched, but no view handled it
+2026-09-12T16:57:04Z [INFO] [warpui_core::core::app] dispatching typed action: warp::pane_group::PaneGroupAction::HandleFocusChange
+2026-09-12T16:57:04Z [WARN] [warpui_core::core::app] Action HandleFocusChange was dispatched, but no view handled it
+2026-09-12T16:57:04Z [WARN] [warp::terminal::view] Tried to update block filter query without active_filter_editor_block_index set
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::terminal::view] Tried to update block filter query without active_filter_editor_block_index set
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::terminal::view] Tried to update block filter query without active_filter_editor_block_index set
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::terminal::view] Tried to update block filter query without active_filter_editor_block_index set
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::terminal::view] Tried to update block filter query without active_filter_editor_block_index set
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::terminal::view] Tried to update block filter query without active_filter_editor_block_index set
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::terminal::view] Tried to update block filter query without active_filter_editor_block_index set
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:04Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:04Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:04Z [INFO] [warp::antivirus::windows] Detected antivirus / EDR software "Microsoft Defender Antivirus"
+2026-09-12T16:57:04Z [INFO] [warp::ai::mcp::file_based_manager] Initial global file-based MCP scan complete: 0 auto-started server(s) to await before the first turn
+2026-09-12T16:57:04Z [WARN] [warp::server::cloud_objects::listener] CloudObjects::Listener: websocket connection failed to connect or finished with an error; trying again: missing authentication credentials
+2026-09-12T16:57:04Z [INFO] [warpui::windowing::winit::window] Window launched partially offsceen. Moving the window up by 0 pixels
+2026-09-12T16:57:04Z [INFO] [warpui::rendering::wgpu::resources] Enabled wgpu backends: Backends(NOOP | VULKAN | GL | METAL | DX12 | BROWSER_WEBGPU)
+2026-09-12T16:57:04Z [INFO] [warpui::rendering::wgpu::resources] Available wgpu adapters (in priority order):
+2026-09-12T16:57:04Z [WARN] [warpui::rendering::wgpu::resources] Deprioritizing non DX12 Nvidia adapter due to version > 572 (unsupported). Newer NVIDIA drivers can crash if multiple windows are created if the `Vulkan / OpenGL Present MethodNVIDIA setting is set to `Auto` or `Prefer layered on DXGI Swapchain`.
+2026-09-12T16:57:04Z [INFO] [warpui::rendering::wgpu::resources] DiscreteGpu: NVIDIA GeForce RTX 5070
+	Backend: Dx12
+	Driver: 32.0.15.9186
+	Can present: true
+	Supported texture format: Some(Bgra8UnormSrgb)
+	Supported alpha mode: [Auto, Inherit, Opaque, PostMultiplied, PreMultiplied]
+2026-09-12T16:57:04Z [INFO] [warpui::rendering::wgpu::resources] Other: NVIDIA GeForce RTX 5070/PCIe/SSE2
+	Backend: Gl
+	Driver: Unknown (4.6.0 NVIDIA 591.86)
+	Can present: true
+	Supported texture format: Some(Rgba8UnormSrgb)
+	Supported alpha mode: [Opaque]
+2026-09-12T16:57:04Z [INFO] [warpui::rendering::wgpu::resources] Cpu: Microsoft Basic Render Driver
+	Backend: Dx12
+	Driver: 10.0.26100.4768
+	Can present: true
+	Supported texture format: Some(Bgra8UnormSrgb)
+	Supported alpha mode: [Auto, Inherit, Opaque, PostMultiplied, PreMultiplied]
+2026-09-12T16:57:04Z [INFO] [warpui::rendering::wgpu::resources] DiscreteGpu: NVIDIA GeForce RTX 5070
+	Backend: Vulkan
+	Driver: NVIDIA (591.86)
+	Can present: true
+	Supported texture format: Some(Bgra8UnormSrgb)
+	Supported alpha mode: [Opaque]
+2026-09-12T16:57:04Z [INFO] [warpui::rendering::wgpu::resources] Verifying adapter "NVIDIA GeForce RTX 5070" is valid...
+2026-09-12T16:57:04Z [INFO] [warpui::rendering::wgpu::resources] Using Dx12 DiscreteGpu (NVIDIA GeForce RTX 5070) for rendering new window.
+2026-09-12T16:57:04Z [INFO] [warpui_core::platform::app] window resized
+2026-09-12T16:57:04Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:04Z [INFO] [warpui_core::platform::app] window resized
+2026-09-12T16:57:04Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:04Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:04Z [INFO] [warpui_core::platform::app] window resized
+2026-09-12T16:57:04Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:04Z [INFO] [warp_terminal::local_tty::windows] Starting WSL shell process: "Ubuntu"
+2026-09-12T16:57:04Z [INFO] [warp_terminal::local_tty::windows] Starting WSL shell process: "Ubuntu"
+2026-09-12T16:57:04Z [INFO] [warp_terminal::local_tty::windows] Starting WSL shell process: "Ubuntu"
+2026-09-12T16:57:05Z [INFO] [warp_terminal::local_tty::windows] Starting WSL shell process: "Ubuntu"
+2026-09-12T16:57:05Z [INFO] [warp_terminal::local_tty::windows] Starting WSL shell process: "Ubuntu"
+2026-09-12T16:57:05Z [INFO] [warp_terminal::local_tty::windows] Starting WSL shell process: "Ubuntu"
+2026-09-12T16:57:05Z [INFO] [warpui_core::core::app] dispatching typed action: warp::pane_group::PaneGroupAction::HandleFocusChange
+2026-09-12T16:57:05Z [WARN] [warpui_core::core::app] Action HandleFocusChange was dispatched, but no view handled it
+2026-09-12T16:57:05Z [INFO] [warp_terminal::local_tty::windows] Starting WSL shell process: "Ubuntu"
+2026-09-12T16:57:05Z [INFO] [warpui_core::platform::app] active window changed: Some(WindowId(0))
+2026-09-12T16:57:05Z [INFO] [warpui_core::core::app] dispatching global action for root_view:update_quake_mode_state
+2026-09-12T16:57:05Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:05Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:05Z [INFO] [warp_terminal::model::ansi] Received InitShell hook
+2026-09-12T16:57:05Z [INFO] [warp_terminal::model::ansi] Received InitShell hook
+2026-09-12T16:57:05Z [INFO] [warp_terminal::model::ansi] Received InitShell hook
+2026-09-12T16:57:05Z [WARN] [warp::terminal::share_block_modal] Tried to render share modal without a model
+2026-09-12T16:57:05Z [WARN] [warp::workspace::native_modal] No alert dialog was set for the native modal
+2026-09-12T16:57:05Z [WARN] [warp::terminal::share_block_modal] Tried to render share modal without a model
+2026-09-12T16:57:05Z [WARN] [warp::ai::blocklist::suggested_agent_mode_workflow_modal] SuggestedAgentModeWorkflowModal has not been initialized
+2026-09-12T16:57:05Z [WARN] [warp::terminal::share_block_modal] Tried to render share modal without a model
+2026-09-12T16:57:05Z [INFO] [warp_terminal::model::ansi] Received InitShell hook
+2026-09-12T16:57:05Z [WARN] [warp::terminal::share_block_modal] Tried to render share modal without a model
+2026-09-12T16:57:05Z [WARN] [warp::terminal::share_block_modal] Tried to render share modal without a model
+2026-09-12T16:57:05Z [WARN] [warp::terminal::share_block_modal] Tried to render share modal without a model
+2026-09-12T16:57:05Z [INFO] [warp_terminal::model::ansi] Received InitShell hook
+2026-09-12T16:57:05Z [WARN] [warp::terminal::share_block_modal] Tried to render share modal without a model
+2026-09-12T16:57:05Z [INFO] [warp_terminal::model::ansi] Received InitShell hook
+2026-09-12T16:57:05Z [INFO] [warp_terminal::model::ansi] Received InitShell hook
+2026-09-12T16:57:05Z [INFO] [warp_terminal::model::ansi] Received CommandFinished hook
+2026-09-12T16:57:05Z [INFO] [warp::terminal::model::terminal_model] Tried to exit the alternate screen, but it was already inactive
+2026-09-12T16:57:05Z [INFO] [warp::terminal::model::block] Block finished with new state DoneWithExecution
+2026-09-12T16:57:05Z [INFO] [warp::terminal::model::blocks] Incrementing stage from WarpInput to ScriptExecution
+2026-09-12T16:57:05Z [INFO] [warp_terminal::model::ansi] Received Precmd hook
+2026-09-12T16:57:06Z [INFO] [warp_terminal::model::ansi] Received CommandFinished hook
+2026-09-12T16:57:06Z [INFO] [warp::terminal::model::terminal_model] Tried to exit the alternate screen, but it was already inactive
+2026-09-12T16:57:06Z [INFO] [warp_terminal::model::ansi] Received CommandFinished hook
+2026-09-12T16:57:06Z [INFO] [warp::terminal::model::terminal_model] Tried to exit the alternate screen, but it was already inactive
+2026-09-12T16:57:06Z [INFO] [warp_terminal::model::ansi] Received CommandFinished hook
+2026-09-12T16:57:06Z [INFO] [warp::terminal::model::terminal_model] Tried to exit the alternate screen, but it was already inactive
+2026-09-12T16:57:06Z [INFO] [warp_terminal::model::ansi] Received CommandFinished hook
+2026-09-12T16:57:06Z [INFO] [warp::terminal::model::terminal_model] Tried to exit the alternate screen, but it was already inactive
+2026-09-12T16:57:06Z [INFO] [warp_terminal::model::ansi] Received CommandFinished hook
+2026-09-12T16:57:06Z [INFO] [warp::terminal::model::terminal_model] Tried to exit the alternate screen, but it was already inactive
+2026-09-12T16:57:06Z [INFO] [warp::terminal::model::block] Block finished with new state DoneWithExecution
+2026-09-12T16:57:06Z [INFO] [warp::terminal::model::blocks] Incrementing stage from WarpInput to ScriptExecution
+2026-09-12T16:57:06Z [INFO] [warp::terminal::model::block] Block finished with new state DoneWithExecution
+2026-09-12T16:57:06Z [INFO] [warp::terminal::model::blocks] Incrementing stage from WarpInput to ScriptExecution
+2026-09-12T16:57:06Z [INFO] [warp::terminal::model::block] Block finished with new state DoneWithExecution
+2026-09-12T16:57:06Z [INFO] [warp::terminal::model::blocks] Incrementing stage from WarpInput to ScriptExecution
+2026-09-12T16:57:06Z [INFO] [warp::terminal::model::block] Block finished with new state DoneWithExecution
+2026-09-12T16:57:06Z [INFO] [warp::terminal::model::blocks] Incrementing stage from WarpInput to ScriptExecution
+2026-09-12T16:57:06Z [INFO] [warp::terminal::model::block] Block finished with new state DoneWithExecution
+2026-09-12T16:57:06Z [INFO] [warp::terminal::model::blocks] Incrementing stage from WarpInput to ScriptExecution
+2026-09-12T16:57:06Z [INFO] [warp_terminal::model::ansi] Received Precmd hook
+2026-09-12T16:57:06Z [INFO] [warp_terminal::model::ansi] Received Precmd hook
+2026-09-12T16:57:06Z [INFO] [warp_terminal::model::ansi] Received Precmd hook
+2026-09-12T16:57:06Z [INFO] [warp_terminal::model::ansi] Received Precmd hook
+2026-09-12T16:57:06Z [INFO] [warp_terminal::model::ansi] Received Precmd hook
+2026-09-12T16:57:06Z [INFO] [warp_terminal::model::ansi] Received CommandFinished hook
+2026-09-12T16:57:06Z [INFO] [warp::terminal::model::terminal_model] Tried to exit the alternate screen, but it was already inactive
+2026-09-12T16:57:06Z [INFO] [warp::terminal::model::block] Block finished with new state DoneWithExecution
+2026-09-12T16:57:06Z [INFO] [warp::terminal::model::blocks] Incrementing stage from WarpInput to ScriptExecution
+2026-09-12T16:57:06Z [INFO] [warp_terminal::model::ansi] Received Precmd hook
+2026-09-12T16:57:06Z [INFO] [warpui_core::core::app] dispatching typed action: warp::pane_group::PaneGroupAction::HandleFocusChange
+2026-09-12T16:57:06Z [INFO] [warpui_core::core::app] notifying view observers and updating windows for timer id 1
+2026-09-12T16:57:06Z [INFO] [warp_terminal::model::ansi] Received Bootstrapped hook
+2026-09-12T16:57:06Z [INFO] [warp::terminal::model::early_output] Configured typeahead mode as ShellReported
+2026-09-12T16:57:06Z [INFO] [warp::terminal::model::session::command_executor] creating a local executor!
+2026-09-12T16:57:06Z [INFO] [warp::terminal::model::session] Parsed shell version string: Some([Number(5), Number(2), Number(21), Number(1), Text("release")])
+2026-09-12T16:57:06Z [INFO] [warp::terminal::model::session] Shell is bootstrapped with session_id SessionId(617215730848137540)
+2026-09-12T16:57:06Z [INFO] [warp_terminal::model::ansi] Received CommandFinished hook
+2026-09-12T16:57:06Z [INFO] [warp::terminal::model::terminal_model] Tried to exit the alternate screen, but it was already inactive
+2026-09-12T16:57:06Z [INFO] [warp::terminal::model::block] Block finished with new state DoneWithExecution
+2026-09-12T16:57:06Z [INFO] [warp::terminal::model::blocks] Incrementing stage from Bootstrapped to PostBootstrapPrecmd
+2026-09-12T16:57:06Z [INFO] [warp::terminal::model_events] WSL session SessionId(617215730848137540) bootstrapped in Ubuntu; attaching a remote server
+2026-09-12T16:57:06Z [INFO] [warp::remote_server::wsl_transport] Connecting remote server to WSL distro Ubuntu for session SessionId(617215730848137540)
+2026-09-12T16:57:06Z [INFO] [remote_server::manager] Starting remote server connection: session=SessionId(617215730848137540)
+2026-09-12T16:57:06Z [INFO] [warp::terminal::model::session] Loading history from file \\wsl$\ubuntu\home\effatha\.bash_history for shell bash
+2026-09-12T16:57:06Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:06Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:06Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:06Z [WARN] [warp::terminal::view] Expected to have session for session ID SessionId(7612209468188642627), but doesn't exist
+2026-09-12T16:57:06Z [WARN] [warp::terminal::view] Expected to have session for session ID SessionId(6609274813952901467), but doesn't exist
+2026-09-12T16:57:06Z [WARN] [warp::terminal::view] Expected to have session for session ID SessionId(5779483104127139419), but doesn't exist
+2026-09-12T16:57:06Z [WARN] [warp::terminal::view] Expected to have session for session ID SessionId(11111611051068808680), but doesn't exist
+2026-09-12T16:57:06Z [WARN] [warp::terminal::view] Expected to have session for session ID SessionId(16475551989129619724), but doesn't exist
+2026-09-12T16:57:06Z [WARN] [warp::terminal::view] Expected to have session for session ID SessionId(15720475882047060401), but doesn't exist
+2026-09-12T16:57:06Z [INFO] [warp_terminal::model::ansi] Received Precmd hook
+2026-09-12T16:57:07Z [INFO] [warp_terminal::model::ansi] Received Bootstrapped hook
+2026-09-12T16:57:07Z [INFO] [warp::terminal::model::early_output] Configured typeahead mode as ShellReported
+2026-09-12T16:57:07Z [INFO] [warp::terminal::model::session::command_executor] creating a local executor!
+2026-09-12T16:57:07Z [INFO] [warp::terminal::model::session] Parsed shell version string: Some([Number(5), Number(2), Number(21), Number(1), Text("release")])
+2026-09-12T16:57:07Z [INFO] [warp::terminal::model::session] Shell is bootstrapped with session_id SessionId(6609274813952901467)
+2026-09-12T16:57:07Z [INFO] [warp::terminal::model_events] WSL session SessionId(6609274813952901467) bootstrapped in Ubuntu; attaching a remote server
+2026-09-12T16:57:07Z [INFO] [warp::remote_server::wsl_transport] Connecting remote server to WSL distro Ubuntu for session SessionId(6609274813952901467)
+2026-09-12T16:57:07Z [INFO] [remote_server::manager] Starting remote server connection: session=SessionId(6609274813952901467)
+2026-09-12T16:57:07Z [INFO] [warp_terminal::model::ansi] Received Bootstrapped hook
+2026-09-12T16:57:07Z [INFO] [warp::terminal::model::early_output] Configured typeahead mode as ShellReported
+2026-09-12T16:57:07Z [INFO] [warp_terminal::model::ansi] Received Bootstrapped hook
+2026-09-12T16:57:07Z [INFO] [warp::terminal::model::early_output] Configured typeahead mode as ShellReported
+2026-09-12T16:57:07Z [INFO] [warp_terminal::model::ansi] Received CommandFinished hook
+2026-09-12T16:57:07Z [INFO] [warp::terminal::model::terminal_model] Tried to exit the alternate screen, but it was already inactive
+2026-09-12T16:57:07Z [INFO] [warp::terminal::model::block] Block finished with new state DoneWithExecution
+2026-09-12T16:57:07Z [INFO] [warp::terminal::model::blocks] Incrementing stage from Bootstrapped to PostBootstrapPrecmd
+2026-09-12T16:57:07Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:07Z [WARN] [warp::terminal::view] Expected to have session for session ID SessionId(7612209468188642627), but doesn't exist
+2026-09-12T16:57:07Z [WARN] [warp::terminal::view] Expected to have session for session ID SessionId(5779483104127139419), but doesn't exist
+2026-09-12T16:57:07Z [WARN] [warp::terminal::view] Expected to have session for session ID SessionId(11111611051068808680), but doesn't exist
+2026-09-12T16:57:07Z [WARN] [warp::terminal::view] Expected to have session for session ID SessionId(16475551989129619724), but doesn't exist
+2026-09-12T16:57:07Z [WARN] [warp::terminal::view] Expected to have session for session ID SessionId(15720475882047060401), but doesn't exist
+2026-09-12T16:57:07Z [INFO] [warp::terminal::model::session::command_executor] creating a local executor!
+2026-09-12T16:57:07Z [INFO] [warp::terminal::model::session] Parsed shell version string: Some([Number(5), Number(2), Number(21), Number(1), Text("release")])
+2026-09-12T16:57:07Z [INFO] [warp::terminal::model::session] Shell is bootstrapped with session_id SessionId(11111611051068808680)
+2026-09-12T16:57:07Z [INFO] [warp::terminal::model_events] WSL session SessionId(11111611051068808680) bootstrapped in Ubuntu; attaching a remote server
+2026-09-12T16:57:07Z [INFO] [warp::remote_server::wsl_transport] Connecting remote server to WSL distro Ubuntu for session SessionId(11111611051068808680)
+2026-09-12T16:57:07Z [INFO] [remote_server::manager] Starting remote server connection: session=SessionId(11111611051068808680)
+2026-09-12T16:57:07Z [INFO] [warp_terminal::model::ansi] Received CommandFinished hook
+2026-09-12T16:57:07Z [INFO] [warp::terminal::model::terminal_model] Tried to exit the alternate screen, but it was already inactive
+2026-09-12T16:57:07Z [INFO] [warp::terminal::model::block] Block finished with new state DoneWithExecution
+2026-09-12T16:57:07Z [INFO] [warp::terminal::model::blocks] Incrementing stage from Bootstrapped to PostBootstrapPrecmd
+2026-09-12T16:57:07Z [INFO] [warp_terminal::model::ansi] Received CommandFinished hook
+2026-09-12T16:57:07Z [INFO] [warp::terminal::model::terminal_model] Tried to exit the alternate screen, but it was already inactive
+2026-09-12T16:57:07Z [INFO] [warp::terminal::model::block] Block finished with new state DoneWithExecution
+2026-09-12T16:57:07Z [INFO] [warp::terminal::model::blocks] Incrementing stage from Bootstrapped to PostBootstrapPrecmd
+2026-09-12T16:57:07Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:07Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:07Z [INFO] [remote_server::client] [remote_server] 12:57:08.981 [0m[34m[INFO][0m [0m[0mProxy: no daemon running, will start one
+2026-09-12T16:57:07Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:07Z [INFO] [warp_terminal::model::ansi] Received Precmd hook
+2026-09-12T16:57:07Z [WARN] [warp::terminal::view] Expected to have session for session ID SessionId(7612209468188642627), but doesn't exist
+2026-09-12T16:57:07Z [WARN] [warp::terminal::view] Expected to have session for session ID SessionId(5779483104127139419), but doesn't exist
+2026-09-12T16:57:07Z [WARN] [warp::terminal::view] Expected to have session for session ID SessionId(16475551989129619724), but doesn't exist
+2026-09-12T16:57:07Z [WARN] [warp::terminal::view] Expected to have session for session ID SessionId(15720475882047060401), but doesn't exist
+2026-09-12T16:57:07Z [INFO] [warp::terminal::model::session::command_executor] creating a local executor!
+2026-09-12T16:57:07Z [INFO] [warp::terminal::model::session] Parsed shell version string: Some([Number(5), Number(2), Number(21), Number(1), Text("release")])
+2026-09-12T16:57:07Z [INFO] [warp::terminal::model::session] Shell is bootstrapped with session_id SessionId(5779483104127139419)
+2026-09-12T16:57:07Z [INFO] [warp::terminal::model_events] WSL session SessionId(5779483104127139419) bootstrapped in Ubuntu; attaching a remote server
+2026-09-12T16:57:07Z [INFO] [warp::remote_server::wsl_transport] Connecting remote server to WSL distro Ubuntu for session SessionId(5779483104127139419)
+2026-09-12T16:57:07Z [INFO] [remote_server::manager] Starting remote server connection: session=SessionId(5779483104127139419)
+2026-09-12T16:57:07Z [INFO] [warp_terminal::model::ansi] Received InputBuffer hook
+2026-09-12T16:57:07Z [INFO] [warp_terminal::model::ansi] Received Precmd hook
+2026-09-12T16:57:07Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:07Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:07Z [INFO] [warp_terminal::model::ansi] Received Bootstrapped hook
+2026-09-12T16:57:07Z [INFO] [warp::terminal::model::early_output] Configured typeahead mode as ShellReported
+2026-09-12T16:57:07Z [INFO] [warp_terminal::model::ansi] Received Precmd hook
+2026-09-12T16:57:07Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:07Z [WARN] [warp::terminal::view] Expected to have session for session ID SessionId(7612209468188642627), but doesn't exist
+2026-09-12T16:57:07Z [WARN] [warp::terminal::view] Expected to have session for session ID SessionId(16475551989129619724), but doesn't exist
+2026-09-12T16:57:07Z [WARN] [warp::terminal::view] Expected to have session for session ID SessionId(15720475882047060401), but doesn't exist
+2026-09-12T16:57:07Z [INFO] [warpui_core::core::app] notifying view observers and updating windows for timer id 3
+2026-09-12T16:57:07Z [INFO] [warp_terminal::model::ansi] Received CommandFinished hook
+2026-09-12T16:57:07Z [INFO] [warp::terminal::model::terminal_model] Tried to exit the alternate screen, but it was already inactive
+2026-09-12T16:57:07Z [INFO] [warp::terminal::model::block] Block finished with new state DoneWithExecution
+2026-09-12T16:57:07Z [INFO] [warp::terminal::model::blocks] Incrementing stage from Bootstrapped to PostBootstrapPrecmd
+2026-09-12T16:57:07Z [INFO] [warp::terminal::model::session::command_executor] creating a local executor!
+2026-09-12T16:57:07Z [INFO] [warp::terminal::model::session] Parsed shell version string: Some([Number(5), Number(2), Number(21), Number(1), Text("release")])
+2026-09-12T16:57:07Z [INFO] [warp::terminal::model::session] Shell is bootstrapped with session_id SessionId(7612209468188642627)
+2026-09-12T16:57:07Z [INFO] [warp::terminal::model_events] WSL session SessionId(7612209468188642627) bootstrapped in Ubuntu; attaching a remote server
+2026-09-12T16:57:07Z [INFO] [warp::remote_server::wsl_transport] Connecting remote server to WSL distro Ubuntu for session SessionId(7612209468188642627)
+2026-09-12T16:57:07Z [INFO] [remote_server::manager] Starting remote server connection: session=SessionId(7612209468188642627)
+2026-09-12T16:57:07Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:07Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:07Z [INFO] [warp_terminal::model::ansi] Received Precmd hook
+2026-09-12T16:57:07Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:07Z [WARN] [warp::terminal::view] Expected to have session for session ID SessionId(16475551989129619724), but doesn't exist
+2026-09-12T16:57:07Z [WARN] [warp::terminal::view] Expected to have session for session ID SessionId(15720475882047060401), but doesn't exist
+2026-09-12T16:57:07Z [INFO] [warp_terminal::model::ansi] Received InputBuffer hook
+2026-09-12T16:57:07Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=452, falling back to host listing
+2026-09-12T16:57:07Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:07Z [INFO] [warp_terminal::model::ansi] Received InputBuffer hook
+2026-09-12T16:57:07Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=439, falling back to host listing
+2026-09-12T16:57:07Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:07Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=484, falling back to host listing
+2026-09-12T16:57:07Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:07Z [INFO] [warp_terminal::model::ansi] Received InputBuffer hook
+2026-09-12T16:57:07Z [INFO] [warp_terminal::model::ansi] Received Bootstrapped hook
+2026-09-12T16:57:07Z [INFO] [warp::terminal::model::early_output] Configured typeahead mode as ShellReported
+2026-09-12T16:57:07Z [INFO] [warp_terminal::model::ansi] Received CommandFinished hook
+2026-09-12T16:57:07Z [INFO] [warp::terminal::model::terminal_model] Tried to exit the alternate screen, but it was already inactive
+2026-09-12T16:57:07Z [INFO] [warp::terminal::model::block] Block finished with new state DoneWithExecution
+2026-09-12T16:57:07Z [INFO] [warp::terminal::model::blocks] Incrementing stage from Bootstrapped to PostBootstrapPrecmd
+2026-09-12T16:57:07Z [INFO] [warp_terminal::model::ansi] Received Precmd hook
+2026-09-12T16:57:07Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=504, falling back to host listing
+2026-09-12T16:57:07Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=504, falling back to host listing
+2026-09-12T16:57:07Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=505, falling back to host listing
+2026-09-12T16:57:07Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:07Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:07Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:07Z [INFO] [repo_metadata::local_model] Successfully indexed repository: \\wsl$\ubuntu\home\effatha\scratch-localai with 2 files
+2026-09-12T16:57:07Z [INFO] [warp_terminal::model::ansi] Received InputBuffer hook
+2026-09-12T16:57:07Z [INFO] [warp::terminal::model::session::command_executor] creating a local executor!
+2026-09-12T16:57:07Z [INFO] [warp::terminal::model::session] Parsed shell version string: Some([Number(5), Number(2), Number(21), Number(1), Text("release")])
+2026-09-12T16:57:07Z [INFO] [warp::terminal::model::session] Shell is bootstrapped with session_id SessionId(16475551989129619724)
+2026-09-12T16:57:07Z [INFO] [warp::terminal::model_events] WSL session SessionId(16475551989129619724) bootstrapped in Ubuntu; attaching a remote server
+2026-09-12T16:57:07Z [INFO] [warp::remote_server::wsl_transport] Connecting remote server to WSL distro Ubuntu for session SessionId(16475551989129619724)
+2026-09-12T16:57:07Z [INFO] [remote_server::manager] Starting remote server connection: session=SessionId(16475551989129619724)
+2026-09-12T16:57:07Z [INFO] [warp_terminal::model::ansi] Received Bootstrapped hook
+2026-09-12T16:57:07Z [INFO] [warp::terminal::model::early_output] Configured typeahead mode as ShellReported
+2026-09-12T16:57:07Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:07Z [INFO] [warp_terminal::model::ansi] Received CommandFinished hook
+2026-09-12T16:57:07Z [INFO] [warp::terminal::model::terminal_model] Tried to exit the alternate screen, but it was already inactive
+2026-09-12T16:57:07Z [INFO] [warp::terminal::model::block] Block finished with new state DoneWithExecution
+2026-09-12T16:57:07Z [INFO] [warp::terminal::model::blocks] Incrementing stage from Bootstrapped to PostBootstrapPrecmd
+2026-09-12T16:57:07Z [WARN] [warp::terminal::view] Expected to have session for session ID SessionId(15720475882047060401), but doesn't exist
+2026-09-12T16:57:07Z [INFO] [warp_terminal::model::ansi] Received Precmd hook
+2026-09-12T16:57:07Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=511, falling back to host listing
+2026-09-12T16:57:07Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:07Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=510, falling back to host listing
+2026-09-12T16:57:07Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=509, falling back to host listing
+2026-09-12T16:57:07Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:07Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:08Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=500, falling back to host listing
+2026-09-12T16:57:08Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=501, falling back to host listing
+2026-09-12T16:57:08Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:08Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:08Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=504, falling back to host listing
+2026-09-12T16:57:08Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:08Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=503, falling back to host listing
+2026-09-12T16:57:08Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:08Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=502, falling back to host listing
+2026-09-12T16:57:08Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=501, falling back to host listing
+2026-09-12T16:57:08Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:08Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:10Z [INFO] [remote_server::client] [remote_server] 12:57:11.662 [0m[34m[INFO][0m [0m[0mProxy: daemon socket ready after 2.677889523s
+2026-09-12T16:57:10Z [INFO] [remote_server::client] [remote_server] 12:57:11.662 [0m[34m[INFO][0m [0m[0mProxy: connecting to daemon socket at /home/effatha/.warp-dev/remote-server/d9b8ac72/server-a08d6ce7.sock
+2026-09-12T16:57:10Z [INFO] [remote_server::client] [remote_server] 12:57:11.662 [0m[34m[INFO][0m [0m[0mProxy: reusing existing daemon
+2026-09-12T16:57:10Z [INFO] [remote_server::client] [remote_server] 12:57:11.662 [0m[34m[INFO][0m [0m[0mProxy: connected, bridging stdio
+2026-09-12T16:57:10Z [INFO] [remote_server::client] [remote_server] 12:57:11.662 [0m[34m[INFO][0m [0m[0mProxy: connecting to daemon socket at /home/effatha/.warp-dev/remote-server/d9b8ac72/server-a08d6ce7.sock
+2026-09-12T16:57:10Z [INFO] [remote_server::client] [remote_server] 12:57:11.662 [0m[34m[INFO][0m [0m[0mProxy: connected, bridging stdio
+2026-09-12T16:57:10Z [INFO] [remote_server::client] [remote_server] 12:57:11.662 [0m[34m[INFO][0m [0m[0mProxy: reusing existing daemon
+2026-09-12T16:57:10Z [INFO] [remote_server::client] [remote_server] 12:57:11.662 [0m[34m[INFO][0m [0m[0mProxy: connecting to daemon socket at /home/effatha/.warp-dev/remote-server/d9b8ac72/server-a08d6ce7.sock
+2026-09-12T16:57:10Z [INFO] [remote_server::client] [remote_server] 12:57:11.662 [0m[34m[INFO][0m [0m[0mProxy: connected, bridging stdio
+2026-09-12T16:57:10Z [INFO] [remote_server::client] [remote_server] 12:57:11.662 [0m[34m[INFO][0m [0m[0mProxy: reusing existing daemon
+2026-09-12T16:57:10Z [INFO] [remote_server::client] [remote_server] 12:57:11.663 [0m[34m[INFO][0m [0m[0mProxy: connecting to daemon socket at /home/effatha/.warp-dev/remote-server/d9b8ac72/server-a08d6ce7.sock
+2026-09-12T16:57:10Z [INFO] [remote_server::client] [remote_server] 12:57:11.663 [0m[34m[INFO][0m [0m[0mProxy: connected, bridging stdio
+2026-09-12T16:57:10Z [INFO] [remote_server::client] [remote_server] 12:57:11.663 [0m[34m[INFO][0m [0m[0mProxy: reusing existing daemon
+2026-09-12T16:57:10Z [INFO] [remote_server::client] [remote_server] 12:57:11.663 [0m[34m[INFO][0m [0m[0mProxy: connecting to daemon socket at /home/effatha/.warp-dev/remote-server/d9b8ac72/server-a08d6ce7.sock
+2026-09-12T16:57:10Z [INFO] [remote_server::client] [remote_server] 12:57:11.663 [0m[34m[INFO][0m [0m[0mProxy: connected, bridging stdio
+2026-09-12T16:57:10Z [INFO] [remote_server::client] [remote_server] 12:57:11.663 [0m[34m[INFO][0m [0m[0mProxy: reusing existing daemon
+2026-09-12T16:57:10Z [INFO] [remote_server::client] [remote_server] 12:57:11.663 [0m[34m[INFO][0m [0m[0mProxy: connecting to daemon socket at /home/effatha/.warp-dev/remote-server/d9b8ac72/server-a08d6ce7.sock
+2026-09-12T16:57:10Z [INFO] [remote_server::client] [remote_server] 12:57:11.663 [0m[34m[INFO][0m [0m[0mProxy: connected, bridging stdio
+2026-09-12T16:57:10Z [INFO] [remote_server::client] [Remote codebase indexing] Client received codebase index statuses push: status_count=0
+2026-09-12T16:57:10Z [INFO] [remote_server::client] [Remote codebase indexing] Client received codebase index statuses push: status_count=0
+2026-09-12T16:57:10Z [INFO] [remote_server::manager] [Remote codebase indexing] Remote server initialize handshake complete: session=SessionId(617215730848137540) host=9fcd8b1e-a3a9-4b0f-80c7-27d345bdd268 server_version="v0.fork.7d8e21b76"
+2026-09-12T16:57:10Z [INFO] [remote_server::manager] [Remote codebase indexing] Remote server initialize handshake complete: session=SessionId(6609274813952901467) host=9fcd8b1e-a3a9-4b0f-80c7-27d345bdd268 server_version="v0.fork.7d8e21b76"
+2026-09-12T16:57:10Z [INFO] [remote_server::client] [Remote codebase indexing] Client received codebase index statuses push: status_count=0
+2026-09-12T16:57:10Z [INFO] [remote_server::manager] [Remote codebase indexing] Remote server initialize handshake complete: session=SessionId(11111611051068808680) host=9fcd8b1e-a3a9-4b0f-80c7-27d345bdd268 server_version="v0.fork.7d8e21b76"
+2026-09-12T16:57:10Z [INFO] [remote_server::client] [Remote codebase indexing] Client received codebase index statuses push: status_count=0
+2026-09-12T16:57:10Z [INFO] [remote_server::manager] [Remote codebase indexing] Remote server initialize handshake complete: session=SessionId(5779483104127139419) host=9fcd8b1e-a3a9-4b0f-80c7-27d345bdd268 server_version="v0.fork.7d8e21b76"
+2026-09-12T16:57:10Z [INFO] [remote_server::client] [Remote codebase indexing] Client received codebase index statuses push: status_count=0
+2026-09-12T16:57:10Z [INFO] [remote_server::manager] [Remote codebase indexing] Remote server initialize handshake complete: session=SessionId(7612209468188642627) host=9fcd8b1e-a3a9-4b0f-80c7-27d345bdd268 server_version="v0.fork.7d8e21b76"
+2026-09-12T16:57:11Z [INFO] [warp::terminal::model::session::command_executor] creating a local executor!
+2026-09-12T16:57:11Z [INFO] [warp::terminal::model::session] Parsed shell version string: Some([Number(5), Number(2), Number(21), Number(1), Text("release")])
+2026-09-12T16:57:11Z [INFO] [warp::terminal::model::session] Shell is bootstrapped with session_id SessionId(15720475882047060401)
+2026-09-12T16:57:11Z [INFO] [warp::terminal::model_events] WSL session SessionId(15720475882047060401) bootstrapped in Ubuntu; attaching a remote server
+2026-09-12T16:57:11Z [INFO] [warp::remote_server::wsl_transport] Connecting remote server to WSL distro Ubuntu for session SessionId(15720475882047060401)
+2026-09-12T16:57:11Z [INFO] [remote_server::manager] Starting remote server connection: session=SessionId(15720475882047060401)
+2026-09-12T16:57:11Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:11Z [INFO] [warp::code_review::code_review_view] Code Review Panel: Setting state to loading after receiving 'loading' message.
+2026-09-12T16:57:11Z [INFO] [warpui_core::core::app] dispatching typed action: warp::pane_group::PaneGroupAction::HandleFocusChange
+2026-09-12T16:57:11Z [INFO] [remote_server::manager] Remote server connected: session=SessionId(617215730848137540) host=9fcd8b1e-a3a9-4b0f-80c7-27d345bdd268
+2026-09-12T16:57:11Z [INFO] [warp::code::routed_lsp] [routed-lsp] host HostId("9fcd8b1e-a3a9-4b0f-80c7-27d345bdd268") is WSL distribution Ubuntu
+2026-09-12T16:57:11Z [INFO] [remote_server::manager] Remote server connected: session=SessionId(6609274813952901467) host=9fcd8b1e-a3a9-4b0f-80c7-27d345bdd268
+2026-09-12T16:57:11Z [INFO] [warp::code::routed_lsp] [routed-lsp] host HostId("9fcd8b1e-a3a9-4b0f-80c7-27d345bdd268") is WSL distribution Ubuntu
+2026-09-12T16:57:11Z [INFO] [remote_server::client] [Remote codebase indexing] Client received codebase index statuses push: status_count=0
+2026-09-12T16:57:11Z [INFO] [remote_server::manager] [Remote codebase indexing] Remote server initialize handshake complete: session=SessionId(16475551989129619724) host=9fcd8b1e-a3a9-4b0f-80c7-27d345bdd268 server_version="v0.fork.7d8e21b76"
+2026-09-12T16:57:11Z [INFO] [remote_server::manager] Remote server connected: session=SessionId(11111611051068808680) host=9fcd8b1e-a3a9-4b0f-80c7-27d345bdd268
+2026-09-12T16:57:11Z [INFO] [warp::code::routed_lsp] [routed-lsp] host HostId("9fcd8b1e-a3a9-4b0f-80c7-27d345bdd268") is WSL distribution Ubuntu
+2026-09-12T16:57:11Z [INFO] [remote_server::manager] Remote server connected: session=SessionId(5779483104127139419) host=9fcd8b1e-a3a9-4b0f-80c7-27d345bdd268
+2026-09-12T16:57:11Z [INFO] [warp::code::routed_lsp] [routed-lsp] host HostId("9fcd8b1e-a3a9-4b0f-80c7-27d345bdd268") is WSL distribution Ubuntu
+2026-09-12T16:57:11Z [INFO] [remote_server::manager] Remote server connected: session=SessionId(7612209468188642627) host=9fcd8b1e-a3a9-4b0f-80c7-27d345bdd268
+2026-09-12T16:57:11Z [INFO] [warp::code::routed_lsp] [routed-lsp] host HostId("9fcd8b1e-a3a9-4b0f-80c7-27d345bdd268") is WSL distribution Ubuntu
+2026-09-12T16:57:11Z [INFO] [remote_server::manager] Remote server connected: session=SessionId(16475551989129619724) host=9fcd8b1e-a3a9-4b0f-80c7-27d345bdd268
+2026-09-12T16:57:11Z [INFO] [warp::code::routed_lsp] [routed-lsp] host HostId("9fcd8b1e-a3a9-4b0f-80c7-27d345bdd268") is WSL distribution Ubuntu
+2026-09-12T16:57:11Z [INFO] [remote_server::client] [remote_server] 12:57:12.939 [0m[34m[INFO][0m [0m[0mProxy: reusing existing daemon
+2026-09-12T16:57:11Z [INFO] [remote_server::client] [remote_server] 12:57:12.939 [0m[34m[INFO][0m [0m[0mProxy: connecting to daemon socket at /home/effatha/.warp-dev/remote-server/d9b8ac72/server-a08d6ce7.sock
+2026-09-12T16:57:11Z [INFO] [remote_server::client] [remote_server] 12:57:12.939 [0m[34m[INFO][0m [0m[0mProxy: connected, bridging stdio
+2026-09-12T16:57:11Z [INFO] [remote_server::client] [Remote codebase indexing] Client received codebase index statuses push: status_count=0
+2026-09-12T16:57:11Z [INFO] [remote_server::manager] [Remote codebase indexing] Remote server initialize handshake complete: session=SessionId(15720475882047060401) host=9fcd8b1e-a3a9-4b0f-80c7-27d345bdd268 server_version="v0.fork.7d8e21b76"
+2026-09-12T16:57:11Z [INFO] [warp_terminal::model::ansi] Received InputBuffer hook
+2026-09-12T16:57:11Z [INFO] [warp_terminal::model::ansi] Received InputBuffer hook
+2026-09-12T16:57:11Z [INFO] [warp::terminal::model_events] Remote server ready for session SessionId(617215730848137540)
+2026-09-12T16:57:11Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:11Z [INFO] [warp::terminal::model_events] Remote server ready for session SessionId(6609274813952901467)
+2026-09-12T16:57:11Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=322, falling back to host listing
+2026-09-12T16:57:11Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:11Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=385, falling back to host listing
+2026-09-12T16:57:11Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:11Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=423, falling back to host listing
+2026-09-12T16:57:11Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:11Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=436, falling back to host listing
+2026-09-12T16:57:11Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:11Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:11Z [INFO] [warp::terminal::model_events] Remote server ready for session SessionId(11111611051068808680)
+2026-09-12T16:57:11Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=485, falling back to host listing
+2026-09-12T16:57:11Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:11Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=508, falling back to host listing
+2026-09-12T16:57:11Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:11Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=500, falling back to host listing
+2026-09-12T16:57:11Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=500, falling back to host listing
+2026-09-12T16:57:11Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:11Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=500, falling back to host listing
+2026-09-12T16:57:11Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:11Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:11Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=500, falling back to host listing
+2026-09-12T16:57:11Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:11Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=500, falling back to host listing
+2026-09-12T16:57:11Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:11Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=500, falling back to host listing
+2026-09-12T16:57:11Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:11Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=500, falling back to host listing
+2026-09-12T16:57:11Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:11Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=500, falling back to host listing
+2026-09-12T16:57:11Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=500, falling back to host listing
+2026-09-12T16:57:11Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:11Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:11Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=500, falling back to host listing
+2026-09-12T16:57:11Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=500, falling back to host listing
+2026-09-12T16:57:11Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:11Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:11Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=501, falling back to host listing
+2026-09-12T16:57:11Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:11Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=502, falling back to host listing
+2026-09-12T16:57:11Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:11Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=502, falling back to host listing
+2026-09-12T16:57:11Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=502, falling back to host listing
+2026-09-12T16:57:11Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:11Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:12Z [INFO] [warp::terminal::model_events] Remote server ready for session SessionId(5779483104127139419)
+2026-09-12T16:57:12Z [INFO] [warp::terminal::model_events] Remote server ready for session SessionId(7612209468188642627)
+2026-09-12T16:57:12Z [INFO] [warp::terminal::model_events] Remote server ready for session SessionId(16475551989129619724)
+2026-09-12T16:57:12Z [INFO] [remote_server::manager] Remote server connected: session=SessionId(15720475882047060401) host=9fcd8b1e-a3a9-4b0f-80c7-27d345bdd268
+2026-09-12T16:57:12Z [INFO] [warp::code::routed_lsp] [routed-lsp] host HostId("9fcd8b1e-a3a9-4b0f-80c7-27d345bdd268") is WSL distribution Ubuntu
+2026-09-12T16:57:12Z [INFO] [warp::code_review::code_review_view] Code Review Panel: Setting state to loading after receiving 'loading' message.
+2026-09-12T16:57:12Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:12Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:12Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:12Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=245, falling back to host listing
+2026-09-12T16:57:12Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:12Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=283, falling back to host listing
+2026-09-12T16:57:12Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:12Z [INFO] [warp::terminal::model_events] Remote server ready for session SessionId(15720475882047060401)
+2026-09-12T16:57:12Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=327, falling back to host listing
+2026-09-12T16:57:12Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:12Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=359, falling back to host listing
+2026-09-12T16:57:12Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:12Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=394, falling back to host listing
+2026-09-12T16:57:12Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:13Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=457, falling back to host listing
+2026-09-12T16:57:13Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:13Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=490, falling back to host listing
+2026-09-12T16:57:13Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:13Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=510, falling back to host listing
+2026-09-12T16:57:13Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:13Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=509, falling back to host listing
+2026-09-12T16:57:13Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:13Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=511, falling back to host listing
+2026-09-12T16:57:13Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:13Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=508, falling back to host listing
+2026-09-12T16:57:13Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=509, falling back to host listing
+2026-09-12T16:57:13Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:13Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:13Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=120, falling back to host listing
+2026-09-12T16:57:13Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:13Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=149, falling back to host listing
+2026-09-12T16:57:13Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:13Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=179, falling back to host listing
+2026-09-12T16:57:13Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:14Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=154, falling back to host listing
+2026-09-12T16:57:14Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:14Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=192, falling back to host listing
+2026-09-12T16:57:14Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:14Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=219, falling back to host listing
+2026-09-12T16:57:14Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:14Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=249, falling back to host listing
+2026-09-12T16:57:14Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:14Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=275, falling back to host listing
+2026-09-12T16:57:14Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:14Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=310, falling back to host listing
+2026-09-12T16:57:14Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:14Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=341, falling back to host listing
+2026-09-12T16:57:14Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:14Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=372, falling back to host listing
+2026-09-12T16:57:14Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:14Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=415, falling back to host listing
+2026-09-12T16:57:14Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:15Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=167, falling back to host listing
+2026-09-12T16:57:15Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:15Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=200, falling back to host listing
+2026-09-12T16:57:15Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:15Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=265, falling back to host listing
+2026-09-12T16:57:15Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:16Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:16Z [INFO] [warpui_core::core::app] dispatching typed action: warp::workspace::action::WorkspaceAction::ActivateTab(0)
+2026-09-12T16:57:16Z [INFO] [warp::code_review::code_review_view] Code Review Panel: Setting state to loading after receiving 'loading' message.
+2026-09-12T16:57:16Z [INFO] [warpui_core::core::app] dispatching typed action: warp::pane_group::PaneGroupAction::HandleFocusChange
+2026-09-12T16:57:16Z [WARN] [warpui_core::core::app] Action HandleFocusChange was dispatched, but no view handled it
+2026-09-12T16:57:16Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:16Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=133, falling back to host listing
+2026-09-12T16:57:16Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:16Z [INFO] [warp::terminal::local_tty::terminal_manager] Creating terminal model with 0 restored blocks
+2026-09-12T16:57:16Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:16Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:16Z [INFO] [warpui_core::core::app] dispatching typed action: warp::pane_group::PaneGroupAction::HandleFocusChange
+2026-09-12T16:57:16Z [WARN] [warpui_core::core::app] Action HandleFocusChange was dispatched, but no view handled it
+2026-09-12T16:57:16Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:16Z [WARN] [warp::terminal::view] Tried to update block filter query without active_filter_editor_block_index set
+2026-09-12T16:57:16Z [WARN] [warp::context_chips::current_prompt] Generator for GitDiffStats: could not prepare execution context
+2026-09-12T16:57:16Z [WARN] [warp::context_chips::current_prompt] Generator for KubernetesContext: could not prepare execution context
+2026-09-12T16:57:16Z [WARN] [warp::code_review::diff_state::remote] RemoteDiffStateModel: GetBranches failed: Git command failed: fatal: not a git repository (or any of the parent directories): .git
+, 
+2026-09-12T16:57:16Z [INFO] [warpui_core::core::app] notifying view observers and updating windows for timer id 4
+2026-09-12T16:57:16Z [INFO] [warpui_core::core::app] dispatching typed action: warp::workspace::action::WorkspaceAction::StartTabDrag
+2026-09-12T16:57:16Z [INFO] [warpui_core::core::app] dispatching typed action: warp::workspace::action::WorkspaceAction::DropTab
+2026-09-12T16:57:16Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:16Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=404, falling back to host listing
+2026-09-12T16:57:16Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:16Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:16Z [WARN] [warp::terminal::share_block_modal] Tried to render share modal without a model
+2026-09-12T16:57:16Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=492, falling back to host listing
+2026-09-12T16:57:16Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:16Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=509, falling back to host listing
+2026-09-12T16:57:16Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:16Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=507, falling back to host listing
+2026-09-12T16:57:16Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=508, falling back to host listing
+2026-09-12T16:57:16Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:16Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=506, falling back to host listing
+2026-09-12T16:57:16Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=502, falling back to host listing
+2026-09-12T16:57:16Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:16Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:16Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=501, falling back to host listing
+2026-09-12T16:57:16Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=502, falling back to host listing
+2026-09-12T16:57:16Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:16Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:16Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:16Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=505, falling back to host listing
+2026-09-12T16:57:16Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=504, falling back to host listing
+2026-09-12T16:57:16Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:16Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:16Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=503, falling back to host listing
+2026-09-12T16:57:16Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:16Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=502, falling back to host listing
+2026-09-12T16:57:16Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=501, falling back to host listing
+2026-09-12T16:57:16Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:16Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:16Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=500, falling back to host listing
+2026-09-12T16:57:16Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:17Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=509, falling back to host listing
+2026-09-12T16:57:17Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=508, falling back to host listing
+2026-09-12T16:57:17Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:17Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:17Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=508, falling back to host listing
+2026-09-12T16:57:17Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:17Z [INFO] [warp_terminal::local_tty::windows] Starting WSL shell process: "Ubuntu"
+2026-09-12T16:57:17Z [INFO] [warpui_core::core::app] notifying view observers and updating windows for timer id 5
+2026-09-12T16:57:17Z [INFO] [warp_terminal::model::ansi] Received InitShell hook
+2026-09-12T16:57:17Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=182, falling back to host listing
+2026-09-12T16:57:17Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:17Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=209, falling back to host listing
+2026-09-12T16:57:17Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:18Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=246, falling back to host listing
+2026-09-12T16:57:18Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:18Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=277, falling back to host listing
+2026-09-12T16:57:18Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:18Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=308, falling back to host listing
+2026-09-12T16:57:18Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:18Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=336, falling back to host listing
+2026-09-12T16:57:18Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:18Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=369, falling back to host listing
+2026-09-12T16:57:18Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:18Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=405, falling back to host listing
+2026-09-12T16:57:18Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:18Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=450, falling back to host listing
+2026-09-12T16:57:18Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:18Z [INFO] [warp_terminal::model::ansi] Received CommandFinished hook
+2026-09-12T16:57:18Z [INFO] [warp::terminal::model::terminal_model] Tried to exit the alternate screen, but it was already inactive
+2026-09-12T16:57:18Z [INFO] [warp::terminal::model::block] Block finished with new state DoneWithExecution
+2026-09-12T16:57:18Z [INFO] [warp::terminal::model::blocks] Incrementing stage from WarpInput to ScriptExecution
+2026-09-12T16:57:18Z [INFO] [warpui_core::core::app] dispatching typed action: warp::pane_group::PaneGroupAction::HandleFocusChange
+2026-09-12T16:57:18Z [INFO] [warp_terminal::model::ansi] Received Precmd hook
+2026-09-12T16:57:18Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=484, falling back to host listing
+2026-09-12T16:57:18Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:18Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=503, falling back to host listing
+2026-09-12T16:57:18Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:18Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=504, falling back to host listing
+2026-09-12T16:57:18Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:18Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=503, falling back to host listing
+2026-09-12T16:57:18Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=502, falling back to host listing
+2026-09-12T16:57:18Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:18Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=503, falling back to host listing
+2026-09-12T16:57:18Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:18Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:18Z [INFO] [warpui_core::core::app] notifying view observers and updating windows for timer id 8
+2026-09-12T16:57:18Z [INFO] [warpui_core::core::app] dispatching typed action: warp::workspace::action::WorkspaceAction::CloseTab(0)
+2026-09-12T16:57:18Z [INFO] [warp::workspace::view] storing data for closed tab
+2026-09-12T16:57:18Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:18Z [WARN] [warp::terminal::view] Expected to have session for session ID SessionId(4639076993583695599), but doesn't exist
+2026-09-12T16:57:18Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:18Z [WARN] [warp::terminal::view] Expected to have session for session ID SessionId(4639076993583695599), but doesn't exist
+2026-09-12T16:57:18Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:18Z [WARN] [warp::terminal::view] Expected to have session for session ID SessionId(4639076993583695599), but doesn't exist
+2026-09-12T16:57:19Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=136, falling back to host listing
+2026-09-12T16:57:19Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:19Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=170, falling back to host listing
+2026-09-12T16:57:19Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:19Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=200, falling back to host listing
+2026-09-12T16:57:19Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:19Z [INFO] [warp_terminal::model::ansi] Received Bootstrapped hook
+2026-09-12T16:57:19Z [INFO] [warp::terminal::model::early_output] Configured typeahead mode as ShellReported
+2026-09-12T16:57:19Z [INFO] [warp::terminal::model::session::command_executor] creating a local executor!
+2026-09-12T16:57:19Z [INFO] [warp::terminal::model::session] Parsed shell version string: Some([Number(5), Number(2), Number(21), Number(1), Text("release")])
+2026-09-12T16:57:19Z [INFO] [warp::terminal::model::session] Shell is bootstrapped with session_id SessionId(4639076993583695599)
+2026-09-12T16:57:19Z [INFO] [warp::terminal::model_events] WSL session SessionId(4639076993583695599) bootstrapped in Ubuntu; attaching a remote server
+2026-09-12T16:57:19Z [INFO] [warp::remote_server::wsl_transport] Connecting remote server to WSL distro Ubuntu for session SessionId(4639076993583695599)
+2026-09-12T16:57:19Z [INFO] [remote_server::manager] Starting remote server connection: session=SessionId(4639076993583695599)
+2026-09-12T16:57:19Z [INFO] [warp_terminal::model::ansi] Received CommandFinished hook
+2026-09-12T16:57:19Z [INFO] [warp::terminal::model::terminal_model] Tried to exit the alternate screen, but it was already inactive
+2026-09-12T16:57:19Z [INFO] [warp::terminal::model::block] Block finished with new state DoneWithExecution
+2026-09-12T16:57:19Z [INFO] [warp::terminal::model::blocks] Incrementing stage from Bootstrapped to PostBootstrapPrecmd
+2026-09-12T16:57:19Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:19Z [INFO] [warp_terminal::model::ansi] Received Precmd hook
+2026-09-12T16:57:19Z [INFO] [warpui_core::core::app] dispatching typed action: warp::pane_group::PaneGroupAction::HandleFocusChange
+2026-09-12T16:57:19Z [INFO] [warpui_core::core::app] notifying view observers and updating windows for timer id 11
+2026-09-12T16:57:19Z [INFO] [warpui_core::core::app] dispatching typed action: warp::workspace::action::WorkspaceAction::ActivateTab(0)
+2026-09-12T16:57:19Z [INFO] [remote_server::client] [remote_server] 12:57:23.319 [0m[34m[INFO][0m [0m[0mProxy: reusing existing daemon
+2026-09-12T16:57:19Z [INFO] [remote_server::client] [remote_server] 12:57:23.319 [0m[34m[INFO][0m [0m[0mProxy: connecting to daemon socket at /home/effatha/.warp-dev/remote-server/d9b8ac72/server-a08d6ce7.sock
+2026-09-12T16:57:19Z [INFO] [remote_server::client] [remote_server] 12:57:23.319 [0m[34m[INFO][0m [0m[0mProxy: connected, bridging stdio
+2026-09-12T16:57:19Z [INFO] [remote_server::client] [Remote codebase indexing] Client received codebase index statuses push: status_count=0
+2026-09-12T16:57:19Z [INFO] [remote_server::manager] [Remote codebase indexing] Remote server initialize handshake complete: session=SessionId(4639076993583695599) host=9fcd8b1e-a3a9-4b0f-80c7-27d345bdd268 server_version="v0.fork.7d8e21b76"
+2026-09-12T16:57:19Z [INFO] [warpui_core::core::app] dispatching typed action: warp::pane_group::PaneGroupAction::HandleFocusChange
+2026-09-12T16:57:19Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:19Z [INFO] [remote_server::manager] Remote server connected: session=SessionId(4639076993583695599) host=9fcd8b1e-a3a9-4b0f-80c7-27d345bdd268
+2026-09-12T16:57:19Z [INFO] [warp::code::routed_lsp] [routed-lsp] host HostId("9fcd8b1e-a3a9-4b0f-80c7-27d345bdd268") is WSL distribution Ubuntu
+2026-09-12T16:57:19Z [INFO] [warp::terminal::model_events] Remote server ready for session SessionId(4639076993583695599)
+2026-09-12T16:57:19Z [INFO] [warp_terminal::model::ansi] Received InputBuffer hook
+2026-09-12T16:57:19Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=211, falling back to host listing
+2026-09-12T16:57:19Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:19Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=253, falling back to host listing
+2026-09-12T16:57:19Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:19Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=296, falling back to host listing
+2026-09-12T16:57:19Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:19Z [INFO] [warpui_core::core::app] dispatching typed action: warp::workspace::action::WorkspaceAction::RenameTab(0)
+2026-09-12T16:57:19Z [INFO] [warpui_core::core::app] dispatching typed action: warp::workspace::action::WorkspaceAction::CloseTab(0)
+2026-09-12T16:57:19Z [INFO] [warp::workspace::view] storing data for closed tab
+2026-09-12T16:57:19Z [INFO] [warp::code_review::code_review_view] Code Review Panel: Setting state to loading after receiving 'loading' message.
+2026-09-12T16:57:19Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:19Z [INFO] [warpui_core::core::app] dispatching typed action: warp::pane_group::PaneGroupAction::HandleFocusChange
+2026-09-12T16:57:19Z [INFO] [warpui_core::core::app] dispatching typed action: warp::pane_group::PaneGroupAction::HandleFocusChange
+2026-09-12T16:57:19Z [WARN] [warpui_core::core::app] Action HandleFocusChange was dispatched, but no view handled it
+2026-09-12T16:57:19Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:19Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:19Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:20Z [INFO] [warpui_core::core::app] dispatching typed action: warp::workspace::action::WorkspaceAction::CloseTab(0)
+2026-09-12T16:57:20Z [INFO] [warp::workspace::view] storing data for closed tab
+2026-09-12T16:57:20Z [INFO] [warp::code_review::code_review_view] Code Review Panel: Ignoring NewDiffsComputed(None) for already-loaded model
+2026-09-12T16:57:20Z [INFO] [warpui_core::core::app] dispatching typed action: warp::pane_group::PaneGroupAction::HandleFocusChange
+2026-09-12T16:57:20Z [WARN] [warpui_core::core::app] Action HandleFocusChange was dispatched, but no view handled it
+2026-09-12T16:57:20Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:20Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:20Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:20Z [INFO] [warpui_core::core::app] dispatching typed action: warp::pane_group::PaneGroupAction::HandleFocusChange
+2026-09-12T16:57:20Z [WARN] [warpui_core::core::app] Action HandleFocusChange was dispatched, but no view handled it
+2026-09-12T16:57:20Z [INFO] [warp_terminal::model::ansi] Received Preexec hook
+2026-09-12T16:57:20Z [WARN] [warpui_core::elements::gui::stack] Failed to compute position for stack child element. Skipping child. X: Err("Position not set for \"input_2779\""), Y: Err("Position not set for \"input_2779\"").
+2026-09-12T16:57:20Z [INFO] [warp_terminal::model::ansi] Received CommandFinished hook
+2026-09-12T16:57:20Z [INFO] [warp::terminal::model::terminal_model] Tried to exit the alternate screen, but it was already inactive
+2026-09-12T16:57:20Z [INFO] [warp::terminal::model::block] Block finished with new state DoneWithExecution
+2026-09-12T16:57:20Z [INFO] [warpui_core::core::app] dispatching typed action: warp::pane_group::PaneGroupAction::HandleFocusChange
+2026-09-12T16:57:20Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=501, falling back to host listing
+2026-09-12T16:57:20Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:20Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=501, falling back to host listing
+2026-09-12T16:57:20Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:20Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=500, falling back to host listing
+2026-09-12T16:57:20Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:20Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=501, falling back to host listing
+2026-09-12T16:57:20Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:20Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=500, falling back to host listing
+2026-09-12T16:57:20Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:20Z [INFO] [warp_terminal::model::ansi] Received Precmd hook
+2026-09-12T16:57:20Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=502, falling back to host listing
+2026-09-12T16:57:20Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:20Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=501, falling back to host listing
+2026-09-12T16:57:20Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=500, falling back to host listing
+2026-09-12T16:57:20Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:20Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:20Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=501, falling back to host listing
+2026-09-12T16:57:20Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=502, falling back to host listing
+2026-09-12T16:57:20Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:20Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:20Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=500, falling back to host listing
+2026-09-12T16:57:20Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:20Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=500, falling back to host listing
+2026-09-12T16:57:20Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:20Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=503, falling back to host listing
+2026-09-12T16:57:20Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:20Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=502, falling back to host listing
+2026-09-12T16:57:20Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:20Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=501, falling back to host listing
+2026-09-12T16:57:20Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=500, falling back to host listing
+2026-09-12T16:57:20Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=502, falling back to host listing
+2026-09-12T16:57:20Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:20Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:20Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:20Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=500, falling back to host listing
+2026-09-12T16:57:20Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:21Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:21Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=505, falling back to host listing
+2026-09-12T16:57:21Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=502, falling back to host listing
+2026-09-12T16:57:21Z [INFO] [warp_terminal::model::ansi] Received InputBuffer hook
+2026-09-12T16:57:21Z [INFO] [warpui_core::core::app] notifying view observers and updating windows for timer id 13
+2026-09-12T16:57:21Z [INFO] [warpui_core::core::app] dispatching typed action: warp::workspace::action::WorkspaceAction::CloseTab(0)
+2026-09-12T16:57:21Z [INFO] [warp::workspace::view] storing data for closed tab
+2026-09-12T16:57:21Z [INFO] [warp::code_review::code_review_view] Code Review Panel: Ignoring NewDiffsComputed(None) for already-loaded model
+2026-09-12T16:57:21Z [INFO] [warpui_core::core::app] dispatching typed action: warp::pane_group::PaneGroupAction::HandleFocusChange
+2026-09-12T16:57:21Z [WARN] [warpui_core::core::app] Action HandleFocusChange was dispatched, but no view handled it
+2026-09-12T16:57:21Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:21Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:21Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:21Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=501, falling back to host listing
+2026-09-12T16:57:21Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=501, falling back to host listing
+2026-09-12T16:57:21Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=501, falling back to host listing
+2026-09-12T16:57:21Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:21Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:21Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:21Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=501, falling back to host listing
+2026-09-12T16:57:21Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=501, falling back to host listing
+2026-09-12T16:57:21Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:21Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=501, falling back to host listing
+2026-09-12T16:57:21Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:21Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:21Z [INFO] [warpui_core::core::app] dispatching typed action: warp::workspace::action::WorkspaceAction::CloseTab(0)
+2026-09-12T16:57:21Z [INFO] [warp::workspace::view] storing data for closed tab
+2026-09-12T16:57:21Z [INFO] [warp::code_review::code_review_view] Code Review Panel: Ignoring NewDiffsComputed(None) for already-loaded model
+2026-09-12T16:57:21Z [INFO] [warpui_core::core::app] dispatching typed action: warp::pane_group::PaneGroupAction::HandleFocusChange
+2026-09-12T16:57:21Z [WARN] [warpui_core::core::app] Action HandleFocusChange was dispatched, but no view handled it
+2026-09-12T16:57:21Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:21Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:21Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:22Z [INFO] [warpui_core::core::app] notifying view observers and updating windows for timer id 14
+2026-09-12T16:57:22Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=509, falling back to host listing
+2026-09-12T16:57:22Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=508, falling back to host listing
+2026-09-12T16:57:22Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=507, falling back to host listing
+2026-09-12T16:57:22Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=508, falling back to host listing
+2026-09-12T16:57:22Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=505, falling back to host listing
+2026-09-12T16:57:22Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:22Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:22Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=504, falling back to host listing
+2026-09-12T16:57:22Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:22Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=503, falling back to host listing
+2026-09-12T16:57:22Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:22Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:22Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:22Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:22Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=505, falling back to host listing
+2026-09-12T16:57:22Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=503, falling back to host listing
+2026-09-12T16:57:22Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=502, falling back to host listing
+2026-09-12T16:57:22Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:22Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:22Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:22Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=500, falling back to host listing
+2026-09-12T16:57:22Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:22Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=502, falling back to host listing
+2026-09-12T16:57:22Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=501, falling back to host listing
+2026-09-12T16:57:22Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:22Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:22Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=512, falling back to host listing
+2026-09-12T16:57:22Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=509, falling back to host listing
+2026-09-12T16:57:22Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:22Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:22Z [INFO] [warpui_core::core::app] notifying view observers and updating windows for timer id 15
+2026-09-12T16:57:22Z [INFO] [warpui_core::core::app] notifying view observers and updating windows for timer id 16
+2026-09-12T16:57:22Z [INFO] [warpui_core::core::app] dispatching typed action: warp::workspace::action::WorkspaceAction::CloseTab(0)
+2026-09-12T16:57:22Z [INFO] [warp::workspace::view] storing data for closed tab
+2026-09-12T16:57:22Z [INFO] [warp::code_review::code_review_view] Code Review Panel: Ignoring NewDiffsComputed(None) for already-loaded model
+2026-09-12T16:57:22Z [INFO] [warpui_core::core::app] dispatching typed action: warp::pane_group::PaneGroupAction::HandleFocusChange
+2026-09-12T16:57:22Z [WARN] [warpui_core::core::app] Action HandleFocusChange was dispatched, but no view handled it
+2026-09-12T16:57:22Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:22Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:22Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:22Z [INFO] [warpui_core::core::app] notifying view observers and updating windows for timer id 17
+2026-09-12T16:57:22Z [INFO] [warpui_core::core::app] notifying view observers and updating windows for timer id 18
+2026-09-12T16:57:22Z [INFO] [warp::code_review::code_review_view] Code Review: Set available_branches with 2 branches
+2026-09-12T16:57:22Z [INFO] [warp::code_review::code_review_view] Code Review: Set available_branches with 2 branches
+2026-09-12T16:57:23Z [INFO] [warpui_core::core::app] dispatching typed action: warp::workspace::action::WorkspaceAction::CloseTab(0)
+2026-09-12T16:57:23Z [INFO] [warp::workspace::view] storing data for closed tab
+2026-09-12T16:57:23Z [INFO] [warpui_core::core::app] dispatching typed action: warp::pane_group::PaneGroupAction::HandleFocusChange
+2026-09-12T16:57:23Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:23Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:23Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:23Z [INFO] [warpui_core::core::app] notifying view observers and updating windows for timer id 19
+2026-09-12T16:57:23Z [INFO] [warpui_core::core::app] notifying view observers and updating windows for timer id 20
+2026-09-12T16:57:24Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:24Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:24Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:24Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:24Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:24Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:24Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:24Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:24Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:24Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:24Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:24Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:24Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:24Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=253, falling back to host listing
+2026-09-12T16:57:25Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:25Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=280, falling back to host listing
+2026-09-12T16:57:25Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:25Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=295, falling back to host listing
+2026-09-12T16:57:25Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:25Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=286, falling back to host listing
+2026-09-12T16:57:25Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:25Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=311, falling back to host listing
+2026-09-12T16:57:25Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:25Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=341, falling back to host listing
+2026-09-12T16:57:25Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:25Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=332, falling back to host listing
+2026-09-12T16:57:25Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=365, falling back to host listing
+2026-09-12T16:57:25Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=403, falling back to host listing
+2026-09-12T16:57:25Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=382, falling back to host listing
+2026-09-12T16:57:25Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=416, falling back to host listing
+2026-09-12T16:57:25Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=457, falling back to host listing
+2026-09-12T16:57:25Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=453, falling back to host listing
+2026-09-12T16:57:25Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=486, falling back to host listing
+2026-09-12T16:57:25Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=512, falling back to host listing
+2026-09-12T16:57:25Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=483, falling back to host listing
+2026-09-12T16:57:25Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=504, falling back to host listing
+2026-09-12T16:57:25Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:25Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=507, falling back to host listing
+2026-09-12T16:57:25Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:25Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:26Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:26Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:26Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:26Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:26Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:26Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:26Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:26Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:26Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:26Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:26Z [INFO] [warpui_core::core::app] dispatching typed action: warp::pane_group::PaneGroupAction::HandleFocusChange
+2026-09-12T16:57:26Z [INFO] [warp_terminal::model::ansi] Received Preexec hook
+2026-09-12T16:57:26Z [INFO] [warpui_core::core::app] notifying view observers and updating windows for timer id 23
+2026-09-12T16:57:27Z [INFO] [warp_terminal::model::ansi] Received CommandFinished hook
+2026-09-12T16:57:27Z [INFO] [warp::terminal::model::terminal_model] Tried to exit the alternate screen, but it was already inactive
+2026-09-12T16:57:27Z [INFO] [warp::terminal::model::block] Block finished with new state DoneWithExecution
+2026-09-12T16:57:27Z [INFO] [warpui_core::core::app] dispatching typed action: warp::pane_group::PaneGroupAction::HandleFocusChange
+2026-09-12T16:57:27Z [INFO] [warp_terminal::model::ansi] Received Precmd hook
+2026-09-12T16:57:27Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:27Z [INFO] [warp_terminal::model::ansi] Received InputBuffer hook
+2026-09-12T16:57:27Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=279, falling back to host listing
+2026-09-12T16:57:27Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:27Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=308, falling back to host listing
+2026-09-12T16:57:27Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:27Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=341, falling back to host listing
+2026-09-12T16:57:27Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:27Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=374, falling back to host listing
+2026-09-12T16:57:27Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:27Z [INFO] [warpui_core::platform::app] active window changed: None
+2026-09-12T16:57:27Z [INFO] [warpui_core::core::app] dispatching global action for root_view:update_quake_mode_state
+2026-09-12T16:57:27Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:57:27Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=418, falling back to host listing
+2026-09-12T16:57:27Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:27Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=456, falling back to host listing
+2026-09-12T16:57:27Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:27Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=502, falling back to host listing
+2026-09-12T16:57:27Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:27Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=502, falling back to host listing
+2026-09-12T16:57:27Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:27Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=501, falling back to host listing
+2026-09-12T16:57:27Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:27Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=503, falling back to host listing
+2026-09-12T16:57:27Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=502, falling back to host listing
+2026-09-12T16:57:27Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:27Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=501, falling back to host listing
+2026-09-12T16:57:27Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:27Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:27Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=502, falling back to host listing
+2026-09-12T16:57:27Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=503, falling back to host listing
+2026-09-12T16:57:27Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=504, falling back to host listing
+2026-09-12T16:57:27Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:27Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:27Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:27Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=500, falling back to host listing
+2026-09-12T16:57:27Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:27Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=502, falling back to host listing
+2026-09-12T16:57:27Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:27Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] timed out elapsed_ms=501, falling back to host listing
+2026-09-12T16:57:27Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:34Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=130, falling back to host listing
+2026-09-12T16:57:34Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:34Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=163, falling back to host listing
+2026-09-12T16:57:34Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:34Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=194, falling back to host listing
+2026-09-12T16:57:34Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:42Z [INFO] [warp::code_review::code_review_view] Code Review: Set available_branches with 2 branches
+2026-09-12T16:57:42Z [INFO] [warp::server::cloud_objects::listener] Attempting to start websocket connection in CloudObjects::Listener
+2026-09-12T16:57:42Z [WARN] [warp::server::cloud_objects::listener] CloudObjects::Listener: websocket connection failed to connect or finished with an error; trying again: missing authentication credentials
+2026-09-12T16:57:43Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=135, falling back to host listing
+2026-09-12T16:57:43Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:43Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=172, falling back to host listing
+2026-09-12T16:57:43Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:43Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=201, falling back to host listing
+2026-09-12T16:57:43Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:44Z [INFO] [repo_metadata::local_model] Successfully indexed repository: \\wsl$\ubuntu\home\effatha\git\warp with 7189 files
+2026-09-12T16:57:50Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=150, falling back to host listing
+2026-09-12T16:57:50Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:50Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=185, falling back to host listing
+2026-09-12T16:57:50Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:57:50Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=217, falling back to host listing
+2026-09-12T16:57:50Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:58:00Z [INFO] [warpui_core::core::app] dispatching typed action: warp::code_review::code_review_view::CodeReviewAction::OpenCreatePrDialog
+2026-09-12T16:58:01Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=135, falling back to host listing
+2026-09-12T16:58:01Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:58:01Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=174, falling back to host listing
+2026-09-12T16:58:01Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:58:01Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=202, falling back to host listing
+2026-09-12T16:58:01Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:58:06Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=121, falling back to host listing
+2026-09-12T16:58:06Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:58:07Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=160, falling back to host listing
+2026-09-12T16:58:07Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:58:07Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=188, falling back to host listing
+2026-09-12T16:58:07Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:58:08Z [INFO] [warp::server::cloud_objects::listener] Attempting to start websocket connection in CloudObjects::Listener
+2026-09-12T16:58:08Z [WARN] [warp::server::cloud_objects::listener] CloudObjects::Listener: websocket connection failed to connect or finished with an error; trying again: missing authentication credentials
+2026-09-12T16:58:18Z [INFO] [warp::terminal::model::terminal_model] Tried to exit the alternate screen, but it was already inactive
+2026-09-12T16:58:18Z [INFO] [warp::terminal::model::block] Block finished with new state DoneWithNoExecution
+2026-09-12T16:58:18Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=124, falling back to host listing
+2026-09-12T16:58:18Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:58:18Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=162, falling back to host listing
+2026-09-12T16:58:18Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:58:18Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=192, falling back to host listing
+2026-09-12T16:58:18Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:58:19Z [INFO] [warp::terminal::model::terminal_model] Tried to exit the alternate screen, but it was already inactive
+2026-09-12T16:58:19Z [INFO] [warp::terminal::model::block] Block finished with new state DoneWithNoExecution
+2026-09-12T16:58:20Z [INFO] [warp::terminal::model::terminal_model] Tried to exit the alternate screen, but it was already inactive
+2026-09-12T16:58:20Z [INFO] [warp::terminal::model::block] Block finished with new state DoneWithNoExecution
+2026-09-12T16:58:21Z [INFO] [warp::terminal::model::terminal_model] Tried to exit the alternate screen, but it was already inactive
+2026-09-12T16:58:21Z [INFO] [warp::terminal::model::block] Block finished with new state DoneWithNoExecution
+2026-09-12T16:58:21Z [INFO] [warp::terminal::model::terminal_model] Tried to exit the alternate screen, but it was already inactive
+2026-09-12T16:58:21Z [INFO] [warp::terminal::model::block] Block finished with new state DoneWithNoExecution
+2026-09-12T16:58:22Z [INFO] [warp::terminal::model::terminal_model] Tried to exit the alternate screen, but it was already inactive
+2026-09-12T16:58:22Z [INFO] [warp::terminal::model::block] Block finished with new state DoneWithNoExecution
+2026-09-12T16:58:23Z [INFO] [warp::terminal::model::terminal_model] Tried to exit the alternate screen, but it was already inactive
+2026-09-12T16:58:23Z [INFO] [warp::terminal::model::block] Block finished with new state DoneWithNoExecution
+2026-09-12T16:58:28Z [INFO] [warpui_core::core::app] dispatching typed action: warp::code_review::git_dialog::GitDialogAction::Confirm
+2026-09-12T16:58:28Z [WARN] [warpui_core::elements::gui::hoverable] Not handling MouseMoved event in Hoverable due to back-to-back synthetic events.
+2026-09-12T16:58:34Z [ERROR] [errors::report_error] gh command failed: none of the git remotes configured for this repository point to a known GitHub host. To tell gh about a new GitHub host, please use `gh auth login`
+
+2026-09-12T16:58:34Z [INFO] [warpui_core::core::app] dispatching typed action: warp::pane_group::PaneGroupAction::HandleFocusChange
+2026-09-12T16:58:34Z [INFO] [warp::server::cloud_objects::listener] Attempting to start websocket connection in CloudObjects::Listener
+2026-09-12T16:58:34Z [WARN] [warp::server::cloud_objects::listener] CloudObjects::Listener: websocket connection failed to connect or finished with an error; trying again: missing authentication credentials
+2026-09-12T16:58:34Z [INFO] [warpui_core::core::app] notifying view observers and updating windows for timer id 25
+2026-09-12T16:59:10Z [INFO] [warp::server::cloud_objects::listener] Attempting to start websocket connection in CloudObjects::Listener
+2026-09-12T16:59:10Z [WARN] [warp::server::cloud_objects::listener] CloudObjects::Listener: websocket connection failed to connect or finished with an error; trying again: missing authentication credentials
+2026-09-12T16:59:30Z [INFO] [warpui_core::core::app] dispatching typed action: warp::pane_group::PaneGroupAction::HandleFocusChange
+2026-09-12T16:59:30Z [INFO] [warp_terminal::model::ansi] Received Preexec hook
+2026-09-12T16:59:30Z [INFO] [warp_terminal::model::ansi] Received CommandFinished hook
+2026-09-12T16:59:30Z [INFO] [warp::terminal::model::terminal_model] Tried to exit the alternate screen, but it was already inactive
+2026-09-12T16:59:30Z [INFO] [warp::terminal::model::block] Block finished with new state DoneWithExecution
+2026-09-12T16:59:30Z [INFO] [warpui_core::core::app] dispatching typed action: warp::pane_group::PaneGroupAction::HandleFocusChange
+2026-09-12T16:59:30Z [INFO] [warp_terminal::model::ansi] Received Precmd hook
+2026-09-12T16:59:30Z [INFO] [warpui_core::core::app] dispatching global action for workspace:save_app
+2026-09-12T16:59:30Z [INFO] [warp_terminal::model::ansi] Received InputBuffer hook
+2026-09-12T16:59:30Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=131, falling back to host listing
+2026-09-12T16:59:30Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:59:30Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=171, falling back to host listing
+2026-09-12T16:59:30Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:59:30Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=201, falling back to host listing
+2026-09-12T16:59:30Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:59:31Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=114, falling back to host listing
+2026-09-12T16:59:31Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:59:31Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=152, falling back to host listing
+2026-09-12T16:59:31Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:59:31Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=188, falling back to host listing
+2026-09-12T16:59:31Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T16:59:42Z [INFO] [warp::server::cloud_objects::listener] Attempting to start websocket connection in CloudObjects::Listener
+2026-09-12T16:59:42Z [ERROR] [errors::report_error] CloudObjects::Listener websocket connection failed: missing authentication credentials
+2026-09-12T16:59:52Z [INFO] [warpui_core::core::app] dispatching typed action: warp::code_review::code_review_view::CodeReviewAction::ToggleGitOperationsMenu
+2026-09-12T17:00:20Z [INFO] [warpui_core::core::app] dispatching typed action: warp::menu::MenuAction::Close(true)
+2026-09-12T17:00:20Z [INFO] [warpui_core::core::app] dispatching typed action: warp::code_review::code_review_view::CodeReviewAction::OpenCommitDialog
+2026-09-12T17:00:20Z [INFO] [warpui_core::core::app] dispatching typed action: warp::menu::MenuAction::Select(Index { row: 0, item: 0 })
+2026-09-12T17:00:52Z [INFO] [warpui_core::core::app] dispatching typed action: warp::code_review::git_dialog::GitDialogAction::Commit(SetIntent(CommitAndCreatePr))
+2026-09-12T17:00:52Z [WARN] [warpui_core::elements::gui::hoverable] Not handling MouseMoved event in Hoverable due to back-to-back synthetic events.
+2026-09-12T17:01:18Z [INFO] [warpui_core::core::app] dispatching typed action: warp::code_review::git_dialog::GitDialogAction::Confirm
+2026-09-12T17:01:18Z [WARN] [warpui_core::elements::gui::hoverable] Not handling MouseMoved event in Hoverable due to back-to-back synthetic events.
+2026-09-12T17:01:19Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=164, falling back to host listing
+2026-09-12T17:01:19Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T17:01:19Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=198, falling back to host listing
+2026-09-12T17:01:19Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T17:01:19Z [WARN] [warp::completer::wsl_guest_listing] [APP-3993 wsl-list] non-zero exit elapsed_ms=229, falling back to host listing
+2026-09-12T17:01:19Z [WARN] [warp::completer] Failed to convert path: Given path was not a UNIX path
+2026-09-12T17:01:25Z [ERROR] [errors::report_error] Commit failed: gh command failed: none of the git remotes configured for this repository point to a known GitHub host. To tell gh about a new GitHub host, please use `gh auth login`
+
+2026-09-12T17:01:25Z [INFO] [warpui_core::core::app] dispatching typed action: warp::pane_group::PaneGroupAction::HandleFocusChange
+2026-09-12T17:01:25Z [INFO] [warpui_core::core::app] notifying view observers and updating windows for timer id 258
