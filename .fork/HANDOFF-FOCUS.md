@@ -59,7 +59,17 @@ cp target/release/warp-oss /tmp/warp-oss-prefix-7d8e21b76
 > driven live on Windows, the fix holds and `app.active` stayed null
 > (`.fork/runs/focus-live-2026-09-12/`). Task 3: workspace check green, the
 > ambiguous-branch test written and mutation-calibrated (`dcdc80494`); the
-> twice-run full-lib baseline is the one item left. Task 4 done: the count
+> twice-run full-lib baseline is done (`.fork/runs/lib-baseline-2026-09-12/`):
+> 30 fail in both runs, 23 of them fail alone, and **17 of those are one fork
+> call site** -- `remote_control::stop` does an unconditional
+> `LocalControlBridge::as_ref` (`9e496b800`), called on every conversation
+> removal since `ae694127a`, and upstream's fixtures never register the
+> bridge. Read, not run: the same panic looks reachable in the app under
+> `WARP_FORK_POLICY=0`, which skips `FORCE_ENABLED` and so never registers the
+> bridge, while the call's comment calls it "a no-op under upstream
+> behaviour". A one-line `has_singleton_model` guard is proposed there, not
+> applied. Three more of the 23 are the intended inversions already in T03 and
+> T04. Task 4 done: the count
 > (`bb0af075d`) and the GHTESTS audit (`41e77d9ef`). Windows checkout synced
 > to `bb0af075d` and both Windows binaries rebuilt; pre-fix copies kept in
 > `C:\dev\prefix-debug-7d8e21b76` and `C:\dev\prefix-release-76d8b07e6`.
