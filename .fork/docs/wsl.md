@@ -168,7 +168,10 @@ the same repository share one server. What changed:
   `\\wsl$\ubuntu\home\x.rs` as `file:///home/x.rs` and folds every
   `file:///...` the server answers with back to the canonical spelling.
   `--shell-type login` is load-bearing: the default PATH had nothing under
-  `/home`.
+  `/home`. **It only gives the `.profile` half of it, though** — `.bashrc`
+  returns early for a non-interactive shell before it loads nvm, so anything
+  installed under nvm (`opencode`, measured 2026-09-07) is not found and must
+  be named by its absolute path.
 - `code::routed_lsp`: `WslHosts` records which distribution a host is, from
   the `Sessions` subscription on `SessionConnected`, the one place the host
   id and `wsl_distro_name()` are both in hand. `lsp_path_for` gives a routed

@@ -48,6 +48,43 @@ ssh warp-ts -t tmux new -As mobile
 mosh --ssh="ssh -p 22" effatha@100.82.213.46 -- tmux new -As mobile
 ```
 
+## Setting it up, the first time
+
+Set up in the order that does not lock you out — moved here 2026-09-12 from
+`CLAUDE.md`, which had it as an account rather than a recipe:
+
+1. Key on the phone (`ssh-keygen -t ed25519` in Termux), its **public** half
+   appended to `~/.ssh/authorized_keys` — `700` on `~/.ssh`, `600` on the file.
+2. **Open the port before disabling passwords**, not after. The password
+   fallback is the safety net that lets you debug a failing key path; removing
+   it first means the only way to test is also the way that can strand you.
+3. `New-NetFirewallRule … -LocalPort 22 -RemoteAddress 192.168.254.0/24` — scope
+   it to the subnet rather than `Any`.
+4. Verify the host key fingerprint **out of band** (`ssh-keygen -lf
+   /etc/ssh/ssh_host_ed25519_key.pub`) instead of accepting the TOFU prompt
+   blind.
+5. Only then `/etc/ssh/sshd_config.d/10-keys-only.conf` with
+   `PasswordAuthentication no`, keeping one session open while you reload.
+
+**Four traps, and three of them produced a confident wrong diagnosis first:**
+
+- **A firewall rule is per *port*.** The console's rule did nothing for 22,
+  and a *dropped* packet gives no refusal — just a silent hang that reads
+  exactly like a broken key or a hung shell. Check `Get-NetFirewallRule …
+  LocalPort -eq <port>` before debugging anything above the network.
+- **`~/.ssh/authorized_keys` was a *directory*** containing a copied pubkey, so
+  sshd had never read it and key auth had never worked. `[ -f authorized_keys ]`
+  reports "missing" for a directory, which reads as "not set up" rather than
+  "set up wrongly". Look at the target before writing to it — `chmod 600` on a
+  directory strips its traversal bit.
+- **`BatchMode=yes` blocks the passphrase prompt, not just the password one.**
+  Chosen to prove a key rather than a password, it produced a false negative on
+  a passphrase-protected key: `debug1: Server accepts key` followed by failure
+  means `authorized_keys` is *correct* and the client could not sign.
+- **`-tt` is not needed for an interactive login** — ssh allocates a TTY when
+  stdin is one. `-t` is for a *remote command* that needs a terminal, which is
+  how the TUI would be run over SSH.
+
 `tmux new -As mobile` = attach to `mobile`, create it if absent. Same line every
 time, however you got dropped. **Run any agent inside that tmux**, never in the
 bare SSH shell, or it dies with the link.

@@ -26,11 +26,31 @@ prompt another, answer another's requests, or see the others in the list.
 
 ## What it needs
 
+Three things, and the VPN is not one of them — measured 2026-08-30 end to end,
+a phone on the LAN paired *with ProtonVPN connected*; the failures that had
+looked VPN-related were actually `no_instance`, Warp not being alive at the
+moment the phone tried:
+
+1. **`networkingMode=mirrored`** in `.wslconfig`, which puts the WSL listener
+   on the Windows stack and gives it a real LAN address (`192.168.254.3` on
+   `eth0`, not a WSL-private `172.x`).
+2. **An inbound Windows firewall rule for the bound port** — verified present
+   with `Get-NetFirewallRule -DisplayName '*warp*'`.
+3. **Warp actually running.** Backgrounding the launch from a shell that then
+   exits does not keep it up, and from the phone that is indistinguishable
+   from a network block. `pair show` answering `no_instance` is the whole
+   diagnosis for a phone that cannot load the page — check that before the
+   network.
+
+(This corrects a citation that stood here pointing at a "Reaching the console
+from a phone" section in `manual.md`; that section never existed there — the
+account only ever lived in `CLAUDE.md`, moved here 2026-09-12.)
+
 - `WARP_FORK_CONTROL_BIND` set to an address the phone can reach: `ggwarpdev
-  console` sets `192.168.254.3:41234`, the one the Windows firewall rule
-  names (`manual.md`, "Reaching the console from a phone"). Without it the
-  chip's click is a toast naming the variable; nothing else in the flow
-  exists.
+  console` sets `192.168.254.3:41234`, the one the firewall rule above names.
+  Without it the chip's click is a toast naming the variable; nothing else in
+  the flow exists. Pin the port: it makes an *ephemeral* bind refused outright
+  rather than producing a stale saved URL.
 - `WARP_FORK_EVENT_LOG=on` for the record to draw from; the product profile
   sets it since phase 3.
 - A conversation in the panel. A CLI agent in a pane is not one, and the fork
@@ -147,6 +167,45 @@ Drivers: `curl.exe --cacert <ca.crt>` from WSL; Brave on the Windows side in a
 scratch profile with `--ignore-certificate-errors` for a first look at the
 page. The measurement that counts is a phone with the authority installed and
 no warning page, and that needs a person with a phone.
+
+## What each defense actually covers, and the action count (moved from CLAUDE.md, 2026-09-12)
+
+Three things believed before they were checked, audited 2026-08-30:
+
+- **`tool_digest.rs` contributes nothing to this threat model.** It is TOFU
+  pinning of **MCP tool definitions** — it hashes what a server advertised at
+  connect, diffs on the next connect, and *warns*; its own docs say
+  "deliberately not a block". It never sees an approval, a paired device or a
+  network path. The digest that guards a phone's yes is `digest_of` in
+  `handlers/approvals.rs`, a different mechanism that merely shares a shape.
+  Do not credit one for the other's job.
+- **The approval digest does not defend against an active network attacker.**
+  It binds a yes to the request *the server showed*, which stops a stale
+  phone answering yesterday's prompt — genuinely valuable. But it is computed
+  server-side and echoed back, so a MITM on a plaintext path can show the
+  phone a benign summary beside the real digest and the thumb binds perfectly
+  to the nasty request. **It binds server-state to server-state; it never
+  binds what the human saw.** Transport encryption (above) is the actual
+  remedy, not this digest.
+- **`pair show` answering `no_instance` is the whole diagnosis** for a phone
+  that cannot load the page — Warp was not alive at the moment it tried, not
+  a network block. Check that before anything else.
+
+**The paired console reaches seven actions, not five.** This line said "five"
+until 2026-09-01: T14.21 added `agent.cancel`, and eight if
+`WARP_FORK_REMOTE_APPROVE` is set (adds `agent.approve`). The seventh is
+`agent.trace` (2026-09-05). Against that, SSH (`.fork/docs/away-from-desk.md`)
+reaches **all 115** `warpctrl` actions, key-only, no prompt. **Read the count
+off `PAIRABLE_ACTIONS` in `app/src/local_control/pairing.rs`, never off this
+page** — the same rule this repo states for the 115-action catalog, and for
+the same reason: a number in prose goes stale the moment the list does.
+
+That asymmetry is the principle, not an inconsistency: `PAIRABLE_ACTIONS` is
+narrow because the *credential* is weak — a QR code is a bearer token
+displayed to a room and spendable by anyone who photographs the screen inside
+its two minutes. An SSH key is a strong credential held by one device. Same
+person, same phone, different authority, because authority follows credential
+strength.
 
 ## How long it lasts (2026-09-06)
 
@@ -367,7 +426,9 @@ launcher (`warpdev.ps1 -Console`) now defaults `-Bind` to `tailnet`,
 resolved from `tailscale ip -4` at launch, and stops the launch if Tailscale
 gives no address rather than binding something a saved URL does not name.
 The Tailscale adapter is a Private network on Windows, so the existing
-41234 rule admits it; port 22 got its own rule for `100.64.0.0/10`.
+41234 rule admits it; port 22 got its own rule for `100.64.0.0/10`. `winget`'s id for the
+install is `Tailscale.Tailscale`, case included — the lowercase form the
+manual carried for a while answers *No package found*.
 
 Measured with ProtonVPN connected (`.fork/runs/reach-2026-09-08/`): the
 PC's public endpoint is a Proton exit with `MappingVariesByDestIP: true`,

@@ -715,1092 +715,134 @@ variable.
 
 ## Working rules
 
-**Build with `--features gui,warp_control_cli`.** `warp_control_cli` is *not* in
-`app/Cargo.toml`'s default list, and without it there is no `--warpctrl` — the
-control plane this fork exists to open is simply absent from the binary.
-
-**Stop a running Warp with `warpctrl window close`** (`CloseMainWindow` on
-Windows), because ordinary shutdown cleans up the crash-recovery sibling and a
-killed one leaves it holding the ports.
-
-**The "stale discovery record" half of that sentence is wrong — and the first
-attempt to correct it was wrong in a more instructive way, because it measured a
-different quantity, in the commit that was correcting someone else for exactly
-that.** Both halves measured 2026-09-03:
-
-| what was killed | `instance list` afterwards |
-|---|---|
-| `taskkill /F /IM warp-oss.exe` — **every** process of that name, sibling included | **empty** |
-| `taskkill /F /PID <the registered pid>` — *the* process, which is what the sentence describes | **one record**, a different pid |
-
-The first form is what T20.3's pre-launch check was validated against, and on its
-own it says records are pruned. That much is true: `discovery.rs` prunes dead-PID
-records on every scan (`is_pid_alive`, two call sites), so the pid filter that
-check nearly shipped really was dead code.
-
-**The second form is the case the sentence was about, and what survives is not a
-stale record — it is a live Warp.** The crash-recovery sibling is parked in
-`WaitForSingleObject` on the parent handle; the parent dies, it continues into
-normal startup, becomes a full instance, **publishes its own discovery record**,
-and spawns a recovery sibling of its own. Measured: one pid killed, two processes
-afterwards, one fresh record. So the original sentence's *observation* was right
-and its *mechanism* was wrong — a record remains, and it is neither stale nor
-prunable, because the process it names is genuinely running.
-
-That is a better argument for `window close` than either version, and it is why
-T20.3's check refuses on a **live** pid rather than filtering for a dead one.
-
-**What accumulates instances is the same fact from the other side**, and this
-file already records it two paragraphs down without connecting them: a CLI agent
-in a pane blocks `window close`, the close is *refused*, and the instance stays
-alive. Three piled up in one session that way. So `ambiguous_instance` always
-comes from live Warps nobody could stop — whether they refused to close or were
-resurrected by killing their parent — and never from records nobody cleaned.
-
-**…and the last sentence needs one exception, because there is a second
-registry.** Bisected 2026-09-10 (T15, `.fork/runs/discovery-2026-09-10/`).
-`discovery_dir()` answers `$XDG_RUNTIME_DIR/warp/local-control` when that
-variable is set and `$HOME/.warp/local-control` when it is not, so **one user on
-one machine has two of them**, and the environment a process was launched from
-decides which it writes to and reads from. A record and broker socket from
-2026-08-28 were still in the second, naming a dead pid, thirteen days later; one
-`env -u XDG_RUNTIME_DIR warpctrl instance list` removed both. The pruner does
-exactly what this file says it does, on every scan, in the directory it was
-given — nothing had ever given it that one.
-
-**The litter is not what this costs you.** A *running* Warp registered in one
-registry is invisible to `warpctrl` in the other, and answers `no_instance` — the
-same word a genuinely absent Warp gets. That message now names the directory it
-searched and the variable that decides it, so the two are separable at a glance
-rather than by experiment. When `instance list` says nothing is running and
-something is, check `$XDG_RUNTIME_DIR` first.
-
-**…and until 2026-09-05 a closed instance's listeners outlived it on Windows,
-so the next launch on the console's port failed with "only one usage of each
-socket address".** Measured three times in one night: `netstat` showed the
-wide listener `LISTENING` under the dead pid, held by `wsl.exe` children Warp
-had spawned for its git chip and left orphaned. The `mio` this build locks
-creates inheritable sockets, and every child Warp spawns with stdio inherits
-them. Both control listeners are marked non-inheritable now
-(`keep_from_children` in `app/src/local_control/mod.rs`); upstream's `9282`
-still fails to bind the same way, which is the cause behind the egress run's
-"honest note". The orphaned relays themselves are still there after a close
-and are not the fork's fix yet. If a port is refused, `netstat -ano | findstr
-<port>` names the dead pid, and the holders are the `wsl` processes created
-at that instance's start.
-
-**…and `ok: true` from `window close` never meant the window closed.** Read
-2026-08-30: the handler sends the close with `TerminationMode::Cancellable` —
-*"the termination can be interrupted"* — and returns the instant it has asked,
-without observing the outcome. So `ok` meant *the request was dispatched*, and
-nothing in the payload said so. That is the mistake `approvals.rs` explicitly
-refuses one action over, reporting the keystroke it sent rather than
-`approved: true` because *"a result claiming `approved: true` would assert an
-effect this process cannot observe"*. The result now carries
-`close: "requested"`, `cancellable: true` and a `verify` sentence naming
-`instance list` as the check. **One mechanism for a refused close, measured
-2026-09-06**: Warp's own *Quit Warp? You have 1 process running* dialog. With
-a freshly split pane whose shell was still starting, `window close` returned
-`ok: true`, the dialog stood over the window
-(`.fork/runs/tls-2026-09-06/after-close-refused.png`), and `instance list`
-kept its record until a second `window close`. That is one cause, not the
-cause: `CloseSessionConfirmationDialog` covers pane and tab closes and
-`OpenDialogSource` has no window arm, so the earlier version of this
-sentence, which declined to name a mechanism, was right to; this one names
-the one that has been seen.
-
-**Whether a refusal costs the whole turn is a fact about the agent you named,
-not about the fork.** Measured 2026-08-31 with `acp probe`, the same prompt and
-the same refusal against two agents:
-
-| agent | what it did after Warp said no |
-|---|---|
-| `opencode` | **nothing.** No further text, turn over — even when the prompt said *"if you cannot run it, say so and then tell me what 2+2 is."* |
-| `claude-agent-acp` 0.70.0, `--mode default` | *"I can't run that command — you denied permission to execute it. So, 2+2 is 4."* |
-
-**Warp sent the identical answer both times** — `{"outcome": "selected",
-"optionId": "reject"}`, a per-call rejection and *not*
-`RequestPermissionOutcome::Cancelled`. Both agents offer a `reject_once` option,
-so `deny`'s fallback to `Cancelled` never fires for either. This retracts a
-hypothesis raised the same day, that Warp was cancelling turns on denial: it is
-not, and the probe shows the agent recording the call as `status: failed` with
-*"The user rejected permission to use this specific tool call."*
-
-So a turn dying after a *no* is agent behaviour with no fork remedy, and it joins
-the list of things that turn out to be facts about `WARP_FORK_ACP_COMMAND`'s
-argument rather than about this codebase — alongside which requests are
-answerable at all, and whether the agent has session modes.
-
-**And that run re-confirmed a dated claim rather than trusting it.**
-`claude-agent-acp` at 0.70.0 with no `--mode` ran the command and raised **zero**
-permission requests: still `auto` by default, still deciding by classifier with
-Warp never in the loop. T14.18's measurement holds.
-
-**A denied call can cost the whole turn while the turn reports `success`.**
-Measured 2026-08-31, and it sharpens the head-vs-tail rule recorded below. A
-denial landing ~90 seconds in, after substantial work, ended the conversation
-with `status: success` and **no answer at all** — 2029 characters of tool trace
-and the denial notice, nothing addressing the question. The status is the trap:
-`agent list` reports a turn that worked, and the absence is visible only by
-reading the output. So do not read `success` as "the question was answered";
-read the output, or count the asks that were refused.
-
-**…and a CLI agent running in a pane blocks it too, with none of the wedge's
-tells.** Measured 2026-08-30: with `claude` alive in a pane, `window close`
-answered `ok: true` and the process stayed up — while `agent list` reported **no
-conversations** and `agent approvals` reported **nothing waiting**, because a CLI
-agent in a pane is neither. So T14.10's instruments, which exist precisely to
-answer "why will it not close", are silent on this case. Three instances
-accumulated this way in one session, and stale instances make every later
-`warpctrl` call answer `ambiguous_instance` — which a check that greps only for
-`"ok"` sails straight past. **End the agent in the pane first**, then close.
-
-**…and cancel a wedged ACP turn first, or it will not close at all.** Measured
-T14.10 against an agent built to stall: with a turn in flight that has stopped
-answering, `window close` returns `ok: true` and Warp stays up — reproduced on
-two separate instances, once after waiting 43 seconds. `agent cancel <id>` and
-then `window close` exits in about five. So a wedge is not only a time cost; it
-takes away the sanctioned way to stop, which is the one thing `kill` was already
-ruled out for. `agent list` now reports `quiet_for_seconds` and `last_activity`
-for a turn Warp is driving, which is how you tell there is one to cancel.
-
-**`agent cancel` killed the person's foreground command until 2026-09-05, and
-the panel showed nothing of a text-only answer until it ended.** Both measured
-on the Windows build with a streaming turn and a `sleep 300` typed into the
-pane behind it (`.fork/runs/cancel-2026-09-05/`). Upstream stops the pane's
-running block whenever the *visible* conversation is stopped, because its agent
-runs commands there; the fork's agents never do, so `fork::panel_agent_is_external`
-now gates that interrupt on the block belonging to the conversation. And the
-ACP translator's text buffer, added so token chunks would not each become a
-message, held a text-only answer whole until the turn ended -- a cancel kept
-nothing. Text now streams into one message by `AppendToMessageContent`. The
-same coupling still refuses a new conversation while a long-running command is
-in the pane (*"the agent is monitoring a long-running command"*); recorded, not
-changed. `.fork/docs/composer.md`, "Item 7, measured and built".
-
-**A GUI Warp binds two loopback ports, and only one of them is this fork's.**
-Measured 2026-08-24 with `ss -ltnp` against a running instance:
-
-| port | owner |
-|---|---|
-| `127.0.0.1:9282` | **upstream's** `crates/http_server` — `PORT_BASE` 9277 plus the channel offset, and Oss is +5 |
-| ephemeral (e.g. `:34969`) | `warpctrl`, which binds port **0** and publishes whatever it gets in the discovery record |
-
-**This corrects a claim that stood here for two days: `warpctrl` never used
-9282.** It also settles the open question below. Upstream's server is started by
-`LaunchMode::should_start_local_http_server`, which is `!self.is_headless()` —
-no feature flag, no channel gate, nothing fork policy touches. It serves the
-routers listed at `app/src/lib.rs:2611` and answers **unauthenticated**: its CORS
-layer restricts browsers to `warp.dev` origins and stops nothing else. Do not
-put anything sensitive behind it; `warpctrl`'s server is the one with `auth.rs`,
-the credential broker and the peer-UID check.
-
-**…and `WARP_FORK_POLICY=0` is still a trap, because the same file tells you to
-use that flag to A/B a regression.** Observed 2026-08-22: a policy-off instance
-ran with a visible window and held a port, while the discovery directory stayed
-**empty** — so `warpctrl window close` answered `no_instance` and there was no
-sanctioned way to stop it. The port was upstream's 9282, ungated by policy; the
-empty directory was `warpctrl` correctly staying off. Plan the shutdown before a
-policy-off run.
-
-**And the explanation this file gave for that stood wrong until 2026-08-31.** It
-said *"the discovery record carries the credential, so no record means no client
-can authenticate"*. It does not: `InstanceRecord` publishes routing metadata, the
-loopback endpoint and **the filename of the credential-broker socket**, and
-`discovery.rs`'s own module docs say in as many words that *"discovery records
-never contain bearer tokens or reusable credentials"* — the secret is minted at
-the broker, per action, and kept process-local. The observed behaviour was right
-and the mechanism under it was invented: with no record a client cannot find
-*where to ask*, which is a weaker and more interesting fact than not being able
-to authenticate. Caught by an agent in Warp's own panel, from a prompt that
-asserted the wrong version as its premise — it corrected the question instead of
-answering it, which is the argument for stating your premise where the agent can
-see it.
-
-**…and often you do not need one.** `--warpctrl` runs `init_feature_flags`
-before it dispatches, so `WARP_FORK_POLICY=0 warp-oss --warpctrl instance list`
-resolves the whole flag set in a process that opens no window and binds no
-port. That is enough to A/B any *flag*, which is most of what policy-off gets
-used for. Save the GUI run for A/B-ing behaviour. (Put any probe **after**
-`mark_initialized()` — `FeatureFlag::is_enabled` panics before it.)
-
-**The `warp` Claude Code plugin is a fork surface, and it is the one nobody
-remembers.** `~/.claude/plugins/cache/claude-code-warp/warp/<version>/` is seven
-bash hooks that emit OSC 777 to the TTY; Warp parses them into
-`CLIAgentEventType`, a **versioned protocol** negotiated through
-`WARP_CLI_AGENT_PROTOCOL_VERSION`, with `PermissionRequest` and
-`PermissionReplied` as first-class events. I17 already ruled on the sibling
-`oz-harness-support` plugin — refused at the manager by
-`fork::cloud_harness_plugin_allowed` — but the local one is welcome and largely
-unexamined.
-
-**The plugin must already be loaded when the CLI agent starts, and if it is not
-the failure is silent.** Measured 2026-08-30: a `claude` running in a pane raised
-a permission prompt in its own TUI and `warpctrl agent approvals` stayed
-**empty** — no error, nothing in the log, and it looks exactly like "this fork
-cannot see CLI agents". Warp installs the plugin on demand, so a session that was
-already running when it landed has no hooks. Reloading plugins in Claude Code and
-asking again made the request appear immediately. **Check the plugin is loaded
-before concluding anything about the CLI-agent path.**
-
-**And with it loaded, `agent approve` genuinely drives a real Claude Code
-prompt** — `keystroke: "enter"`, the request left the queue, the tool ran and the
-file appeared. That was `approvals.rs`'s weakest claim and it is now watched
-rather than assumed. So the fork's thesis path has working remote consent today:
-Claude asks, the plugin reports over OSC 777, Warp surfaces it, a paired device
-answers.
-
-**TR-EVENTS-B measured 2026-08-30, and the answer is "absent but recoverable".**
-The `PermissionRequest` payload was captured verbatim with a second hook
-registered beside the plugin's own (`.fork/tools/dump-hook-stdin.sh`; a hook
-event runs every command registered for it, so this needs no edit to the
-vendored plugin). Ten keys arrive:
-
-```
-cwd  effort  hook_event_name  permission_mode  permission_suggestions
-prompt_id  session_id  tool_input  tool_name  transcript_path
-```
-
-- **There is no `tool_use_id`.** The claim recorded in three files is correct.
-- **But `transcript_path` is on the payload**, pointing at Claude Code's own
-  session JSONL, whose assistant messages carry `tool_use` blocks with
-  `toolu_…` ids.
-- **And the entry is written *before* the hook fires** — measured, transcript
-  entries at `22:33:13.86–13.99Z` against a dump at `22:33:15Z`. So the id is
-  available at decision time, not only afterwards.
-- **The obvious join does not work.** Matching on `tool_input` alone is
-  ambiguous: the same command resolved to **two** ids in one session, because
-  an agent re-runs commands. The usable key is the *most recent* `tool_use`,
-  disambiguated by `tool_name` + input among calls not yet resolved. **Not
-  verified**: what happens with parallel tool calls, where one assistant message
-  carries several `tool_use` blocks and "most recent" stops being a single
-  answer.
-
-**Two fields nobody knew were there, and one of them changes I18.**
-`permission_mode` is on the payload, so Warp can *know* the mode a CLI agent is
-in rather than infer it. And `permission_suggestions` carries Claude Code's own
-proposed rule additions, shaped
-`{type: addRules, rules: [...], behavior: allow, destination: session}` — a
-first-class, **session-scoped** persistent grant. That is direct evidence for
-I18's central claim: the "allow all for this session" affordance is not
-something the fork would be inventing, it is something already offered and
-currently dropped. `effort: {level: …}` is the third, unexamined.
-
-**Two facts about it that change what the fork can do** (read 2026-08-30, T14.20):
-the permission hook is **observational only** — it reports and exits, so Warp is
-told and cannot answer — and the payload carries **no call id**, which is
-`TR-EVENTS-B` named in three files. Both are plugin-side. So "remote consent only
-works on ACP" is true today and is **not** an architectural fact: it is what you
-get when the only channel is one-directional. Before concluding that a
-CLI-agent limitation is structural, check whether it is simply a hook that does
-not answer yet.
-
-**The agent driving this fork reads `AGENTS.md`, not this file — unless
-`opencode.json` says otherwise.** Measured T14.7 by asking it: in this repo
-`opencode` listed `AGENTS.md` alone. So an agent sent to build the fork gets
-upstream's rules, which say never to `cargo fmt` (folklore this file corrects
-below) and which have never heard of the eight-job cap — the rule whose
-violation took the WSL VM down the same morning. `opencode.json` at the repo
-root now carries `"instructions": ["CLAUDE.md"]`, and after it the agent quoted
-both the capped build command and `warpctrl window close` back correctly. The
-same file carries `permission: {edit: "ask", bash: "ask"}`, which is what makes
-the fork's consent surface reachable at all: **Warp cannot make an agent ask.**
-The agent's own config decides *when* to ask; Warp decides only where the ask
-lands and who may answer it. Committing that config is how the repo stops
-depending on ambient settings for its own safety.
-
-**A request Warp will not answer is usually the agent asking to leave the
-project directory — and that is the agent's setting, not Warp's bug.**
-`acp_permission` says yes only to tool kinds whose spec meaning stops at the
-call, so `other` is refused. Measured T14.8: `other` is exactly what `opencode`
-sends *before* any call that would reach outside the project. `cat
-.fork/GOAL.md` is one `execute` and is answerable; `cat ~/.bashrc` is an `other`
-followed by an `execute`, and refusing the first means the second never arrives.
-It resolves paths, so `../warp/...` back inside is a plain `execute`. The remedy
-lives in the agent: opencode calls this permission `external_directory`, and
-`"permission": {"external_directory": {"/path/*": "allow"}}` in the project's
-`opencode.json` stops the ask being raised at all — verified by running.
-`claude-agent-acp` sends the same command as one `execute` and never asks this,
-so **which requests are answerable is a fact about the agent you named**. Check
-that before suspecting Warp when a session stalls on ordinary work.
-
-**The agent's permission config is `opencode.json` in *this repo*, not a user
-file and nothing to do with Claude Code or Warp.** `~/.config/opencode/opencode.jsonc`
-exists on this machine and is empty but for its `$schema` line, so every
-permission decision comes from the committed project file. (`claude-agent-acp` is
-the other story entirely: it reads Claude Code's settings and starts in session
-mode `auto`, described above.)
-
-**And its `bash` pattern map has a footgun that reads backwards.** Measured
-2026-08-29, two rules, neither documented where you would look:
-
-- **Later keys win.** `{"*": "ask", "git status*": "allow"}` allows
-  `git status`; reverse the two and everything asks.
-- **Unmatched commands default to `allow`, not to `ask`.** So `{"echo*":
-  "ask"}` does not mean *"ask about echo"* — it means *"ask about echo and allow
-  literally everything else"*. A block that reads as tightening is a wholesale
-  opening.
-
-Therefore any object form **must** start with `"*": "ask"` and list the allows
-after it. **This repo now runs one**, applied 2026-08-30 with the maintainer's
-explicit approval:
-
-```json
-"bash": {
-  "*": "ask",
-  "git status*": "allow", "git diff*": "allow", "git log*": "allow",
-  "cargo test*": "allow", "cargo check*": "allow"
-}
-```
-
-The plain string form (`"bash": "ask"`) has no such hazard, and is what this was.
-
-**But the trailing `*` is not a prefix a compound command can ride, and that was
-a real worry worth killing.** The obvious reading of `"git status*": "allow"` is
-a glob over the whole command string, which would mean `git status && rm -rf ~`
-matches and runs unasked. Measured 2026-08-30, calibrated both ways in one
-session:
-
-| command | result |
-|---|---|
-| `git status --short && echo COMPOUND_RAN_UNASKED` | **asked** — `echo` is not allowed |
-| `git status --short && git log --oneline -1` | **ran unasked** — both segments allowed |
-
-So `opencode` **decomposes a compound command and requires every segment to match
-independently**. The allowlist cannot be smuggled past with `&&`.
-
-That materially changes what widening it costs. Adding read-only commands does
-not open a door for whatever is chained after them, because whatever is chained
-after them is matched on its own. The remaining argument against any particular
-entry is about that command alone — `ls` and `wc` take arbitrary paths, so an
-allow is wider than it reads — and not about composition.
-
-**How to check one, because the obvious check cannot fail.** Confirming that an
-allowed command runs unasked proves nothing on its own: a map missing its
-`"*": "ask"` lead allows *everything*, so the allow-list appears to work
-perfectly while the catch-all is wide open. The test that matters is the one
-that must **ask**. Measured against the committed file: `git status --short`
-ran with 0 requests, `ls -1 .fork` and `wc -l CLAUDE.md` each raised one.
-
-And pick that firing case so the agent will actually run it. The first attempt
-used `echo hello`, and the agent answered without running anything — 0 asks and
-0 tool calls, which reads exactly like a passing test and is no evidence at all.
-A command whose output the agent needs (`ls`, `wc`) is the reliable shape.
-
-**This repo's `opencode.json` grants `external_directory: {"~/.cargo/**":
-"allow"}`, and what that does is narrower than it reads.** It is there because
-reading a dependency's source is ordinary work here and it was the measured
-stall. **The grant is scope, not action**: measured 2026-08-29 with it in place,
-a write to `~/.cargo/…` still raised an `edit` request and a shell command still
-raised an `execute` one, both approvable, and neither ran. So it does not let the
-agent do anything unasked — it converts requests Warp *cannot* answer into
-requests it can. `~` expands, `**` alone is enough without a sibling `*`, and
-the file parses with comments if you ever want to annotate it (all three run,
-not assumed). Widen it only for somewhere you would also be content to answer
-`edit` prompts about, and add `~/.rustup/**` if toolchain sources start stalling
-— that one has not bitten yet, so it is not granted.
-
-**And it does not cover the same destination reached through the shell.**
-Measured 2026-08-30 in a panel session: the agent wanted the
-`agent_client_protocol` crate's source — exactly what the `~/.cargo/**` grant
-exists for — and reached for it with `find / … | xargs grep`, a **bash** call,
-where the map's `"*": "ask"` lead caught it first. The grant is on the
-file-reading door; the shell door to the same place is untouched, and the two
-permission surfaces do not compose. T14.8 measured this remedy against an agent
-that used file reads, so its effectiveness is a fact about *how the agent
-chooses to reach for a file*, not about the path being granted.
-
-**The same collision is the fork's most repeatable friction, and it stops turns.**
-Twice in eighteen turns `opencode` ran `wc -l` to size a file before reading it,
-and each was denied. When the ask landed at the *tail* of a turn, after the answer
-was assembled, it cost nothing. When it landed at the *head* — 8 seconds in,
-before any reading — it killed the turn: 871 characters of output and no answer.
-Same mechanism, opposite costs, and the timing is not something the asker
-controls. `wc`, `ls`, `find` and `cat` are read-only and all ask; `git log` and
-`cargo check`, which do far more, do not. The allowlist is drawn around commands
-the maintainer named, not around what a command can do.
-
-**Answered 2026-08-30, and the four commands did not get the same answer.**
-`ls*` and `wc*` are now allowed; `find*`, `cat*` and `grep*` are deliberately
-refused, and the split is the argument rather than a convenience:
-
-- **`find` is disqualified outright.** `-exec` makes `find*: allow` an
-  arbitrary-command allow wearing a read-only name.
-- **`cat` and `grep` reveal file *contents* at arbitrary paths.** Inside the
-  project that adds nothing — the agent's own read tool already reads there
-  unasked. The differential is *outside* it, and this is the measured hazard
-  recorded above: `external_directory` gates the file-tool door, and the bash
-  door to the same place is separate and does not compose. Allowing `cat*`
-  reopens through bash exactly the hole that grant closes. Note also that
-  `egress.rs` is **Warp's** HTTP client, not the agent's — so the agent's own
-  API channel is an exfil path the deny-list does not cover.
-
-  **And the agent dials that channel even when the model is local, which was
-  measured twice and cannot be configured away by the obvious means.** During a
-  turn answered entirely by a `llama-server` on this machine,
-  `claude-agent-acp` opens a TLS connection to `api.anthropic.com` *before* it
-  opens the one to the model (2026-09-09, `.fork/runs/localmodel-panel-2026-09-09/`).
-  `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` does not remove it. Anthropic's
-  docs name exactly two things that variable does not cover — the WebFetch
-  domain safety check (`skipWebFetchPreflight`) and official marketplace
-  auto-install (`CLAUDE_CODE_DISABLE_OFFICIAL_MARKETPLACE_AUTOINSTALL`) — and
-  **the marketplace one was tested and is not it**
-  (`.fork/runs/pricefetch-2026-09-09/`). The WebFetch check is untested because
-  it fires only when WebFetch is used.
-
-  Two things worth carrying from that. **It reproduces with no Warp process at
-  all** — `warpctrl acp probe` inside the distribution shows the same
-  connection, so this is a fact about the agent and never about the panel, and
-  measuring it needs no GUI, no relaunch and four minutes. And **the fix, if
-  one is wanted, is not a `warpctrl` change**: it is a firewall rule or a
-  network namespace around the agent, which is a decision rather than a bug.
-
-  **Decided 2026-09-11: accepted and documented. Stop re-measuring it.** The
-  maintainer runs Claude Code with the non-essential-traffic flags already set
-  and the connection is opened anyway, which is one more control ruled out
-  without a further run. Containment stays available as an ops choice — a
-  firewall rule or a namespace — and is theirs to make outside this repo.
-
-  **Disclosing it in the panel was considered and refused**, and the reason is
-  worth keeping because the shape recurs: it would be new consent-surface UI for
-  something Warp neither causes, governs, nor can stop, and a notice that a
-  named third-party agent talks to its own vendor teaches the reader nothing
-  they did not choose when they named it. The honest place for it is here.
-
-  **The general fact it stands for, which is the part to carry:** the fork's
-  deny-lists live in `crates/egress_policy` and are consulted by **Warp's** HTTP
-  client. An agent Warp spawns has its own network stack and its own
-  credentials, and nothing in this repository is between it and the internet.
-  Naming an agent in `WARP_FORK_ACP_COMMAND` is trusting it, and the thesis
-  covers what *Warp* sends — not what the agent does.
-- **`ls` and `wc` leak metadata and counts, not contents.** `wc -l
-  ~/.ssh/id_ed25519` discloses that the file exists and is 27 lines. That is a
-  real cost, and it is the one worth paying, because these two are precisely the
-  measured turn-killers.
-
-**And steering does more here than the allow does.** Both measured incidents
-were the agent *sizing a file before reading it* — something its own read tool
-does without asking. So, as an instruction to any agent reading this file:
-
-> **Read files with your read tool. Do not size them with `wc` or probe with
-> `ls` first, and do not shell out for something a native tool already does.**
-
-That removes the ask at zero security cost, which is smaller than any allow.
-
-**…but measured 2026-08-31, steering put *in the prompt* did not hold, and this
-paragraph was reading stronger than the evidence.** An audit task was re-run with
-that instruction written into the prompt in the imperative, naming the exact
-command to avoid. The agent shelled out on its **first** call anyway, again on
-its second, and produced sixteen `rg` asks before the turn was cancelled. So
-steering is worth writing and it is not a remedy to rely on: it costs nothing and
-it fails silently. What actually stopped the turn was the volume, not any one
-refusal.
-
-**And that volume looked like the measured case for I18 until the question was
-re-run with a boundary, at which point it was not.** Same audit target, same
-three questions, one sentence added — *answer only from those two files; do not
-follow callers, do not trace the UI* — and the result was **0 permission
-requests, 50 seconds, a complete answer**. Six audits across one day now say the
-same thing:
-
-| audit scope | asks |
-|---|---|
-| named files (`egress.rs`, `console.js`, auth trio, transcript) | 0–1 each |
-| *"trace where the warning goes and who sees it"* | **16, turn lost** |
-| the same target, scoped to two named files | **0** |
-
-**So the rule, and it costs one sentence:** name the files, and say where the
-answer stops. An audit question with a boundary is answerable inside this fork's
-permission posture exactly as it stands. One without a boundary sends the agent
-across the codebase and then outside the project — the `find /` that got refused
-was reaching for a crate's source — and the cost is the whole turn, not an
-annoyance.
-
-That materially weakens what had been written here an hour earlier as the case
-for I18. The persistent grant may still be worth building, and the argument for
-it is no longer this measurement. Recorded that way because a number that
-survives one control is worth much less than it looked.
-
-**Check it with the case that must *ask*, not the case that must pass.** A map
-missing its `"*": "ask"` lead allows everything, so an allow-list appears to work
-perfectly while the catch-all stands wide open — the confirming test cannot fail
-and proves nothing. The firing case is `cat ~/.bashrc` through bash, which must
-still raise a request. And pick a passing case whose output the agent actually
-needs, or it will answer without running anything and 0 asks will look like a
-pass.
-
-**The fork's transports emit tool calls as *text*, never as `Action` messages —
-and wanting them structured is a trap with a name.** `AIAgentOutputMessageType::
-Action` / `api::message::Message::ToolCall` is an **instruction**: Warp's action
-model executes it and returns a result. An ACP or `local_agent` agent has
-*already run* the tool, so emitting one runs it a second time.
-`acp_agent/translate.rs`'s module docs say this, note it was inherited from
-`local_agent/translate.rs` "which found it the hard way", and say it is restated
-because **T14 produced three separate instances of a hazard being recorded in
-prose and then built against anyway.** A fourth was started on 2026-08-30 and
-stopped at the advisor.
-
-The consequence, so it is not rediscovered as a bug: `Exchange.tools` in the
-transcript is **always empty** on both fork paths, and `get_action_result` is
-structurally empty for them — the only writer in the app is
-`shared_session.rs:368`, the collaboration path. That is by design, not an
-omission.
-
-**So the trap, refused by name: any design whose success criterion is
-*"`get_action_result` returns `Some` on the ACP path"*.** Including the
-disguised form — registering a *synthetic* finished action through
-`apply_finished_action_result` so the record looks populated. It never
-dispatches, but it inserts entries into an executor's model and bets nothing
-upstream ever walks them as pending work; that bet cannot be settled by reading.
-The correct success criterion is **"the transcript prose contains the
-outcome"**, because on these paths *the prose is the record* — which is exactly
-how refusals are already kept (`transcript_tests.rs`, and verified in real
-transcripts on disk).
-
-**And the last word of it is won't-fix, measured 2026-08-30 rather than
-argued.** `tool_update_text` (the display path of the day, replaced by the tool
-row in `146265e37`) early-returned on anything that is not `Completed`, so a
-`Failed` call emitted no text of its own — which looked like the one real gap
-left. The test was the cheap one: a panel session was asked to `cat` a
-nonexistent file. The transcript came back carrying
-
-> `cat: …/definitely-not-a-real-file-xyz.txt: No such file or directory` — the
-> file doesn't exist, so `cat` exited non-zero.
-
-So the failure is legible in the prose regardless, and a status marker would add
-a greppable token and nothing else. **T14.19's leftover was closed without code** — and then closed *with* code
-anyway, from the other end: `146265e37` gave every call its own row, so a
-failure now carries a marker (`Failed to run …`, `Denied: run …`) as well as its
-prose. The verdict below still stands as a verdict about the prose; what changed
-is that the greppable token turned out to be worth having for a different
-reason.
-Everything the ticket wanted is already there: tool names in the prose, refusals
-in the prose with their reason, and now failures too.
-
-Two instrument notes from that run, both the same lesson this file keeps paying
-for. `warpctrl agent approvals` in its default **pretty** format carried the
-approval id *only* inside the runnable `agent approve '<id>'` line, never as a
-labelled field — so a poll grepping for `approval_id` reported zero while a
-request was genuinely parked, and that phantom zero was one inference away from
-a security investigation into an auto-approval hole that does not exist.
-**Fixed 2026-08-31**: the pretty output now has a labelled `approval_id` line,
-and the empty case says *in the payload*, not merely in a comment above it, that
-an agent asking nothing is not evidence nothing is running. **The rule stands
-regardless — use `--output-format json` for anything a script decides on**; the
-fix makes the trap need the documentation rather than depend on it. And
-`--instance` is a **per-subcommand** flag, not a global one: `warpctrl pane list
---instance <id>`, never `warpctrl --instance <id> pane list`, which exits with
-`unexpected argument`.
-
-**An agent in the panel works in the *pane's* directory** — that half is right,
-and it is the half that matters. Both agent paths read
-`session_context.current_working_directory()`, so this is identical for
-`local_agent` and `acp_agent`, and the failure is quiet in the worst way:
-measured T14.7, a first turn asked to work on this repo answered "not a git
-repository", created `/home/effatha/target/` and wrote there, and reported
-success. **`warpctrl input submit 'cd /home/effatha/git/warp'` before the first
-prompt**, and for an ACP agent this decides more than the files — the agent
-resolves its own permission config from there too.
-
-**This paragraph also said "a fresh pane starts in `$HOME`. Not in the directory
-Warp was launched from", and that is backwards — measured 2026-09-01 across
-three launches.** A fresh pane's shell *inherits Warp's own process cwd*, and a
-**restored** pane keeps the directory it had in the previous launch, which is
-undocumented and was the thing actually being observed:
-
-| Warp's process cwd | pane origin | pane shell | agent's `pwd` |
-|---|---|---|---|
-| the repo | new tab | the repo | **the repo** |
-| `$HOME` | restored from last launch | the repo | **the repo** |
-| `$HOME` | scratch profile, nothing to restore | `$HOME` | **`$HOME`** |
-
-Row 2 is what separates the two candidate rules: Warp's cwd and the pane's cwd
-disagree, and the agent follows the **pane**. Row 3 is the only one that lands in
-`$HOME`, and it does so because Warp was *launched* from `$HOME` — which is what
-a desktop launcher or a shell sitting at home does, and so is the ordinary case
-the original sentence generalised from.
-
-**The remedy is unchanged and the reason for it is stronger.** `cd` first, not
-because there is a `$HOME` default to overcome, but because the pane's directory
-now has *two* sources you did not choose — where Warp happened to be launched,
-and where that pane was pointing days ago. Session restore is the nastier of the
-two: it survives a reboot and it is invisible in the launch command.
-
-Two traps for anyone re-running this. Reading the shell's cwd out of
-`/proc/<pid>/cwd` measures the **shell**, and the claim is about what the *agent*
-sees — they coincide often enough to look like confirmation and they are not the
-same quantity. And any instance launched normally has panes to restore, so a
-"fresh pane" is not fresh: only `XDG_CONFIG_HOME`/`XDG_STATE_HOME` pointed at a
-scratch directory (with the onboarding key seeded, per the recipe below) gives a
-profile with nothing to restore.
-
-**Leave the user's `settings.toml` alone.** For any run that needs different
-settings, point `XDG_CONFIG_HOME`/`XDG_STATE_HOME` at a scratch directory —
-noting that this relocates every other XDG-config tool too, `gh` included.
-
-**…and a scratch profile means first-run onboarding, which looks exactly like a
-broken control plane.** The window sits on "Welcome to Warp", so `window list`
-reports `has_workspace: false`, `pane list` is empty, and `tab.create` answers
-`missing_target`. Seed it instead:
-
-```
-$XDG_CONFIG_HOME/warp-oss/user_preferences.json   →   {"prefs": {"HasCompletedOnboarding": "true"}}
-```
-
-Both halves are load-bearing and each has burned a session on its own: the
-directory is **`warp-oss`**, not `warp-terminal` — a file in the wrong one is
-never read — and the key goes **inside `prefs`**, because a flat
-`{"HasCompletedOnboarding":"true"}` is silently discarded. Launch once first if
-the file does not exist, then merge the key into what Warp wrote; it has real
-content. This recipe has cost three sessions a restart while being correctly
-recorded in `.fork/tickets/` T15 each time, which is why it is here.
-
-**Read back a state-changing step before measuring what follows it.** The
-merge-base trap has a second form and it bit on 2026-08-29: a driver script
-answered an approval with the digest passed positionally instead of as
-`--digest`, so nothing was delivered, the turn parked, and `quiet_for_seconds`
-honestly reported 171 seconds of silence — which reads exactly like the wedge
-that field exists to detect. As with `git diff A...B` against an assumed base,
-the measurement was correct and the input to it was not. **After any mutation,
-confirm the mutation before believing the next reading**: after `agent approve`,
-check the request has left `agent approvals`. One extra call, and it turns a
-three-minute misdiagnosis into a two-second one. Two dearer checks are worth it
-before a *surprising* finding goes into a doc: calibrate a new instrument against
-a known answer first (`wedged-agent.py` is the pattern — fire on the known
-present, stay silent on the known absent), and confirm on a second instrument
-when one exists, which is the general form of *take the screenshot before
-believing `warpctrl agent read`*.
-
-**A live run measures the binary, not your source — check the timestamp.**
-Measured 2026-08-30 and it cost a rebuild plus a wrong conclusion: a release
-build was started, then a fix was written while it compiled, and the run that
-followed exercised the *pre-fix* binary. The feature looked broken, the unit
-test for it passed, and the gap between those two facts is exactly the shape of
-a real bug — so the next twenty minutes went into the wrong place. `date -r
-target/release/warp-oss` against the newest file you touched settles it in one
-second. This is the read-back rule (above) applied to a build: **after any
-mutation, confirm the mutation before believing the next reading**, and a
-compile is a mutation with a long latency and no completion signal of its own.
-
-**…and on Windows that timestamp check does not work, because the build is a
-different checkout.** Found 2026-09-02. `C:\dev\warp` is its own clone whose
-`origin` is the WSL repo, and `build.ps1` does `Set-Location C:\dev\warp` then
-`cargo build` with **no sync step**. So after six commits in the WSL tree the
-build ran, printed `Finished dev profile in 34.12s`, exited 0 — and produced
-nothing, correctly, because *that* tree had not changed. The binary's timestamp
-was 18 hours old and cargo was right.
-
-The recorded remedy above fails here: `date -r` against "the newest file you
-touched" compares a binary in one tree to a source file in another, so it reports
-a stale binary every time and means nothing. **Check the commit, not the clock**
-— `git -C /mnt/c/dev/warp log --oneline -1` against your own HEAD, before every
-Windows run. **To sync, the command depends on which side's `git` you are
-holding, and this line got it wrong until 2026-09-04 when both forms failed in
-one sitting.** The `gh` remote is GitHub and only carries what has been pushed,
-which needs a say-so, so it is usually behind and answers *"Already up to
-date"* against the wrong source. The `origin` remote is the UNC path
-`\\wsl.localhost\Ubuntu\…`, which Windows `git` resolves and WSL `git` cannot.
-So from WSL, fetch by the Linux path; from PowerShell, fetch `origin`:
-
-```bash
-git -C /mnt/c/dev/warp fetch /home/effatha/git/warp dev && git -C /mnt/c/dev/warp merge --ff-only FETCH_HEAD   # from WSL
-git -C C:\dev\warp fetch origin dev; git -C C:\dev\warp merge --ff-only FETCH_HEAD                          # from PowerShell
-```
-
-The launcher's own hint uses the PowerShell form because that is where it runs.
-
-**A symlink in that checkout needs two things and Developer Mode is only one.**
-`core.symlinks = false` is written into the clone's config by git at **clone**
-time and is sticky, so the toggle fixes nothing already on disk. Set it true,
-then re-materialise: `git reset HEAD <path>` (checkout restores from the
-**index**, so after a `git rm --cached` it says *"did not match any file(s)
-known to git"* while HEAD holds mode `120000`), delete the plain file, then
-`git checkout -- <path>`. **Test the capability with `git`, not PowerShell** —
-`New-Item -ItemType SymbolicLink` refuses under Developer Mode because
-PowerShell 5.1 omits `SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE` and Git for
-Windows passes it, so the stand-in fails where the real client works. Account:
-`.fork/docs/manual.md`, *The skills symlink*.
-
-`.fork/docs/manual.md` documents the clone and never says to update it, which is how
-a two-tree setup reads as one tree for months. Worth stating in general: a build
-that reports success and changes nothing is indistinguishable from a build that
-had nothing to do, and only one of those means your code ran.
-
-**And never `pgrep -f` a pattern your own command line contains.** From the same
-session: `until ! pgrep -f "release/warp-oss"; do sleep 2; done` never exits,
-because the `bash -c` running the loop has that string in its own argv and
-matches itself. It waited 34 minutes for itself to die and never ran the build
-it was guarding. Match on something narrower (`pgrep -f "release/warp-oss$"`),
-or check for the thing you actually care about — the discovery record, a port,
-a file.
-
-**Diff test-failure membership, not counts.** Measure a same-session baseline on
-a stashed tree and compare *which* tests failed. There is a known pre-existing
-failure set (`gh`-dependent git tests, flaky secret-redaction globals, terminal
-view) whose members vary run to run — a count that matches can still hide a
-regression, and a count that differs by one is usually the flaky set.
-
-**How wide that variation actually is, measured across six runs of `-p warp
---lib` on 2026-09-04:** 19, 20, 21, 21, 23 and 28 failures, against a union of at
-least 26 distinct names (26 across the five runs that were saved to a file; the
-28-failure run was read off the terminal and lost, which is its own small
-lesson). So the count carries almost no information — a nine-failure swing is
-the normal weather here, and a single number will either alarm or reassure at
-random. The baseline has to be a *union of at least two runs*, or one flaky pass
-in a single baseline run promotes an old failure to a fresh "regression". That
-happened on this merge: two names showed as regressions against a two-run
-baseline and were neither.
-
-**And the family behind the swing has a name: shared login state.** The cluster
-that moves is `ai::mcp::file_based_manager` (up to nine at once), and its
-assertion is *"post-login activation should start TUI Warp-global servers"* —
-the same global the already-listed `auth_completion_waits_for_cloud_initial_load_before_migrating`
-and `test_byo_api_key_disabled_for_anonymous_firebase_user` contend over. All of
-it passes at `--test-threads=1` and 3/3 in isolation. So when a whole module
-fails together and then passes alone, look for a global the tests are logging in
-and out of, not for a bug in that module. The two auth tests above fail
-*serially* too, which is what separates the genuinely broken from the merely
-ordered.
-
-**And the same trap has a third crate in it: `-p warp_cli`.** Measured
-2026-08-31, by walking into it. The empty-approvals sentence was edited in
-`crates/warp_cli/src/local_control/commands.rs`; `-p local_control` and `-p warp
---lib` were run and both passed; the assertion on that exact string lives in
-`crates/warp_cli/src/local_control_tests.rs` and sat **red for several hours**,
-shipped in a commit whose body described the fix. Written by someone who had read
-the T8.6 warning below the same day. The string is now a `pub(crate)` constant
-asserted by reference rather than copied, which is the fix that survives the next
-person. **`cargo check --workspace --all-targets` does not catch this** — a
-stale `assert_eq!` compiles perfectly.
-
-**Adding a `warpctrl` action? Run `-p warp --lib` too, not just `-p
-local_control`.** The catalog count is pinned in *two* places: the fast one is
-`catalog_has_exactly_<count>_retained_actions` in
-`crates/local_control/src/protocol_tests.rs` — the number is part of the name, so
-grep `fn catalog_has_exactly` rather than pasting this — and its twin is
-`capabilities_advertises_the_complete_catalog` in
-`app/src/local_control/mod_tests.rs`.
-
-**`PAIRABLE_ACTIONS` is pinned by two tests, and this paragraph said it was
-pinned by none.** Corrected 2026-09-01 by calibration, after the wrong version
-had stood here for a day and was one step from funding a panel task to build a
-test that already existed. `a_paired_device_gets_the_read_surface_and_the_safe_half_of_answering`
-asserts the **whole list** against a literal slice — membership, not a count, so
-it is strictly stronger than the catalog pin above — and widening the list also
-reddens `saying_yes_does_not_travel_by_default_and_saying_no_does`, which holds
-the consent asymmetry. Both verified by making them fail: adding
-`ActionKind::AgentApprove` to the list fails exactly those two and nothing else.
-
-What *did* go stale for two days was the **count in this file**, and no test can
-pin prose — which is the whole reason this file keeps telling you to read a
-number off the test. The observation was right and the mechanism invented under
-it was not, the same shape as the discovery-record retraction above. T8.6 updated the first, left the second
-red, and shipped — because `cargo test -p local_control` takes a second and the
-app crate does not. `crates/warp_cli` holds two more guardrails: an
-exhaustive `match` over the CLI enum and a list requiring every action to have a
-parseable example.
-
-**Widening a shared type — or merging upstream — is gated by `cargo check
---workspace --all-targets`, not by the binary build.** Same failure mode as
-above, one level up. When the fork adds a variant to an enum or a field to a
-struct that upstream also constructs, the compiler finds every site *it
-compiles* — and `--bin warp-oss` compiles neither test code nor `warp_tui`.
-T10.1's merge landed three such breaks that git had merged perfectly cleanly:
-two new upstream TUI files matching exhaustively over `BlocklistAIHistoryEvent`
-(T8.3's `ConversationSettledChanged`), and six `AgentConversationData` literals
-in `crates/persistence` missing T8.3's `settled`. The persistence one **was
-already red before the merge** — T8.3 shipped a required field without ever
-compiling that crate's tests. A clean `cargo build` proves nothing here.
-
-**Measured 2026-09-04, and the headline number below is wrong by 2x: a single
-`rustc` on the `warp` crate holds 16.6 GB RSS, not 8.1.** Sampled every 10 s
-through an uncapped release build: peak **17,028 MB in one process**, and at
-that moment **exactly one `rustc` was running** — the app crate is the tail of
-the graph and compiles alone. 19.8 GB stayed available, swap moved 250 MB.
-This supersedes both the 8.1 GB figure and the unverified 13.7 GB one, and it
-names the crate, which neither of those did.
-
-**That makes the cap *more* defensible, not less, and it is the opposite of what
-this measurement was expected to show.** At 16.6 GB per large crate against
-~39 GB of guest memory, **two** concurrent large crates is the ceiling and three
-is the crash — so the mechanism recorded below is right and its arithmetic was
-optimistic by half. `-j 8` is safe not because eight jobs fit but because seven
-of the eight are small.
-
-**What this run does NOT establish is whether uncapping is safe, and the reason
-is the trap this file already names twice.** The build compiled **4 crates** —
-it was incremental against a Sep 1 tree — so `-j` was never the binding
-constraint, the sampled maximum concurrency was 7, and the run says nothing
-about the many-crates-in-parallel case that actually took the VM down. The
-command ran correctly and answered a question nobody asked. **A clean build is
-the test**, it costs 30+ minutes, and it carries the real risk; it has not been
-run. Until it is, treat the cap as unresolved rather than lifted, and treat
-"am I building on both sides at once?" as the question that matters more than
-either number.
-
-**Run 2026-09-11, and the cap is lifted: `-j` never stood between this build and
-the wall, at any width.** Clean `target/release`, uncapped `-j 32`, 1058 crates,
-7m16s. The entire parallel front summed to **9,229 MB across 21 concurrent
-compilers** — less than the `warp` crate compiling **alone** (12,706 MB exact,
-`/usr/bin/time -v`). `MemAvailable` bottomed at **25,871 MB** of ~39 GB, and it
-did so while exactly **one** compiler was running. Same shape the `-j 8` clean
-build found, now confirmed at four times the width.
-`.fork/runs/uncapped-2026-09-11/`.
-
-**The extrapolation this file carried was wrong, and how it was wrong is the
-transferable part.** *"Eight jobs averaged ~470 MB each, so thirty-two is
-~15 GB"* averaged the eight crates that happened to be resident when a sampler
-ticked. Uncapped, 31 compilers summed to 4,893 MB — **~158 MB each**. A wider
-front recruits *smaller* crates, because the big ones are the graph's tail and
-compile alone whatever `-j` says. So a per-job average measured at one width
-does not scale to another, and the paragraph above that reasons from one is the
-shape to distrust.
-
-**One cost, measured, and it runs the other way: uncapping raises the
-single-crate peak.** 11,342 MB at `-j 8` against **12,706 MB** at `-j 32`, same
-instrument, **+12%** — the jobserver bounds `rustc`'s *internal* codegen-unit
-parallelism, so a wider `-j` lets one `rustc` run more of its 64 units at once.
-`-j` does reach the app crate; it reaches it in the direction opposite to the
-one the cap was chosen for.
-
-**What survives untouched is the hazard that actually took the guest down**: an
-uncapped WSL build *concurrent with a Windows one*. That pressure is one level
-up, on the host's 64 GB, and the run above was deliberately the opposite — a
-clean host with nothing else on it. **"Never build on both sides at once" is now
-the only rule**, and `CARGO_BUILD_JOBS=8` is the knob for the cases where it
-cannot be honoured: a remote session where a dead VM costs the link, or a desk
-with something else memory-hungry running. `.fork/tools/build.sh` honours an
-environment cap and is otherwise uncapped; `build.ps1` stays capped, because
-this measurement was taken inside the guest and does not transfer.
-
-**Sampled again on the post-merge release build (2026-09-04, every 10 s across
-7m15s), and it confirms the mechanism while still not being the test.** Peak
-15.1 GB in one `rustc`, on the `warp` crate; `MemAvailable` never fell below
-**22.0 GB** of 39.2; swap moved 245 MB, which is nothing. The shape is the
-finding: **the app crate compiled alone for 35 of the 42 samples**, roughly six
-of the seven minutes. The `-j 8` phase at the front was eight genuinely small
-crates, the largest 1.3 GB.
-
-So *"`-j 8` is safe not because eight jobs fit but because seven of the eight
-are small"* now has numbers under it, and a sharper version: for most of a build
-of this shape **`-j` is not doing anything at all**, because there is only one
-job to cap. The cap earns its keep in the parallel front half, which is exactly
-the half this run made no demands of.
-
-**It is still not the clean-build test, for the same reason as last time.** The
-`target/release` directory was warm, so this measured the tail of the graph, not
-many large crates at once. Two instrument notes worth copying. The crate count
-was almost published as *"2 crates compiled"* — an artifact of piping the build
-through `tail -30` and then grepping the truncated log, which is the
-measuring-the-wrong-quantity error one layer down, in the *capture* rather than
-the command. And the sampler recorded the **maximum** single `rustc` RSS when
-the quantity that kills the VM is the **sum**; `MemAvailable` is what actually
-answered the question, and it was in the sampler by luck rather than design.
-
-**The instrument behind every number in this section counted `rust-analyzer` as
-a compiler, found 2026-09-09.** `.fork/tools/memsample.sh` selected processes
-with `ps -C rustc`, which on this procps is **not** an exact match — it also
-selects `rust-analyzer`, and one over this workspace holds **15-16.5 GB**. Every
-sample taken with an editor open added that to the totals and reported it as the
-heaviest single compiler. The fix is `ps -p $(pgrep -x rustc)`.
-
-The tell sat in the output for twenty minutes and was read past: rust-analyzer
-has no `--crate-name`, so its crate column reads `?`. **A row whose `max_crate`
-is `?` is not describing a compiler** — which is also why the rows above
-survive, since their peak sample names the `warp` crate and a rust-analyzer
-cannot.
-
-**Re-measured the same evening on a clean build with the corrected sampler, and
-the shape is the finding.** The `-j 8` parallel front — seven concurrent
-compilers — peaked at a **summed 3,287 MB**, heaviest single 911 MB. The `warp`
-crate then compiled **alone**, climbing 1.5 GB → **14,975 MB** over four minutes
-and still rising when the build was stopped, so that is a floor and not a peak.
-
-**The closest the machine came to the wall was while exactly one compiler was
-running**: `MemAvailable` bottomed at **8,198 MB** during the single-crate
-phase, against ~19,300 MB throughout the parallel one. So `-j 8` is not what
-stands between this build and the edge, and no value of `-j` would be — the
-ceiling is one crate that compiles by itself. What is still unmeasured is an
-*uncapped* front half: eight jobs averaged ~470 MB each here, and thirty-two of
-them together is the question the cap was actually chosen for.
-`.fork/runs/pricefetch-2026-09-09/memsample-fixed.tsv`.
-
-**And every number above is a 10-second sampler's, so every one of them is
-low.** Measured 2026-09-09, ten builds, `.fork/runs/profile-2026-09-09/`.
-Adjacent ticks near the app crate's peak swing 1.7 GB, so where the sampler
-lands decides the answer: two readings of *the same build* gave 15,587 MB and
-14,978 MB. **The exact peak is 15,809 MB**, and it comes from `/usr/bin/time
--v`, which reports the heaviest single descendant's RSS out of
-`getrusage(RUSAGE_CHILDREN)` with no sampling window at all — calibrated three
-levels deep against a program allocating a known 700 MB. Two identical
-baselines under it agreed to **6 MB** and produced byte-identical binaries. Use
-it for anything comparing one build to another; `memsample.sh` is still what
-gives the *sum* across compilers and the `MemAvailable` trace, and it takes
-`MEMSAMPLE_INTERVAL` now.
-
-**The app crate is bounded since 2026-09-09, and it took two lines.**
-`[profile.release.package.warp]` in the root `Cargo.toml` sets `debug = 0` and
-`codegen-units = 64`: **15,809 MB → 11,342 MB (−28.3%)**, 378 s → 305 s, and a
-binary 125 MB smaller. `opt-level = 2` (−567 MB) and `split-debuginfo =
-"unpacked"` (−359 MB, and it moved 45 KB of a 777 MB binary) were measured and
-refused. The argument for all four is in `Cargo.toml` beside the block, at
-length, because the next person to read a two-line profile override will
-otherwise assume it was guessed.
-
-Three things from it worth having outside that comment. **`debug = 0` on a
-*package* costs less than it reads** — `readelf` on the result shows full line
-tables for every dependency crate and **zero entries for `app/src`**, so a
-backtrace loses file/line in the app crate and keeps it everywhere else.
-**`codegen-units = 64`'s runtime cost is unmeasured**, and it is the first line
-to remove if a regression ever appears in the app crate; `debug = 0` alone
-still holds 2,302 MB of the 4,467. And **a per-package profile override cannot
-be delivered by an environment variable, silently**:
-`CARGO_PROFILE_RELEASE_PACKAGE_warp_DEBUG=0` is ignored with no error and rustc
-still gets `-C debuginfo=1`, while the whole-profile `CARGO_PROFILE_RELEASE_DEBUG=0`
-works and reaches every crate in the graph, so toggling it costs a full rebuild
-instead of one crate.
-
-**None of which is the largest lever available.** The same crate had 22,795 MB
-of headroom with no `rust-analyzer` resident and 8,198 MB with one. Killing an
-editor's language server is worth 14.6 GB — three times the whole profile
-sweep — so kill it before measuring anything, and report any profile saving
-against that or it will look better than it is.
-
-**The specific hazard to keep in view is not the VM's size, it is the host's.**
-Windows-side tests and builds draw on the same 64 GB, so an uncapped WSL build
-concurrent with a Windows build is the exact scenario that took the guest down —
-and it is the one case the extra guest headroom does not help with, because the
-pressure is one level up. Treat "am I building on both sides at once?" as the
-question, not "how much has WSL got?".
-
-**And that question has an answer you can run, which is the half this paragraph
-was missing until 2026-09-09.** A clean build was started that day on the
-strength of `free -m` *inside the guest* — 22 GB available, which reads as a
-green light — while the host was at **60 GB of 64**. The maintainer said so and
-that is how it was caught. The guest structurally cannot see the hazard; that
-is what makes it one. From inside WSL:
-
-```bash
-powershell.exe -NoProfile -Command "$os = Get-CimInstance Win32_OperatingSystem;
-  ($os.TotalVisibleMemorySize - $os.FreePhysicalMemory)/1MB"
-```
-
-Measured the same evening, after the build and the language server were killed:
-host 63.8 GB total, 43.6 used, `vmmemWSL` still holding **19.5 GB** it had not
-returned, and `llama-server` holding **10.2 GB** by design and permanently.
-Two consequences. WSL gives memory back slowly, so the host number lags what
-the guest freed, and a build started on a fresh `free -m` can be starting into
-an occupied host. And **the guest's own residents have to go first** — a 15 GB
-rust-analyzer beside a build is not merely pressure, it is a confound that
-makes the measurement meaningless even when the build finishes.
-
-**Cap the release build: `CARGO_BUILD_JOBS=8 cargo build --release …`.**
-*(Superseded 2026-09-11 — see the resolution above. The account below is why the
-cap existed and is kept because the crash it describes was real.)*
-Measured 2026-08-29 on WSL: an uncapped release build **took the whole VM down**
-— the guest came back at `up 1 min` with an empty `dmesg`, which is the
-signature of the VM dying rather than Linux OOM-killing a process. A single
-`rustc` compiling the `warp` crate holds **~8.1 GB RSS**, and cargo defaults to
-one job per core (32 here), so several 8 GB-class crates reach codegen together
-and exhaust the VM's 31 GiB. At `-j 8` the same build finished with 19 GiB still
-free. `[profile.release]`'s own comment in `Cargo.toml` records this hazard from
-the CI side — *"OOM-killing release builds"* — so it is one failure with two
-faces, and the guest-side face is worse because it takes the session with it.
-The host has 64 GB and had **no `.wslconfig` at all**, so the VM's 32 GB was
-WSL2's default half-of-host rather than a chosen value; one now exists with more
-headroom and real swap. The `autoMemoryReclaim` line in it sat under `[wsl2]`, where WSL refuses it, from the day it was written until 2026-09-07, so that half was never in force; it is under `[experimental]` now, and the swap file is on X: (`.fork/runs/wsl-move-2026-09-07/`).
-
-**And read the two numbers above as pre-fix.** The 32 GB and the `-j 8` that was
-landed on after repeated OOM crashes both describe the VM *before* the
-`.wslconfig` existed. Today `memory=40GB` with `swap=16GB`, so the cap is running
-with headroom it was not chosen against. A single `rustc` was sampled at
-**13.7 GB RSS** on 2026-08-30 with swap at 12.8/16 GB — but **which crate that
-was compiling was not verified**, so it is not a like-for-like replacement for
-the 8.1 GB figure and is recorded only as evidence that 8 GB is a floor rather
-than a ceiling. Re-measure properly before re-tuning the cap.
-
-**And the prefix defeats the person's own allow rule — measured 2026-09-03.**
-Claude Code matches `Bash(cargo:*)` against `cargo …` and not against
-`CARGO_BUILD_JOBS=8 cargo …`; its docs say an allow rule *"won't match past an
-assignment of any other variable"*. Probed at `claude-agent-acp` 0.73.0 in
-session mode `default`, the bare command raised 0 permission requests and the
-prefixed one raised 1. **Seven of run 2's 44 asks were exactly this** — cargo
-commands the maintainer had already allowed, asked about again because this
-file told the agent to type the prefix. The rule form that survives it is
-`Bash(CARGO_BUILD_JOBS=8 cargo:*)`, measured 0 requests in this repo, and the
-docs are silent on it; the other remedy is `jobs = 8` under `[build]` in a
-cargo config, which retires the prefix and this instruction with it. Neither is
-a Warp change. Account in `.fork/runs/classifier/README.md`.
-
-**`cargo clean --release` breaks the WSL remote-development server, and it
-surfaces as a network error.** Measured 2026-09-09.
-`~/.warp-dev/remote-server/warp-oss` is a **symlink into
-`target/release/warp-oss`** — the manual's staging recipe, because on the Oss
-channel there is nothing to install from. Clean the target and the symlink
-dangles, so every WSL pane's auto-connect fails at spawn with *"Response channel
-closed before receiving a reply"*, which Warp's banner renders as **"Failed to
-start SSH extension"** and which reads like a broken tunnel. File browsing and
-code review in WSL panes fall back to 9p until a release build exists again.
-
-Two things follow. **Before `cargo clean --release`, know that you are also
-uninstalling the daemon** — and a warm `target/release` is what makes an
-app-crate re-measurement cost four minutes instead of half an hour, so cleaning
-is expensive twice over. And **when that banner appears, read the log rather
-than the network**: `grep -i 'remote server' <log>` names the real failure on
-the line above.
-
-**Never share `CARGO_TARGET_DIR` between two checkouts of this workspace.**
-Measured 2026-08-24: running a baseline in a `git worktree` with the main tree's
-target directory (to save disk) left artifacts that did not match either tree,
-and the damage was *silent* — the next build failed with
-`no variant or associated item named CtrlCCancelsThirdPartyHarness found` and
-`no field 'inviteLink' on the GraphQL type 'Team'`, both pointing at source that
-was correct on disk. Worse, it invalidates verification done before it: a
-`cargo check --workspace --all-targets` that passed only proved the *cache* was
-consistent. Give the worktree its own target directory and accept the disk, or
-measure the baseline by stashing in place.
-
-**A cargo *feature* enabled by one dependency changes how another crate
-behaves, and nothing in the diff shows it.** Found 2026-08-31 and it is the
-fork breaking the fork: `agent-client-protocol`, added for T14.5, enables
-`serde_json/preserve_order`. Cargo unifies features across the whole build, so
-`serde_json::Map` became an insertion-ordered `IndexMap` **everywhere** —
-including `drive/local_sync/format.rs`, which relied on it being a sorted
-`BTreeMap` to emit stable bytes. A git-backed sync silently started producing a
-different byte stream for identical content: spurious diffs and avoidable merge
-conflicts, in the one feature whose whole job is to be diffable. **No line of
-`local_sync` changed.**
-
-The tripwire existed and fired: `json_payload_keys_are_sorted_not_insertion_ordered`
-says in its own comment *"pinned because the workspace enabling `preserve_order`
-would silently make every file's byte-stability depend on hash iteration"*. Three
-tests had been red for an unknown period, and nobody had run `-p warp --lib
-local_sync` after adding ACP. **The guard worked; the habit around it did not** —
-and `cargo build`, `cargo check --workspace --all-targets` and every gate in this
-file are all silent, because a feature flip is not a compile error.
-
-Fixed by sorting explicitly at the seam rather than by fighting the feature: the
-ACP crate needs it, unification means it cannot be turned off for one crate
-anyway, and **a module that must produce stable bytes should not depend on a
-global default to get them.** The general rule: if your output's byte-stability
-comes from a dependency's default, pin it locally or it is one `cargo add` away
-from changing.
-
-**And the fork already knew this.** `tool_digest.rs`'s `canonical_json` sorts
-explicitly, with a doc naming the hazard exactly — *"if any crate in the graph
-ever turns it on, every stored digest silently stops matching and every server
-reads as a rug-pull"*. Same hazard, two modules: one defended in code, one
-defended only by a test. The feature got turned on and the defended one was fine.
-**Swept afterwards and there is no third**: `approvals::digest_of` and `graph`'s
-fingerprint both hash field-by-field over strings, so neither can be reordered.
-
-**A build script that reads a file it does not `rerun-if-changed` is a merge
-trap.** `crates/graphql/build.rs` registers a schema from
-`../warp_graphql_schema/api/schema.graphql` and watched only itself, so an
-upstream merge that changed the queries *and* the schema together left a stale
-registration in `OUT_DIR` and failed with "no field X on type Y" against a schema
-that has the field. Fixed in both graphql build scripts (T11.1). If you add one,
-declare every input.
+**Build with `--features gui,warp_control_cli`, and stop a running Warp with
+`warpctrl window close`** (`CloseMainWindow` on Windows) — never `kill`, which
+leaves a crash-recovery sibling holding the ports. `ok: true` from that call
+means only that the request was dispatched, not that the window closed; a CLI
+agent alive in a pane or a wedged ACP turn each block it silently, with none
+of `agent list`'s instruments lighting up, so end the agent or `agent cancel`
+first. Two discovery registries exist on one machine
+(`$XDG_RUNTIME_DIR/warp/local-control` vs `$HOME/.warp/local-control`), and a
+`no_instance` from one while a Warp runs in the other is indistinguishable
+from a genuinely absent Warp until you check which directory was searched.
+`WARP_FORK_POLICY=0` still needs a shutdown plan — a policy-off instance holds
+upstream's `9282` with an empty discovery directory, so `warpctrl` cannot see
+it, but you usually don't need the GUI at all: `--warpctrl` runs
+`init_feature_flags` before it dispatches, so a headless
+`WARP_FORK_POLICY=0 warp-oss --warpctrl instance list` A/Bs any flag with no
+window and no port. **`.fork/docs/warpctrl.md` has every wrong version of
+"why won't it close" this file cycled through** — the discovery-record
+correction that took two attempts, the credential-broker explanation that
+stood wrong for a week, and the orphaned-listener trap on Windows.
+
+**Whether a denial or a refusal costs the whole turn is a fact about the
+agent you named, not about the fork** — `opencode` goes silent after a `no`
+where `claude-agent-acp` answers around it, though Warp sends the identical
+per-call rejection to both; and a turn can report `status: success` while a
+denial ~90 seconds in left no answer at all, so read the output rather than
+the status. The Claude Code plugin (OSC 777 hooks) must already be loaded
+when a CLI agent starts or `agent approvals` stays silently empty, and its
+permission payload carries no call id and cannot answer — a hook that only
+reports is not the same limitation as a fork that cannot listen.
+`opencode.json`'s `bash` permission map has two footguns that read backwards
+(later keys win; an unmatched command defaults to *allow*, not *ask*) but
+does decompose a compound command and check every segment, so `&&` cannot
+smuggle a denied command past an allowed one. `external_directory` grants and
+bash allows are two separate doors that do not compose — a grant on the
+file-reading door does nothing for the same path reached through a shell
+call. And the fork's transports (`local_agent`, `acp_agent`) never re-emit a
+tool call as an `Action` message, because the agent already ran it — the
+transcript prose is the record on these paths, by design, not an omission.
+**`.fork/docs/agent-transports.md` has the full account**: the refusal table,
+the plugin's TR-EVENTS-B measurement, the bash-map traps and the four
+commands (`ls`/`wc` allowed, `find`/`cat`/`grep` refused) that did not get the
+same answer, and why steering in a prompt is worth writing but not worth
+relying on.
+
+**An agent in the panel works in the *pane's* directory, and that directory
+has two sources you did not choose.** `warpctrl input submit 'cd
+/home/effatha/git/warp'` before the first prompt, or an ACP agent silently
+resolves its own permission config from the wrong place too. A fresh pane
+*inherits Warp's own process cwd*; a **restored** pane keeps whatever
+directory it had last launch, which is invisible in the launch command and
+survives a reboot — this line said "a fresh pane starts in `$HOME`" until
+2026-09-01, which was true only when Warp itself had been launched from
+`$HOME`. Reading `/proc/<pid>/cwd` measures the shell, not the agent; they
+usually agree and are not the same quantity. For a genuinely clean test
+profile, point `XDG_CONFIG_HOME`/`XDG_STATE_HOME` at a scratch directory
+(never edit the user's own `settings.toml`) and seed
+`$XDG_CONFIG_HOME/warp-oss/user_preferences.json` with
+`{"prefs": {"HasCompletedOnboarding": "true"}}` — the directory is
+`warp-oss` not `warp-terminal`, and the key must sit inside `prefs` or it is
+silently discarded. `.fork/docs/agent-transports.md` has the full table and
+both traps.
+
+**Verify a build before trusting a run, and know which checkout you are
+asking.** On Linux, `date -r target/release/warp-oss` against the newest file
+you touched catches a run against a stale pre-fix binary — a compile is a
+mutation with a long latency and no completion signal of its own. **On
+Windows that check is meaningless**: `C:\dev\warp` is a separate clone with
+no sync step, so check the commit (`git -C /mnt/c/dev/warp log --oneline -1`)
+and sync by the side whose `git` you are holding — WSL fetches the Linux path,
+PowerShell fetches `origin`. `.fork/docs/build.md` has both commands and the
+symlink recipe for Developer Mode's Git-for-Windows/PowerShell split.
+
+**Never `pgrep -f` a pattern your own command line contains** — a wrapping
+`bash -c` matches its own argv. Match something narrower, or check the thing
+you actually care about.
+
+**Diff test-failure *membership*, not counts.** A 9-failure swing between runs
+is normal weather here (`-p warp --lib`'s known flaky set, mostly shared
+login-state tests in `ai::mcp::file_based_manager` that pass serially and
+alone). Baseline on a *union* of at least two runs, or a flaky pass in a single
+baseline run promotes an old failure to a fresh "regression".
+
+**A catalog count or an allowlist is pinned by a test, never by this file.**
+`warpctrl`'s action count and `PAIRABLE_ACTIONS`' membership are each asserted
+in two places (`fn catalog_has_exactly_*`, `a_paired_device_gets_the_read_surface…`)
+— grep the test name, don't paste the number; it goes stale here on exactly
+the schedule this warning is about.
+
+**Widening a shared type, or merging upstream, needs `cargo check --workspace
+--all-targets`** — `--bin warp-oss` compiles neither test code nor `warp_tui`,
+so a clean binary build proves nothing about either.
+
+**Cap a WSL release build only when you cannot avoid building on both sides at
+once: `CARGO_BUILD_JOBS=8 cargo build --release …`.** Uncapped, `-j` was
+measured clean at full width on 2026-09-11 and never stood between the build
+and the VM's wall — the actual ceiling is the `warp` crate compiling alone,
+which no `-j` value changes. What still takes the guest down is a WSL build
+concurrent with a Windows one, which is pressure on the *host's* memory and
+invisible from inside the guest. `[profile.release.package.warp]` bounds the
+app crate's own peak (`debug = 0`, `codegen-units = 64`, −28%); killing a
+resident `rust-analyzer` first is worth three times that. `.fork/docs/build.md`
+has every number and the two wrong extrapolations that preceded this.
+
+**`cargo clean --release` dangles the WSL remote-server symlink** and surfaces
+as *"Failed to start SSH extension"*, which reads like a network fault — read
+the log (`grep -i 'remote server'`) before the network.
+
+**Never share `CARGO_TARGET_DIR` between two checkouts of this workspace.** A
+shared cache can pass `cargo check --workspace --all-targets` while holding
+artifacts that match neither tree.
+
+**A cargo *feature* enabled by one dependency can silently change another
+crate's behaviour.** `agent-client-protocol` turned on `serde_json/preserve_order`
+workspace-wide, which broke `local_sync`'s byte-stable output with no line of
+`local_sync` changed and no compile error anywhere. If a module's output must
+be byte-stable, sort explicitly at that seam — do not rely on a dependency's
+default to stay off.
+
+**A build script must `rerun-if-changed` every file it reads, not just
+itself** — `crates/graphql/build.rs` watched only itself and shipped a stale
+schema registration across a merge that changed both the queries and the
+schema.
+
+**`.fork/docs/build.md` carries the account behind every rule above**: the
+measured crash that justified the original cap, the two wrong extrapolations
+from it, and the clean uncapped run that retired it. Read it before re-tuning
+`CARGO_BUILD_JOBS` or re-opening the `-j` question — the next move is running
+the uncapped build on both sides at once, deliberately, not re-reading numbers.
 
 **Merging upstream: watch the overlap, not the divergence.** `git merge-base
 upstream/master dev` computed, never pasted (see *Method*), then the file sets
@@ -1840,119 +882,21 @@ edges, so `rustfmt some_mod.rs` silently rewrites `some_mod_tests.rs` too.
 Whichever you run, check `git status` afterwards and revert files you did not
 mean to touch.
 
-**Reaching the console from a phone: three things, and the VPN is not one of
-them.** Measured 2026-08-30, end to end — a phone on the LAN loaded the console
-and paired, *with ProtonVPN connected*. **This retracts the claim in
-`67fbe4921`'s body that ProtonVPN blocks LAN traffic.** It does not; the pairing
-failures that produced that claim were `no_instance` — Warp not being alive at
-the moment the phone tried — which was then watched happening live. The LAN
-route being intact was read as evidence about the VPN when it was evidence about
-nothing.
-
-What is actually required:
-
-1. **`networkingMode=mirrored`** in `.wslconfig`, which puts the WSL listener on
-   the Windows stack and gives it a real LAN address (`192.168.254.3` on `eth0`,
-   not a WSL-private `172.x`).
-2. **An inbound Windows firewall rule for the port**, and it is needed — verified
-   present with `Get-NetFirewallRule -DisplayName '*warp*'`.
-3. **Warp actually running.** Backgrounding the launch from a shell that then
-   exits does not keep it up, and from the phone that is indistinguishable from a
-   network block.
-
-**There is an Android emulator now, and it is the phone until a phone turns
-up.** `.fork/tools/phone.sh`, Windows-side (WSL cannot reach the wide
-listener; the emulator's NAT rides the Windows stack), AVD `warp_phone`; the
-manual's "A phone that is not a phone" has the traps. Measured with it
-2026-09-06: the authority installs through Settings, the link opens with no
-warning, the page pairs, Yes and prompts land `via paired_device`, the install
-opens standalone. Two things it settled that the desk could not: **Chrome on
-Android has no `Notification` constructor** (the console posts through
-`/sw.js` now), and **with Chrome in the background as an app Android does not
-run the page**, so a foreground notification reaches a phone whose Chrome is
-open on another tab and never a phone in a pocket. That second one is the
-push opt-in's whole case, and it stays unbuilt by decision.
-
-**Pin the port, and not only for the reason recorded above.** The firewall rule
-names one port, so an *ephemeral* port is refused outright rather than merely
-producing a stale saved URL. `WARP_FORK_CONTROL_BIND=192.168.254.3:41234`.
-
-**And since 2026-09-08 the console is off the LAN, on a tailnet address, with
-no change to Warp.** `warpdev.ps1 -Console` defaults `-Bind` to `tailnet`,
-resolved from `tailscale ip -4` at launch, and stops the launch when there
-is no address rather than binding one a saved URL does not name. The Tailscale
-adapter is a Private network on Windows, so the 41234 rule above admits it
-unchanged. Measured the same day with ProtonVPN connected: the PC sits behind
-a symmetric NAT at Proton's exit and every packet to the phone crosses
-Tailscale's DERP relay, 240-590 ms, never direct; a conversation was still
-handed to the phone and driven from it through that relay
-(`.fork/runs/reach-2026-09-08/`). The coordination server is Tailscale's own
-for now, one free account, a stop-gap the maintainer chose on the day;
-headscale on a VPS is the destination and `.fork/reach.html` carries the
-choice, the refusals (Cloudflare Tunnel decrypts at its edge and reads every
-prompt) and the ops steps. `winget`'s id is `Tailscale.Tailscale`, case
-included; the lowercase form the manual carried answers *No package found*.
-
-**Check Warp is alive before diagnosing the network.** `pair show` answering
-`no_instance` is the whole diagnosis; a phone that cannot load the page tells you
-nothing about why until you know there was something to load.
-
-**What the pairing path does and does not defend — three corrections, audited
-2026-08-30.** Each was believed in this session before it was read:
-
-- **The control server was plaintext HTTP until 2026-09-06.** `pairing.rs`
-  built `http://{origin}{path}#{secret}` and `discovery.rs:82` the same; there
-  was no TLS anywhere in the control plane, and on a home LAN that was an
-  accepted residual. **The wide listener speaks TLS now** (T19,
-  `app/src/local_control/tls.rs`): an authority Warp mints once under
-  `fork::state_dir()`, a server certificate per launch for the bind address,
-  and the same port answering plain HTTP with the authority at `/ca.crt` and
-  an install page, nothing else. The phone installs the authority once and
-  `https://<bind>` is a secure context with no warning. Loopback stays plain,
-  so `warpctrl` and the discovery record are untouched. What is still true:
-  the token and every approval payload are in the clear to a phone that never
-  installed the authority and tapped through the warning instead, and the
-  digest argument below is unchanged.
-- **`tool_digest.rs` contributes nothing to this threat model.** It is TOFU
-  pinning of **MCP tool definitions** — it hashes what a server advertised at
-  connect, diffs on the next connect, and *warns*; its own docs say
-  "deliberately not a block". It never sees an approval, a paired device or a
-  network path. The digest that guards a phone's yes is `digest_of` in
-  `handlers/approvals.rs`, a different mechanism that merely shares a shape. Do
-  not credit one for the other's job.
-- **And the approval digest does not defend against an active network
-  attacker.** It binds a yes to the request *the server showed*, which stops a
-  stale phone answering yesterday's prompt — genuinely valuable. But it is
-  computed server-side and echoed back, so a MITM on a plaintext path can show
-  the phone a benign summary beside the real digest and the thumb binds
-  perfectly to the nasty request. **It binds server-state to server-state; it
-  never binds what the human saw.**
-
-The remedy for all three was transport encryption, and since 2026-09-06 the
-wide listener has it (above). A Tailscale address is still *one literal IP*
-and so fits `WARP_FORK_CONTROL_BIND`'s parser unchanged for reach — binding
-it is **narrower** than the LAN bind, not wider, and retires the
-mirrored-networking firewall rule. Prefer it as a *replacement* bind, never an
-addition, and never a port-forward.
-
-**An instrument narrower than the thing it stands in for passes what the
-thing fails, measured 2026-09-06 twice in one day.** `curl.exe` drove the
-whole TLS flow green in the morning; the first browser to reach the same
-listener was refused every request, *Host header is required*, because it
-negotiated HTTP/2 from the ALPN list and over h2 the authority is a
-pseudo-header the `Host` check never sees, while `curl.exe` offers HTTP/1.1
-only. And `curl.exe` is Schannel, which refuses a private authority's chain
-outright (`CERT_TRUST_REVOCATION_STATUS_UNKNOWN`) where every phone accepts
-it, so the first driver pass read `000` on every TLS line and looked like a
-broken server. Neither was the fork; both were the stand-in. When the real
-client is a phone, put a browser in the loop before believing curl, and read
-what protocol it negotiated (`.fork/runs/page-2026-09-06/`,
-`.fork/runs/tls-2026-09-06/`).
-
-**`DEVICE_LIFETIME` is 12 hours** (`pairing.rs:116`), so a phone paired at
-breakfast is unpaired by dinner, and re-pairing needs a locally-authenticated
-`warpctrl` to mint the code. Plan for that before relying on a paired phone for
-a working day.
+**Reaching the console from a phone, and the real remote backstop: both are
+written up, not repeated here.** The console needs mirrored WSL networking, a
+Windows firewall rule for the bound port, and Warp actually running — three
+things, none of them the VPN. It now speaks TLS (an authority Warp mints
+itself) and sits on a Tailscale address rather than the LAN since 2026-09-08.
+An Android emulator stands in for a phone today (`.fork/tools/phone.sh`). The
+paired console reaches seven `warpctrl` actions (eight with
+`WARP_FORK_REMOTE_APPROVE`); SSH reaches all 115, because authority follows
+credential strength — a QR code is a bearer token shown to a room, an SSH key
+is held by one device. `.fork/docs/remote-control.md` has the TLS mechanics,
+what the approval digest does and does not defend against, and the action
+count's history. `.fork/docs/away-from-desk.md` has the SSH setup recipe and
+its four traps (a firewall rule is per-port; `authorized_keys` can silently be
+a directory; `BatchMode=yes` swallows a passphrase prompt, not just a
+password).
 
 **A git worktree is workflow insulation, not security insulation, and calling it
 "insulated space" for an agent is actively misleading.** An agent with shell
@@ -1966,136 +910,20 @@ available is a **word until one calibrated test** — a sandboxed command
 attempting a write outside the project and a network call, both confirmed to
 fail — has been run.
 
-**There is a second binary, it is upstream's, and fork policy does not reach
-it — but the telemetry backstop does.** `crates/warp_tui` builds
-`warp-tui-oss`, described as *"Warp Agent CLI"*. Built and run for the first
-time 2026-08-30; nothing in this repo's docs had mentioned it.
-
-- **Build it the way `script/run-tui` does**: `--features standalone`, without
-  which `bundled_resources_dir()` cannot find the sibling `resources/` and the
-  binary cannot locate its skills. 9m18s at `-j 8`.
-- **It runs.** Alt-screen, mouse tracking, and then a spinner. **Measured by
-  I20**: the spinner is a device-code OAuth account gate, not a model
-  credential — `--set-provider-api-key <openai|anthropic|google|grok>` and
-  `--api-key` (`WARP_API_KEY`) are a separate path and do not bypass it.
-- **It was not a fork surface, and this bullet said so for eleven days after it
-  stopped being true.** The evidence was a grep: `fork::`, `acp_agent`,
-  `local_agent` and `generate_multi_agent_output` return **nothing** in
-  `crates/warp_tui/src/`. All four greps still return nothing, and the
-  conclusion drawn from them was wrong, because **`crates/warp_tui` depends on
-  the app crate** — `warp = { workspace = true, features = ["tui"] }` at
-  `Cargo.toml:73`. The binary's entry point is `app/src/tui/mod.rs`, where
-  `fork::` is in scope and always was. A grep over the library answered a
-  question about the library; the question asked was about the binary.
-
-  **I20 lifted the account gate in `e4f52077a`.** `initial_login_phase` consults
-  `fork::account_gate_bypassed() && fork_agent_will_answer()` — deliberately
-  conjoined, because the gate is load-bearing for Warp's own cloud agent and
-  merely cosmetic for the fork's transports, which intercept before `ServerApi`
-  is reached. Measured with it in place: the TUI opens on *"Not signed in"*, 22
-  skills discovered, **a fork ACP agent answers, and a permission request parks
-  correctly.** The consent architecture was intact in a binary the fork had
-  never run.
-
-  `warpctrl` was absent from it until 2026-09-11 and is now in, for the cost I20
-  predicted: a `LaunchMode::Tui { .. }` arm on the `matches!` at
-  `app/src/lib.rs`, and `warp_control_cli = ["warp/warp_control_cli"]` in
-  `crates/warp_tui`'s features, forwarding like `voice_input` beside it. Build
-  it with `--features standalone,warp_control_cli`. **Measured, not reasoned**:
-  the TUI process publishes a discovery record and a broker socket within a
-  second of launch, advertises all 115 actions, and answers `agent.approvals`
-  and `agent.list` from a `warpctrl` in another shell — which on a phone over
-  mosh+tmux is a second pane.
-
-  **What that buys is a *server*, not an answerer, and the distinction is the
-  safety argument.** Consent stays a typed command in a different process, so
-  I20's type-ahead hazard is not taken on: it belongs to an **in-TUI keypress
-  prompt**, where an Enter already sitting in the input buffer when the prompt
-  takes focus is a yes nobody gave. Nothing here puts a prompt in that terminal.
-  Anything that later does must answer that hazard first, and I20 says to
-  measure it rather than reason about it.
-
-  **Still unverified**: the end-to-end park-and-approve *inside* a TUI session —
-  a real ACP permission request parked there and answered from another shell.
-  The channel is proved; that loop is not.
-
-  The old sentence is kept above rather than deleted because its *rule* is still
-  right and only its example rotted: do not assume a fork behaviour holds in the
-  TUI because it holds in the GUI. Check `app/src/tui/`, not `crates/warp_tui/`.
-- **The one thing that does carry over is the important one.** The telemetry
-  deny-list is in `crates/egress_policy` (it was `http_client`'s own
-  `egress.rs` until 2026-09-09), consulted from `http_client` at `lib.rs:378`,
-  and `egress_policy::is_active()` reads *only*
-  `WARP_FORK_ALLOW_TELEMETRY_EGRESS`, with no reference to the app's
-  `fork::is_active()`. `warp_tui` takes `http_client.workspace = true`. **So the
-  backstop is on by default in any binary that links the shared client,
-  including this one.** Putting that policy below the HTTP client rather than in
-  the app's seam is why the fork's strongest claim survives into a binary the
-  fork never edited — worth remembering the next time a policy could go in
-  either place.
-- **On-thesis, with a caveat.** `--set-provider-api-key` is the user's own key,
-  stored locally, which is the thesis nearly verbatim. But the agent behind it
-  is *upstream's*, not the fork's, so a TUI session is a different stack from a
-  panel session and none of T14's consent work applies to it.
-
-**The real remote backstop is SSH, not the console — and it is set up as of
-2026-08-30.** A phone in Termux runs `ssh warp` and gets a shell, key-only, no
-prompt. That reaches **all 115 `warpctrl` actions**, against **seven** through a
-paired console — eight if `WARP_FORK_REMOTE_APPROVE` is set, which adds
-`agent.approve`. This line said "five" until 2026-09-01: T14.21 added
-`agent.cancel` and updated the module's own docs without updating this file.
-The seventh is `agent.trace` (2026-09-05), the conversation's record for the
-console's live view, and the widest read a phone gets; the argument is beside
-the entry in `pairing.rs`. **And a code minted for one conversation buys two
-more, `agent.prompt` and `agent.approve`, confined to it on the grant** --
-the fork's `/remote-control`, `.fork/docs/remote-control.md`; the watch list
-above is what `pair show` without `--conversation` still mints.
-**Read the count off `PAIRABLE_ACTIONS` in `app/src/local_control/pairing.rs`,
-never off this sentence** — the same rule this file already states for the 114,
-and for the same reason.
-
-**That asymmetry is the principle, not an inconsistency.** `PAIRABLE_ACTIONS` is
-narrow because the *credential* is weak — a QR code is a bearer token displayed
-to a room and spendable by anyone who photographs the screen inside its two
-minutes. An SSH key is a strong credential held by one device. Same person, same
-phone, different authority, because authority follows credential strength. Reach
-for this whenever "why can't the phone do X" comes up: the answer is almost
-always about the credential, not about phones.
-
-The setup, in the order that does not lock you out:
-
-1. Key on the phone (`ssh-keygen -t ed25519` in Termux), its **public** half
-   appended to `~/.ssh/authorized_keys` — `700` on `~/.ssh`, `600` on the file.
-2. **Open the port before disabling passwords**, not after. The password
-   fallback is the safety net that lets you debug a failing key path; removing
-   it first means the only way to test is also the way that can strand you.
-3. `New-NetFirewallRule … -LocalPort 22 -RemoteAddress 192.168.254.0/24` — scope
-   it to the subnet rather than `Any`.
-4. Verify the host key fingerprint **out of band** (`ssh-keygen -lf
-   /etc/ssh/ssh_host_ed25519_key.pub`) instead of accepting the TOFU prompt
-   blind.
-5. Only then `/etc/ssh/sshd_config.d/10-keys-only.conf` with
-   `PasswordAuthentication no`, keeping one session open while you reload.
-
-**Four traps, and three of them produced a confident wrong diagnosis first:**
-
-- **A firewall rule is per *port*.** The 41234 rule for the console did nothing
-  for 22, and a *dropped* packet gives no refusal — just a silent hang that
-  reads exactly like a broken key or a hung shell. Check
-  `Get-NetFirewallRule … LocalPort -eq <port>` before debugging anything above
-  the network.
-- **`~/.ssh/authorized_keys` was a *directory*** containing a copied pubkey, so
-  sshd had never read it and key auth had never worked. `[ -f authorized_keys ]`
-  reports "missing" for a directory, which reads as "not set up" rather than
-  "set up wrongly". Look at the target before writing to it — `chmod 600` on a
-  directory strips its traversal bit.
-- **`BatchMode=yes` blocks the passphrase prompt, not just the password one.**
-  Chosen to prove a key rather than a password, it produced a false negative on
-  a passphrase-protected key: `debug1: Server accepts key` followed by failure
-  means `authorized_keys` is *correct* and the client could not sign.
-- **`-tt` is not needed for an interactive login** — ssh allocates a TTY when
-  stdin is one. `-t` is for a *remote command* that needs a terminal, which is
-  how the TUI would be run over SSH.
+**There is a second binary, `crates/warp_tui`, and it turned out to be a fork
+surface after all — this line said otherwise for eleven days, because a grep
+over the library answered a question about the library when the question was
+about the binary it links into.** `warp_tui` depends on the `app` crate, so
+`fork::` and the account gate bypass are in scope in `app/src/tui/mod.rs`
+regardless of what `crates/warp_tui/src/` alone shows. Built with
+`--features standalone,warp_control_cli`, it now publishes a discovery record
+and answers `warpctrl` like any other instance — a *server*, not an answerer,
+so consent still stays a typed command in a different process. The telemetry
+deny-list is on by default in it too, because that policy lives below
+`http_client`, not in the app's own seam. **`.fork/docs/agent-transports.md`
+has the full account**, including what is still unverified: an ACP permission
+request parked and answered from a shell while the TUI holds the prompt, end
+to end, inside one session.
 
 **There is a browser, and it is on the Windows side.** `/mnt/c/Program Files`
 holds Firefox, Brave and Zen, and Windows reaches the WSL wide listener — so a
@@ -2144,71 +972,16 @@ gets the real contents without raising or focusing anything. The id changes ever
 launch, so read it rather than remember it; Warp is the child sized like a window
 (`1246x802+1089+596`), among Weston's own 1x1 and 10x10 stubs.
 
-**A WSL pane's files are not where the session says they are, and `warpctrl
-session inspect` is now the way to ask.** Since 2026-09-05 a WSL pane attaches
-its server itself when the shell bootstraps (`WARP_FORK_WSL_AUTO_CONNECT`,
-`.fork/docs/wsl.md`), so `local` on a fresh pane means the connect *failed*
-and the log has a `Remote server connection failed` line saying why. The first
-run of that connect deleted the hand-staged daemon symlink through upstream's
-version-mismatch repair, which is the kind of thing this file exists to
-record: a remedy built for a channel with a CDN ran on one without. It reports `filesystem` as
-`{"where": "local"}`, `{"where": "host", "host_id": …}` or
-`{"where": "unreachable"}`. Reach for it before theorising about why a tree is
-slow or a file tool is missing: a WSL session keeps `SessionType::Local` even
-when Warp has routed it to a server inside the distribution, so **nothing else
-in any payload distinguishes a routed session from an ordinary one**. Before
-T16 phase 2 the only way to tell was to read the app log for a
-`Remote server connected` line and then infer, from the *absence* of
-`repo_metadata::local_model` lines, that no walk had happened — an inference
-from a missing log line, which is the shape of mistake this file already
-records twice.
-
-**The diff panel works in a WSL pane either way, and the "never finishes" this
-file's neighbours carried for the unrouted case did not reproduce.** Measured
-2026-09-05 on the Windows debug build: routed, the remote diff stack built for
-SSH drew this repo's changes within 8 s of their being made outside the pane;
-unrouted (`WARP_FORK_WSL_AUTO_CONNECT=0`), the same panel drew them over
-`\\wsl$` 3 s after the `cd`, with the full 6505-file walk done in 27 s. What
-the friction-log screenshot was showing is therefore not established. What
-did change (`099b26ea5`): the tree, search and the diff panel used to take a
-WSL pane as *unsupported* from `is_wsl()` alone, so a routed pane looked
-exactly like an unrouted one to all three; they now ask
-`session_filesystem`, a routed pane is a remote session with a server, and the
-unrouted fallback names the 9p read instead of blaming WSL. `.fork/docs/wsl.md`
-has the three screenshots by name.
-
-**A routed buffer has a language server since 2026-09-05, and it is the
-distribution's own.** The shape is the smallest one that was still the idea:
-every key in Warp stays a Windows path, a workspace inside a distribution is
-the `\\wsl$\<distro>\...` spelling the fork already keys on, and
-`crates/lsp` spawns `wsl.exe -d <distro> --shell-type login -- <binary>` with
-that root as cwd and translates `\\wsl$\...` to `file:///...` and back at
-one seam (`UriMapper`). Measured before designed: a Windows process driving a
-distro-spawned `rust-analyzer` answered a definition in 3.4 s, the Windows
-binary over the redirector took 25 s on the same crate, and this repository
-answered from cold in 61 s. The open question the WSL page carried, whether a
-Linux server accepts a Windows client's URIs, was the wrong question: it
-accepts Linux ones, and what could not spell them was `url::Url::from_file_path`
-on Windows. **Three live runs found three `file_path()` gates that read
-"local" where they meant "has a server"** — the footer, the shutdown manager
-(it stopped the new server as unused ten seconds in) and the view — so if a
-routed buffer loses a feature the unrouted one has, grep for `file_path()`
-before anything else. Two facts from the runs that are not the fork's: the
-editor's cmd modifier is the Super key on winit builds, so go-to-definition
-on Windows is **Win+click** (the context menu has the same item), and the
-`--shell-type login` is what gives the server the user's profile PATH — **the
-`.profile` half of it only**: `.bashrc` returns for a non-interactive shell
-before it loads nvm, so anything installed under nvm (`opencode`, measured
-2026-09-07) is not found and must be named by its absolute path.
-
-**And connect before you `cd`, or rather: it no longer matters, which is the
-point.** Until 2026-09-02 a pane that navigated into a repository and *then* ran
-`remote wsl connect` kept its Windows-side tree for the rest of its life —
-nothing re-derived the repository when a server attached, so whether the routing
-happened at all depended on the order two unrelated commands were typed in.
-Every measurement of T16 phase 1 had happened to connect first. `SessionConnected`
-now re-runs repo detection. If you are testing this, `session inspect` is the
-check: it must say `host` after the connect regardless of order.
+**A WSL pane's files, its language server, and its diff panel are all
+answered by `warpctrl session inspect`, and none of the three behave the way
+an unrouted intuition expects — full account in `.fork/docs/wsl.md`.** A
+session keeps `SessionType::Local` even when routed, so nothing else in any
+payload distinguishes a routed pane from an ordinary one; the diff panel and
+LSP both work either way and the "never finishes" this file's neighbours once
+carried for the unrouted case did not reproduce; and connect-before-`cd`
+ordering stopped mattering once `SessionConnected` began re-running repo
+detection. `.fork/docs/wsl.md` has the `file_path()` gates, the commit
+timings, and the nvm/`.bashrc` PATH trap for an agent installed that way.
 
 **And take the screenshot before believing `warpctrl agent read`.** Measured on
 T14.6: a conversation whose panel was displaying a full error paragraph read back
@@ -2234,16 +1007,23 @@ and not them:
   pane, `composer.md` before anything the panel draws, `observability.md`
   before adding any capture to the event log, `classifier.md` before repeating
   the line that a model deciding permissions is not consent,
-  `environment.md` before changing a `WARP_FORK_*` parser or adding a variable.
-  `manual.md` is the operating manual, still whole; reach for it to *use*
-  something rather than change it.
+  `environment.md` before changing a `WARP_FORK_*` parser or adding a variable,
+  `build.md` before re-tuning `CARGO_BUILD_JOBS` or chasing a build-memory
+  number, `warpctrl.md` before touching instance lifecycle or the discovery
+  registry, `agent-transports.md` before deciding something is a fork
+  limitation rather than a fact about the agent you named. `manual.md` is the
+  operating manual, still whole; reach for it to *use* something rather than
+  change it.
 - **This file is the index and those pages are the accounts.** A finding lands
   here as a *rule*, in as few lines as the rule needs, and its account goes to
-  the surface page. That convention is new on 2026-09-10 and it exists because
-  the file crossed Claude Code's 150,000-character memory-file warning — the
-  environment-variable list alone had become one 11,587-character paragraph with
-  10,211 of those characters inside parentheses. `.fork/docs/model-economy.md`
-  has the threshold's formula and why it is 5% of the active context window.
+  the surface page. That convention is new on 2026-09-10 and **a convention
+  alone did not hold it**: the file was back over budget a day later, because
+  writing the rule is cheap to remember and moving the account is the step
+  that gets skipped at the end of a long session. `.fork/tools/claude-md-budget.sh`
+  is the fix that isn't more prose — it runs in `script/presubmit`, fails the
+  gate this repo already trusts when the file crosses a budget, and names the
+  largest section to cut from. `.fork/docs/model-economy.md` has the warning
+  threshold's formula and why it is 5% of the active context window.
 - **`.fork/tickets/`** — the work, one file per ticket (`T01`–`T20`) and one per
   idea (`I00`–`I22`), split out of the old `TASKS.md` and `IDEAS.md` with no
   sentence changed. **Mostly historic**: read the one you are about to touch,
