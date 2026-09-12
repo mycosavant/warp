@@ -224,19 +224,55 @@
   </div>
 </div>
 
-<div class="item">
+<div class="item done">
   <div class="rank">7</div>
   <div class="body">
-    <div class="head"><h2>Voice: measure before building &mdash; openwhispr dictation</h2><span class="status">later · measure first</span></div>
-    <div class="meta"><span>effort: small (measurement) &rarr; medium (build, contingent)</span><span>impact: medium</span></div>
-    <p>Only the dictation half is open for agent work; the read-aloud/TTS half is
-    the maintainer's own current work and off-limits. Before building anything:
-    <code>crates/warp_tui</code> already has a <code>voice_input</code> cargo
-    feature with rendering tests, and the fork's <code>LocalTranscriber</code>
-    already has <code>http</code> and <code>command</code> backends that
-    openwhispr may fit unchanged. The first step is checking how much of this is
-    already built, not writing new code.</p>
-    <p class="src">Source: <code>.fork/HANDOFF-NEXT.md</code> §5; <code>.fork/docs/voice.md</code>; <code>.fork/tickets/T02</code>.</p>
+    <div class="head"><h2>Voice: measure before building &mdash; openwhispr dictation</h2><span class="status">resolved · 2026-09-12</span></div>
+    <div class="meta"><span>effort: small (measurement, done)</span><span>impact: medium</span></div>
+    <p>Measured, then resolved as a decision rather than a build task.
+    Dictation is already done and already self-contained &mdash;
+    <code>LocalTranscriber</code>'s <code>Http</code>/<code>Command</code>
+    backends point at any local engine unmodified. The maintainer would
+    "highly prefer that we use what is already built and on-thesis here
+    rather than mess with another fork": openwhispr isn't theirs (no commits
+    made to it) and <code>franken_whisper</code>, checked as an alternative,
+    is a friend's project and stale. Neither is worth chasing as a
+    dependency. Also resolved: dictation happens entirely GUI-process-local
+    (cpal capture &rarr; transcribe &rarr; the same <code>user_insert</code>
+    path as typing), so WSL pane routing was never a relevant concern for
+    either half &mdash; pocket-tts's read-aloud already bypasses WSL audio
+    entirely via <code>warpctrl agent trace</code>. Scoping correction
+    written into <code>.fork/HANDOFF-GHTESTS.md</code> and
+    <code>.fork/docs/voice.md</code> in the maintainer's own words: "do not
+    touch" was about pocket-tts's own codebase at one PR-review moment, not
+    a ban on this fork's dictation work.</p>
+    <p class="src">Source: this session, 2026-09-12; fable-advisor design review; <code>.fork/docs/voice.md</code>.</p>
+  </div>
+</div>
+
+<div class="item done">
+  <div class="rank">9</div>
+  <div class="body">
+    <div class="head"><h2>Integration tests for warpctrl's dispatch path</h2><span class="status">done · 2026-09-12</span></div>
+    <div class="meta"><span>effort: small</span><span>impact: medium</span></div>
+    <p>Not originally on this board &mdash; came out of a fable-advisor design
+    review the maintainer asked for, which corrected the premise that
+    <code>local_control</code>/<code>warpctrl</code> (115 actions) has zero
+    integration-level tests: <code>layout_tests.rs</code> already drives a
+    real multi-tab app state through the actual dispatch path. Extended that
+    pattern with two tests: one driving <code>session_inspect</code> against
+    a real second tab (the half the pure-function test can name but not
+    witness), and one driving <code>bridge.handle_request</code>'s full
+    seven-guard chain, including a negative case proving
+    <code>confine::ensure_within</code> actually stops a phone paired to one
+    conversation from reaching another &mdash; not just in isolation.
+    Writing the first test surfaced a real bug: <code>select_window_entries</code>
+    had no single-window fallback when OS-level focus isn't reported (the
+    same wall hit live during the version-skew test, worked around there
+    with <code>--window 0</code>), while <code>create_tab</code>'s own
+    window resolution already had the correct fallback. Unified onto the
+    correct one. Both new tests calibrated by breaking.</p>
+    <p class="src">Source: this session, 2026-09-12; <code>app/src/local_control/handlers/metadata.rs</code>, <code>app/src/local_control/mod_tests.rs</code>.</p>
   </div>
 </div>
 
