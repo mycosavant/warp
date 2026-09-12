@@ -1093,6 +1093,25 @@ refused, and the split is the argument rather than a convenience:
   measuring it needs no GUI, no relaunch and four minutes. And **the fix, if
   one is wanted, is not a `warpctrl` change**: it is a firewall rule or a
   network namespace around the agent, which is a decision rather than a bug.
+
+  **Decided 2026-09-11: accepted and documented. Stop re-measuring it.** The
+  maintainer runs Claude Code with the non-essential-traffic flags already set
+  and the connection is opened anyway, which is one more control ruled out
+  without a further run. Containment stays available as an ops choice — a
+  firewall rule or a namespace — and is theirs to make outside this repo.
+
+  **Disclosing it in the panel was considered and refused**, and the reason is
+  worth keeping because the shape recurs: it would be new consent-surface UI for
+  something Warp neither causes, governs, nor can stop, and a notice that a
+  named third-party agent talks to its own vendor teaches the reader nothing
+  they did not choose when they named it. The honest place for it is here.
+
+  **The general fact it stands for, which is the part to carry:** the fork's
+  deny-lists live in `crates/egress_policy` and are consulted by **Warp's** HTTP
+  client. An agent Warp spawns has its own network stack and its own
+  credentials, and nothing in this repository is between it and the internet.
+  Naming an agent in `WARP_FORK_ACP_COMMAND` is trusting it, and the thesis
+  covers what *Warp* sends — not what the agent does.
 - **`ls` and `wc` leak metadata and counts, not contents.** `wc -l
   ~/.ssh/id_ed25519` discloses that the file exists and is 27 lines. That is a
   real cost, and it is the one worth paying, because these two are precisely the
@@ -1446,6 +1465,41 @@ run. Until it is, treat the cap as unresolved rather than lifted, and treat
 "am I building on both sides at once?" as the question that matters more than
 either number.
 
+**Run 2026-09-11, and the cap is lifted: `-j` never stood between this build and
+the wall, at any width.** Clean `target/release`, uncapped `-j 32`, 1058 crates,
+7m16s. The entire parallel front summed to **9,229 MB across 21 concurrent
+compilers** — less than the `warp` crate compiling **alone** (12,706 MB exact,
+`/usr/bin/time -v`). `MemAvailable` bottomed at **25,871 MB** of ~39 GB, and it
+did so while exactly **one** compiler was running. Same shape the `-j 8` clean
+build found, now confirmed at four times the width.
+`.fork/runs/uncapped-2026-09-11/`.
+
+**The extrapolation this file carried was wrong, and how it was wrong is the
+transferable part.** *"Eight jobs averaged ~470 MB each, so thirty-two is
+~15 GB"* averaged the eight crates that happened to be resident when a sampler
+ticked. Uncapped, 31 compilers summed to 4,893 MB — **~158 MB each**. A wider
+front recruits *smaller* crates, because the big ones are the graph's tail and
+compile alone whatever `-j` says. So a per-job average measured at one width
+does not scale to another, and the paragraph above that reasons from one is the
+shape to distrust.
+
+**One cost, measured, and it runs the other way: uncapping raises the
+single-crate peak.** 11,342 MB at `-j 8` against **12,706 MB** at `-j 32`, same
+instrument, **+12%** — the jobserver bounds `rustc`'s *internal* codegen-unit
+parallelism, so a wider `-j` lets one `rustc` run more of its 64 units at once.
+`-j` does reach the app crate; it reaches it in the direction opposite to the
+one the cap was chosen for.
+
+**What survives untouched is the hazard that actually took the guest down**: an
+uncapped WSL build *concurrent with a Windows one*. That pressure is one level
+up, on the host's 64 GB, and the run above was deliberately the opposite — a
+clean host with nothing else on it. **"Never build on both sides at once" is now
+the only rule**, and `CARGO_BUILD_JOBS=8` is the knob for the cases where it
+cannot be honoured: a remote session where a dead VM costs the link, or a desk
+with something else memory-hungry running. `.fork/tools/build.sh` honours an
+environment cap and is otherwise uncapped; `build.ps1` stays capped, because
+this measurement was taken inside the guest and does not transfer.
+
 **Sampled again on the post-merge release build (2026-09-04, every 10 s across
 7m15s), and it confirms the mechanism while still not being the test.** Peak
 15.1 GB in one `rustc`, on the `warp` crate; `MemAvailable` never fell below
@@ -1568,6 +1622,8 @@ rust-analyzer beside a build is not merely pressure, it is a confound that
 makes the measurement meaningless even when the build finishes.
 
 **Cap the release build: `CARGO_BUILD_JOBS=8 cargo build --release …`.**
+*(Superseded 2026-09-11 — see the resolution above. The account below is why the
+cap existed and is kept because the crash it describes was real.)*
 Measured 2026-08-29 on WSL: an uncapped release build **took the whole VM down**
 — the guest came back at `up 1 min` with an empty `dmesg`, which is the
 signature of the VM dying rather than Linux OOM-killing a process. A single
@@ -1868,16 +1924,27 @@ time 2026-08-30; nothing in this repo's docs had mentioned it.
   correctly.** The consent architecture was intact in a binary the fork had
   never run.
 
-  What is still absent is `warpctrl`: `LocalControlServer` is registered behind
-  a `matches!` on `LaunchMode` with no TUI arm (`app/src/lib.rs`), and
-  `warp_control_cli` is not among `crates/warp_tui`'s features — which forward
-  to the app crate (`voice_input = ["warp/voice_input"]` is the pattern). So a
-  parked request in the TUI names a command that cannot exist in that process,
-  and `fork::local_control_serving()` is what makes the note say *"Nothing in
-  this session can answer it"* instead. **Read I20 before scoping anything
-  here**; it names the cheap path and the hazard (type-ahead: an Enter already
-  in the terminal's input buffer when a prompt takes focus is a yes nobody
-  gave).
+  `warpctrl` was absent from it until 2026-09-11 and is now in, for the cost I20
+  predicted: a `LaunchMode::Tui { .. }` arm on the `matches!` at
+  `app/src/lib.rs`, and `warp_control_cli = ["warp/warp_control_cli"]` in
+  `crates/warp_tui`'s features, forwarding like `voice_input` beside it. Build
+  it with `--features standalone,warp_control_cli`. **Measured, not reasoned**:
+  the TUI process publishes a discovery record and a broker socket within a
+  second of launch, advertises all 115 actions, and answers `agent.approvals`
+  and `agent.list` from a `warpctrl` in another shell — which on a phone over
+  mosh+tmux is a second pane.
+
+  **What that buys is a *server*, not an answerer, and the distinction is the
+  safety argument.** Consent stays a typed command in a different process, so
+  I20's type-ahead hazard is not taken on: it belongs to an **in-TUI keypress
+  prompt**, where an Enter already sitting in the input buffer when the prompt
+  takes focus is a yes nobody gave. Nothing here puts a prompt in that terminal.
+  Anything that later does must answer that hazard first, and I20 says to
+  measure it rather than reason about it.
+
+  **Still unverified**: the end-to-end park-and-approve *inside* a TUI session —
+  a real ACP permission request parked there and answered from another shell.
+  The channel is proved; that loop is not.
 
   The old sentence is kept above rather than deleted because its *rule* is still
   right and only its example rotted: do not assume a fork behaviour holds in the
