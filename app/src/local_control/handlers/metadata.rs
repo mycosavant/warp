@@ -563,15 +563,56 @@ pub(crate) fn session_list(
     }))
 }
 
+// Unlike `session_list` (which lists every session when no target is given,
+// same as `pane_list`/`tab_list`/`window_list`), `session_inspect` is a
+// single-result lookup: an unqualified call means "the session in the tab I'm
+// looking at", so `tab` defaults to `Active` here — which, via
+// `select_tab_entries`'s own `force_active_window`, already narrows `window`
+// to the active one too, the same cascade `tab_inspect` relies on. `pane`
+// stays a pass-through deliberately: narrowing it to `PaneTarget::Active`
+// (the UI-*focused* pane) would pick the wrong session in a tab with a split
+// where focus and the active session differ, since "session" here means
+// `active_session_id`, not UI focus — defaulting `session` to `Active` below
+// finds that session correctly across every pane the (now-defaulted) tab
+// holds.
+//
+// The tab-widening is gated on the *effective* session target being `Active`
+// (explicit, or defaulted from `None`) rather than applied unconditionally:
+// an explicit `Session::Id { .. }` names a specific session that may live in
+// any tab, not necessarily the active one, and narrowing to the active tab
+// first would make that lookup miss a real session sitting in a background
+// tab. `session_list` keeps the old "list everything when unset" meaning for
+// `None`, which is why this defaulting lives here rather than in the shared
+// `active_session_target` (whose own bug was narrower: it widened window/tab
+// only for an *explicit* `Active`, never for the argument-less `None` case
+// this function exists to serve — leaving pane selection unscoped across
+// every tab in every window, each with its own `is_active` pane, before the
+// session-level filter below ever ran).
+fn session_inspect_target(target: &TargetSelector) -> (TargetSelector, Option<SessionTarget>) {
+    let session = target.session.clone().or(Some(SessionTarget::Active));
+    let widen_to_active_tab = matches!(session, Some(SessionTarget::Active));
+    let target = TargetSelector {
+        window: target.window.clone(),
+        tab: if widen_to_active_tab {
+            target.tab.clone().or(Some(TabTarget::Active))
+        } else {
+            target.tab.clone()
+        },
+        pane: target.pane.clone(),
+        session: session.clone(),
+    };
+    (target, session)
+}
+
 pub(crate) fn session_inspect(
     target: &TargetSelector,
     ctx: &mut ModelContext<LocalControlBridge>,
 ) -> Result<serde_json::Value, ControlError> {
-    let target = active_session_target(target);
+    let (target, session) = session_inspect_target(target);
     let pane_entries = select_pane_entries(&target, ActionKind::SessionInspect, ctx)?;
     let entries = select_session_entries(
         session_entries_for_panes(pane_entries, ctx),
-        target.session.as_ref().or(Some(&SessionTarget::Active)),
+        session.as_ref(),
         ActionKind::SessionInspect,
     )?;
     let data = json!({ "sessions": session_values(entries) });

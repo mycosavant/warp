@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>What's Actually Left</title>
+<!--
+  Local-first, self-contained, no external fonts, scripts or fetches, by the
+  maintainer's rule of 2026-09-05. Style block copied verbatim from next.html
+  so this reads as part of the same set of boards, not a new format.
+-->
+<style>
+  :root {
+    --paper: #f6f5f1; --paper-2: #edebe4; --ink: #1c1f24; --ink-2: #4a4f58; --ink-3: #7a7f88;
+    --rule: #d9d6cd; --accent: #0f6e6a; --accent-ink: #0a4f4c; --accent-wash: #dcecea;
+    --done: #3f7d3a; --done-wash: #dfeadb; --active: #a86a12; --active-wash: #f3e6cf;
+    --park: #8a8f98; --code-bg: #ecebe5;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif;
+    --cond: "Arial Narrow", "Roboto Condensed", "Segoe UI", system-ui, sans-serif;
+    --mono: ui-monospace, "Cascadia Mono", Consolas, "SF Mono", Menlo, "DejaVu Sans Mono", monospace;
+    color-scheme: light dark;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #17191d; --paper-2: #1f2227; --ink: #e8e6df; --ink-2: #b4b2aa; --ink-3: #7f7e78;
+      --rule: #33373e; --accent: #5fb8b2; --accent-ink: #8fd4cf; --accent-wash: #173634;
+      --done: #86c07a; --done-wash: #1f3320; --active: #d9a052; --active-wash: #3a2c14;
+      --park: #767b84; --code-bg: #20232a;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--paper); color: var(--ink); font-family: var(--sans); font-size: 16px; line-height: 1.55; margin: 0; }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 48px 24px 96px; }
+  header { display: grid; gap: 14px; margin-bottom: 40px; }
+  .eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); display: flex; gap: 16px; flex-wrap: wrap; }
+  h1 { font-family: var(--serif); font-weight: 600; font-size: 42px; line-height: 1.05; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+  .lede { font-size: 18px; color: var(--ink-2); margin: 0; max-width: 62ch; }
+  .decision { border-left: 3px solid var(--accent); background: var(--accent-wash); padding: 16px 20px; margin: 0 0 40px; display: grid; gap: 8px; }
+  .decision .k { font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent-ink); }
+  .decision p { margin: 0; max-width: 66ch; }
+  h2 { font-family: var(--serif); font-weight: 600; font-size: 22px; margin: 0 0 8px; line-height: 1.2; text-wrap: balance; }
+  h3.section { font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); margin: 40px 0 0; padding-top: 24px; border-top: 1px solid var(--rule); }
+  .item { border-top: 1px solid var(--rule); padding: 28px 0 32px; display: grid; grid-template-columns: 56px 1fr; gap: 0 20px; }
+  .rank { font-family: var(--cond); font-weight: 600; font-size: 40px; line-height: 1; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+  .item.now .rank { color: var(--active); }
+  .item.next .rank { color: var(--accent); }
+  .item.done .rank { color: var(--done); }
+  .item.done .status { background: var(--done-wash); color: var(--done); border-color: transparent; }
+  .item.done h2 { text-decoration: line-through; text-decoration-color: var(--ink-3); text-decoration-thickness: 1px; }
+  .body { display: grid; gap: 10px; min-width: 0; }
+  .head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  .head h2 { margin: 0; }
+  .meta { font-family: var(--mono); font-size: 12px; color: var(--ink-3); display: flex; gap: 14px; flex-wrap: wrap; }
+  .body p { margin: 0; max-width: 66ch; }
+  .status { font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; border: 1px solid var(--rule); border-radius: 999px; padding: 3px 10px; background: var(--paper-2); color: var(--ink-2); white-space: nowrap; }
+  .item.now .status { background: var(--active-wash); color: var(--active); border-color: transparent; }
+  .item.next .status { background: var(--accent-wash); color: var(--accent-ink); border-color: transparent; }
+  .src { font-size: 13px; color: var(--ink-3); }
+  .src code { font-size: 0.9em; }
+  code { font-family: var(--mono); font-size: 0.88em; background: var(--code-bg); padding: 1px 5px; border-radius: 3px; }
+  .parked { border-top: 1px solid var(--rule); padding: 28px 0 0; }
+  .parked ul { margin: 12px 0 0; padding: 0; list-style: none; display: grid; gap: 12px; }
+  .parked li { display: grid; grid-template-columns: 190px 1fr; gap: 16px; font-size: 14px; }
+  .parked li b { font-weight: 500; color: var(--park); font-family: var(--cond); font-size: 15px; }
+  .parked li span { color: var(--ink-2); }
+  @media (max-width: 620px) { .parked li { grid-template-columns: 1fr; gap: 2px; } }
+  footer { margin-top: 48px; font-family: var(--mono); font-size: 12px; color: var(--ink-3); border-top: 1px solid var(--rule); padding-top: 16px; }
+  footer p { margin: 0 0 6px; max-width: 70ch; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="eyebrow"><span>roadmap</span><span>2026-09-12</span><span>ranked by priority &amp; effort</span></div>
+  <h1>What's actually left</h1>
+  <p class="lede">The tracked backlog is almost entirely closed. <code>GOAL.md</code>'s
+  board is done, seven of <code>next.html</code>'s eight items are done, and the two
+  2026-09-12 handoffs closed most of what they opened same-day. What remains is a
+  short tail of small verification tasks, plus a few items that are the
+  maintainer's call and not schedulable by ranking alone.</p>
+</header>
+
+<div class="decision">
+  <div class="k">Bottom line</div>
+  <p>Nothing here is large. The whole open list is small-to-medium verification
+  work in the fork's own house style — measure a claim that was only read, or
+  close a one-line staleness. Do the two free ones first, then work down.</p>
+</div>
+
+<div class="item done">
+  <div class="rank">1</div>
+  <div class="body">
+    <div class="head"><h2>Rebuild the Windows release binary</h2><span class="status">done · 2026-09-12</span></div>
+    <div class="meta"><span>effort: trivial</span><span>impact: high</span></div>
+    <p>Was <code>v0.fork.7a5a3028e</code> (2026-09-10), missing the routed
+    commit-message and PR-content fixes (<code>036bcccac</code>,
+    <code>848427cfc</code>, <code>35a29d6d6</code>) and today's COMPOSER fix.
+    The Windows checkout itself was also 3 commits behind &mdash; fetched and
+    fast-forwarded to <code>76d8b07e6</code> first. Rebuilt (8m14s), and
+    verified from disk rather than trusting the build script's own report:
+    sidecar and <code>--version</code> both read <code>v0.fork.76d8b07e6</code>,
+    link timestamp matches the sidecar write, and
+    <code>--warpctrl instance list</code> confirms <code>warp_control_cli</code>
+    is in.</p>
+    <p class="src">Source: this session, 2026-09-12; build log and disk state independently checked.</p>
+  </div>
+</div>
+
+<div class="item done">
+  <div class="rank">2</div>
+  <div class="body">
+    <div class="head"><h2>Retire <code>GOAL.md</code></h2><span class="status">done · 2026-09-12</span></div>
+    <div class="meta"><span>effort: trivial</span><span>impact: hygiene</span></div>
+    <p>Checked what could be checked before retiring rather than trusting the
+    board table alone: all seven board items are done, and the friction log's
+    own 2026-09-12 #4 entry specifically warns against reading its sparseness
+    as evidence that the seven-day living-in-the-build condition wasn't met.
+    That condition itself &mdash; whether seven days were actually lived in the
+    product-profile build &mdash; isn't independently verifiable from the repo;
+    it rests on the maintainer's own call, given directly. Archived in full at
+    <code>.fork/archive/GOAL-2026-09-04.md</code> per
+    the file's own "delete when met or abandoned," with its one decision moved
+    to <code>.fork/decisions/</code>. Leaving a fully-met file with that much
+    authority sitting around &mdash; it outranked every ticket's ordering while
+    it stood &mdash; was exactly the kind of stale-but-trusted doc
+    <code>CLAUDE.md</code> spends a whole section warning about.</p>
+    <p class="src">Source: <code>.fork/archive/GOAL-2026-09-04.md</code>; decision at <code>.fork/decisions/2026-09-04-acp-stays-the-transport-local-agent-stays-beside-it.md</code>.</p>
+  </div>
+</div>
+
+<div class="item done">
+  <div class="rank">3</div>
+  <div class="body">
+    <div class="head"><h2>Diagnose <code>ambiguous_target</code> on restored multi-tab profiles</h2><span class="status">done · 2026-09-12</span></div>
+    <div class="meta"><span>effort: small</span><span>impact: medium</span></div>
+    <p>Turned out not to be the judgment call it looked like. Diagnosis: every
+    tab has exactly one <code>is_active</code> pane structurally (a
+    <code>PaneGroup</code> invariant, not a restore artifact), so N tabs give N
+    actives. The real bug was in <code>session_inspect</code>'s defaulting:
+    its old helper only widened window/tab/pane to Active when the caller had
+    already passed <code>session: Active</code> explicitly, and was a no-op
+    for the argument-less case &mdash; the one this whole complaint is about
+    &mdash; leaving pane selection unscoped across every tab before the
+    session-level filter ran. Reproduced live against two real tabs
+    (<code>ambiguous_target</code>), fixed with a defaulting function scoped
+    to <code>session_inspect</code> alone (not the shared helper, which
+    <code>session_list</code> still needs its old "list everything" meaning
+    from), confirmed live post-fix resolves to exactly the active tab's
+    session, and confirmed an explicit <code>--session &lt;id&gt;</code> for a
+    session in a <em>non</em>-active tab still finds it &mdash; a regression
+    the first draft of the fix would have introduced by widening tab
+    unconditionally. Four unit tests calibrated by breaking twice, each
+    reddening only the test it targets. 8/8 metadata tests, 53/53
+    <code>fork::</code>, 181/181 <code>local_control::</code> pass.</p>
+    <p class="src">Source: this session, 2026-09-12; <code>app/src/local_control/handlers/metadata.rs</code>, live-tested via a scratch profile.</p>
+  </div>
+</div>
+
+<div class="item next">
+  <div class="rank">4</div>
+  <div class="body">
+    <div class="head"><h2>Verify park-and-approve end to end inside a TUI session</h2><span class="status">next · small&ndash;medium</span></div>
+    <div class="meta"><span>effort: small&ndash;medium, mostly verification</span><span>impact: medium</span></div>
+    <p>An ACP permission request parked in the TUI and answered from a separate
+    shell — the channel is proved (<code>f2e1558c6</code>), the full loop has
+    never been run. This has now carried across two handoffs
+    (<code>HANDOFF-DECIDE.md</code> → <code>HANDOFF-NEXT.md</code> →
+    <code>HANDOFF-GHTESTS.md</code>) without anyone picking it up, which is the
+    fork's own signal for promoting something: a friction or gap that recurs
+    outranks a fresh idea with none behind it.</p>
+    <p class="src">Source: <code>.fork/HANDOFF-NEXT.md</code> §6; <code>.fork/HANDOFF-GHTESTS.md</code> "still open" list.</p>
+  </div>
+</div>
+
+<div class="item next">
+  <div class="rank">5</div>
+  <div class="body">
+    <div class="head"><h2>Test version skew: older daemon, newer GUI</h2><span class="status">next · small</span></div>
+    <div class="meta"><span>effort: small</span><span>impact: medium</span></div>
+    <p>The claim that an older remote-server daemon degrades gracefully against a
+    newer GUI rests on "prost skips unknown fields" — read, never measured. The
+    2026-09-12 PR drive ran both halves at the same commit on purpose, so this is
+    still open. Cheap to close: build a daemon at a commit before
+    <code>036bcccac</code>, run one GUI action against it.</p>
+    <p class="src">Source: <code>.fork/HANDOFF-GHTESTS.md</code>, Task 4.</p>
+  </div>
+</div>
+
+<div class="item">
+  <div class="rank">6</div>
+  <div class="body">
+    <div class="head"><h2>Exercise the diff-truncation budget on a real huge diff</h2><span class="status">later · small&ndash;medium</span></div>
+    <div class="meta"><span>effort: small&ndash;medium</span><span>impact: low&ndash;medium</span></div>
+    <p><code>get_diff_for_commit_message</code> truncates to
+    <code>MAX_DIFF_CHARS_FOR_AI</code> on the daemon side only; a genuinely huge
+    diff has never been tried through either the commit-message or the PR path.
+    Needs a repo with a large diff staged, which is the only reason this sits
+    below items 3&ndash;5 rather than beside them.</p>
+    <p class="src">Source: <code>.fork/HANDOFF-GHTESTS.md</code>, Task 4.</p>
+  </div>
+</div>
+
+<div class="item">
+  <div class="rank">7</div>
+  <div class="body">
+    <div class="head"><h2>Voice: measure before building &mdash; openwhispr dictation</h2><span class="status">later · measure first</span></div>
+    <div class="meta"><span>effort: small (measurement) &rarr; medium (build, contingent)</span><span>impact: medium</span></div>
+    <p>Only the dictation half is open for agent work; the read-aloud/TTS half is
+    the maintainer's own current work and off-limits. Before building anything:
+    <code>crates/warp_tui</code> already has a <code>voice_input</code> cargo
+    feature with rendering tests, and the fork's <code>LocalTranscriber</code>
+    already has <code>http</code> and <code>command</code> backends that
+    openwhispr may fit unchanged. The first step is checking how much of this is
+    already built, not writing new code.</p>
+    <p class="src">Source: <code>.fork/HANDOFF-NEXT.md</code> §5; <code>.fork/docs/voice.md</code>; <code>.fork/tickets/T02</code>.</p>
+  </div>
+</div>
+
+<div class="item">
+  <div class="rank">8</div>
+  <div class="body">
+    <div class="head"><h2>Dev-build log occasionally lands in <code>.recovery</code></h2><span class="status">backlog · small</span></div>
+    <div class="meta"><span>effort: small, cause unisolated</span><span>impact: low</span></div>
+    <p>An unexplained oddity noted against T02: some dev-build sessions write
+    their log to the crash-recovery sibling's file instead of the normal log.
+    Not chased by anyone, no known impact. Worth a bounded look if a
+    logging/build session is already open; not worth opening one for.</p>
+    <p class="src">Source: <code>.fork/tickets/T02-local-voice.md</code>.</p>
+  </div>
+</div>
+
+<h3 class="section">Blocked on you &mdash; not rankable by priority/effort alone</h3>
+<div class="parked">
+  <ul>
+    <li><b>Real PR drive (route 3)</b><span>The only way to prove an actual GitHub PR gets created with the generated title. Needs a throwaway private repo and your explicit say-so &mdash; the standing constraint is no PR without sign-off. Trivial once granted; not actionable before that.</span></li>
+    <li><b>kode-rs framing</b><span>A swarm of agents built a lot of it in a misconfigured <code>/loop</code>; parts were lost when worktrees were torn down unmerged. There's a "built-not-wired" document and a trail of notes, none tested lately. Whether to build on that tree at all is your call, recorded as parked on 2026-09-11.</span></li>
+  </ul>
+</div>
+
+<h3 class="section">Declined or not open &mdash; listed so they don't get re-proposed</h3>
+<div class="parked">
+  <ul>
+    <li><b>Gemini <code>authenticate</code> half 2</b><span>Decided 2026-09-11: Gemini models are reachable through opencode or codex on OpenRouter, so opening the credential door isn't worth it. Closed, not merely deferred.</span></li>
+    <li><b>CLAUDE.md reduction pass</b><span>Explicitly: don't start a fresh pass &mdash; you consider it largely done. The only standing task is discipline: pay for any addition with a removal.</span></li>
+    <li><b>Voice: read-aloud / TTS / mobile entry point</b><span>Your own current work; asked to be left alone on it. Not agent work.</span></li>
+  </ul>
+</div>
+
+<footer>
+  <p>Built from <code>.fork/GOAL.md</code>, <code>.fork/next.html</code>,
+  <code>.fork/HANDOFF-NEXT.md</code>, <code>.fork/HANDOFF-GHTESTS.md</code> and
+  <code>.fork/tickets/</code>, read directly on 2026-09-12. Priority and effort
+  are judgment calls made against those sources, not a formula &mdash; re-read the
+  source doc before acting on an item here, the way this project always asks.</p>
+</footer>
+
+</div>
+</body>
+</html>
