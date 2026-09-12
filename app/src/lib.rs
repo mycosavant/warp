@@ -2628,10 +2628,18 @@ pub(crate) fn initialize_app(
             http_server::HttpServer::new(routers, ctx)
         });
     }
+    // The TUI is included because it reaches this bootstrap by the same path the
+    // GUI does (`initialize_app`, above), and without a record here a request
+    // parked in the TUI names a `warpctrl` that cannot exist in its process.
+    // What this registers is the *server*, not an answerer: consent is still a
+    // typed command in another shell, which over mosh+tmux is a second pane. An
+    // in-TUI keypress answerer is deliberately not built, because a prompt that
+    // appears in the terminal the person is typing into can be answered by an
+    // Enter already sitting in the input buffer -- a yes nobody gave.
     #[cfg(feature = "local_fs")]
     if matches!(
         launch_mode,
-        LaunchMode::App { .. } | LaunchMode::Test { .. }
+        LaunchMode::App { .. } | LaunchMode::Test { .. } | LaunchMode::Tui { .. }
     ) && FeatureFlag::WarpControlCli.is_enabled()
     {
         ctx.add_singleton_model(local_control::LocalControlBridge::new);
