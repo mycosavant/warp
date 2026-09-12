@@ -6,7 +6,7 @@ use tempfile::TempDir;
 
 use super::{
     RepositoryInfo, detect_current_branch, detect_current_branch_display, get_pr_for_branch,
-    is_gh_auth_error, is_gh_missing_error,
+    is_gh_auth_error, is_gh_missing_error, truncate_on_char_boundary,
 };
 
 /// Helper: run a git command inside the given repo directory.
@@ -20,6 +20,47 @@ async fn git(repo: &Path, args: &[&str]) -> String {
         .await
         .expect("failed to run git");
     String::from_utf8_lossy(&output.stdout).trim().to_owned()
+}
+
+/// `&s[..byte_cap]` panics when the cut point lands inside a multi-byte code
+/// point -- reachable in a diff, whose content is arbitrary source or commit
+/// text, not just ASCII. Deliberately places a 4-byte emoji straddling the
+/// cut so the walk-back in `truncate_on_char_boundary` has to move, not just
+/// happen to land cleanly.
+#[cfg(feature = "local_fs")]
+#[test]
+fn truncate_on_char_boundary_walks_back_out_of_a_multi_byte_character() {
+    let s = format!("{}🦀{}", "a".repeat(10), "b".repeat(10));
+    // The crab is bytes 10..14. Every cut point inside that range must walk
+    // back to 10, never panic, and never include a partial code point.
+    for cut in 11..14 {
+        let truncated = truncate_on_char_boundary(&s, cut);
+        assert_eq!(
+            truncated,
+            &s[..10],
+            "cut={cut} must walk back to the char boundary before the crab"
+        );
+    }
+    // A cut exactly on a boundary is returned unchanged, not walked back
+    // further than necessary.
+    assert_eq!(truncate_on_char_boundary(&s, 10), &s[..10]);
+    assert_eq!(truncate_on_char_boundary(&s, 14), &s[..14]);
+}
+
+#[cfg(feature = "local_fs")]
+#[test]
+fn truncate_on_char_boundary_handles_the_edges() {
+    let s = "hello";
+    assert_eq!(
+        truncate_on_char_boundary(s, 0),
+        "",
+        "must not underflow at zero"
+    );
+    assert_eq!(
+        truncate_on_char_boundary(s, 100),
+        s,
+        "a cap past the string's length is a no-op, not an out-of-bounds slice"
+    );
 }
 
 #[cfg(feature = "local_fs")]

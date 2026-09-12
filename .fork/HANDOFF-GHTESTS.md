@@ -277,10 +277,18 @@ non-obvious parts it already handles:
   commit. The claim that an older daemon degrades to upstream behaviour rests
   on prost skipping an unknown field — read, not measured. Cheap to test: run
   a new GUI against a daemon binary built before `036bcccac`.
-- **The truncation budget is now computed on one side and never rechecked on
+~~**The truncation budget is now computed on one side and never rechecked on
   the other.** `get_diff_for_commit_message` truncates to `MAX_DIFF_CHARS_FOR_AI`
   on the daemon, and the client sends what it is given. A diff that large has
-  not been tried, on either the commit-message or the PR path.
+  not been tried, on either the commit-message or the PR path.~~ **Corrected
+  and closed 2026-09-12**: not daemon-exclusive — `git_actions.rs` is
+  explicitly backend-agnostic, so the same truncation runs in-process for an
+  unrouted session too. Both paths now have a real oversized-diff test
+  (`a_huge_commit_message_diff_is_truncated_within_budget`,
+  `a_huge_pr_diff_is_truncated_within_budget`), plus a direct unit test on
+  `truncate_on_char_boundary` for the multi-byte cut-point case neither
+  integration test could reach precisely. All four calibrated by breaking:
+  each redress reddened only the test it targets.
 - **`warpctrl session inspect` with no argument answers `ambiguous_target`
   whenever a profile restores several tabs**, because *every* restored tab
   reports `is_active: true`. Six tabs, six actives. That reads as a routing

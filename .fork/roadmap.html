@@ -194,17 +194,26 @@
   </div>
 </div>
 
-<div class="item">
+<div class="item done">
   <div class="rank">6</div>
   <div class="body">
-    <div class="head"><h2>Exercise the diff-truncation budget on a real huge diff</h2><span class="status">later · small&ndash;medium</span></div>
+    <div class="head"><h2>Exercise the diff-truncation budget on a real huge diff</h2><span class="status">done · 2026-09-12</span></div>
     <div class="meta"><span>effort: small&ndash;medium</span><span>impact: low&ndash;medium</span></div>
-    <p><code>get_diff_for_commit_message</code> truncates to
-    <code>MAX_DIFF_CHARS_FOR_AI</code> on the daemon side only; a genuinely huge
-    diff has never been tried through either the commit-message or the PR path.
-    Needs a repo with a large diff staged, which is the only reason this sits
-    below items 3&ndash;5 rather than beside them.</p>
-    <p class="src">Source: <code>.fork/HANDOFF-GHTESTS.md</code>, Task 4.</p>
+    <p>Corrected a wrong framing on the way: truncation is <em>not</em>
+    daemon-exclusive as <code>HANDOFF-GHTESTS.md</code> stated &mdash;
+    <code>git_actions.rs</code> is explicitly backend-agnostic, so an
+    unrouted session hits the identical code. No live GUI drive was needed:
+    the truncation logic is pure and its callers are plain functions over a
+    real repo path, so the existing <code>git_actions_tests.rs</code>
+    temp-repo fixture pattern was enough. Added a real 1000-line-edit repro
+    (verified: 124,891-byte diff, ~8x the 16,000-byte budget) exercised
+    through both <code>commit_message_diff</code> and
+    <code>pr_content_inputs</code>, plus a direct unit test on
+    <code>truncate_on_char_boundary</code> for a 4-byte character straddling
+    the exact cut point &mdash; the one case neither integration test could
+    hit precisely. All four new tests calibrated by breaking: each break
+    reddened only the test aimed at it.</p>
+    <p class="src">Source: this session, 2026-09-12; <code>app/src/util/git.rs</code>, <code>app/src/code_review/git_actions_tests.rs</code>.</p>
   </div>
 </div>
 

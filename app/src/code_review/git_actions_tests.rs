@@ -5,6 +5,7 @@ use command::r#async::Command;
 use tempfile::TempDir;
 
 use super::commit_message_diff;
+use crate::util::git::MAX_DIFF_CHARS_FOR_AI;
 
 /// Helper: run a git command inside the given repo directory.
 async fn git(repo: &Path, args: &[&str]) -> String {
@@ -186,6 +187,81 @@ async fn the_pr_inputs_do_not_see_an_uncommitted_change() {
         !inputs.diff.contains("uncommitted.txt"),
         "generating before the chain's commit would describe the wrong branch: {}",
         inputs.diff
+    );
+}
+
+/// Overwrites a tracked file with `line_count` lines, each long enough that
+/// the diff comfortably clears `MAX_DIFF_CHARS_FOR_AI`. Verified rather than
+/// assumed: 1,000 lines of similar filler produced a 160,891-byte `git diff`
+/// on this machine, ten times the 16,000-byte budget.
+fn write_oversized_file(path: &Path, line_count: usize) {
+    let mut content = String::new();
+    for i in 0..line_count {
+        content.push_str(&format!(
+            "line {i} filler text to pad the diff well past the budget\n"
+        ));
+    }
+    std::fs::write(path, content).expect("write");
+}
+
+/// The commit-message path never sends an unbounded diff to a model — this is
+/// the budget from `.fork/HANDOFF-GHTESTS.md` Task 4 that had "never been
+/// tried, on either the commit-message or the PR path" until this test.
+#[cfg(feature = "local_fs")]
+#[tokio::test]
+async fn a_huge_commit_message_diff_is_truncated_within_budget() {
+    let (_dir, path) = init_repo().await;
+    let file = path.join("big.txt");
+    write_oversized_file(&file, 1_000);
+    git(&path, &["add", "big.txt"]).await;
+    git(&path, &["commit", "-m", "add big.txt"]).await;
+    // Edit every line rather than rewriting identical content -- an
+    // unchanged file produces an empty diff and would make this test measure
+    // nothing, the same trap `an_empty_diff_is_refused_before_any_model_call`
+    // exists to catch on the other side.
+    let edited: String = std::fs::read_to_string(&file)
+        .expect("read")
+        .lines()
+        .map(|line| format!("{line} EDITED\n"))
+        .collect();
+    std::fs::write(&file, edited).expect("write");
+    git(&path, &["add", "big.txt"]).await;
+
+    let diff = commit_message_diff(&path, true).await.expect("a diff");
+    assert!(
+        diff.len() <= MAX_DIFF_CHARS_FOR_AI + "\n... (diff truncated)".len(),
+        "the model must never see more than the budget plus its own marker: {} bytes",
+        diff.len()
+    );
+    assert!(
+        diff.ends_with("... (diff truncated)"),
+        "a truncated diff must say so, or the model has no signal it's incomplete: {}",
+        &diff[diff.len().saturating_sub(80)..]
+    );
+}
+
+/// The PR path has the same budget, applied separately -- `get_diff_for_pr`
+/// truncates on its own, so a fix to one path is not a fix to the other.
+#[cfg(feature = "local_fs")]
+#[tokio::test]
+async fn a_huge_pr_diff_is_truncated_within_budget() {
+    let (_dir, path) = init_repo().await;
+    git(&path, &["checkout", "-b", "feature"]).await;
+    let file = path.join("big.txt");
+    write_oversized_file(&file, 1_000);
+    git(&path, &["add", "big.txt"]).await;
+    git(&path, &["commit", "-m", "add big.txt"]).await;
+
+    let inputs = super::pr_content_inputs(&path).await.expect("inputs");
+    assert!(
+        inputs.diff.len() <= MAX_DIFF_CHARS_FOR_AI + "\n... (diff truncated)".len(),
+        "the model must never see more than the budget plus its own marker: {} bytes",
+        inputs.diff.len()
+    );
+    assert!(
+        inputs.diff.ends_with("... (diff truncated)"),
+        "a truncated diff must say so: {}",
+        &inputs.diff[inputs.diff.len().saturating_sub(80)..]
     );
 }
 

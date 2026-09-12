@@ -521,7 +521,7 @@ pub fn git_operation_in_progress(repo_path: &Path) -> bool {
 /// Maximum number of characters of diff content to send to AI for commit
 /// message / PR title / PR description generation.
 #[cfg(feature = "local_fs")]
-const MAX_DIFF_CHARS_FOR_AI: usize = 16_000;
+pub(crate) const MAX_DIFF_CHARS_FOR_AI: usize = 16_000;
 
 /// Per-file cap for untracked-file content we synthesise into the diff sent
 /// to AI. Keeps any one new file from dominating the budget.
