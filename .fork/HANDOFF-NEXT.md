@@ -15,6 +15,10 @@ the same way when its own list is empty.
 2. **`.fork/GOAL.md`** — the standing horizon, *live in the build*. It outranks
    ticket ordering while it stands.
 3. **`.fork/next.html`** — the board, with status chips. Open it in a browser.
+5. **`.fork/HANDOFF-GHTESTS.md`** — added 2026-09-12. The open work left by the
+   routed commit-message and PR-content fixes: five tests that never run their
+   fake `gh`, the live PR drive that was not run, and the loose ends. It adds
+   to this file rather than replacing it.
 4. **`.fork/runs/run-live-2026-09/friction.md`** — two tables: the maintainer's
    and the agent's. **Add to the agent's one as a habit, not as a task.**
 
