@@ -100,8 +100,9 @@ horizon's same-day rule for a friction that stops a turn outranks it.
   2026-09-07: the picker is the agent's own list (T14.14 built, T21 follows),
   not a second one. What is left of I22 is on the next horizon.
 - **I1's inbox.** No friction log has asked for it.
-- **The clean-build test of the `-j 8` cap.** Worth running once; not part of
-  living in the build.
+- ~~**The clean-build test of the `-j 8` cap.** Worth running once; not part of
+  living in the build.~~ **Run 2026-09-11** in the decide sitting, and the cap is
+  lifted. `.fork/runs/uncapped-2026-09-11/`.
 
 ## Decisions on record
 
@@ -116,8 +117,14 @@ horizon's same-day rule for a friction that stops a turn outranks it.
 ## Standing constraints
 
 No push, no PR, no upstream merge without an explicit say-so (the 2026-09-04
-merge had it). **Permission posture stays frozen.** `CARGO_BUILD_JOBS=8`, and the
-cap is **unresolved, not lifted**: the 2026-09-04 measurement was a warm build in
-which the app crate compiled alone for six of seven minutes at 15.1 GB, and the
-many-large-crates case that took the guest down has not been run. Never build on
-both sides of the VM at once. Leave no Warp or agent processes running.
+merge had it). **Permission posture stays frozen.** ~~`CARGO_BUILD_JOBS=8`, and
+the cap is **unresolved, not lifted**~~ — **resolved and lifted 2026-09-11**: the
+clean uncapped build was run at the desk and `-j` never stood between this build
+and the wall. The whole `-j 32` front summed to 9,229 MB, less than the `warp`
+crate compiling alone; `MemAvailable` bottomed at 25,871 MB and did so with one
+compiler running. `.fork/runs/uncapped-2026-09-11/`. **Never build on both sides
+of the VM at once** is what that leaves standing, and it is now the only rule —
+the hazard is one level up, on the host's 64 GB, and this run was deliberately a
+clean host. `CARGO_BUILD_JOBS` is honoured by `build.sh` as the knob for where
+that rule cannot be: a remote session where a dead VM costs the link. Leave no
+Warp or agent processes running.

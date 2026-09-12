@@ -4,11 +4,45 @@
 #
 # Two things this does that a bare `cargo build` does not:
 #
-#   CARGO_BUILD_JOBS=8   A single rustc on the `warp` crate was sampled at
-#                        15.1 GB (2026-09-04). Windows and the WSL guest draw on
-#                        the same 64 GB, so an uncapped build here is one half of
-#                        the pair that took the guest down. Never build on both
-#                        sides at once.
+#   CARGO_BUILD_JOBS     Honoured if the environment already set one; otherwise
+#                        cargo's default (one job per core) is used. This was a
+#                        hardcoded `=8` until 2026-09-11, when the clean uncapped
+#                        build the cap was chosen against was finally run:
+#                        `.fork/runs/uncapped-2026-09-11/`.
+#
+#                        The measurement: at `-j 32`, the entire parallel front
+#                        summed to 9,229 MB across 21 concurrent compilers --
+#                        LESS than the `warp` crate compiling by itself (12,706
+#                        MB exact). `MemAvailable` bottomed at 25,871 MB of ~39
+#                        GB, and it did so while exactly ONE compiler was
+#                        running. So `-j` never stood between this build and the
+#                        wall, at any width.
+#
+#                        The old extrapolation was wrong in an instructive way:
+#                        "eight jobs averaged ~470 MB each, so thirty-two is ~15
+#                        GB" averaged the eight crates that happened to be
+#                        resident at a sampler tick. Uncapped, 31 compilers
+#                        summed to 4,893 MB -- ~158 MB each. A wider front
+#                        recruits SMALLER crates, because the big ones are the
+#                        graph's tail and compile alone whatever `-j` says.
+#
+#                        One cost, measured: uncapping raises the SINGLE-crate
+#                        peak, 11,342 MB at `-j 8` to 12,706 MB at `-j 32`,
+#                        +12%. The jobserver bounds rustc's internal
+#                        codegen-unit parallelism, so a wider `-j` lets one
+#                        rustc run more of its 64 units at once.
+#
+#                        What is untouched by all of that is the hazard that
+#                        actually took the guest down in 2026-08-29: an uncapped
+#                        WSL build CONCURRENT WITH A WINDOWS ONE. That pressure
+#                        is one level up, on the host's 64 GB, and the run above
+#                        was deliberately the opposite -- a clean host with
+#                        nothing else on it. **Never build on both sides at
+#                        once** is therefore the rule that survives, and it is
+#                        now the only one. `CARGO_BUILD_JOBS=8` is the knob for
+#                        the situations where it cannot be honoured: a remote
+#                        session where a dead VM costs the link, or a desk where
+#                        something else memory-hungry is running.
 #
 #   warp-oss.version     Written beside the binary after a successful build,
 #                        holding `v0.fork.<sha>[-dirty]`. `ChannelState::
@@ -50,7 +84,16 @@ fi
 sha=$(git rev-parse --short HEAD)
 [[ -n "$(git status --porcelain)" ]] && sha="$sha-dirty"
 version="v0.fork.$sha"
-export CARGO_BUILD_JOBS=8
+# Uncapped unless the caller asked for a cap; see the header. Written as an
+# `if` rather than `[[ ... ]] && unset`, because under `set -e` that form exits
+# the script on the branch where a cap IS set -- the test is false, the `&&`
+# short-circuits, and the line's status is 1.
+if [[ -z "${CARGO_BUILD_JOBS:-}" ]]; then
+  unset CARGO_BUILD_JOBS
+else
+  echo "=== capped at CARGO_BUILD_JOBS=$CARGO_BUILD_JOBS (uncapped is the default since 2026-09-11) ==="
+  export CARGO_BUILD_JOBS
+fi
 # A stray GIT_RELEASE_TAG in the environment would silently put the cascade
 # back; the sidecar is the only stamp this script makes.
 unset GIT_RELEASE_TAG

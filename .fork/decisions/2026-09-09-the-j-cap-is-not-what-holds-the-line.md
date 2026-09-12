@@ -98,3 +98,45 @@ phases, and the source of the two low figures corrected above). Related: [[the s
 compiler]] — `ps -C rustc` is not an exact match on this procps, and every
 number this script produced before this date with an editor open was inflated
 by 15-16.5 GB.
+
+---
+
+## Closed 2026-09-11: the cap is lifted, and this file's title was right
+
+The one thing left open here — an uncapped front half — was run at the desk with
+the maintainer's authorisation, on a clean `target/release` and a clean host.
+`.fork/runs/uncapped-2026-09-11/`.
+
+| | uncapped `-j 32`, clean, 1058 crates |
+|---|---|
+| wall time | 7m16s |
+| peak **summed**, parallel front | **9,229 MB** across 21 compilers |
+| peak **single** `rustc` | 12,706 MB exact, the `warp` crate, **alone** |
+| `MemAvailable` floor | **25,871 MB** of ~39 GB, with **one** compiler running |
+
+**The whole front, at four times the width, summed to less than one app crate.**
+That is this file's title stated as a number rather than an inference.
+
+**The extrapolation that kept this open was wrong in a way worth naming.**
+*"Eight jobs averaged ~470 MB each, so thirty-two is ~15 GB"* took the average of
+the eight crates that happened to be resident at a sampler tick. Uncapped, 31
+compilers summed to 4,893 MB — ~158 MB each. A wider front recruits *smaller*
+crates, because the large ones are the graph's tail and compile alone whatever
+`-j` says. **A per-job average measured at one width does not scale to another**,
+and reasoning from one is the move to distrust.
+
+**One cost, and it points the other way.** Uncapping raises the *single-crate*
+peak: 11,342 MB at `-j 8` against 12,706 MB at `-j 32`, same instrument, +12%.
+The jobserver bounds `rustc`'s internal codegen-unit parallelism, so a wider `-j`
+lets one `rustc` run more of its 64 units at once. So `-j` does reach the app
+crate — in the direction opposite to the one the cap was chosen for, and by
+1.4 GB against 25.9 GB of headroom. Worth knowing before anyone raises
+`codegen-units` again.
+
+**What is untouched, and is now the only rule**: an uncapped WSL build
+*concurrent with a Windows one*. That pressure is on the host's 64 GB, one level
+above anything the guest can see, and this run was deliberately its opposite.
+`.fork/tools/build.sh` is uncapped by default and honours a `CARGO_BUILD_JOBS`
+already in the environment, which is the knob for the case that rule cannot
+cover — a remote session where a dead VM costs the link. `build.ps1` stays
+capped, because this measurement was taken inside the guest.
