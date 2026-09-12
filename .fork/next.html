@@ -248,6 +248,18 @@
     </div>
   </article>
 
+  <article class="item" data-id="voice-out">
+    <div class="rank">new</div>
+    <div class="body">
+      <div class="head"><h2>Speech <em>out</em>, on the phone</h2><span class="status">unranked &middot; filed 2026-09-12</span></div>
+      <div class="meta"><span>friction #2</span><span>the maintainer's, stated directly</span></div>
+      <p><b>The mobile surface has a dependency nobody wrote down, and it is the one that bites daily.</b> In the maintainer's own words: without natural-sounding voice <em>and playback controls</em>, the phone surface is <em>&ldquo;not much more useful than if it didn't exist at all&rdquo;</em>. They flagged it as liable to sound like sugaring and said plainly that it is not &mdash; it is what makes a week of mosh+tmux work on the road possible rather than theoretical.</p>
+      <p><b>It appears nowhere in this repository.</b> Measured 2026-09-12 across <code>.fork/</code> and <code>CLAUDE.md</code>: <code>text-to-speech</code> 0 hits, <code>playback</code> 0, <code>espeak</code> 0, <code>piper</code> 2, <code>tts</code> 2 &mdash; and both <code>tts</code> hits are incidental, a disabled cloud re-check chain and a symptom in the 2026-09-07 audio-endpoint incident. Zero commits.</p>
+      <p><b>T02 is the trap, not the answer.</b> The fork already has a voice ticket and it runs the other way: local <em>transcription</em>, replacing Wispr Flow, speech in. Anyone grepping <code>voice</code> finds 23 hits and concludes the surface is covered. It is covered in the direction that does not gate the working day.</p>
+      <p><b>Open, and the maintainer's to answer before any of it is built:</b> which engine and whether it runs in Termux on the phone or synthesises on the desk and streams over the tailnet; what &ldquo;playback controls&rdquo; has to mean concretely (pause, scrub, speed, skip a tool block); and what gets read aloud, since an agent transcript is mostly tool noise and the useful half is the prose. <b>Not started, deliberately</b> &mdash; the requirement is now recorded, which is the thing that was missing.</p>
+    </div>
+  </article>
+
   <article class="item done" data-id="clean-build">
     <div class="rank">7</div>
     <div class="body">
@@ -283,7 +295,7 @@
   <section class="parked">
     <h2>Logging in parallel</h2>
     <ul>
-      <li><b>The maintainer's log</b><span><code>.fork/runs/run-live-2026-09/friction.md</code>, one line per working day, an empty day is a line. It holds one dated day; the horizon needs seven.</span></li>
+      <li><b>The maintainer's log</b><span><code>.fork/runs/run-live-2026-09/friction.md</code>, one line per working day, an empty day is a line. <b>It held one dated day until 2026-09-12, and that was a reporting gap, not a working one</b> &mdash; the maintainer went straight into fixing each blocker in situ and reasonably assumed the filing was the agents' job. The commits are the real record: <b>39 of the 119 since 2026-09-04</b> name the phone or a remote shell as the working surface. An agent read the thin table as evidence about the week and was wrong; that is the phantom-zero rule applied to a log instead of a payload.</span></li>
       <li><b>The agent's log</b><span>The same file, a second table headed <em>agent</em>: what the agent working this board lacked in the panel, one line per session. This is I19's first step, done as a habit instead of a task. A line that recurs three times outranks any row above.</span></li>
       <li><b>What would make this fail</b><span>Installing a runtime unasked. Measuring a local model on the Windows side while the pane is in the distribution. Reading <code>success</code> off <code>agent list</code> instead of the output. A fetch that runs with its variable unset.</span></li>
     </ul>
