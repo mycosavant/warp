@@ -111,6 +111,61 @@ Warp's own git tree as mode `120000`. It exists so Claude Code finds Warp's
 in-repo skills at the path it expects. It has nothing to do with bridging
 Windows and WSL. It was simply collateral damage from the Windows checkout.
 
+#### Repairing it, which takes two fixes and reads like one
+
+Resolved 2026-09-12 after it had cost parts of two sessions. **Developer Mode
+alone does not fix it.** `core.symlinks = false` is written into
+`C:\dev\warp/.git/config` by git at **clone** time, on a machine that could not
+then make symlinks, and it is sticky — so turning Developer Mode on later
+changes nothing already on disk and `.claude/skills` stays a 17-byte text file
+whose contents are the link target, `../.agents/skills`.
+
+**The obvious recovery then fails in a way that reads like the opposite of the
+truth.** Both of these:
+
+```
+git rm --cached .claude/skills   → fatal: pathspec ... did not match any files
+git checkout -- .claude/skills   → error: pathspec ... did not match any file(s) known to git
+```
+
+are complaining about the **same missing index entry**, and neither says so.
+`git checkout -- <path>` restores from the *index*, not from HEAD; once
+`git rm --cached` has run the path is gone from the index, while HEAD has been
+holding it as mode `120000` the whole time. Diagnose with the three sources
+separately:
+
+```
+git ls-tree HEAD .claude/skills   # 120000 blob ...   <- HEAD has it
+git ls-files -s .claude/skills    # blank             <- the index does not
+git status --porcelain .claude/skills   # "D " and "??" together
+```
+
+The order that works, in PowerShell so Windows git creates the link:
+
+```powershell
+git -C C:\dev\warp config core.symlinks true
+git -C C:\dev\warp reset HEAD .claude/skills   # restore the index entry from HEAD
+Remove-Item C:\dev\warp\.claude\skills        # drop the plain file
+git -C C:\dev\warp checkout -- .claude/skills  # materialise as a real symlink
+```
+
+Verify with `(Get-Item .claude\skills -Force).LinkType` — `SymbolicLink`, target
+`..\.agents\skills`, and `git status` clean.
+
+**Do not test the capability with PowerShell.** `New-Item -ItemType SymbolicLink`
+answers *"Administrator privilege required for this operation"* with Developer
+Mode **on**, because PowerShell 5.1 does not pass
+`SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE` and Git for Windows does. Taken at
+face value it says the machine cannot make symlinks, one step before doing so
+successfully. Test with git instead — a throwaway repo, `git update-index --add
+--cacheinfo 120000,<sha>,link`, `git checkout -- link`, then read `LinkType`.
+This is the curl-versus-browser lesson in `CLAUDE.md` running the other way: the
+narrow stand-in **fails** where the real client works, which is the shape that
+talks you out of a fix that would have worked.
+
+`git ls-files -s | Select-String '^120000'` lists every tracked symlink; in this
+repo there is exactly one, so nothing else was affected.
+
 ### Warp's shell bootstrap (the `source ~/.bashrc` garbling)
 
 Two separate pieces, often confused:

@@ -11,6 +11,39 @@ actively misleads is called out under *Formatting* below.
 
 ---
 
+## How to write in this file
+
+**This file is the index. Accounts go elsewhere.** A finding lands here as a
+*rule*, in as few lines as the rule needs, and its account — the measurements,
+the false starts, the run — goes to a `.fork/docs/` page or a `.fork/runs/`
+record, cited by path. **Writing the account here is the regression**, and it is
+the easy one to make, because the account is what you have just finished
+learning. This rule has been in the file since 2026-09-10, at the bottom, where
+it was read after the damage; it is here now for the obvious reason.
+
+**It is over budget: 154,434 characters against Claude Code's 150,000-character
+memory-file warning, plus an 8,735-character skill that loads with it.** Treat
+every addition as needing a removal to pay for it. `.fork/docs/model-economy.md`
+has the threshold's formula and why it is 5% of the active context window.
+
+**Retract in place, and leave the wrong claim visible.** This file's value is
+that it records what was believed and what falsified it, so a reader can tell a
+claim that survived contact from one nobody has tested. Deleting a wrong
+sentence destroys exactly that. The form, used throughout:
+
+- Strike it (`~~…~~`) or write *"this line said X until DATE"*, then give the
+  correction and **what falsified it** — a run, a command, a person.
+- Date both halves. A measured claim is measured *as of* its date.
+- Put the correction in **the commit that makes it and the doc that was wrong**,
+  not only in the newer doc that happens to be right.
+- A run record in `.fork/runs/` is **never rewritten**; supersede it with a
+  pointer at its head and leave its body alone.
+
+**Say what you did not establish.** A finding with no stated limit reads as
+stronger than it is, and the next reader spends a day on the gap.
+
+---
+
 ## Method: run it
 
 **Scope and verify by running the thing, not by reading it.** This is the rule
@@ -491,28 +524,20 @@ either half of it alone is worse than `opencode`. Warp sends the identical
 per-call rejection (`{"outcome": "selected", "optionId": "reject"}`, never
 `Cancelled`) in every case, so the difference is entirely the agent's.
 
-**The fourth row is new on 2026-09-11 and it is the first agent that needs no
-mode variable to ask.** `@zed-industries/codex-acp` opens its session in
-`read-only` — Warp was asked about the one `execute` in a three-tool turn and not
-about the list or the read — where `claude-agent-acp` opens in `auto` and answers
-by classifier. It runs on the maintainer's **own OpenRouter key** through
-codex's `model_providers` config, so no `authenticate` is ever sent, and it
-advertises a `configOptions` model list the panel's chip can populate. Watched on
-the wire across four runs it reached **openrouter.ai and nothing else**.
-`.fork/runs/codex-wire-2026-09-11/`. Two traps in the config: at the pinned
-codex, `wire_api` accepts **only** `responses` (`chat` is refused at load, and
-OpenRouter does serve `/v1/responses`), and a `CODEX_HOME` under `/tmp` makes
-codex warn and carry on without its helper binaries.
+**The fourth row is new on 2026-09-11 and is the first agent that asks without
+a mode variable.** codex-acp opens in `read-only`, runs on the maintainer's own
+OpenRouter key through codex's `model_providers`, sends no `authenticate`, and
+across four watched runs reached **openrouter.ai and nothing else**. Config
+traps: `wire_api` accepts only `responses` at the pinned codex, and a
+`CODEX_HOME` under `/tmp` is refused. `.fork/runs/codex-wire-2026-09-11/`.
 
-**Two rules from that run that are not about codex.** *Ask the question of the
-pinned tree, not of HEAD* — a wrapper vendors a version, and codex-acp 0.16.0
-pins `rust-v0.137.0`, three months behind the `main` a recon had read, which is
-how a config block was published that the binary refuses. And *linked is not
-reached*: the analytics and OpenTelemetry crates are compiled into that binary
-(208 `codex_otel` symbols) while its telemetry endpoints are absent, because
-nothing calls them and `--gc-sections` takes the unreferenced chain's strings
-with it. **A dependency graph answers a different question from a call graph**,
-and the first one reads like the alarming answer.
+**Two rules from it that are not about codex.** *Ask the question of the pinned
+tree, not of HEAD* — a wrapper vendors a version, and reading the newer one is
+how a config block got published that the binary refuses. And *linked is not
+reached*: the telemetry crates are compiled into that binary while their
+endpoints are absent, because nothing calls them and `--gc-sections` takes the
+unreferenced chain's strings with it. **A dependency graph answers a different
+question from a call graph**, and it is the one that reads as alarming.
 
 **On the Windows build, name the agent so it starts *inside* the distribution, or
 every turn in a WSL pane fails before it begins.** Measured 2026-09-02, end to
@@ -1372,30 +1397,17 @@ git -C C:\dev\warp fetch origin dev; git -C C:\dev\warp merge --ff-only FETCH_HE
 
 The launcher's own hint uses the PowerShell form because that is where it runs.
 
-**A symlink in that checkout needs two things, and Developer Mode is only one of
-them.** Found 2026-09-12. `core.symlinks = false` is written into
-`C:\dev\warp/.git/config` by git at **clone** time when the machine could not
-make symlinks, and it is **sticky** — turning Developer Mode on later fixes
-nothing already on disk, and `.claude/skills` stays a 17-byte text file whose
-contents are the link target. Both halves are needed: `git config core.symlinks
-true`, then re-materialise the path.
-
-**And the obvious recovery fails in a way that reads like the opposite of the
-truth.** `git checkout -- <path>` restores from the **index**, not from HEAD, so
-once `git rm --cached` has run the path is gone from the index and checkout says
-*"did not match any file(s) known to git"* — while HEAD has been holding it as
-mode `120000` the whole time. The order that works is `git reset HEAD <path>`,
-delete the plain file, then `git checkout -- <path>`.
-
-**The capability test for this is a false negative in PowerShell.** `New-Item
--ItemType SymbolicLink` answers *"Administrator privilege required"* with
-Developer Mode **on**, because PowerShell 5.1 does not pass
-`SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE` and Git for Windows does. So test
-with `git` — a throwaway repo, `update-index --add --cacheinfo 120000,<sha>,link`,
-then `checkout` — and read `LinkType`. This is the curl-versus-browser lesson
-already recorded above, running the other way: the narrow stand-in **failed**
-where the real client succeeds, which is the shape that talks you out of a fix
-that would have worked.
+**A symlink in that checkout needs two things and Developer Mode is only one.**
+`core.symlinks = false` is written into the clone's config by git at **clone**
+time and is sticky, so the toggle fixes nothing already on disk. Set it true,
+then re-materialise: `git reset HEAD <path>` (checkout restores from the
+**index**, so after a `git rm --cached` it says *"did not match any file(s)
+known to git"* while HEAD holds mode `120000`), delete the plain file, then
+`git checkout -- <path>`. **Test the capability with `git`, not PowerShell** —
+`New-Item -ItemType SymbolicLink` refuses under Developer Mode because
+PowerShell 5.1 omits `SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE` and Git for
+Windows passes it, so the stand-in fails where the real client works. Account:
+`.fork/docs/manual.md`, *The skills symlink*.
 
 `.fork/docs/manual.md` documents the clone and never says to update it, which is how
 a two-tree setup reads as one tree for months. Worth stating in general: a build

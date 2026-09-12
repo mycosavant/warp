@@ -70,6 +70,7 @@ changes the answer; the story of the finding stays in the ticket it cites.
 | `docs/composer.md` | the agent panel as drawn: Warp's notes, tool rows, the approval card, the measured chrome-to-words ratio |
 | `docs/observability.md` | the viewer spec: the harness's own transcript is the record, Warp adds what it alone knows |
 | `docs/remote-control.md` | `/remote-control` the fork's way: one conversation handed to a phone, which may drive it and nothing else |
+| `docs/voice.md` | **speech in and speech out as one surface**: what `pocket-tts` already is and where it is tested, the four device constraints any fork-side bridge inherits, the `agent trace` bridge that is not built, and three findings kept for their shape rather than their subject |
 | `docs/classifier.md` | a local permission classifier, and why "a model deciding is not consent" does two jobs |
 | `docs/environment.md` | **the account behind every `WARP_FORK_*` variable**: what each default was chosen against, the two parser shapes and which one a variable gets. The index is the table in `CLAUDE.md`; this is the argument |
 | `docs/model-economy.md` | which model and how much effort for each kind of work here, what the `CLAUDE.md` prefix costs, the 150k-character warning it crossed on 2026-09-10, and the caching habits that follow |
