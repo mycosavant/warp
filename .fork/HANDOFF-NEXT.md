@@ -114,9 +114,11 @@ pocket-tts PRs #7 and #8 are confirmed on a device.
 
 ### 6 · Never verified, from earlier work
 
-- **End-to-end park-and-approve inside a TUI session** — a real ACP permission
+- ~~**End-to-end park-and-approve inside a TUI session** — a real ACP permission
   request parked in the TUI and answered from another shell. The channel is
-  proved (`f2e1558c6`); that loop is not.
+  proved (`f2e1558c6`); that loop is not.~~ **Verified live 2026-09-12**,
+  `.fork/runs/tui-approve-2026-09-12/`: parked, approved from a separate shell,
+  file confirmed written from disk.
 - **Codex's telemetry claim rests on a polling census.** `.fork/runs/codex-wire-2026-09-11/`
   states its own limit: a connection inside one poll interval would be missed.
   The static read and the negative control agree with it, which is why it stands.

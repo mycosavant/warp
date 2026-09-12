@@ -158,19 +158,25 @@
   </div>
 </div>
 
-<div class="item next">
+<div class="item done">
   <div class="rank">4</div>
   <div class="body">
-    <div class="head"><h2>Verify park-and-approve end to end inside a TUI session</h2><span class="status">next · small&ndash;medium</span></div>
-    <div class="meta"><span>effort: small&ndash;medium, mostly verification</span><span>impact: medium</span></div>
-    <p>An ACP permission request parked in the TUI and answered from a separate
-    shell — the channel is proved (<code>f2e1558c6</code>), the full loop has
-    never been run. This has now carried across two handoffs
+    <div class="head"><h2>Verify park-and-approve end to end inside a TUI session</h2><span class="status">done · 2026-09-12</span></div>
+    <div class="meta"><span>effort: small&ndash;medium</span><span>impact: medium</span></div>
+    <p>Had carried across three handoffs untouched
     (<code>HANDOFF-DECIDE.md</code> → <code>HANDOFF-NEXT.md</code> →
-    <code>HANDOFF-GHTESTS.md</code>) without anyone picking it up, which is the
-    fork's own signal for promoting something: a friction or gap that recurs
-    outranks a fresh idea with none behind it.</p>
-    <p class="src">Source: <code>.fork/HANDOFF-NEXT.md</code> §6; <code>.fork/HANDOFF-GHTESTS.md</code> "still open" list.</p>
+    <code>HANDOFF-GHTESTS.md</code>). Driven live in a scratch profile: built
+    <code>warp-tui-oss</code> with <code>standalone,warp_control_cli</code>,
+    launched under tmux with <code>claude-agent-acp</code> pinned to
+    <code>0.73.0</code> and <code>WARP_FORK_ACP_MODE=default</code>, sent a
+    prompt requiring a file write, watched the turn park with the TUI's own
+    transcript naming the exact <code>warpctrl agent approve</code> command
+    and digest, answered it from a separate shell, and confirmed the loop
+    actually closed by reading the written file back off disk rather than
+    trusting a status line. Not covered: the deny path (same code, not driven
+    live), a paired remote device answering, and agents besides
+    <code>claude-agent-acp</code>.</p>
+    <p class="src">Source: <code>.fork/runs/tui-approve-2026-09-12/</code>.</p>
   </div>
 </div>
 

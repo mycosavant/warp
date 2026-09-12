@@ -526,9 +526,15 @@ time 2026-08-30; nothing in this repo's docs had mentioned it.
   Anything that later does must answer that hazard first, and I20 says to
   measure it rather than reason about it.
 
-  **Still unverified**: the end-to-end park-and-approve *inside* a TUI session —
-  a real ACP permission request parked there and answered from another shell.
-  The channel is proved; that loop is not.
+  ~~**Still unverified**: the end-to-end park-and-approve *inside* a TUI
+  session — a real ACP permission request parked there and answered from
+  another shell. The channel is proved; that loop is not.~~ **Verified live
+  2026-09-12**: a permission request parked in a real TUI session, answered
+  with `warpctrl agent approve` from a separate shell, and the file it was
+  asking to write came back off disk with the exact content the turn intended
+  — not inferred from a status line. `.fork/runs/tui-approve-2026-09-12/`. Not
+  covered: the deny path (same code, not driven live), a paired remote device
+  answering, and any agent besides `claude-agent-acp`.
 
   The old sentence is kept above rather than deleted because its *rule* is still
   right and only its example rotted: do not assume a fork behaviour holds in the

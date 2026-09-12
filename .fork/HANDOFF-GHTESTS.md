@@ -307,7 +307,8 @@ non-obvious parts it already handles:
   has `http` and `command` backends that openwhispr may fit unchanged — so
   **measure what already works before building anything**. `.fork/docs/voice.md`
   and `.fork/tickets/T02` are the index.
-- **End-to-end park-and-approve inside a TUI session** — never verified.
+- ~~**End-to-end park-and-approve inside a TUI session** — never verified.~~
+  **Verified live 2026-09-12**, `.fork/runs/tui-approve-2026-09-12/`.
 
 ---
 
