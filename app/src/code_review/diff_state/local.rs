@@ -1282,7 +1282,10 @@ impl LocalDiffStateModel {
     ) {
         let Some(repo_path) = self.active_repository_path(ctx) else {
             ctx.emit(DiffStateModelEvent::GitOpCompleted(
-                GitOpResult::CommitChainCompleted(Err("no active repository".to_string())),
+                GitOpResult::CommitChainCompleted(Err(super::CommitChainFailure::at(
+                    git_actions::CommitChainStage::NotCommitted,
+                    "no active repository",
+                ))),
             ));
             return;
         };
@@ -1323,7 +1326,9 @@ impl LocalDiffStateModel {
                         me.apply_git_op_delta(commits, upstream_ref, ctx);
                         Ok(pr_info)
                     }
-                    Err(e) => Err(e.to_string()),
+                    // The chain knows how far it got; carry that rather than
+                    // flattening it to a message.
+                    Err(e) => Err(super::CommitChainFailure::at(e.stage, e.source.to_string())),
                 };
                 ctx.emit(DiffStateModelEvent::GitOpCompleted(
                     GitOpResult::CommitChainCompleted(domain_result),

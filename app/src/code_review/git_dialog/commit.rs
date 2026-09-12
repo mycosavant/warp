@@ -15,7 +15,8 @@ use warpui::ui_components::components::{UiComponent, UiComponentStyles};
 use warpui::ui_components::switch::SwitchStateHandle;
 use warpui::{AppContext, SingletonEntity, ViewContext, ViewHandle};
 
-use crate::code_review::diff_state::CommitChainMode;
+use crate::code_review::diff_state::{CommitChainFailure, CommitChainMode};
+use crate::code_review::git_actions::CommitChainStage;
 use crate::code_review::git_dialog::pr::show_pr_created_toast;
 use crate::code_review::git_dialog::{
     GitDialog, GitDialogAction, GitDialogEvent, GitDialogMode, render_branch_section,
@@ -399,10 +400,31 @@ pub(super) fn start_confirm(me: &mut GitDialog, ctx: &mut ViewContext<GitDialog>
 
 /// Shared commit-chain completion for both backends: toast + telemetry + close.
 /// `Ok(Some)` means create-PR ran; `Ok(None)` is a plain commit / commit-and-push.
+/// What to tell someone whose commit chain failed.
+///
+/// Two claims, and the first is the one that was missing: whether the commit
+/// they just made still exists. A chain that fails at the pull-request stage
+/// has committed and pushed, and saying *"Commit failed"* sends them looking
+/// for work that is already on the remote.
+pub(super) fn chain_failure_toast(failure: &CommitChainFailure) -> String {
+    let cause = user_facing_git_error(&failure.message);
+    match failure.stage {
+        Some(CommitChainStage::Pushed) => {
+            format!("Committed and pushed, but the pull request failed. {cause}")
+        }
+        // Not "Commit failed": the commit is in the repository, and a user
+        // told otherwise would remake it and be answered "nothing to commit".
+        Some(CommitChainStage::Committed) => {
+            format!("Committed, but the push failed. {cause}")
+        }
+        Some(CommitChainStage::NotCommitted) | None => cause.to_string(),
+    }
+}
+
 pub(super) fn finish_commit_chain(
     me: &GitDialog,
     intent: CommitChainMode,
-    result: Result<Option<PrInfo>, String>,
+    result: Result<Option<PrInfo>, CommitChainFailure>,
     ctx: &mut ViewContext<GitDialog>,
 ) {
     let operation = match intent {
@@ -412,7 +434,7 @@ pub(super) fn finish_commit_chain(
     };
     let (status, error) = match &result {
         Ok(_) => (GitDialogStatus::Succeeded, None),
-        Err(err) => (GitDialogStatus::Failed, Some(err.clone())),
+        Err(failure) => (GitDialogStatus::Failed, Some(failure.message.clone())),
     };
     match &result {
         Ok(Some(pr)) => show_pr_created_toast(pr, ctx),
@@ -424,9 +446,19 @@ pub(super) fn finish_commit_chain(
             };
             show_toast(msg, ctx);
         }
-        Err(err) => {
-            report_error!(anyhow::anyhow!("{err}").context("Commit failed"));
-            show_toast(user_facing_git_error(err), ctx);
+        Err(failure) => {
+            // The label named the first stage whatever actually failed, so a
+            // PR failure was reported — and sent to Sentry — as a failed
+            // commit that had in fact been made and pushed.
+            let label = match failure.stage {
+                Some(CommitChainStage::Pushed) => {
+                    "Pull request failed; the commit was made and pushed"
+                }
+                Some(CommitChainStage::Committed) => "Push failed; the commit was made",
+                Some(CommitChainStage::NotCommitted) | None => "Commit failed",
+            };
+            report_error!(anyhow::anyhow!("{}", failure.message).context(label));
+            show_toast(chain_failure_toast(failure), ctx);
         }
     }
     send_telemetry_from_ctx!(
@@ -658,3 +690,7 @@ fn render_intent_buttons(state: &CommitState) -> Box<dyn Element> {
     }
     column.finish()
 }
+
+#[cfg(test)]
+#[path = "commit_tests.rs"]
+mod tests;

@@ -199,8 +199,11 @@ failure the handoff named as passing rather than falsifying. The chain's dialog
 resolved in seven seconds rather than hanging, and its commit and push both
 landed first. No pull request was created and none could be.
 
-One defect found on the way and **not fixed**: the chain reports a failed PR
-creation as `Commit failed:` when the commit succeeded and is pushed.
+~~One defect found on the way and **not fixed**~~ — **fixed the same day, and
+it was two.** The chain now carries a `CommitChainStage` and says which stage
+it reached; and `user_facing_git_error` no longer answers *"GitHub CLI not
+authenticated"* to `gh`'s no-GitHub-remote message, which merely *suggests*
+`gh auth login`. `.fork/runs/routedpr-2026-09-12/`.
 
 The account below is kept as written.
 

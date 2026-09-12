@@ -32,6 +32,63 @@ use crate::util::git::{self, Commit, PrInfo, get_branch_commit_messages, get_dif
 /// When the chain creates a PR, `ai_client` (when `Some`) generates the
 /// title/body with a `--fill` fallback; pass `None` to skip AI entirely.
 #[allow(clippy::too_many_arguments)]
+/// How far a commit chain got before it failed.
+///
+/// This is the part a user cannot work out for themselves, and the reason the
+/// type exists: a chain that fails at the pull-request stage has already made
+/// a commit and pushed it, and reporting that as *"Commit failed"* sends them
+/// looking for work that is on disk and on the remote. Measured on a routed
+/// pane 2026-09-12, where exactly that happened:
+/// `.fork/runs/routedpr-2026-09-12/`.
+///
+/// Three states rather than a `committed` flag, because a **push** failure is
+/// the case a flag gets wrong in the other direction: the commit exists
+/// locally, so "the commit failed" would send the user to remake a commit that
+/// is already there, and their retry would answer "nothing to commit".
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CommitChainStage {
+    /// Nothing was committed.
+    NotCommitted,
+    /// The commit was made and is in the local repository. Nothing was
+    /// published.
+    Committed,
+    /// The commit was made and pushed. A later stage failed.
+    Pushed,
+}
+
+/// A commit chain that failed, and how far it got.
+#[derive(Debug)]
+pub struct CommitChainError {
+    pub stage: CommitChainStage,
+    pub source: anyhow::Error,
+}
+
+impl CommitChainError {
+    /// `.map_err(CommitChainError::at(CommitChainStage::Pushed))`
+    fn at(stage: CommitChainStage) -> impl FnOnce(anyhow::Error) -> Self {
+        move |source| Self { stage, source }
+    }
+}
+
+impl std::fmt::Display for CommitChainError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Deliberately just the cause: every consumer that wants the stage
+        // reads `committed`, and the daemon turns this into a wire string
+        // where an added prefix would be a second, unparsed claim.
+        write!(f, "{}", self.source)
+    }
+}
+
+// `std::error::Error` is what lets a caller that only wants the cause — the
+// daemon, which has no way to put `committed` on the wire — convert with
+// anyhow's blanket `From`. Implementing `From<Self> for anyhow::Error` by hand
+// collides with that blanket impl.
+impl std::error::Error for CommitChainError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        self.source.source()
+    }
+}
+
 pub async fn run_commit_chain(
     repo_path: &Path,
     mode: CommitChainMode,
@@ -41,28 +98,42 @@ pub async fn run_commit_chain(
     ai_client: Option<&dyn AIClient>,
     pr: PrStage,
     path_env: Option<&str>,
-) -> anyhow::Result<CommitChainOutcome> {
-    git::run_commit(repo_path, message, include_unstaged, path_env).await?;
+) -> Result<CommitChainOutcome, CommitChainError> {
+    git::run_commit(repo_path, message, include_unstaged, path_env)
+        .await
+        .map_err(CommitChainError::at(CommitChainStage::NotCommitted))?;
     let mut pr_info = None;
     let mut pr_inputs = None;
     match mode {
         CommitChainMode::CommitOnly => {}
         CommitChainMode::CommitAndPush => {
-            git::run_push(repo_path, branch, path_env).await?;
+            // Past the commit, so a push failure leaves one behind.
+            git::run_push(repo_path, branch, path_env)
+                .await
+                .map_err(CommitChainError::at(CommitChainStage::Committed))?;
         }
         CommitChainMode::CommitAndCreatePr => {
-            git::run_push(repo_path, branch, path_env).await?;
+            git::run_push(repo_path, branch, path_env)
+                .await
+                .map_err(CommitChainError::at(CommitChainStage::Committed))?;
             // After the push, and that ordering is load-bearing: the PR diff
             // is taken against `origin/<branch>`, so inputs computed before
             // this point would describe the branch without the commit just
             // made.
             match pr {
                 PrStage::Create(content) => {
-                    pr_info =
-                        Some(create_pr(repo_path, branch, ai_client, content, path_env).await?);
+                    pr_info = Some(
+                        create_pr(repo_path, branch, ai_client, content, path_env)
+                            .await
+                            .map_err(CommitChainError::at(CommitChainStage::Pushed))?,
+                    );
                 }
                 PrStage::ReturnInputs => {
-                    pr_inputs = Some(pr_content_inputs(repo_path).await?);
+                    pr_inputs = Some(
+                        pr_content_inputs(repo_path)
+                            .await
+                            .map_err(CommitChainError::at(CommitChainStage::Pushed))?,
+                    );
                 }
             }
         }

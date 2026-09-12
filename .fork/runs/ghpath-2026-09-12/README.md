@@ -45,6 +45,51 @@
 > **The Windows half is reasoned, not measured — there is no Rust probe of
 > `CreateProcessW` in this record.**
 >
+> **SECOND CORRECTION, later the same day: the Windows half is now run, and
+> the two platforms are opposite.** `windows-probe/` in this directory is a
+> two-binary cargo crate built on the Windows side (rustc 1.92.0) that plants a
+> fake `hostname.exe` shadowing System32's and a fake `warp-only-here.exe` that
+> exists nowhere else, then spawns both with `PATH` set on the child.
+>
+> ```
+> CONTROL (no child PATH) hostname        -> effatha
+> CONTROL (no child PATH) warp-only-here  -> SPAWN FAILED: program not found
+> PROBE hostname        cwd=false -> FAKE RAN C:\dev\pathprobe\fakebin\hostname.exe
+> PROBE warp-only-here  cwd=false -> FAKE RAN C:\dev\pathprobe\fakebin\warp-only-here.exe
+> ```
+>
+> The control is what makes it mean anything: with no child `PATH`, the real
+> `hostname` answers and the invented name fails to spawn. With one, **both
+> fakes run** — the child's `PATH` shadows System32.
+>
+> | | program also on the parent's `PATH` | program only on the child's |
+> |---|---|---|
+> | **Linux**, glibc 2.39 | the **parent's** runs | the child's runs |
+> | **Windows** | the **child's** runs | the child's runs |
+>
+> So on Windows the child's `PATH` is authoritative for Rust's
+> `std::process::Command`, and it is **Linux** that treats it as a fallback.
+> `node_runtime`'s comment has this exactly backwards for Rust — it says
+> `CreateProcessW` uses the parent's `PATH` "so running `node` directly would
+> find node.exe via Warp's inherited env". Measured, it does not. That may well
+> be true of a bare `CreateProcessW` call; Rust's wrapper resolves the program
+> itself before it gets there.
+>
+> What survives of that file's `cmd.exe /c` wrapper is the reason
+> `command_builder.rs` gives rather than the one `node_runtime` gives:
+> `.cmd` and `.bat` scripts on `PATH`, which Rust's resolver does not try. That
+> reason is correct and untouched by any of this.
+>
+> And the LSP call sites do have the mild precedence issue on Linux and macOS
+> after all — `Command::new("gopls").env("PATH", captured)` loses to a `gopls`
+> on the inherited `PATH`. Real, unfixed, and **not measured to affect anyone**:
+> it needs two different `gopls` installs to be visible at all.
+>
+> Three readings of the same mechanism in one day, each one confident. The
+> probe that settles a platform question is a two-file crate and four minutes;
+> the thing that makes it evidence is the control, which is what separates
+> "the fake ran" from "the fake ran *because of the child's PATH*".
+
 > How this was got wrong: one observation (the real `gh` running) was
 > generalised into a mechanism without testing the other case, and the
 > mechanism then read as an explanation for two other files. The probe that

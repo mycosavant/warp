@@ -93,7 +93,37 @@ minutes before. The model cannot have recalled it, so the diff travelled from
 the daemon to the client and the client called the model — a24's fix,
 re-measured on a new pair of binaries with a marker that cannot predate the run.
 
-## A defect found on the way: the chain mislabels its own failure
+## A defect found on the way: the chain mislabels its own failure — **fixed 2026-09-12**
+
+Fixed the same day, and it turned out to be two defects rather than one. See
+the section as written below for what was observed; what follows is what was
+done.
+
+**The stage now travels.** `run_commit_chain` tags each failure with a
+`CommitChainStage` — `NotCommitted`, `Committed`, `Pushed` — and the dialog
+says which: *"Committed and pushed, but the pull request failed"*, *"Committed,
+but the push failed"*, or the cause alone. Three states rather than a
+`committed` flag, because a **push** failure is the case a flag gets wrong in
+the other direction: the commit is in the repository, and "Commit failed" would
+have the user remake it and be answered *"nothing to commit"*. The daemon still
+reports a chain failure as a bare string, so a failure inside the distribution
+arrives with no stage and is reported exactly as before — carrying it across
+means widening the proto.
+
+**The second defect was in the toast and is worse than the label.**
+`user_facing_git_error` matched on the substring `gh auth login` and answered
+*"GitHub CLI not authenticated."* — but `gh`'s message for a repository with no
+GitHub remote *ends by suggesting that command*. So anyone whose remote is
+GitLab, or self-hosted, or in this run a bare repo on disk, was told to
+authenticate, which cannot help. A new arm above it answers *"No GitHub remote
+for this repository."*
+
+Calibrated by breaking each fix and predicting the direction first. One break
+reddened **nothing** — the `Committed` stage had no test through the chain at
+all — and that gap is now closed by
+`a_chain_whose_push_fails_says_the_commit_was_made`, which fails when the break
+is re-applied.
+
 
 ```
 [ERROR] Commit failed: gh command failed: ... known GitHub host

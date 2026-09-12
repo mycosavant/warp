@@ -17,6 +17,7 @@ use warp_util::standardized_path::StandardizedPath;
 use warpui::{AppContext, ModelContext, ModelHandle};
 
 use crate::code_review::diff_size_limits::DiffSize;
+use crate::code_review::git_actions::CommitChainStage;
 use crate::util::git::{BranchEntry, Commit, FileChangeEntry, PrInfo};
 #[cfg_attr(not(feature = "local_fs"), allow(dead_code))]
 mod local;
@@ -418,11 +419,46 @@ pub enum DiffStateModelEvent {
 /// Result of a remote git operation, emitted via
 /// `DiffStateModelEvent::GitOpCompleted`. The model applies the post-op
 /// delta before emitting, so the dialog only handles UI concerns.
+/// A commit chain that failed, as the dialog receives it.
+///
+/// The [`git_actions::CommitChainError`](crate::code_review::git_actions::CommitChainError)
+/// this mirrors cannot be used directly, because [`GitOpResult`] is `Clone`
+/// and `anyhow::Error` is not.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CommitChainFailure {
+    pub message: String,
+    /// How far the chain got, or `None` when nobody could tell — the daemon
+    /// reports a chain failure as a bare string, so a failure inside the
+    /// distribution arrives here with no stage attached. `None` is reported
+    /// the way every chain failure was before 2026-09-12: the cause alone,
+    /// claiming nothing about the commit. Widening the proto is what would
+    /// carry it across.
+    pub stage: Option<CommitChainStage>,
+}
+
+impl CommitChainFailure {
+    /// A failure whose stage the chain reported.
+    pub fn at(stage: CommitChainStage, message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+            stage: Some(stage),
+        }
+    }
+
+    /// A failure whose stage is not knowable here.
+    pub fn unknown_stage(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+            stage: None,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum GitOpResult {
     /// Commit chain completed. `Ok(Some(pr))` when create-PR was part of
     /// the chain; `Ok(None)` for commit-only or commit-and-push.
-    CommitChainCompleted(Result<Option<PrInfo>, String>),
+    CommitChainCompleted(Result<Option<PrInfo>, CommitChainFailure>),
     /// Standalone push completed.
     PushCompleted(Result<(), String>),
     /// Standalone create-PR completed.

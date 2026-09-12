@@ -162,6 +162,13 @@ fn user_facing_git_error(raw: &str) -> &'static str {
         // `run_gh_command` wraps spawn failures with this prefix, which is
         // the reliable "gh binary missing" signal.
         "GitHub CLI (gh) not installed. See https://cli.github.com/."
+    } else if lower.contains("known github host") {
+        // Ordering is load-bearing and this arm is why. `gh`'s message for a
+        // repository with no GitHub remote *ends by suggesting `gh auth
+        // login`*, so the arm below used to claim the user was not
+        // authenticated — wrong advice, and it will not help. Measured on a
+        // repository whose only remote was a local bare one, 2026-09-12.
+        "No GitHub remote for this repository."
     } else if lower.contains("not logged in")
         || lower.contains("authentication required")
         || lower.contains("gh auth login")

@@ -1,0 +1,7 @@
+CONTROL (no child PATH) hostname        -> effatha
+CONTROL (no child PATH) warp-only-here  -> SPAWN FAILED: program not found
+PROBE hostname        cwd=false -> FAKE RAN C:\dev\pathprobe\fakebin\hostname.exe
+PROBE hostname        cwd=true  -> FAKE RAN C:\dev\pathprobe\fakebin\hostname.exe
+PROBE warp-only-here  cwd=false -> FAKE RAN C:\dev\pathprobe\fakebin\warp-only-here.exe
+PROBE warp-only-here  cwd=true  -> FAKE RAN C:\dev\pathprobe\fakebin\warp-only-here.exe
+rustc 1.92.0 (ded5c06cf 2025-12-08)

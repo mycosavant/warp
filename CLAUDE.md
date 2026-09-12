@@ -790,19 +790,26 @@ symlink recipe for Developer Mode's Git-for-Windows/PowerShell split.
 `bash -c` matches its own argv. Match something narrower, or check the thing
 you actually care about.
 
-**Setting `PATH` on a child is a fallback, not an override.** The parent's
-`PATH` is searched first; the child's is consulted only when that finds nothing
-(measured 2026-09-12, Linux/glibc — **the Windows half is reasoned, not run**,
-and `CreateProcessW` is said to have no fallback at all). So
-`Command::new("gh").env("PATH", user_path)` runs the inherited `gh` whenever
-there is one, and the user's only when there is not. Two consequences. **A test
-that plants a fake binary on a child `PATH` exercises the real one** whenever
-that name is installed — five here did, green for months because the fake
-imitated the real error. And a tool present in both places silently ignores the
-user's shell, which `warp_util::path::resolve_executable_in_path` fixes at the
-call site. This line said *never decides* and that APP-4188's `gh` half **never
-worked**; both were wrong within hours, from generalising one observation
-without probing the other case. `.fork/runs/ghpath-2026-09-12/`.
+**Setting `PATH` on a child means opposite things on the two platforms.**
+Measured 2026-09-12 with a fake shadowing an installed binary and a fake with a
+name nothing else has, each run with a no-`PATH` control:
+
+| | name also on the parent's `PATH` | name only on the child's |
+|---|---|---|
+| **Linux** (glibc 2.39) | the **parent's** runs | the child's runs |
+| **Windows** | the **child's** runs | the child's runs |
+
+So on Windows the child's `PATH` decides; on Linux it is only a *fallback*, and
+`Command::new("gh").env("PATH", user_path)` there runs the inherited `gh`
+whenever there is one. Resolve explicitly — `warp_util::path::resolve_executable_in_path`
+— and both platforms agree. **A test that plants a fake on a child `PATH`
+exercises the real binary on Linux** whenever that name is installed; five here
+did, green for months because the fake imitated the real error. This rule was
+written twice wrongly the same day, first as *lookup always uses the parent's*
+and then as *a fallback on both platforms*, each from one observation without a
+control. `node_runtime`'s comment is wrong the other way — `cmd.exe /c` on
+Windows is earned by `.cmd`/`.bat` resolution, not by `PATH`.
+`.fork/runs/ghpath-2026-09-12/`.
 
 **Diff test-failure *membership*, not counts.** A 9-failure swing between runs
 is normal weather here (`-p warp --lib`'s known flaky set, mostly shared

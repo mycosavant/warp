@@ -705,7 +705,10 @@ impl RemoteDiffStateModel {
                         );
                         ctx.emit(DiffStateModelEvent::GitOpCompleted(
                             super::GitOpResult::CommitChainCompleted(Err(
-                                "committed and pushed, but the PR request was lost".to_string(),
+                                super::CommitChainFailure::at(
+                                    git_actions::CommitChainStage::Pushed,
+                                    "the PR request was lost",
+                                ),
                             )),
                         ));
                         return;
@@ -722,7 +725,10 @@ impl RemoteDiffStateModel {
                 }
                 Ok(pr_info)
             }
-            Err(msg) => Err(msg.clone()),
+            // The daemon sends a bare string, so a failure inside the
+            // distribution is indistinguishable from one before the commit.
+            // Claiming the commit survived would be a guess.
+            Err(msg) => Err(super::CommitChainFailure::unknown_stage(msg.clone())),
         };
         ctx.emit(DiffStateModelEvent::GitOpCompleted(
             super::GitOpResult::CommitChainCompleted(domain_result),
@@ -789,8 +795,14 @@ impl RemoteDiffStateModel {
             .take()
             .is_some_and(|pending| pending.from_commit_chain);
         if from_commit_chain {
+            // Reaching here means the daemon already returned PR inputs, and
+            // it only does that after the commit and the push. So a failure
+            // at this point is provably after the commit, and this is the
+            // path the routed run of 2026-09-12 took.
             ctx.emit(DiffStateModelEvent::GitOpCompleted(
-                super::GitOpResult::CommitChainCompleted(domain_result.map(Some)),
+                super::GitOpResult::CommitChainCompleted(domain_result.map(Some).map_err(|msg| {
+                    super::CommitChainFailure::at(git_actions::CommitChainStage::Pushed, msg)
+                })),
             ));
             return;
         }

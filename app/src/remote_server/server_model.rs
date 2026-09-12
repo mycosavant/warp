@@ -3224,6 +3224,12 @@ impl ServerModel {
                     path_env,
                 )
                 .await
+                // The chain's `committed` flag stops here: a
+                // `GitCommitChainResponse` failure is a bare string, so the
+                // client cannot tell a commit failure inside the distribution
+                // from a push one and does not guess. Widening the proto is
+                // what would carry it across.
+                .map_err(anyhow::Error::from)
             },
             move |me, result, _ctx| {
                 let message = match result {

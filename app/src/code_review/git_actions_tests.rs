@@ -188,3 +188,152 @@ async fn the_pr_inputs_do_not_see_an_uncommitted_change() {
         inputs.diff
     );
 }
+
+/// Writes an executable fake `gh` into its own directory and returns
+/// `(dir, path_env)` — the directory handle, and a `PATH` string with it first.
+///
+/// Until 2026-09-12 a fake like this was never executed: `run_gh_command`
+/// resolved the program through the parent's `PATH`, and on Linux that wins
+/// whenever the name is installed. It resolves `path_env` now, so this works.
+/// `.fork/runs/ghpath-2026-09-12/`.
+#[cfg(all(feature = "local_fs", unix))]
+fn fake_gh(script: &str) -> (TempDir, String) {
+    use std::fs;
+    use std::os::unix::fs::PermissionsExt;
+
+    let dir = tempfile::tempdir().expect("failed to create fake bin dir");
+    let gh = dir.path().join("gh");
+    fs::write(&gh, script).expect("failed to write fake gh");
+    let mut perms = fs::metadata(&gh).unwrap().permissions();
+    perms.set_mode(0o755);
+    fs::set_permissions(&gh, perms).unwrap();
+    let path_env = format!(
+        "{}:{}",
+        dir.path().display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+    (dir, path_env)
+}
+
+/// A chain that fails while creating the PR reports that the commit landed.
+///
+/// The defect this pins, measured on a routed pane 2026-09-12: the dialog
+/// labelled every chain failure *"Commit failed"*, including one where the
+/// commit had been made and pushed and only `gh` refused. See
+/// `.fork/runs/routedpr-2026-09-12/`.
+#[cfg(all(feature = "local_fs", unix))]
+#[tokio::test]
+async fn a_chain_that_fails_at_the_pr_says_the_commit_landed() {
+    let (_dir, _remote, repo) = init_repo_with_origin().await;
+    git(&repo, &["checkout", "-b", "feature"]).await;
+    std::fs::write(repo.join("f.txt"), "content\n").unwrap();
+    let (_fake_dir, path_env) = fake_gh("#!/bin/sh\nprintf 'refused\\n' >&2\nexit 1\n");
+
+    let err = super::run_commit_chain(
+        &repo,
+        super::CommitChainMode::CommitAndCreatePr,
+        "a message",
+        true,
+        "feature",
+        None,
+        super::PrStage::Create(None),
+        Some(&path_env),
+    )
+    .await
+    .err()
+    .expect("the fake gh refuses, so the chain must fail");
+
+    assert_eq!(
+        err.stage,
+        super::CommitChainStage::Pushed,
+        "the PR stage runs after the commit and push, so both landed: {err}"
+    );
+    // And they really did, not just by the flag's say-so.
+    assert_eq!(
+        git(&repo, &["log", "--oneline", "-1", "--format=%s"]).await,
+        "a message"
+    );
+    assert_eq!(
+        git(&repo, &["rev-list", "--count", "origin/feature..HEAD"]).await,
+        "0",
+        "the chain pushed before it tried the PR"
+    );
+}
+
+/// A chain that fails before anything is published says so.
+#[cfg(all(feature = "local_fs", unix))]
+#[tokio::test]
+async fn a_chain_that_fails_at_the_commit_does_not_claim_it_landed() {
+    let (_dir, _remote, repo) = init_repo_with_origin().await;
+    git(&repo, &["checkout", "-b", "feature"]).await;
+    // Nothing to commit, so the commit stage fails.
+    let (_fake_dir, path_env) = fake_gh("#!/bin/sh\nexit 0\n");
+
+    let err = super::run_commit_chain(
+        &repo,
+        super::CommitChainMode::CommitAndCreatePr,
+        "a message",
+        true,
+        "feature",
+        None,
+        super::PrStage::Create(None),
+        Some(&path_env),
+    )
+    .await
+    .err()
+    .expect("an empty tree has nothing to commit");
+
+    assert_eq!(
+        err.stage,
+        super::CommitChainStage::NotCommitted,
+        "nothing was committed: {err}"
+    );
+}
+
+/// A chain whose push fails reports the commit as made but unpublished.
+///
+/// Added because a calibration found nothing guarding it: breaking the push
+/// arm's stage reddened no test at all. This is the case a `committed` flag
+/// gets wrong in the other direction — the commit is in the repository, and
+/// "Commit failed" would have the user remake it.
+#[cfg(all(feature = "local_fs", unix))]
+#[tokio::test]
+async fn a_chain_whose_push_fails_says_the_commit_was_made() {
+    let (_dir, repo) = init_repo().await;
+    git(&repo, &["checkout", "-b", "feature"]).await;
+    // An origin that is not a repository, so the push cannot succeed and no
+    // network is involved either way.
+    let not_a_repo = tempfile::tempdir().expect("failed to create non-repo dir");
+    git(
+        &repo,
+        &[
+            "remote",
+            "add",
+            "origin",
+            &not_a_repo.path().display().to_string(),
+        ],
+    )
+    .await;
+    std::fs::write(repo.join("f.txt"), "content\n").unwrap();
+
+    let err = super::run_commit_chain(
+        &repo,
+        super::CommitChainMode::CommitAndPush,
+        "a message",
+        true,
+        "feature",
+        None,
+        super::PrStage::Create(None),
+        None,
+    )
+    .await
+    .err()
+    .expect("pushing to a non-repository must fail");
+
+    assert_eq!(err.stage, super::CommitChainStage::Committed, "{err}");
+    // And the commit really is there, which is the whole claim.
+    assert_eq!(
+        git(&repo, &["log", "--oneline", "-1", "--format=%s"]).await,
+        "a message"
+    );
+}
