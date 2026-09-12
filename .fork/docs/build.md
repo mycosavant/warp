@@ -13,6 +13,23 @@ number instead of an impression; this page is where the number went.*
 
 ---
 
+**What the version sidecar cost, and why it is not an environment variable.**
+Moved here from `CLAUDE.md` 2026-09-12; the rule stays there. Stamping
+`GIT_RELEASE_TAG` compiles the tag into `warp_core` through `option_env!`, and
+cargo rebuilds every dependent of a crate it rebuilds without checking whether
+the output changed — 55 crates invalidated by one changed tag. Measured on WSL
+2026-09-05, release profile: the commit that introduced the sidecar (and so
+changed `warp_core`) recompiled 53 crates in 6m57s, the last cascade.
+
+| build after | crates compiled | wall time |
+|---|---|---|
+| a `warp_core` change (`e8fb118ee`) | 53 | 6m57s |
+| a docs-only commit (`c56fc22de`) | **0** | **0.56s** |
+
+The second row is the whole argument: `--version` answered the new sha from a
+binary whose timestamp had not moved, because nothing it was built from had
+changed. Under the stamp it would have been 55 crates again.
+
 **A live run measures the binary, not your source — check the timestamp.**
 Measured 2026-08-30 and it cost a rebuild plus a wrong conclusion: a release
 build was started, then a fix was written while it compiled, and the run that

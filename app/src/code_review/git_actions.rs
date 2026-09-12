@@ -13,6 +13,10 @@
 //! `DiffStateModel`, building wire responses), and any execution-time guards
 //! (e.g. the daemon's `git_operation_in_progress` backstop).
 
+#[cfg(test)]
+#[path = "git_actions_tests.rs"]
+mod tests;
+
 use std::path::Path;
 
 use crate::ai::generate_code_review_content::api::{GenerateCodeReviewContentRequest, OutputType};
@@ -78,19 +82,31 @@ pub async fn create_pr(
     }
 }
 
-/// Generates an AI commit message for the working-tree changes.
-/// Bails when there's nothing to summarize (empty diff) or the model returns an empty message.
-pub async fn generate_commit_message(
+/// The working-tree diff a commit message would be generated from.
+///
+/// Split out of [`generate_commit_message`] so the two halves can run in
+/// different processes: the remote-server daemon computes the diff beside the
+/// files, and the client generates from it with its own model. Bails on an
+/// empty diff, which is the same refusal [`generate_commit_message`] makes and
+/// for the same reason — so the dialog says one thing whichever side ran.
+pub async fn commit_message_diff(
     repo_path: &Path,
-    branch_name: &str,
     include_unstaged: bool,
-    ai_client: &dyn AIClient,
 ) -> anyhow::Result<String> {
     let diff = git::get_diff_for_commit_message(repo_path, include_unstaged).await?;
-    // Skip the AI round trip when there's nothing to summarize.
     if diff.trim().is_empty() {
         anyhow::bail!("no changes to generate a commit message from");
     }
+    Ok(diff)
+}
+
+/// Generates an AI commit message from a diff already in hand.
+/// Bails when the model returns an empty message.
+pub async fn generate_commit_message_from_diff(
+    diff: String,
+    branch_name: &str,
+    ai_client: &dyn AIClient,
+) -> anyhow::Result<String> {
     let generated = ai_client
         .generate_code_review_content(GenerateCodeReviewContentRequest {
             output_type: OutputType::CommitMessage,
@@ -105,6 +121,19 @@ pub async fn generate_commit_message(
         anyhow::bail!("AI returned an empty commit message");
     }
     Ok(trimmed.to_string())
+}
+
+/// Generates an AI commit message for the working-tree changes.
+/// Bails when there's nothing to summarize (empty diff) or the model returns an empty message.
+pub async fn generate_commit_message(
+    repo_path: &Path,
+    branch_name: &str,
+    include_unstaged: bool,
+    ai_client: &dyn AIClient,
+) -> anyhow::Result<String> {
+    // Skip the AI round trip when there's nothing to summarize.
+    let diff = commit_message_diff(repo_path, include_unstaged).await?;
+    generate_commit_message_from_diff(diff, branch_name, ai_client).await
 }
 
 /// Generates PR title and body via AI (in parallel) and creates the PR.

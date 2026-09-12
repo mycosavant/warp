@@ -439,6 +439,17 @@ message GitGenerateCommitMessageRequest {
   bool include_unstaged = 2;
   // Current branch name, passed as context to the AI request.
   string branch_name = 3;
+  // When set, the daemon computes the diff and returns it in the `diff`
+  // response variant instead of calling a model; the client generates the
+  // message itself. The fork sets this because the daemon runs inside the WSL
+  // distribution, where the user's model endpoint and keychain are not
+  // installed — so the daemon-side generation this message was written for
+  // cannot succeed there, and the dialog opens blank.
+  //
+  // An older daemon that does not know this field skips it and generates as
+  // before; the client accepts either response variant, so the skew is a
+  // degradation to upstream behaviour rather than a failure.
+  bool return_diff_only = 4;
 }
 
 message GitGenerateCommitMessageResponse {
@@ -446,6 +457,11 @@ message GitGenerateCommitMessageResponse {
     // The generated commit message (already trimmed, non-empty).
     string message = 1;
     GitOpError error = 2;
+    // The working-tree diff, returned when `return_diff_only` was set. Already
+    // truncated to the AI token budget by the same helper the daemon would
+    // have used, and never empty — an empty diff is an `error` either way, so
+    // the dialog says the same thing on both paths.
+    string diff = 3;
   }
 }
 

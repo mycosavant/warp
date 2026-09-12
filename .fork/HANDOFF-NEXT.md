@@ -57,12 +57,25 @@ So `authenticate` is the door for an agent whose *only* way in is a vendor login
 **Gemini is untested and must not be assumed to match.** Evidence:
 `.fork/runs/codex-wire-2026-09-11/`, `.fork/runs/auth-2026-09-10/`.
 
-### 2 · The routed-WSL commit message (board item 2, "open from the run")
+### 2 · The routed-WSL commit message — **built 2026-09-12**
 
-The daemon inside the distribution generates the commit message with its own
+The daemon inside the distribution generated the commit message with its own
 client, where the fork's config is not installed — so on the *recommended*
-configuration this one feature is dead. The shape: the daemon returns the diff
-and the GUI generates. **A protocol addition**, so not an evening.
+configuration this one feature was dead. ~~**A protocol addition**, so not an
+evening.~~ It was **one request field**: `return_diff_only` on
+`GitGenerateCommitMessageRequest`. The proto is in-tree
+(`crates/remote_server/proto/`), so there is no upstream dependency and no
+generated code to check in, and the daemon already computed the diff beside
+the files — the only half it could not do was call a model it has no
+configuration for.
+
+**Not verified live.** Five unit tests, each calibrated by breaking it, and
+the routed commit dialog has not been opened since. The 10-second check is:
+routed WSL pane, code review panel, Commit. **The same defect is still live in
+the two PR-content call sites** (`GitCreatePrRequest.autogenerate_content`,
+`GitCommitChainRequest.autogenerate_pr_content`), where it degrades to
+`gh pr create --fill` rather than going blank, which is probably why nobody
+filed it.
 
 ### 3 · kode-rs framing (board item 8) — parked, the maintainer's call
 

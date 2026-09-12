@@ -422,6 +422,15 @@ upstream and rebasable.
 | `app/src/local_control/`, `crates/local_control/`, `crates/warp_cli/src/local_control/` | the `warpctrl` control plane, 115 actions. The count is pinned by **two** tests in different crates — update both, and never loosen either. **This line said 109 for two phases**: T11.2 took it to 110, T11.4 to 111, T11.5 to 114 and item 6's `agent.trace` to 115, and each updated the pins without updating this table. Read the count off the test, never off prose — and grep for `fn catalog_has_exactly`, because the test's own name embeds the number and so goes stale on exactly the schedule this warning is about. |
 | `app/src/remote_server/wsl_transport.rs`, `crates/remote_server/src/wsl.rs` | the second `RemoteTransport`: Warp's remote-development server, in a WSL distro instead of over SSH. |
 
+**A routed pane's daemon has none of this process's configuration**, so
+anything `fork.rs` re-points at the user's own model or keychain is dead there
+until the *client* does the work. The commit dialog opened blank from 2026-09-07
+to 2026-09-12 because upstream has the daemon both compute the diff and call
+the model, and the endpoint, model and key live here. Fixed by `return_diff_only`
+on the request: the daemon returns the diff, the client generates. **The two
+PR-content call sites still generate on the daemon** and fall back to
+`gh pr create --fill`, which is why nobody filed them. `.fork/docs/wsl.md`.
+
 **Every request through `http_client::Client::get` tells the destination what
 this machine is, whoever the destination is.** Found 2026-09-09 while building
 the fork's first deliberate third-party request (T21.4). `include_warp_http_headers`
@@ -473,18 +482,7 @@ not set `GIT_RELEASE_TAG` for a local build**; both scripts clear it in case
 the shell inherited one. The live Windows script is `C:\dev\build.ps1`, and
 `.fork/tools/build.ps1` is its tracked copy: change one, copy to the other.
 
-Measured on WSL the same day, release profile: the commit that introduced
-the sidecar (and so changed `warp_core`) recompiled 53 crates in 6m57s, the
-last cascade; the docs-only commit after it is the second row.
-
-| build after | crates compiled | wall time |
-|---|---|---|
-| a `warp_core` change (`e8fb118ee`) | 53 | 6m57s |
-| a docs-only commit (`c56fc22de`) | **0** | **0.56s** |
-
-The second row is the whole argument: `--version` answered the new sha
-from a binary whose timestamp had not moved, because nothing it was built
-from had changed. Under the stamp it would have been 55 crates again.
+The cost it removed is measured in `.fork/docs/build.md`.
 
 **The bigger one was underneath it, and it was live.**
 `generate_multi_agent_output` intercepts for the ACP and local agents *only when

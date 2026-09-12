@@ -263,6 +263,27 @@ pub fn local_ai_completions_enabled() -> bool {
     is_active()
 }
 
+/// Whether a commit message for a *remote* repository is generated on this
+/// side, from a diff the daemon returns, instead of by the daemon.
+///
+/// Upstream's `GitGenerateCommitMessage` RPC has the daemon do both halves:
+/// compute the diff beside the files, then call `/ai/generate_code_review_content`
+/// with the account the daemon is signed in as. Neither half of that survives
+/// here. [`local_ai_completions_enabled`] re-points that route at the user's
+/// own endpoint, and the endpoint name, the model and the key live in this
+/// process — in `settings.toml` and the OS keychain. The daemon that matters
+/// on the recommended configuration runs *inside the WSL distribution*, a
+/// different filesystem and a different keychain, so it has none of them and
+/// the commit dialog opens blank. Measured 2026-09-07, friction a4.
+///
+/// So the client asks for the diff and generates. Tied to
+/// [`local_ai_completions_enabled`] rather than given its own switch because
+/// it is the same fact: the model is configured here, so the call belongs
+/// here. Consumed by `code_review::diff_state::remote`.
+pub fn remote_commit_message_generated_locally() -> bool {
+    local_ai_completions_enabled()
+}
+
 /// Set to `1`, `on` or `true` to answer agent conversations from the local
 /// `claude` CLI instead of `api.warp.dev`.
 const LOCAL_AGENT_ENV_VAR: &str = "WARP_FORK_LOCAL_AGENT";

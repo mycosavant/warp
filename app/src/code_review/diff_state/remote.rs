@@ -11,7 +11,7 @@
 use std::sync::Arc;
 
 use instant::Instant;
-use remote_server::manager::{RemoteServerManager, RemoteServerManagerEvent};
+use remote_server::manager::{CommitMessageOutcome, RemoteServerManager, RemoteServerManagerEvent};
 use warp_core::{HostId, SessionId, send_telemetry_from_ctx};
 use warp_util::remote_path::RemotePath;
 use warp_util::standardized_path::StandardizedPath;
@@ -22,9 +22,12 @@ use super::{
     DiffStateError, DiffStateModelEvent, DiffStats, FileDiffAndContent, GitDiffData,
     GitDiffWithBaseContent,
 };
+use crate::code_review::git_actions;
 use crate::code_review::telemetry_event::CodeReviewTelemetryEvent;
+use crate::fork;
 use crate::remote_server::diff_state_proto::{try_decode_file_delta, try_decode_snapshot};
 use crate::remote_server::proto;
+use crate::server::server_api::ServerApiProvider;
 use crate::util::git::{BranchEntry, Commit, FileChangeEntry, PrInfo};
 
 // ── Internal state ────────────────────────────────────────────────
@@ -201,10 +204,26 @@ impl RemoteDiffStateModel {
                 host_id,
                 repo_path,
                 result,
-            } if self.remote_path.matches(host_id, repo_path) => {
-                // AI ran on the daemon; just relay the result to the dialog.
-                ctx.emit(DiffStateModelEvent::CommitMessageGenerated(result.clone()));
-            }
+                branch_name,
+            } if self.remote_path.matches(host_id, repo_path) => match result {
+                // The daemon ran the model; just relay the result to the dialog.
+                Ok(CommitMessageOutcome::Message(message)) => {
+                    ctx.emit(DiffStateModelEvent::CommitMessageGenerated(Ok(
+                        message.clone()
+                    )));
+                }
+                // We asked for the diff, so the model call is ours to make.
+                Ok(CommitMessageOutcome::Diff(diff)) => {
+                    self.generate_commit_message_from_remote_diff(
+                        diff.clone(),
+                        branch_name.clone(),
+                        ctx,
+                    );
+                }
+                Err(e) => {
+                    ctx.emit(DiffStateModelEvent::CommitMessageGenerated(Err(e.clone())));
+                }
+            },
             RemoteServerManagerEvent::GetCommittedBranchFilesResponse {
                 host_id,
                 repo_path,
@@ -743,6 +762,10 @@ impl RemoteDiffStateModel {
     /// Issues an AI commit-message generation request via the remote server
     /// manager. The result arrives as a `GenerateCommitMessageResponse`
     /// manager event, handled in `handle_manager_event`.
+    ///
+    /// Under fork policy it asks for the *diff* and generates here — see
+    /// [`fork::remote_commit_message_generated_locally`], which carries the
+    /// reason.
     pub fn generate_commit_message(
         &self,
         include_unstaged: bool,
@@ -751,9 +774,46 @@ impl RemoteDiffStateModel {
     ) {
         let host_id = self.remote_path.host_id.clone();
         let repo_path = self.remote_path.path.clone();
+        let return_diff_only = fork::remote_commit_message_generated_locally();
         RemoteServerManager::handle(ctx).update(ctx, |mgr, ctx| {
-            mgr.git_generate_commit_message(host_id, repo_path, include_unstaged, branch_name, ctx);
+            mgr.git_generate_commit_message(
+                host_id,
+                repo_path,
+                include_unstaged,
+                branch_name,
+                return_diff_only,
+                ctx,
+            );
         });
+    }
+
+    /// Generates the commit message here, from a diff the daemon computed.
+    ///
+    /// Reached only when the request set `return_diff_only`. The AI client is
+    /// this process's, so `ai::local_completion` resolves the user's endpoint
+    /// and model — the configuration the daemon does not have.
+    fn generate_commit_message_from_remote_diff(
+        &self,
+        diff: String,
+        branch_name: String,
+        ctx: &mut ModelContext<Self>,
+    ) {
+        let ai_client = ServerApiProvider::handle(ctx).as_ref(ctx).get_ai_client();
+        ctx.spawn(
+            async move {
+                git_actions::generate_commit_message_from_diff(
+                    diff,
+                    &branch_name,
+                    ai_client.as_ref(),
+                )
+                .await
+            },
+            |_me, result, ctx| {
+                ctx.emit(DiffStateModelEvent::CommitMessageGenerated(
+                    result.map_err(|e| e.to_string()),
+                ));
+            },
+        );
     }
 
     /// Fetches the committed branch files (`merge_base(HEAD, main)..HEAD`) for

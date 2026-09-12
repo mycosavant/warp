@@ -396,6 +396,27 @@ pub enum RemoteSessionState {
     Disconnected,
 }
 
+/// What a `GitGenerateCommitMessage` request came back with.
+///
+/// The request carries `return_diff_only`, and the two variants are that
+/// choice arriving back: the daemon either called a model itself, or handed
+/// over the diff for the client to call one.
+///
+/// The fork asks for the diff. The daemon runs inside the WSL distribution,
+/// where the user's model endpoint and keychain are not installed, so the
+/// generation this RPC was written for fails there and the commit dialog opens
+/// blank — the whole point of the field. A client that did not ask for a diff
+/// will never see [`CommitMessageOutcome::Diff`], and an older daemon that has
+/// never heard of the field always answers [`CommitMessageOutcome::Message`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum CommitMessageOutcome {
+    /// A commit message the daemon generated, trimmed and non-empty.
+    Message(String),
+    /// The working-tree diff, for the client to generate from. Truncated to
+    /// the AI token budget by the daemon and never empty.
+    Diff(String),
+}
+
 /// Events emitted by [`RemoteServerManager`].
 #[derive(Clone, Debug)]
 pub enum RemoteServerManagerEvent {
@@ -590,12 +611,17 @@ pub enum RemoteServerManagerEvent {
         repo_path: StandardizedPath,
         result: Result<PrInfo, String>,
     },
-    /// Response to a commit-message generation request (AI runs on the
-    /// daemon). `Ok` carries the generated message; `Err` the error string.
+    /// Response to a commit-message generation request. `Ok` carries either
+    /// the daemon-generated message or the raw diff for the client to generate
+    /// from, depending on which the request asked for; `Err` the error string.
     GenerateCommitMessageResponse {
         host_id: HostId,
         repo_path: StandardizedPath,
-        result: Result<String, String>,
+        result: Result<CommitMessageOutcome, String>,
+        /// The branch name the request carried, echoed so a client generating
+        /// from a returned diff still has the context the daemon would have
+        /// passed to the model. Nothing else in the event supplies it.
+        branch_name: String,
     },
     /// Response to a committed-branch-files request (backs the Create PR
     /// dialog's Changes box). Carries the committed per-file entries
@@ -1244,13 +1270,16 @@ impl HostRequestHandle {
     }
 
     /// Generates a commit message via AI on the remote host (the daemon
-    /// computes the diff locally and calls the Warp content endpoint).
+    /// computes the diff locally and calls the Warp content endpoint), or —
+    /// when `return_diff_only` is set — returns the diff for this side to
+    /// generate from. See [`CommitMessageOutcome`].
     pub async fn git_generate_commit_message(
         &self,
         repo_path: &StandardizedPath,
         include_unstaged: bool,
         branch_name: String,
-    ) -> Result<String, HostRequestError> {
+        return_diff_only: bool,
+    ) -> Result<CommitMessageOutcome, HostRequestError> {
         let msg = self
             .send(
                 crate::proto::host_scoped_request::Message::GitGenerateCommitMessage(
@@ -1258,6 +1287,7 @@ impl HostRequestHandle {
                         repo_path: repo_path.to_string(),
                         include_unstaged,
                         branch_name,
+                        return_diff_only,
                     },
                 ),
             )
@@ -1267,7 +1297,10 @@ impl HostRequestHandle {
                 match resp.result {
                     Some(crate::proto::git_generate_commit_message_response::Result::Message(
                         m,
-                    )) => Ok(m),
+                    )) => Ok(CommitMessageOutcome::Message(m)),
+                    Some(crate::proto::git_generate_commit_message_response::Result::Diff(d)) => {
+                        Ok(CommitMessageOutcome::Diff(d))
+                    }
                     Some(crate::proto::git_generate_commit_message_response::Result::Error(e)) => {
                         Err(HostRequestError::OperationFailed(e.message))
                     }
@@ -3370,23 +3403,31 @@ impl RemoteServerManager {
 
     /// Generates a commit message via AI on the remote host and emits
     /// `GenerateCommitMessageResponse` with the result.
+    #[allow(clippy::too_many_arguments)]
     pub fn git_generate_commit_message(
         &mut self,
         host_id: HostId,
         repo_path: StandardizedPath,
         include_unstaged: bool,
         branch_name: String,
+        return_diff_only: bool,
         ctx: &mut ModelContext<Self>,
     ) {
         let handle = self.host_request_handle(&host_id);
 
         let repo_path_for_event = repo_path.clone();
         let host_id_for_event = host_id.clone();
+        let branch_name_for_event = branch_name.clone();
         let spawner = self.spawner.clone();
         ctx.background_executor()
             .spawn(async move {
                 let result = handle
-                    .git_generate_commit_message(&repo_path, include_unstaged, branch_name)
+                    .git_generate_commit_message(
+                        &repo_path,
+                        include_unstaged,
+                        branch_name,
+                        return_diff_only,
+                    )
                     .await
                     .map_err(|e| e.to_string());
                 let _ = spawner
@@ -3395,6 +3436,7 @@ impl RemoteServerManager {
                             host_id: host_id_for_event,
                             repo_path: repo_path_for_event,
                             result,
+                            branch_name: branch_name_for_event,
                         });
                     })
                     .await;

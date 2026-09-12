@@ -1512,3 +1512,49 @@ fn wsl_lsp_in_distro_is_on_unless_switched_off_by_name() {
     assert!(!wsl_lsp_from(Some("off")));
     assert!(!wsl_lsp_from(Some("false")));
 }
+
+/// A remote repository's commit message is generated on this side exactly when
+/// fork policy is active.
+///
+/// Asserted against `is_active()` rather than a constant, for the reason given
+/// on [`the_local_owner_exists_only_under_fork_policy`]. The `WARP_FORK_POLICY=0`
+/// direction matters here more than usual: upstream's daemon generates the
+/// message itself with the account it is signed in as, and A/B-ing a suspected
+/// regression has to give that back rather than asking a client with no
+/// endpoint configured to do it.
+#[test]
+fn a_remote_commit_message_is_generated_on_this_side_under_fork_policy() {
+    assert_eq!(
+        remote_commit_message_generated_locally(),
+        is_active(),
+        "which side calls the model must follow which side holds its configuration"
+    );
+}
+
+/// The client is what decides which side generates, and it decides once.
+///
+/// Pinned by source text because the alternative is a live daemon inside a WSL
+/// distribution. The realistic regression is not the flag being wrong, it is a
+/// second `generate_commit_message` caller appearing that passes a literal
+/// `false` — the commit dialog then goes blank again on the recommended
+/// configuration, with no error anywhere and nothing in the diff looking odd.
+///
+/// Calibrated by breaking it: replacing the predicate with `false` reddens the
+/// first assertion, and adding a second literal-argument call site reddens the
+/// second.
+#[test]
+fn the_client_asks_for_the_diff_under_fork_policy_and_only_the_client_decides() {
+    let source = include_str!("code_review/diff_state/remote.rs");
+
+    assert!(
+        source.contains("fork::remote_commit_message_generated_locally()"),
+        "the request's return_diff_only must come from the policy seam, not from \
+         a literal at the call site"
+    );
+    assert_eq!(
+        source.matches("git_generate_commit_message(").count(),
+        1,
+        "one call site decides this; a second one that forgets the predicate is \
+         invisible in review and blank in the dialog"
+    );
+}

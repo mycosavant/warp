@@ -11,6 +11,7 @@ use ::ai::index::full_source_code_embedding::{
     ContentHash, FragmentMetadata as LocalFragmentMetadata, NodeHash,
 };
 use ::ai::project_context::model::{ProjectContextModel, ProjectContextModelEvent};
+use remote_server::manager::CommitMessageOutcome;
 use remote_server::proto::OpenBufferSuccess;
 use repo_metadata::repositories::{DetectedRepositories, RepoDetectionSource};
 use repo_metadata::{RepoMetadataEvent, RepoMetadataModel, RepositoryIdentifier};
@@ -3409,6 +3410,13 @@ impl ServerModel {
     /// diff locally, then calls the Warp server's code-review content endpoint
     /// via the daemon's authenticated `AIClient` and returns the generated
     /// message.
+    ///
+    /// When the request sets `return_diff_only` the model call is skipped and
+    /// the diff itself is returned, for the client to generate from. That is
+    /// the fork's path: this daemon runs inside the WSL distribution, where
+    /// the user's model endpoint and keychain are not installed, so generating
+    /// here can only fail. Which side generates is the *client's* decision,
+    /// because the client is where that configuration lives.
     fn handle_generate_git_commit_message(
         &mut self,
         msg: GitGenerateCommitMessageRequest,
@@ -3421,16 +3429,23 @@ impl ServerModel {
             Err(e) => return invalid_request_response(e),
         };
         log::info!(
-            "Handling GenerateCommitMessage repo={} (request_id={request_id})",
-            msg.repo_path
+            "Handling GenerateCommitMessage repo={} return_diff_only={} (request_id={request_id})",
+            msg.repo_path,
+            msg.return_diff_only
         );
         let include_unstaged = msg.include_unstaged;
         let branch_name = msg.branch_name;
+        let return_diff_only = msg.return_diff_only;
         let ai_client = ServerApiProvider::handle(ctx).as_ref(ctx).get_ai_client();
         let request_id_for_response = request_id.clone();
         let handle = self.spawn_request_handler(
             request_id.clone(),
             async move {
+                if return_diff_only {
+                    return git_actions::commit_message_diff(&repo_path, include_unstaged)
+                        .await
+                        .map(CommitMessageOutcome::Diff);
+                }
                 git_actions::generate_commit_message(
                     &repo_path,
                     &branch_name,
@@ -3438,14 +3453,20 @@ impl ServerModel {
                     ai_client.as_ref(),
                 )
                 .await
+                .map(CommitMessageOutcome::Message)
             },
             move |me, result, _ctx| {
                 let message = match result {
-                    Ok(message) => server_message::Message::GitGenerateCommitMessageResponse(
+                    Ok(outcome) => server_message::Message::GitGenerateCommitMessageResponse(
                         GitGenerateCommitMessageResponse {
-                            result: Some(git_generate_commit_message_response::Result::Message(
-                                message,
-                            )),
+                            result: Some(match outcome {
+                                CommitMessageOutcome::Message(m) => {
+                                    git_generate_commit_message_response::Result::Message(m)
+                                }
+                                CommitMessageOutcome::Diff(d) => {
+                                    git_generate_commit_message_response::Result::Diff(d)
+                                }
+                            }),
                         },
                     ),
                     Err(e) => server_message::Message::GitGenerateCommitMessageResponse(
