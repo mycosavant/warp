@@ -52,11 +52,13 @@ sentence destroys exactly that. The form, used throughout:
 - A run record in `.fork/runs/` is **never rewritten**; supersede it with a
   pointer at its head and leave its body alone.
 - **A decision record or a handoff states the final call, not a trail of
-  struck drafts** (maintainer, 2026-09-13). It quotes the maintainer verbatim
-  with the date, labels paraphrase as the agent's, writes *"truncated"* where a
-  message was cut off, and tags each factual claim RAN, READ, TOLD or ASSUMED.
-  Before it is committed, a separate agent asks it *"which claim here does the
-  code contradict?"* Long maintainer input arrives as a dump file: read all of it.
+  struck drafts, and not the maintainer's prose** (maintainer, 2026-09-13).
+  Their messages are often spitballed away from the code; the record carries
+  the gist of the call, checked against the code and stated technically and
+  literally correct, dated and attributed to them. Tag each factual claim RAN,
+  READ, TOLD or ASSUMED. Before it is committed, a separate agent asks it
+  *"which claim here does the code contradict?"* Long input arrives as a dump
+  file: read all of it.
 
 **Say what you did not establish.** A finding with no stated limit reads as
 stronger than it is, and the next reader spends a day on the gap.

@@ -1,8 +1,7 @@
 # Handoff: what the agent sends to its vendor during a local-model turn
 
-Written 2026-09-13. The design is the fable-advisor's from the same evening,
-which the maintainer endorsed: *"fable is making the right call, and that's all
-that really matters."* **This run comes before `HANDOFF-BUILDS.md` task 4**
+Written 2026-09-13 from the fable-advisor's design of the same evening, which
+the maintainer adopted. **This run comes before `HANDOFF-BUILDS.md` task 4**
 (the panel disclosure), because two likely outcomes would each rewrite what
 that disclosure says. It needs no GUI and no merge; it can start any time.
 
@@ -20,25 +19,33 @@ they happen, or whether anything stops them.
 
 What is known around it, and its limits:
 
+- **Anthropic's own docs name the hosts a sandboxed Claude Code needs**
+  (READ, `code.claude.com/docs/en/sandbox-environments`, *Sandbox runtime*,
+  2026-09-13): `api.anthropic.com` or the configured provider, and on a
+  third-party provider `api.anthropic.com` as well, because the WebFetch domain
+  safety check calls it unless `skipWebFetchPreflight: true`; plus `claude.ai`
+  and `platform.claude.com` for OAuth sign-in and token refresh, droppable when
+  authenticated with an API key. The 2026-09-09 turn used no WebFetch, so the
+  preflight should not explain it (ASSUMED). Token refresh is a candidate; it
+  would appear on `claude.ai` or `platform.claude.com`, not only
+  `api.anthropic.com`, so **the census must record every host**.
 - **The byte counts are not per turn.** The run's `socket-bytes.txt` totals
   (9,286 bytes up, 171,451 down, four connections) belong to pid 337595,
-  sampled 17:45:41-46, which is a later `acp probe`, not a panel turn: the
-  panel-turn agents were pids 322226 and 326427 and turn 2 ended at 17:41:25
-  (READ, the run's README and `timeline.txt`, checked by a reviewer on
-  2026-09-13). So how much is sent per turn, and whether any of it happens after
-  startup, is unmeasured.
+  sampled 17:45:41-46, a later `acp probe`, not a panel turn: the panel-turn
+  agents were pids 322226 and 326427 and turn 2 ended at 17:41:25 (READ, the
+  run's README and `timeline.txt`). Per-turn volume, and whether anything is
+  sent after startup, is unmeasured.
 - **The subscription token is on disk.** `~/.claude/.credentials.json` exists
   in the WSL home (RAN, `stat`), so an agent launched with
   `ANTHROPIC_API_KEY=local` still has it. Whether it uses it when an API key is
   set is ASSUMED either way.
 - **One such call was decrypted before.** `.fork/tickets/open-questions.md`,
   *Method 2*, shows `GET /v1/mcp_servers?limit=1000` from the `claude` child
-  (READ). That the endpoint is the claude.ai connectors list and is scoped to
-  the account is ASSUMED. That run was an ordinary subscription turn with no
-  dummy key and no local model, so it does not answer this question.
-- **A switch may exist.** The 0.73.0 binary in the npx cache contains the
-  strings `ENABLE_CLAUDEAI_MCP_SERVERS` and `disableClaudeAiConnectors` (RAN,
-  a string search). What they do is ASSUMED until configuration C runs.
+  (READ). That it is the claude.ai connectors list and account-scoped is
+  ASSUMED; that run was an ordinary subscription turn with no local model.
+- **A switch may exist.** The 0.73.0 binary contains the strings
+  `ENABLE_CLAUDEAI_MCP_SERVERS` and `disableClaudeAiConnectors` (RAN, a string
+  search). What they do is ASSUMED until configuration C runs.
 
 ## Instruments
 
@@ -69,19 +76,20 @@ that made them.
 ### The canary
 
 A unique string in the prompt and a different one in a file in the session
-cwd. Grep every captured request body sent to Anthropic for both.
+cwd. Grep every captured request body, to every host, for both.
 
 ## Configurations, in this order (not a grid)
 
 | # | configuration | what it answers |
 |---|---|---|
-| A | baseline: credentials present, the non-essential flag set | what is sent today |
+| A | baseline: credentials present, the non-essential flag set | what is sent today, to which hosts |
 | B | A with `CLAUDE_CONFIG_DIR` pointed at an empty directory | does it depend on the account |
 | C | A with `ENABLE_CLAUDEAI_MCP_SERVERS=false` | does the switch stop the connectors call |
-| D | fail-closed: `HTTPS_PROXY=http://127.0.0.1:9` (a closed port), `NO_PROXY` loopback | does a turn survive with no route out |
+| D | fail-closed: `HTTPS_PROXY=http://127.0.0.1:9` (a closed port), `NO_PROXY` loopback | does a turn survive with no route out (advisory: only if the agent honours the proxy) |
 | E | turn 1 against turn 3 in one session | startup or every turn |
-| F | a WebFetch turn | the documented preflight, for comparison |
+| F | a WebFetch turn, and one with `skipWebFetchPreflight: true` | the documented preflight and its documented off switch |
 | G | the winner of A-D, repeated with the agent on the **Windows** side | a different credential store and network path |
+| H | **optional**: the agent under Anthropic's sandbox runtime with no network domains allowed | an **enforced** version of D. On Linux the runtime removes the network namespace and routes everything through its own proxy (READ, its README), so nothing can bypass it. The README also says loopback is not directly reachable on Linux, so whether the agent can still reach `llama-server` is the question. Install it from a pinned source build, not `npx` |
 
 For every run record: does the turn still answer, and time to first token
 against A. Then the same census, configuration A only, for `opencode acp` and
@@ -100,7 +108,7 @@ README.
 
 ## Falsifiers, stated before the run
 
-- **A canary in any body sent to Anthropic.** Then a notice is the wrong
+- **A canary in any body sent off the machine.** Then a notice is the wrong
   answer: this becomes "block it or stop recommending this agent for local
   models", and the maintainer decides which before anything is built.
 - **"Nothing stops it"** is falsified by any configuration reaching zero
@@ -121,7 +129,9 @@ README.
   the agent's binary path changes with each version, a host block on
   `api.anthropic.com` also kills the maintainer's own Claude Code, and
   Hyper-V firewall rules cover the whole WSL VM (the last is TOLD, not
-  verified). A user-run script only for a mechanism this run measured.
+  verified). If H works, the sandbox runtime is the better containment, and it
+  also answers `HANDOFF-SECURITY.md`'s excluded threat (anything running as the
+  user) for agents.
 - Update `docs/agent-transports.md`, then write `HANDOFF-BUILDS.md` task 4's
-  wording from the table: agent and version measured, whether as the user's
-  account, whether bodies carried content, the stop if any.
+  wording from the table: agent and version measured, hosts, whether as the
+  user's account, whether bodies carried content, the stop if any.
