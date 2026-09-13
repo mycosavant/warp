@@ -827,8 +827,10 @@ async fn run_credential_broker(
 
 /// Authenticates the pipe peer before decoding and evaluating its request.
 ///
-/// Ordering matches the Unix broker: the OS-reported caller identity, not any
-/// field in caller-controlled JSON, is the client-identity boundary.
+/// As on Unix, the OS-reported caller identity, not any field in
+/// caller-controlled JSON, is the client-identity boundary, and it is checked
+/// before any caller-sent byte is interpreted. Unlike Unix, the check cannot
+/// come before the first read: see `read_authenticated_broker_request`.
 ///
 /// Framing differs by necessity. The Unix broker reads to EOF after the client
 /// shuts down its write half; a named pipe has no half-close, so both
@@ -838,19 +840,32 @@ async fn handle_credential_broker_connection(
     mut pipe: tokio::net::windows::named_pipe::NamedPipeServer,
     state: ControlServerState,
 ) -> Result<(), ControlError> {
-    let response = match ensure_same_user_peer(&pipe) {
-        Ok(()) => match read_broker_request(&mut pipe).await {
-            Ok(bytes) => match serde_json::from_slice::<CredentialRequest>(&bytes) {
-                Ok(request) => issue_credential(&state, request, None)
-                    .await
-                    .and_then(|credential| serialize_credential_broker_response(&credential)),
-                Err(err) => Err(ControlError::with_details(
-                    ErrorCode::InvalidRequest,
-                    "failed to decode local-control credential request",
-                    err.to_string(),
-                )),
-            },
-            Err(error) => Err(error),
+    /// A client that connects and never sends a whole request would otherwise
+    /// hold this task forever. Before the prefix was read ahead of the identity
+    /// check, such a client was refused at once, by accident of the bug.
+    const BROKER_REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
+    let request = tokio::time::timeout(
+        BROKER_REQUEST_TIMEOUT,
+        read_authenticated_broker_request(&mut pipe),
+    )
+    .await
+    .unwrap_or_else(|_| {
+        Err(ControlError::new(
+            ErrorCode::TransportUnavailable,
+            "timed out reading the local-control credential request",
+        ))
+    });
+    let response = match request {
+        Ok(bytes) => match serde_json::from_slice::<CredentialRequest>(&bytes) {
+            Ok(request) => issue_credential(&state, request, None)
+                .await
+                .and_then(|credential| serialize_credential_broker_response(&credential)),
+            Err(err) => Err(ControlError::with_details(
+                ErrorCode::InvalidRequest,
+                "failed to decode local-control credential request",
+                err.to_string(),
+            )),
         },
         Err(error) => Err(error),
     };
@@ -872,9 +887,20 @@ async fn handle_credential_broker_connection(
         .map_err(|err| broker_io_error("write the local-control credential response", err))
 }
 
-/// Reads one length-prefixed credential request.
+/// Reads one length-prefixed credential request, authenticating the peer
+/// between the prefix and the payload.
+///
+/// The prefix has to come first. Windows refuses `ImpersonateNamedPipeClient`
+/// with `ERROR_CANNOT_IMPERSONATE` (`0x80070558`) until data has been read from
+/// the pipe, and the client connects before it writes. Until 2026-09-12 the
+/// broker impersonated before any read, so it passed only when the client's write had
+/// already landed by the time the connection's task ran, and `warpctrl`
+/// intermittently failed with `unauthorized_local_client`
+/// (`.fork/runs/focus-live-2026-09-12/`). The four prefix bytes are held
+/// without being looked at until the peer is known, so nothing the caller sent
+/// is interpreted, and nothing is allocated from it, before the identity check.
 #[cfg(windows)]
-async fn read_broker_request(
+async fn read_authenticated_broker_request(
     pipe: &mut tokio::net::windows::named_pipe::NamedPipeServer,
 ) -> Result<Vec<u8>, ControlError> {
     /// Bounds the request so a hostile prefix cannot force a large allocation
@@ -885,6 +911,7 @@ async fn read_broker_request(
     pipe.read_exact(&mut length)
         .await
         .map_err(|err| broker_io_error("read the local-control credential request length", err))?;
+    ensure_same_user_peer(pipe)?;
     let length = u32::from_le_bytes(length) as usize;
     if length > MAX_BROKER_REQUEST_BYTES {
         return Err(ControlError::new(

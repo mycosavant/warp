@@ -1,0 +1,19 @@
+exe: C:\dev\broker-race\prefix-warp-oss.exe
+sidecar: v0.fork.bb0af075d
+launched pid 12680
+pipe: \\.\pipe\warp-local-control\inst_a09635e25d9c406db63daf4919c3dfe2.broker.sock
+delay    0 ms -> transport error: Exception calling "Write" with "3" argument(s): "Pipe is broken."
+delay    0 ms -> invalid_request  {"protocol_version":1,"error":{"code":"invalid_request","message":"failed to decode local-control credential request","details":"missing field `protocol_version` at line 1 column 2"}}
+delay    0 ms -> invalid_request  {"protocol_version":1,"error":{"code":"invalid_request","message":"failed to decode local-control credential request","details":"missing field `protocol_version` at line 1 column 2"}}
+delay  300 ms -> transport error: Exception calling "Write" with "3" argument(s): "Pipe is broken."
+delay  300 ms -> transport error: Exception calling "Write" with "3" argument(s): "Pipe is broken."
+delay  300 ms -> transport error: Exception calling "Write" with "3" argument(s): "Pipe is broken."
+window close: {
+  "action": "window.close",
+  "ok": true,
+  "instance_id": "inst_a09635e25d9c406db63daf4919c3dfe2",
+  "close": "requested",
+  "cancellable": true,
+  "verify": "a cancellable close can be refused and this result does not observe the outcome; poll `instance list` until this instance is gone. If it stays, end any CLI agent running in a pane and cancel any in-flight agent turn, then close again."
+}
+process exited: False

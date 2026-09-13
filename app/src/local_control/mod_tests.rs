@@ -57,6 +57,69 @@ async fn credential_broker_accepts_peer_from_same_user() {
     ensure_peer_uid(&stream, actual_uid).expect("same user is accepted");
 }
 
+/// A client that connects and writes a moment later is authenticated and read.
+///
+/// `warpctrl` opens the pipe and then writes, and Windows will not impersonate
+/// a pipe client until data has been read from the pipe. The first assertion
+/// pins that premise at the moment between the two. Until 2026-09-12 the broker
+/// impersonated before reading, which failed whenever its task reached the
+/// check first (`.fork/runs/focus-live-2026-09-12/`).
+///
+/// The client is opened exactly as `request_credential_over_pipe` opens it,
+/// with `std::fs::OpenOptions` and no security QoS flags. That is not a detail.
+/// The first version of this test used tokio's `ClientOptions`, which sets
+/// `SECURITY_SQOS_PRESENT` with static tracking, so the client's identity was
+/// captured when it connected: on Windows the premise assertion got `Ok`, and
+/// the test could not have seen the bug.
+///
+/// Calibrate by moving `ensure_same_user_peer` above the prefix read in
+/// `read_authenticated_broker_request`: the second assertion fails with
+/// `0x80070558`.
+#[cfg(windows)]
+#[tokio::test]
+async fn credential_broker_authenticates_a_client_that_writes_after_connecting() {
+    use std::io::Write as _;
+
+    use super::{create_broker_pipe, ensure_same_user_peer, read_authenticated_broker_request};
+
+    let pipe_name = format!(
+        r"\\.\pipe\warp-broker-test-{}-{}",
+        std::process::id(),
+        uuid::Uuid::new_v4()
+    );
+    let mut server = create_broker_pipe(&pipe_name, true).expect("broker pipe");
+
+    let payload = b"{\"late\":true}".to_vec();
+    let sent = payload.clone();
+    let client_pipe_name = pipe_name.clone();
+    let writer = tokio::task::spawn_blocking(move || {
+        let mut client = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(&client_pipe_name)
+            .expect("client connects");
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        let length = u32::try_from(sent.len()).expect("small payload");
+        client
+            .write_all(&length.to_le_bytes())
+            .and_then(|()| client.write_all(&sent))
+            .and_then(|()| client.flush())
+            .expect("write request");
+        client
+    });
+    server.connect().await.expect("server accepts");
+
+    let premature = ensure_same_user_peer(&server)
+        .expect_err("Windows refuses to impersonate before anything has been read");
+    assert_eq!(premature.code, ErrorCode::UnauthorizedLocalClient);
+
+    let received = read_authenticated_broker_request(&mut server)
+        .await
+        .expect("a same-user client that writes late is authenticated");
+    assert_eq!(received, payload);
+    drop(writer.await.expect("writer task"));
+}
+
 #[test]
 fn protocol_version_helper_rejects_unsupported_versions() {
     ensure_protocol_version(::local_control::PROTOCOL_VERSION)

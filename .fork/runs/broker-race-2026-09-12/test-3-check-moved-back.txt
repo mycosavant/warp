@@ -1,0 +1,20 @@
+=== cargo test start 20:24:37 ===
+850 |             while let Ok(Some(item)) = sse.event_receiver.try_next() {
+904 |             while let Ok(Some(item)) = sse.event_receiver.try_next() {
+1570 |             while let Ok(Some(item)) = sse.event_receiver.try_next() {
+2604 |             while let Ok(Some(item)) = sse.event_receiver.try_next() {
+30 | async fn init_repo_with_origin() -> (TempDir, TempDir, std::path::PathBuf) {
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1m 09s
+     Running unittests src\lib.rs (target\debug\deps\warp-6c942a25cebd2abc.exe)
+running 1 test
+test local_control::tests::credential_broker_authenticates_a_client_that_writes_after_connecting ... FAILED
+failures:
+---- local_control::tests::credential_broker_authenticates_a_client_that_writes_after_connecting stdout ----
+thread 'local_control::tests::credential_broker_authenticates_a_client_that_writes_after_connecting' (32404) panicked at app\src\local_control\mod_tests.rs:118:10:
+a same-user client that writes late is authenticated: ControlError { code: UnauthorizedLocalClient, message: "failed to identify local-control credential broker peer", details: Some("Unable to impersonate using a named pipe until data has been read from that pipe. (0x80070558)") }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+failures:
+    local_control::tests::credential_broker_authenticates_a_client_that_writes_after_connecting
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 7124 filtered out; finished in 0.30s
+error: test failed, to rerun pass `-p warp --lib`
+=== cargo exit 101 at 20:25:48 ===

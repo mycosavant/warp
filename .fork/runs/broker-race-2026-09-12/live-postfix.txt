@@ -1,0 +1,23 @@
+exe: C:\dev\warp\target\debug\warp-oss.exe
+sidecar: v0.fork.3d006bac1-dirty
+launched pid 22052
+pipe: \\.\pipe\warp-local-control\inst_3926a9a2b1e54f67a11444b119ae36d8.broker.sock
+delay    0 ms -> invalid_request  {"protocol_version":1,"error":{"code":"invalid_request","message":"failed to decode local-control credential request","details":"missing field `protocol_version` at line 1 column 2"}}
+delay    0 ms -> invalid_request  {"protocol_version":1,"error":{"code":"invalid_request","message":"failed to decode local-control credential request","details":"missing field `protocol_version` at line 1 column 2"}}
+delay    0 ms -> invalid_request  {"protocol_version":1,"error":{"code":"invalid_request","message":"failed to decode local-control credential request","details":"missing field `protocol_version` at line 1 column 2"}}
+delay    0 ms -> invalid_request  {"protocol_version":1,"error":{"code":"invalid_request","message":"failed to decode local-control credential request","details":"missing field `protocol_version` at line 1 column 2"}}
+delay    0 ms -> invalid_request  {"protocol_version":1,"error":{"code":"invalid_request","message":"failed to decode local-control credential request","details":"missing field `protocol_version` at line 1 column 2"}}
+delay  300 ms -> invalid_request  {"protocol_version":1,"error":{"code":"invalid_request","message":"failed to decode local-control credential request","details":"missing field `protocol_version` at line 1 column 2"}}
+delay  300 ms -> invalid_request  {"protocol_version":1,"error":{"code":"invalid_request","message":"failed to decode local-control credential request","details":"missing field `protocol_version` at line 1 column 2"}}
+delay  300 ms -> invalid_request  {"protocol_version":1,"error":{"code":"invalid_request","message":"failed to decode local-control credential request","details":"missing field `protocol_version` at line 1 column 2"}}
+delay 1000 ms -> invalid_request  {"protocol_version":1,"error":{"code":"invalid_request","message":"failed to decode local-control credential request","details":"missing field `protocol_version` at line 1 column 2"}}
+delay 3000 ms -> invalid_request  {"protocol_version":1,"error":{"code":"invalid_request","message":"failed to decode local-control credential request","details":"missing field `protocol_version` at line 1 column 2"}}
+window close: {
+  "action": "window.close",
+  "ok": true,
+  "instance_id": "inst_3926a9a2b1e54f67a11444b119ae36d8",
+  "close": "requested",
+  "cancellable": true,
+  "verify": "a cancellable close can be refused and this result does not observe the outcome; poll `instance list` until this instance is gone. If it stays, end any CLI agent running in a pane and cancel any in-flight agent turn, then close again."
+}
+process exited: True
