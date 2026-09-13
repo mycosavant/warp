@@ -829,7 +829,7 @@ fn open_from_restored(arg: &OpenFromRestoredArg, ctx: &mut AppContext) {
                     } else {
                         ctx.add_window(
                             AddWindowOptions {
-                                window_bounds: WindowBounds::new(window.bounds),
+                                window_bounds: placed_by_fork(WindowBounds::new(window.bounds)),
                                 title: Some("Warp".to_owned()),
                                 fullscreen_state: window.fullscreen_state,
                                 background_blur_radius_pixels,
@@ -881,7 +881,7 @@ fn open_from_restored(arg: &OpenFromRestoredArg, ctx: &mut AppContext) {
                     .expect("Window should exist at idx");
                 ctx.add_window(
                     AddWindowOptions {
-                        window_bounds: WindowBounds::new(window.bounds),
+                        window_bounds: placed_by_fork(WindowBounds::new(window.bounds)),
                         title: Some("Warp".to_owned()),
                         fullscreen_state: window.fullscreen_state,
                         background_blur_radius_pixels,
@@ -1273,6 +1273,13 @@ fn open_new_tab_insert_subshell_command_and_bootstrap_if_supported(
     });
 }
 
+/// A normal window's bounds, unless `WARP_FORK_WINDOW_BOUNDS` pins where normal
+/// windows open (`fork::window_bounds_override`). Not applied to the hotkey
+/// window or to a window torn off by a tab drag.
+fn placed_by_fork(bounds: WindowBounds) -> WindowBounds {
+    crate::fork::window_bounds_override().map_or(bounds, WindowBounds::ExactPosition)
+}
+
 /// Returns the common configuration for a new "regular" window (not Quake Mode).
 fn default_window_options(window_settings: &WindowSettings, ctx: &AppContext) -> AddWindowOptions {
     let (inherited_bounds, window_style) = ctx.next_window_bounds_and_style();
@@ -1281,7 +1288,7 @@ fn default_window_options(window_settings: &WindowSettings, ctx: &AppContext) ->
 
     AddWindowOptions {
         window_style,
-        window_bounds: next_bounds,
+        window_bounds: placed_by_fork(next_bounds),
         title: Some("Warp".to_owned()),
         background_blur_radius_pixels: Some(*window_settings.background_blur_radius),
         background_blur_texture: *window_settings.background_blur_texture,

@@ -1,0 +1,11 @@
+exe: C:\dev\warp\target\debug\warp-oss.exe
+sidecar: v0.fork.94d8b32bb-dirty
+bounds: 1400x900+100+100
+launch 1 (fresh or restored, var set) : var=True pid=39900 rect=(100,100) 1400x900 scale=100% monitor=\\.\DISPLAY1 primary=True monitorBounds={X=0,Y=0,Width=2560,Height=1440}
+launch 1 (fresh or restored, var set) : moved ok=True -> rect=(600,400) 1000x700
+launch 1 (fresh or restored, var set) : exited=True
+launch 2 (restored after a move, var set) : var=True pid=44612 rect=(100,100) 1400x900 scale=100% monitor=\\.\DISPLAY1 primary=True monitorBounds={X=0,Y=0,Width=2560,Height=1440}
+launch 2 (restored after a move, var set) : moved ok=True -> rect=(600,400) 1000x700
+launch 2 (restored after a move, var set) : exited=True
+launch 3 (restored after a move, var unset) : var=False pid=34004 rect=(600,400) 1000x700 scale=100% monitor=\\.\DISPLAY1 primary=True monitorBounds={X=0,Y=0,Width=2560,Height=1440}
+launch 3 (restored after a move, var unset) : exited=True

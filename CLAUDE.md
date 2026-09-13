@@ -701,6 +701,7 @@ config came from wherever Warp was launched.
 | `WARP_FORK_HARNESS_DIR` | unset | the agent's `.claude/projects` directory for `agent.trace`, when the instance's own search does not find it. |
 | `WARP_FORK_CONTROL_BIND` | loopback | **the only one that reaches off the machine.** One literal IP, optionally with a port — pin the port. A hostname, a wildcard or a typo leaves the wide listener shut and loopback serving. |
 | `WARP_FORK_REMOTE_APPROVE` | off | lets a *paired* device run `agent.approve` — say **yes** to an agent's prompt from a phone. Only a literal `1`/`on`/`true`/`yes`; `agent.deny` needs no switch, because saying no can only make less happen. |
+| `WARP_FORK_WINDOW_BOUNDS` | unset | `1400x900+100+100`: every normal window opens there, restored ones too. Virtual-screen coordinates, so on Windows a small offset is the primary monitor. |
 
 Tab→pane drag has no variable of its own; `WARP_FORK_POLICY=0` puts the tab's
 horizontal-only drag axis back.

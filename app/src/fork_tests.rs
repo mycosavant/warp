@@ -1637,3 +1637,40 @@ fn the_commit_chain_asks_for_pr_inputs_rather_than_generating_first() {
         "generation before the chain's own push would describe the wrong branch"
     );
 }
+
+#[test]
+fn window_bounds_take_the_x11_geometry_form_and_refuse_anything_else() {
+    use pathfinder_geometry::rect::RectF;
+    use pathfinder_geometry::vector::vec2f;
+
+    assert_eq!(window_bounds_from(None), Ok(None));
+    assert_eq!(window_bounds_from(Some("  ")), Ok(None));
+    assert_eq!(
+        window_bounds_from(Some(" 1400x900+100+50 ")),
+        Ok(Some(RectF::new(vec2f(100., 50.), vec2f(1400., 900.))))
+    );
+    assert_eq!(
+        window_bounds_from(Some("800x600+0+0")),
+        Ok(Some(RectF::new(vec2f(0., 0.), vec2f(800., 600.))))
+    );
+    for refused in [
+        "1400x900",
+        "1400x900+100",
+        "1400x900+100+50+5",
+        "1400x900++100+50",
+        // The one a leading-`+` guard is for: `u32::from_str` accepts `+50`.
+        // Calibrated by deleting the guard, which leaves only this case green-lit.
+        "1400x900+100++50",
+        "1400x900+-100+50",
+        "1400*900+0+0",
+        "0x900+0+0",
+        "1400x0+0+0",
+        "1400.5x900+0+0",
+        "primary",
+    ] {
+        assert!(
+            window_bounds_from(Some(refused)).is_err(),
+            "{refused:?} should be refused, not read as a place"
+        );
+    }
+}

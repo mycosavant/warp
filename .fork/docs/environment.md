@@ -292,6 +292,37 @@ otherwise silently mean something, here a typo is simply not consent.
 
 ---
 
+## `WARP_FORK_WINDOW_BOUNDS`
+
+Added 2026-09-12, after a live Windows run left a window wherever the platform
+put it and the maintainer said that finding and rearranging windows between
+launches cost both of us. `1400x900+100+100` opens every normal window at that
+size and place: new ones, a first launch, and restored ones, whose saved
+position it overrides.
+
+The coordinates are logical pixels on the virtual screen, not "the primary
+monitor". On Windows the two agree, because the virtual screen's origin is the
+primary monitor's top-left corner. It is not resolved against a monitor
+because on Windows that lookup goes through an existing window
+(`crates/warpui/src/windowing/winit/window/windows_wm.rs`), and a launch's first
+window is the one with none. A rect that overlaps no monitor is dropped by the
+windowing layer and the platform places the window.
+
+Parser shape: a value that does not parse is **ignored with a warning in the
+log**, and the window opens where upstream would put it. Neither of the two
+shapes above fits exactly: nothing is consented to and nothing is exposed, so
+refusing to start would be louder than a misplaced window deserves, and the log
+line is what separates a typo from a setting that did nothing.
+
+Not gated on `WARP_FORK_POLICY`, because it changes where a window is rather
+than what Warp does, and an A/B run is where a fixed place helps most. It does
+not touch the hotkey window or a window torn off by dragging a tab.
+
+Driven live on Windows the same night, at 100% scale only: a restored window
+whose saved position had been moved opened at the pinned rect, and with the
+variable unset the same profile reopened at the moved one
+(`.fork/runs/window-bounds-2026-09-12/`).
+
 ## Not a variable
 
 Tab→pane drag has no variable of its own; `WARP_FORK_POLICY=0` puts the tab's

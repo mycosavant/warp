@@ -1628,6 +1628,83 @@ pub(crate) fn keep_dir_out_of_git(dir: &std::path::Path) {
     }
 }
 
+/// `WIDTHxHEIGHT+X+Y`: where every normal window opens.
+const WINDOW_BOUNDS_ENV_VAR: &str = "WARP_FORK_WINDOW_BOUNDS";
+
+/// Where every normal window opens, when `WARP_FORK_WINDOW_BOUNDS` names a place.
+///
+/// Upstream lets the platform choose a new window's origin and reopens a
+/// restored window where it was last left, so from one launch to the next a
+/// window lands wherever Windows cascades it or on whichever monitor it last
+/// lived on. A person rearranging windows between test launches and a session
+/// looking for the window it just launched pay the same cost. This pins it.
+///
+/// The value is the X11 geometry form, in logical pixels, in virtual-screen
+/// coordinates. On Windows the virtual screen's origin is the primary
+/// monitor's top-left corner, so `1400x900+100+100` is on the primary monitor.
+/// It is not resolved against a named monitor, because on Windows asking for
+/// the primary monitor goes through an existing window (`windows_wm.rs`), and
+/// the first window of a launch is the one that has none.
+///
+/// It applies to new windows and to restored ones, overriding the saved
+/// position, so several restored windows open stacked in one place. It does
+/// not apply to the hotkey window, which has its own geometry, or to a window
+/// torn off by dragging a tab, which follows the cursor. A rect that overlaps
+/// no monitor is dropped by the windowing layer, and the platform places the
+/// window.
+///
+/// Not gated on `is_active()`: it changes where a window is, not what Warp
+/// does, and a `WARP_FORK_POLICY=0` A/B run is where a fixed place helps most.
+/// A value that does not parse is ignored with a warning in the log, and the
+/// window opens where upstream would put it.
+///
+/// Consumed by `root_view::placed_by_fork`.
+pub fn window_bounds_override() -> Option<pathfinder_geometry::rect::RectF> {
+    static PARSED: std::sync::OnceLock<Option<pathfinder_geometry::rect::RectF>> =
+        std::sync::OnceLock::new();
+    *PARSED.get_or_init(|| {
+        match window_bounds_from(std::env::var(WINDOW_BOUNDS_ENV_VAR).ok().as_deref()) {
+            Ok(bounds) => bounds,
+            Err(reason) => {
+                log::warn!("fork: ignoring {WINDOW_BOUNDS_ENV_VAR}: {reason}");
+                None
+            }
+        }
+    })
+}
+
+/// Split from the environment so the parse can be asserted without setting a
+/// process-global variable from a test that runs beside others.
+fn window_bounds_from(
+    value: Option<&str>,
+) -> Result<Option<pathfinder_geometry::rect::RectF>, String> {
+    use pathfinder_geometry::vector::vec2f;
+
+    let value = match value.map(str::trim) {
+        None | Some("") => return Ok(None),
+        Some(value) => value,
+    };
+    let malformed = || format!("{value:?} is not WIDTHxHEIGHT+X+Y, e.g. 1400x900+100+100");
+    let (size, offset) = value.split_once('+').ok_or_else(malformed)?;
+    let (x, y) = offset.split_once('+').ok_or_else(malformed)?;
+    let (width, height) = size.split_once('x').ok_or_else(malformed)?;
+    let number = |part: &str| {
+        // `u32::from_str` accepts a leading `+`, which would let `+X++Y` through.
+        if part.starts_with('+') {
+            return Err(malformed());
+        }
+        part.parse::<u32>().map_err(|_| malformed())
+    };
+    let (width, height, x, y) = (number(width)?, number(height)?, number(x)?, number(y)?);
+    if width == 0 || height == 0 {
+        return Err(format!("{value:?} has a zero width or height"));
+    }
+    Ok(Some(pathfinder_geometry::rect::RectF::new(
+        vec2f(x as f32, y as f32),
+        vec2f(width as f32, height as f32),
+    )))
+}
+
 pub(crate) fn tighten_existing(path: &std::path::Path) {
     #[cfg(unix)]
     {
