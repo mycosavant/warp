@@ -94,6 +94,36 @@ Add only the missing one, calibrated by breaking the validator's loopback arm.
 If both exist, write nothing and say so in the merge record. After the merge
 these tests are the first gate to read.
 
+## Task 2b: pin the HTTP clients the egress backstop never sees
+
+`crates/websocket` has a test that no other crate dials a WebSocket. Nothing
+does the same for `reqwest`. Found 2026-09-13 (READ, by two agents; the second
+corrected the first): these build a client that passes none of `http_client`'s
+three enforcement points —
+
+| where | what |
+|---|---|
+| `crates/mcp/src/runtime.rs:175` | MCP HTTP transport |
+| `crates/mcp/src/sse_transport/reqwest_impl.rs:88` | MCP SSE transport, `reqwest::Client::default()`, live via `runtime.rs:372` |
+| `app/src/tracing/local_export.rs:28` | OTLP export, gated to loopback |
+| `app/src/tracing/cloud_agent_auth.rs:112` | tracing auth |
+| `crates/local_control/src/client.rs:54,114` | `warpctrl`'s loopback client, `reqwest::blocking` |
+| `app/src/integration_testing/agent_mode/llm_judge/`, `app/src/ai/agent_sdk/test_support.rs:10` | test support only |
+
+Covered, because the builder is handed to `http_client::Client::from_client_builder`:
+`app/src/server/telemetry/mod.rs:72-75` and `app/src/ai/acp_agent/prices.rs:297`.
+Confirm both.
+
+**Before the merge**, add a test that finds every client construction outside
+`crates/http_client` (`reqwest::Client::new`, `::builder`, `::default`,
+`ClientBuilder::new`, and the `reqwest::blocking` forms) that is not wrapped by
+`from_client_builder`, and fails on any not in a named list, each entry with its
+reason, the way the websocket pin does.
+Calibrate by adding a construction and watching it fail. A merge that adds an
+analytics client built the way upstream's MCP code is then stops at the gate
+instead of shipping. Whether each listed client should go through
+`egress_policy` is `HANDOFF-SECURITY.md` task 6, not this one.
+
 ## Task 3: the merge
 
 Approved by the maintainer on 2026-09-13. The rules:

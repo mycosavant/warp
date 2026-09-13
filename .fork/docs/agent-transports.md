@@ -324,23 +324,17 @@ refused, and the split is the argument rather than a convenience:
   without a further run. Containment stays available as an ops choice — a
   firewall rule or a namespace — and is theirs to make outside this repo.
 
-  ~~**Disclosing it in the panel was considered and refused**, and the reason is
-  worth keeping because the shape recurs: it would be new consent-surface UI for
-  something Warp neither causes, governs, nor can stop, and a notice that a
-  named third-party agent talks to its own vendor teaches the reader nothing
-  they did not choose when they named it. The honest place for it is here.~~
-
-  **Reversed 2026-09-13 by the maintainer; "accepted" stands, "refused" does
-  not.** When the panel answers from a local model through an agent measured to
-  do this, Warp says so in the panel, with *Got it* and an option to make that
-  the last notice. What falsified the reason above was the fork's own
-  promise. A person who points the panel at a local model has chosen "the work
-  stays on this machine", so the fact is news to exactly them, at exactly that
-  moment. A notice that asks nothing and gates nothing is a disclosure, not a
-  consent surface. Decision:
-  `.fork/decisions/2026-09-13-a-local-model-turn-discloses-the-agents-own-connection.md`;
-  build: `HANDOFF-BUILDS.md` task 4, which also measures which harness to
-  recommend for local models before this page recommends one.
+  **The panel discloses it, from a measurement of what is sent** (maintainer,
+  2026-09-13). This page recorded the opposite from 2026-09-11 until then: a
+  panel disclosure "considered and refused" as consent UI for something Warp
+  cannot stop (`a7b6803c8`, a paraphrase with no quote of the maintainer).
+  Someone who points the panel at a local model reasonably expects the turn to
+  stay local, and the requests may be made as their own Claude account: the
+  subscription token is on disk even with a dummy key. Whether any of these
+  calls is account-scoped is unmeasured.
+  `HANDOFF-VENDORCALLS.md` measures content, account and any stop first;
+  `HANDOFF-BUILDS.md` task 4 then builds the note from it. Decision:
+  `.fork/decisions/2026-09-13-a-local-model-turn-discloses-the-agents-own-connection.md`.
 
   **The general fact it stands for, which is the part to carry:** the fork's
   deny-lists live in `crates/egress_policy` and are consulted by **Warp's** HTTP

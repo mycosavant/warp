@@ -94,7 +94,9 @@ Each correction struck, dated, with the sha that falsified it.
 
 Update `.fork/README.md`: the handoff paragraphs (the four 2026-09-13 handoffs
 live, the rest archived), the ticket table's state column for T04 (every box
-ticked) and T13, and the four 2026-09-13 decisions under `decisions/`. Run
+ticked) and T13, and the 2026-09-13 decisions under `decisions/`. Also archive the stale
+`HANDOFF-*.md` files first: a stranger opening `.fork/` should not read
+fourteen handoffs as current. Run
 `.fork/tools/claude-md-budget.sh` if you touch `CLAUDE.md` at all.
 
 Commit per area, e.g. `fork: archive nine finished handoffs (DOCS)`,

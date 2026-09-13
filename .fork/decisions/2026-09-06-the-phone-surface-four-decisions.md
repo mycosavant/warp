@@ -22,7 +22,10 @@ drafted, each the page's recommendation.
   to be built only if a week of use says the foreground half is not enough,
   because push is a nudge through Google's or Apple's relay and that relay
   learns when this machine had something to say.
-- **A control pairing has no clock.** It ends on Stop sharing, on the
+- **Superseded 2026-09-13** by
+  `2026-09-13-a-control-pairing-expires-after-twelve-hours.md`: a control
+  pairing now also expires after twelve hours. The original text:
+  **A control pairing has no clock.** It ends on Stop sharing, on the
   conversation being deleted, or on Warp closing. The 12-hour lifetime stays
   for the watch pairing, which a variable minted; a control pairing was minted
   by a person pointing at a conversation, and the credential purge on stop is

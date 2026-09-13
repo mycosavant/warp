@@ -102,17 +102,22 @@ would have to change before first-class status, ranked.
 
 ## Task 4: a local-model turn discloses the agent's own connection
 
-Decision: `2026-09-13-a-local-model-turn-discloses-the-agents-own-connection.md`,
-added the same evening. It reverses the disclosure half of the 09-11 ruling in
-`docs/agent-transports.md`.
+Decision: `2026-09-13-a-local-model-turn-discloses-the-agents-own-connection.md`.
+It reverses the disclosure half of the 2026-09-11 ruling (commit `a7b6803c8`),
+which had refused a panel notice; "accepted" still stands.
+
+**Held until `HANDOFF-VENDORCALLS.md` has run.** Its result decides the
+wording, whether a stop exists, and whether a notice is the right answer at
+all (if the canary appears in a request body, it is not).
 
 **What to show.** A note in the panel, the same kind as the mode disclosure
 (`WarpNote`, which read-aloud already skips), with **Got it** and an option to
-make that acknowledgement the last one. Say only what was measured, in plain
-words: this agent contacted its vendor's servers during a turn answered by a
-local model, the flags meant to stop that did not, and Warp neither causes nor
-blocks it. Link the run record or the doc section. **Do not say what is sent**,
-because nobody has measured the content.
+make that acknowledgement the last one. It names the agent and the version
+measured, whether the requests are made as the user's account, whether any
+body carried prompt or file content, and the stop the run found, if any. It is
+hidden when the launch command already carries that stop. It does not say
+"during this turn": Warp does not see the connection per turn, and the note
+describes a measured property of a version.
 
 **When to show it. Decide from what Warp already knows, in this order:**
 

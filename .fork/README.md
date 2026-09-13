@@ -80,11 +80,15 @@ backlog mostly closed and the upstream drift check reporting a false zero:
 runs beside the merge), `HANDOFF-CORRECTNESS.md` (four defects with a wrong
 answer on screen) and `HANDOFF-BUILDS.md` (the endpoint watcher, a graph run
 keeping the machine awake, the TUI's test pass, and a disclosure that the
-agent contacts its vendor during a local-model turn). A fifth, `HANDOFF-SECRETS.md`
-(a measured secrets inventory, the Linux key fallback that only looked
-encrypted, and the console authority constrained), was added the same evening
-when the maintainer took its recommendations. The last three start after the
-merge lands. Every handoff above this paragraph is finished and moves to
+agent contacts its vendor during a local-model turn). Three more
+the same evening, after two fable-advisor passes: `HANDOFF-SECURITY.md` (seven
+risks for a user who is not the maintainer, ranked; it replaced a
+`HANDOFF-SECRETS.md` the code contradicted in three places),
+`HANDOFF-VENDORCALLS.md` (what the agent sends its vendor during a local-model
+turn, measured before any disclosure is built) and `HANDOFF-SUPPLYCHAIN.md`
+(agents from pinned, audited artifacts instead of `npx`). CORRECTNESS, BUILDS
+and SECURITY start after the merge lands; VENDORCALLS and SUPPLYCHAIN can start
+any time. Every handoff above this paragraph is finished and moves to
 `archive/` under HYGIENE.
 
 ## docs/ — one page per surface, current truth

@@ -1,22 +1,25 @@
 > A decision on record, 2026-09-13. Binding until a later decision names it.
 
-- **A native Android app is a destination for the phone surface**, recorded at
-  the maintainer's word on 2026-09-13 after friction row 3 noted that nothing
-  tracked it. The first version would be minimal and on-thesis: a
-  remote-control GUI that pairs with the desk instance, the way the maintainer
-  describes T3 Code's app (believed React Native; its architecture has not
-  been read here). The maintainer's leaning, stated as thoughts rather than a
-  choice: native Android with a Rust core, Compose if needed, Kotlin
-  Multiplatform if the Rust core is compatible with it. **Nothing is scoped.**
-  What already exists for it to talk to: `/remote-control`'s pairing, device
-  token and scoped actions (`docs/remote-control.md`), the console over TLS
-  with Warp's own authority, and reach over the tailnet (`reach.html`). The
-  browser console remains the surface in use until a spec is written.
+- **A native Android app is a destination for the phone surface. Nothing is
+  scoped.** The maintainer, verbatim: *"APK is also a destination and T3-code
+  has a good example of how i think this might work on-thesis and minimally for
+  a first effort. it's well designed, but is basically just a remote-control
+  GUI that pairs with the desk instance. not sure of the architecture, but i
+  think it's react native. I'd like to do a native android, rust-core app,
+  which may/may not require composer, maybe Kotlin MP if the rust-core is
+  compatible. just thoughts for now."* Later the same evening: *"Honestly, the
+  CA cert is probably the biggest single motivator to move toward a native
+  APK. i have mostly switched to mosh+tmux for now since under my current
+  browser configs, it still says unsecure despite having installed the CA."*
+  And: *"this is all really enforcing the need for an APK. i've really found
+  the mosh+tmux experience to be better anyways, but this risk has been part of
+  the reason i've pushed for that."*
 
-  **The strongest motivation, added the same evening:** the console's private
-  certificate authority. With it installed, the maintainer's DDG (Chromium)
-  and Firefox still show the page as not secure, so day-to-day use has moved to
-  mosh+tmux. A native app can pin the fork's authority inside the app instead of
-  asking the phone to trust a root system-wide, which removes both the browser
-  friction and most of what a stolen authority key could do to the phone.
-  `HANDOFF-SECRETS.md` task 3 handles the authority in the meantime.
+  T3 Code's app has not been read here. What the app would talk to already
+  exists: `/remote-control`'s pairing and scoped actions
+  (`docs/remote-control.md`), the console over TLS, and reach over the tailnet
+  (`reach.html`). An app can pin the fork's authority inside itself rather than
+  asking the phone to trust a root system-wide, which answers the browser
+  problem and most of what a stolen authority key could do to the phone.
+  Until a spec exists, `HANDOFF-SECURITY.md` task 5 hardens the authority the
+  browser console uses.
