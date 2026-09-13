@@ -72,6 +72,17 @@ drift in `manager_tests.rs`. It also lists four claims retracted that day, with
 their falsifiers, so the next session does not re-derive them. The account is
 the last section of `docs/warpctrl.md`.
 
+**Four handoffs written 2026-09-13, all approved by the maintainer that
+evening**, after a pass over every board, handoff and ticket found the tracked
+backlog mostly closed and the upstream drift check reporting a false zero:
+`HANDOFF-MERGE.md` (the drift check, the validator door, then the merge, first),
+`HANDOFF-HYGIENE.md` (archive the finished handoffs and correct the boards;
+runs beside the merge), `HANDOFF-CORRECTNESS.md` (four defects with a wrong
+answer on screen) and `HANDOFF-BUILDS.md` (the endpoint watcher, a graph run
+keeping the machine awake, the TUI's test pass). The last two start after the
+merge lands. Every handoff above this paragraph is finished and moves to
+`archive/` under HYGIENE.
+
 ## docs/ — one page per surface, current truth
 
 Each opens with *as of <date>* and a state table, then how to use the thing,
