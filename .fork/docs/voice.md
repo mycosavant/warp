@@ -1,6 +1,6 @@
 # Voice, both directions
 
-*As of 2026-09-12.* Speech **in** and speech **out** are two halves of one
+*As of 2026-09-13.* Speech **in** and speech **out** are two halves of one
 surface, and only one of them has ever been on this fork's board. This page is
 the fork's account of both: what exists, where it lives, what the fork would
 have to build, and the engineering findings worth keeping whichever way it goes.
@@ -9,31 +9,159 @@ have to build, and the engineering findings worth keeping whichever way it goes.
 settled and what the fork's own share is; read the sources named below for the
 detail. Nothing here restates their documentation.
 
-| half | where the work is | state |
+| half | where | state |
 |---|---|---|
-| speech **out** — read-aloud | `mycosavant/pocket-tts` | built, on a device, tested end to end |
-| speech **in** — transcription | `.fork/tickets/T02` | T2.1/T2.2 built and self-contained in this fork; the maintainer ranks it high; not chasing openwhispr/franken_whisper as dependencies |
+| speech **in**, at the desk | OpenWhispr, installed on Windows | **in daily use**; its paste reaches Warp's composer (maintainer, 2026-09-13) |
+| speech **in**, inside Warp | `.fork/tickets/T02`, `LocalTranscriber` | built, egress measured; spoken words through the mic never measured |
+| speech **out**, at the desk | a pocket-tts CLI in `mycosavant/pocket-tts` | **decided 2026-09-13, unbuilt** |
+| speech **out**, on the phone | `mycosavant/pocket-tts` Android app | built, on a device, tested end to end |
+
+~~This table had two rows until 2026-09-13, and the speech-in row read *"T2.1/T2.2
+built and self-contained in this fork."*~~ True of the code, and it read as
+"done". What falsified the reading: the 2026-09-05 egress run posted to
+`whisper-stub.py`, which returns canned text, and T02 itself says the words of
+a real recording were never proved. No whisper engine is installed on this
+machine today.
 
 ---
 
-## Why this page exists at all
+## The desk is primary: decisions, 2026-09-13
 
-On 2026-09-12 a session searched *this* repository for `text-to-speech`, found
-zero hits, and filed read-aloud as an unexplored requirement. It is none of
-those things: there is a built Android app, a device test with eight cases, and
-two open pull requests. **The error was concluding from one tree's silence about
-work that lives in another tree and in cloud artifacts** — the same shape as
-reading a thin friction log and inferring an idle week, made twice in one
-session. This page is the index that stops the third time.
+Taken by the maintainer after the facts below were measured.
 
-## Speech out: what exists
+- **The desk (Windows) is the primary target.** The Android app is the
+  maintainer's system-level TTS for that device, used for much more than this;
+  wiring it to Termux was a stop-gap for this work, not its goal.
+- **Dictation at the desk is OpenWhispr**, and Warp needs no code for it.
+- **Read-aloud at the desk is a pocket-tts CLI the maintainer owns**, living in
+  `mycosavant/pocket-tts`. Warp names it as a command, the way `LocalTranscriber`
+  names a transcriber binary, and never links the engine.
+- **Windows `System.Speech` is rejected** on quality.
+- **Mobile leans agnostic**: use whatever TTS the device already has, rather
+  than Warp pushing voice to a device. A leaning, not a decision.
 
-`org.pockettts.android` — an Android app using Kyutai Pocket TTS voices through
+**What was not established:** that OpenWhispr's paste works in every Warp input
+(only the agent composer was tried), and anything about the CLI beyond reading
+the code it will be ported from.
+
+## Speech in
+
+### OpenWhispr, at the desk
+
+Upstream's release is installed (the fork `mycosavant/openwhispr` is behind it
+and is not what runs), with local OpenAI Whisper Base active and the hotkey
+Ctrl+Win. Read off the running processes 2026-09-13:
+`windows-key-listener.exe Control+Super`, `windows-mic-listener.exe` and a
+`qdrant` instance are its children, and no whisper engine is running between
+dictations.
+
+**Why it reaches Warp**, read from the fork's `resources/windows-fast-paste.c`:
+it pastes into the foreground window, sending Ctrl+Shift+V to windows it
+recognises as terminals and Ctrl+V to everything else. `warp-oss.exe` is on
+neither of its terminal lists, so Warp receives Ctrl+V, which it binds on
+Windows (`app/src/terminal/view/init.rs:274`). The installed release may carry
+different lists; the maintainer's test is what settles it.
+
+**Do not point `LocalTranscriber` at OpenWhispr's engine.** It is not a
+contract:
+
+- `src/helpers/whisperServer.js` starts `whisper-server` on demand, on a port
+  picked from 8178–8199 at each start, bound to `127.0.0.1`.
+- OpenWhispr's main process holds `127.0.0.1:8200`, which answers `401` to `/`,
+  `/health` and `/v1/models`. Not identified.
+
+### `LocalTranscriber`, inside Warp
+
+`.fork/tickets/T02` is this fork's own work and T2.1–T2.5 are built:
+`LocalTranscriber` implementing `voice::transcriber::Transcriber`, installed
+unconditionally under fork policy (`app/src/lib.rs:2160`), fail-closed so that
+a misconfiguration is an error rather than a silent fallback to the server. The
+mic button is reachable without an account, because `is_any_ai_enabled` passes
+through `fork::account_gate_bypassed()`. The privacy note in T02 is the reason
+it exists: `Provider::OpenAI` is *not* a local path, and
+`ServerVoiceTranscriber` POSTs base64 audio to `api.warp.dev` regardless of
+provider.
+
+It stays as it is. It is harmless while OpenWhispr covers dictation, and it is
+the path if OpenWhispr ever goes away.
+
+~~*"`LocalTranscriber`'s `Http`/`Command` contracts already work with any local
+engine pointed at them, unmodified"* (2026-09-12).~~ Corrected 2026-09-13: the
+only engine it has been run against is whisper.cpp. The OpenAI-shaped servers
+(speaches, faster-whisper-server, LocalAI) were read about, not run. Probably
+true of any server answering `{"text": ...}`; not shown.
+
+**Not a fork dependency, and not worth chasing as one (2026-09-12).** The
+maintainer doesn't own openwhispr and prefers this fork stay self-contained.
+`franken_whisper` (a friend's project, stale) was checked for the same reason
+and set aside for the same reason. Using OpenWhispr as a desktop app beside
+Warp is not a dependency: nothing in Warp knows it exists.
+
+**A note on how this half was nearly mis-filed.** Grepping `voice` in this
+repository returns ~23 hits and reads as covered; all of it is transcription.
+For a while that led to the opposite error, treating T02 as pointing "the wrong
+direction". It does not. The maintainer ranks input high, and speaking to the
+fork and being read to by it are one surface.
+
+## Speech out at the desk: the CLI
+
+**Where it lives: `mycosavant/pocket-tts`, as the first Rust shell** of the
+core that repo's `android/docs/owning-the-pipeline.md` already argues for
+(pipeline in one Rust crate, shells for JNI, Obsidian and CLI). Reasons it is
+not a crate in this fork:
+
+- **Warp's default build does not compile ONNX Runtime in.** `ort` (rc.10) is
+  optional in `crates/input_classifier`, and the NLD classifiers in the default
+  build use candle. Linking it for one feature adds its runtime to every build
+  and a second `ort` version to reconcile (the reference adapter uses rc.12).
+- **A separate binary serves Termux, a Claude Code `/speak` command and Warp
+  alike**, and Warp's builds never wait on it.
+
+**Warp's share** is a speaker seam shaped like `LocalTranscriber`: Warp decides
+*what* is spoken (the last agent reply, with code blocks and tables stripped)
+and hands text to the command the user names. The trigger (keybinding,
+`warpctrl` action, panel button) is undecided.
+
+**What it is ported from**, read 2026-09-13, not run:
+
+| | |
+|---|---|
+| engine | speech-kit's `native/src/adapters/pocket_tts.rs`, ~300 lines, **MIT**; `ort` + `sentencepiece-rs` over `tokenizer.model`, 24 kHz output |
+| models | `KevinAHM/pocket-tts-onnx` `english_2026-04` int8 (text conditioner, flow LM main and flow, Mimi decoder), ~125 MB; **CC-BY-4.0** |
+| voice | `alba.safetensors` from `kyutai/pocket-tts-without-voice-cloning`; **CC-BY-4.0**. No encoder in this bundle, so no cloning |
+| pins | speech-kit's `native/catalog.json` pins each file to a commit and a sha256; reuse them |
+
+Both model licences require attribution in the CLI.
+
+**The tokenizer risk the position paper ranks highest mostly does not apply to
+this path.** That risk is re-implementing SentencePiece over sherpa's
+`vocab.json`. This port loads the real `tokenizer.model` through a library, so
+it inherits a tokenizer already in use. Not verified by running.
+
+**Order:** build the CLI on Windows, text on stdin, voice alba, to a WAV or the
+speaker; measure it against the *Eleven Utterances* set, trailing runts
+included, **before any Warp code**; then the Warp seam; then the phone.
+
+### Why not speech-kit's own sidecar
+
+It is running on this machine (`local-dictation-sidecar.exe`, Speech Kit
+`2026.8.7`, spawned by Obsidian), and it is the wrong door:
+
+- It speaks a framed stdin/stdout protocol (JSON `StartSynthesis { voice_id,
+  chunks }` in, binary PCM16 frames out). Its ADR 0001 chose that framing to
+  keep the plugin–sidecar boundary internal.
+- The maintainer pins its version because a fast-moving sidecar is a security
+  exposure. Warp speaking its protocol would track a private format of a
+  project the maintainer forks but does not lead.
+
+## Speech out on the phone: what exists
+
+`org.pockettts.android`, an Android app using Kyutai Pocket TTS voices through
 sherpa-onnx, registered as a **system TTS engine**, so Select-to-Speak, Chrome
 read-aloud and ebook readers all speak in a natural voice with the calling app
-oblivious that it is installed. Alongside that it has its own reader —
-`ReadAloudActivity` → `Reader.speak()` → `PlaybackService` — with real transport
-controls and a scratchpad.
+oblivious that it is installed. Alongside that it has its own reader
+(`ReadAloudActivity` → `Reader.speak()` → `PlaybackService`) with real
+transport controls and a scratchpad.
 
 It already accepts `ACTION_PROCESS_TEXT` and `ACTION_SEND`, so the whole
 transport UI sits behind an intent, and since PR #3 behind a broadcast as well.
@@ -41,7 +169,7 @@ transport UI sits behind an intent, and since PR #3 behind a broadcast as well.
 **Tested on the device 2026-09-11/12** (SM-S938U1, Android 16, build 46):
 transcript → script → broadcast → audio, with lock-screen controls and the
 screen off. Tests 1–5 pass. Every first-contact failure was in the shell script
-or in proot; none in the app. Two PRs open at the time of writing — **#7** the
+or in proot; none in the app. Two PRs open at the time of writing: **#7** the
 script fixes, **#8** the app fixes, green in CI and not yet run on a phone.
 
 **Why it is a `/command` and not a Stop hook**, which is the part that
@@ -52,7 +180,12 @@ platform chose the trigger. An exported broadcast receiver is the way back to
 screen-off operation, precisely because a receiver may never start an activity
 and does not need to.
 
-## The fork's own share, and it is small
+## The phone bridge
+
+~~This section was titled *"The fork's own share, and it is small"* until
+2026-09-13.~~ The maintainer said the Termux wiring was a stop-gap and the desk
+is primary, so the fork's share is now the desk seam above. The account below
+stands for whenever the phone comes back.
 
 **The tested path assumes Claude Code runs on the phone**, in proot Ubuntu under
 Termux, where `am` is a local exec and the harness JSONL sits beside it.
@@ -69,17 +202,17 @@ warpctrl agent trace <conversation>
 ```
 
 It joins the agent's own session file with Warp's event log and **needs no
-running Warp** — the same property that made mosh+tmux worth having, since the
+running Warp**, the same property that made mosh+tmux worth having, since the
 instance is usually what is being rebuilt. So the candidate is one line from a
 phone-local Termux shell rather than the mosh pane: ssh to the desk, take the
 trace, broadcast locally. In `speak-last.sh`'s own structure that is a second
 **source** for the text, not a second script.
 
 **Unbuilt on this side. Do not build it before #7 and #8 are confirmed on a
-device** — they are green in CI and have never touched a phone, and wiring a new
+device**: they are green in CI and have never touched a phone, and wiring a new
 text source into two unverified layers means debugging all three at once.
 
-## Four constraints any bridge inherits
+## Four constraints any phone bridge inherits
 
 Measured on the device, properties of the environment rather than of the app,
 and not negotiable from this side.
@@ -104,13 +237,13 @@ and not negotiable from this side.
 The engine has no length for a chunk in advance: it runs the language model
 frame by frame and stops when its own end-of-speech head crosses a hard-coded
 threshold. On a **trailing run of very short sentences** that head fires early
-and the tail is lost — `One. Two. Three. Four. Five.` stopped after *"Two."*
+and the tail is lost: `One. Two. Three. Four. Five.` stopped after *"Two."*
 
 **Position is the variable, not length.** Mid-text runts are harmless, and a
 single trailing runt is harmless; a run of them at the end is not. PR #8 joins
 such a run with commas in the spoken form only, leaving what is shown untouched.
 
-The reason it matters here is #8's own: **that is how agent replies end** — in
+The reason it matters here is #8's own: **that is how agent replies end**, in
 countdowns and strings of statuses. Warp's replies have the same shape, so any
 fork surface that speaks agent output meets this.
 
@@ -119,6 +252,15 @@ sentence holding a run of numbers. `Tests 1, 2 and 3 are green.` lost "green" in
 2 of 3 runs; `Files A, B and C are updated.` never did. The threshold is the
 engine's and the reference implementation uses the same value, so nothing at the
 app layer can tell a premature ending from a real one.
+
+**speech-kit does it differently, and the maintainer hears less of the cutoff
+there** (2026-09-13, by ear, not measured). Its adapter stops on an EOS logit
+above `-4.0` and then generates a tail: **5 more frames when the text has 4
+words or fewer, 3 otherwise**, capped by a frame budget of `tokens / 3 + 2`
+seconds (`pocket_tts.rs:223`, `:283`, `:321`). The Android build goes through
+sherpa-onnx's own stopping rule. The longer tail on short text is a plausible
+cause of the difference and is **read, not measured**; the CLI's first test set
+is where to measure it.
 
 ## Three findings worth keeping for their shape
 
@@ -129,7 +271,7 @@ argument for writing them down.
 **The timer measured the consumer, not the producer.** The app reported
 *"generation speed: 0.83x real time — slower than playback"* and that number was
 wrong about what it named. The reader fed the speaker from inside the engine's
-callback, and the write blocks when the buffer is full — so chunk N+1 could not
+callback, and the write blocks when the buffer is full, so chunk N+1 could not
 begin until chunk N had been *heard*. The figure timed a call that spent most of
 its length waiting on playback. Back-solved, the model runs roughly **1.4–4×
 real time** on that device. Underruns could not see it either, because a track
@@ -141,7 +283,7 @@ aimed.
 **A bounded channel would have deadlocked where a semaphore does not.** The fix
 made `Reader.play` a producer and a consumer, with the engine's callback
 dropping pieces into a channel and a writer feeding the sink. The bound is a
-**semaphore on chunks, not a bounded channel** — and the reason is worth
+**semaphore on chunks, not a bounded channel**, and the reason is worth
 keeping: *the engine's callback cannot suspend*. A callback blocked waiting for
 room would hold the engine exactly as the blocking write did, with nothing to
 wake it after a stop. Same intent, opposite outcome, and only one of the two
@@ -152,7 +294,7 @@ Voice drift over long text was attributed for a month to independent
 generations from one voice prompt, with audio-prompt chaining proposed as the
 fix. The real cause was one behaviour in sherpa-onnx's C++: it cuts a chunk back
 into sentences on `.!?` and generates each independently. The app chunked; the
-engine re-split underneath it. Fixed from the *caller's* side in four lines —
+engine re-split underneath it. Fixed from the *caller's* side in four lines,
 two sentence-length bounds in sherpa's `extra` map, set above the app's own
 chunk cap. On the device: *"much better, first syllable collapse is almost
 none."*
@@ -162,39 +304,30 @@ you own is a bug; a defect in code you call is a mystery.* It took a month to
 find because the behaviour had no setting, no log and no symptom except a voice
 that sounded wrong in a way nobody could name.
 
-## Speech in
+## Why this page exists at all
 
-`.fork/tickets/T02` is this fork's own work and T2.1/T2.2 are built:
-`LocalTranscriber` implementing `voice::transcriber::Transcriber`, fail-closed
-so that a misconfiguration is an error rather than a silent fallback to the
-server. The privacy note in that ticket is the reason it exists —
-`Provider::OpenAI` is *not* a local path, and `ServerVoiceTranscriber` POSTs
-base64 audio to `api.warp.dev` regardless of provider.
+On 2026-09-12 a session searched *this* repository for `text-to-speech`, found
+zero hits, and filed read-aloud as an unexplored requirement. It is none of
+those things: there is a built Android app, a device test with eight cases, and
+two open pull requests. **The error was concluding from one tree's silence about
+work that lives in another tree and in cloud artifacts**, the same shape as
+reading a thin friction log and inferring an idle week, made twice in one
+session. This page is the index that stops the third time.
 
-`mycosavant/openwhispr` is the neighbouring work outside this repo, local
-Parakeet/Whisper with BYOK cloud models.
-
-**Not a fork dependency, and not worth chasing as one (2026-09-12).** The
-maintainer doesn't own openwhispr and prefers this fork stay self-contained
-rather than take on a dependency on another project — `LocalTranscriber`'s
-`Http`/`Command` contracts already work with any local engine pointed at
-them, unmodified. `franken_whisper` (a friend's project, stale) was checked
-for the same reason and set aside for the same reason.
-
-**A note on how this half was nearly mis-filed.** Grepping `voice` in this
-repository returns ~23 hits and reads as covered; all of it is transcription.
-For a while that led to the opposite error — treating T02 as pointing "the wrong
-direction". It does not. The maintainer ranks input high, and speaking to the
-fork and being read to by it are one surface. **Only one half was ever on the
-board.**
+The same shape recurred on 2026-09-13 in the other direction: a summary called
+dictation "done" from the code, while the only engine ever run was a stub, and
+the dictation actually in use lived in a desktop app nobody had asked about.
 
 ## Sources
 
 | | |
 |---|---|
-| `mycosavant/pocket-tts` | the app, `android/docs/`, PRs #1–#8 |
+| `mycosavant/pocket-tts` | the Android app, `android/docs/` (`direct-ort.md`, `owning-the-pipeline.md`), PRs #1–#8; home of the desk CLI |
+| `mycosavant/speech-kit-obsidian-plugin` | `native/src/adapters/pocket_tts.rs`, `native/src/protocol.rs`, `native/catalog.json`, `docs/adr/0001-*` |
+| `mycosavant/openwhispr` | `src/helpers/whisperServer.js`, `resources/windows-fast-paste.c`; behind the installed upstream release |
 | artifact *Read Aloud Wiring* | the implementation handoff, 2026-09-11, with its ruled-out list |
 | artifact *Eleven Utterances* | the device test, 2026-09-11/12, eight cases, revised after the follow-up |
-| artifact *Pipeline, Not Inference* | the position paper on owning the pipeline rather than the inference |
+| artifact *Pipeline, Not Inference* | the position paper; its text is `owning-the-pipeline.md` above |
 | `.fork/tickets/T02-local-voice.md` | the fork's transcription work |
+| `.fork/runs/egress-windows-2026-09-05/` | voice egress, measured against `whisper-stub.py` |
 | `.fork/runs/run-live-2026-09/friction.md` | friction #2, and the two corrections that produced this page |

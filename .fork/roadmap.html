@@ -230,9 +230,14 @@
     <div class="head"><h2>Voice: measure before building &mdash; openwhispr dictation</h2><span class="status">resolved · 2026-09-12</span></div>
     <div class="meta"><span>effort: small (measurement, done)</span><span>impact: medium</span></div>
     <p>Measured, then resolved as a decision rather than a build task.
-    Dictation is already done and already self-contained &mdash;
+    <del>Dictation is already done and already self-contained &mdash;
     <code>LocalTranscriber</code>'s <code>Http</code>/<code>Command</code>
-    backends point at any local engine unmodified. The maintainer would
+    backends point at any local engine unmodified.</del>
+    <strong>Corrected 2026-09-13:</strong> the code is built and its egress
+    was measured, but against <code>whisper-stub.py</code>; spoken words
+    through the mic were never measured, and the only engine ever run was
+    whisper.cpp. The dictation actually in use at the desk is OpenWhispr, whose
+    paste reaches Warp's composer (maintainer's test). The maintainer would
     "highly prefer that we use what is already built and on-thesis here
     rather than mess with another fork": openwhispr isn't theirs (no commits
     made to it) and <code>franken_whisper</code>, checked as an alternative,
@@ -240,8 +245,13 @@
     dependency. Also resolved: dictation happens entirely GUI-process-local
     (cpal capture &rarr; transcribe &rarr; the same <code>user_insert</code>
     path as typing), so WSL pane routing was never a relevant concern for
-    either half &mdash; pocket-tts's read-aloud already bypasses WSL audio
-    entirely via <code>warpctrl agent trace</code>. Scoping correction
+    either half &mdash; <del>pocket-tts's read-aloud already bypasses WSL audio
+    entirely via <code>warpctrl agent trace</code>.</del>
+    <strong>Corrected 2026-09-13:</strong> that bridge was never built;
+    <code>.fork/docs/voice.md</code> said "Unbuilt on this side" the same day.
+    Read-aloud at the desk, now the primary target, is decided as a pocket-tts
+    CLI in <code>mycosavant/pocket-tts</code> that Warp names as a command.
+    Scoping correction
     written into <code>.fork/HANDOFF-GHTESTS.md</code> and
     <code>.fork/docs/voice.md</code> in the maintainer's own words: "do not
     touch" was about pocket-tts's own codebase at one PR-review moment, not
@@ -340,7 +350,7 @@
   <ul>
     <li><b>Gemini <code>authenticate</code> half 2</b><span>Decided 2026-09-11: Gemini models are reachable through opencode or codex on OpenRouter, so opening the credential door isn't worth it. Closed, not merely deferred.</span></li>
     <li><b>CLAUDE.md reduction pass</b><span>Explicitly: don't start a fresh pass &mdash; you consider it largely done. The only standing task is discipline: pay for any addition with a removal.</span></li>
-    <li><b>Voice: read-aloud / TTS / mobile entry point</b><span>Your own current work; asked to be left alone on it. Not agent work.</span></li>
+    <li><b>Voice: read-aloud / TTS / mobile entry point</b><span><del>Your own current work; asked to be left alone on it. Not agent work.</del> Corrected 2026-09-13: "do not touch" was scoped to one pocket-tts PR review (2026-09-12). Now open: desk read-aloud via a pocket-tts CLI in <code>mycosavant/pocket-tts</code>, then a Warp speaker seam. See <code>.fork/docs/voice.md</code>.</span></li>
   </ul>
 </div>
 
