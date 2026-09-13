@@ -12,3 +12,11 @@
   token and scoped actions (`docs/remote-control.md`), the console over TLS
   with Warp's own authority, and reach over the tailnet (`reach.html`). The
   browser console remains the surface in use until a spec is written.
+
+  **The strongest motivation, added the same evening:** the console's private
+  certificate authority. With it installed, the maintainer's DDG (Chromium)
+  and Firefox still show the page as not secure, so day-to-day use has moved to
+  mosh+tmux. A native app can pin the fork's authority inside the app instead of
+  asking the phone to trust a root system-wide, which removes both the browser
+  friction and most of what a stolen authority key could do to the phone.
+  `HANDOFF-SECRETS.md` task 3 handles the authority in the meantime.
