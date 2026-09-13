@@ -1,4 +1,53 @@
 use super::*;
+use crate::ai::agent::{AIAgentText, MessageId};
+
+fn text_message(id: &str, text: &str) -> AIAgentOutputMessage {
+    AIAgentOutputMessage {
+        id: MessageId::new(id.to_string()),
+        message: AIAgentOutputMessageType::Text(AIAgentText {
+            sections: vec![AIAgentTextSection::PlainText {
+                text: text.to_string().into(),
+            }],
+        }),
+        citations: Vec::new(),
+    }
+}
+
+/// The failure this exists for, measured in a running Warp: the ACP mode
+/// disclosure is a `WarpNote` in the same output as the agent's reply, and it
+/// was read aloud first.
+#[test]
+fn warp_notes_are_not_read_aloud() {
+    let note = AIAgentOutputMessage {
+        id: MessageId::new("note".to_string()),
+        message: AIAgentOutputMessageType::WarpNote {
+            headline: "This session is in the agent's `default` mode.".to_string(),
+            detail: AIAgentText {
+                sections: vec![AIAgentTextSection::PlainText {
+                    text: "Warp did not choose it.".to_string().into(),
+                }],
+            },
+        },
+        citations: Vec::new(),
+    };
+    let reply = text_message(
+        "reply",
+        "The read-aloud test finished. Patching. Testing. Done.",
+    );
+    assert_eq!(
+        spoken_text(&[note, reply]),
+        "The read-aloud test finished. Patching. Testing. Done."
+    );
+}
+
+#[test]
+fn consecutive_agent_text_messages_are_all_read() {
+    let messages = [
+        text_message("a", "First part."),
+        text_message("b", "Second part."),
+    ];
+    assert_eq!(spoken_text(&messages), "First part.\nSecond part.");
+}
 
 fn exchange(has_query: bool, output: &str) -> (bool, String) {
     (has_query, output.to_owned())

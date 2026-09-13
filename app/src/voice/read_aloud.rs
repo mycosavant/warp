@@ -16,27 +16,56 @@ use std::sync::Mutex;
 use anyhow::{Context as _, anyhow};
 
 use crate::ai::agent::conversation::AIConversation;
+use crate::ai::agent::{AIAgentOutputMessage, AIAgentOutputMessageType, AIAgentTextSection};
 
 static READING: Mutex<Option<Child>> = Mutex::new(None);
 
-/// The last reply in `conversation`: every non-empty output from the most
-/// recent exchange that carried a user query to the end.
+/// The last reply in `conversation`: what the agent said, from the most recent
+/// exchange that carried a user query to the end.
 ///
 /// One reply can span several exchanges when the agent calls tools between
-/// pieces of prose, which is why this mirrors the AI block's "Copy output"
-/// (`get_output_text_since_preceding_user_query`) rather than taking the last
-/// exchange alone. Tool results are left out: they are not what the agent said.
+/// pieces of prose, which is why this takes the same span as the AI block's
+/// "Copy output" (`get_output_text_since_preceding_user_query`) rather than the
+/// last exchange alone.
 pub fn last_reply_text(conversation: &AIConversation) -> Option<String> {
     let exchanges: Vec<(bool, String)> = conversation
         .root_task_exchanges()
         .map(|exchange| {
-            (
-                exchange.has_user_query(),
-                exchange.format_output_for_copy(None),
-            )
+            let spoken = exchange
+                .output_status
+                .output()
+                .map(|output| spoken_text(&output.get().messages))
+                .unwrap_or_default();
+            (exchange.has_user_query(), spoken)
         })
         .collect();
     join_last_reply(&exchanges)
+}
+
+/// The agent's own prose in one exchange's output, and nothing else.
+///
+/// **Not `format_output_for_copy`, and the first version was.** Copy output
+/// writes Warp's own notes (`WarpNote`, among them the ACP mode disclosure) and
+/// tool rows into the text, which is right for a clipboard and wrong for a
+/// voice: measured 2026-09-13 in a running Warp, the first reply of an ACP
+/// session was read aloud as about forty seconds of Warp explaining the
+/// agent's permission mode before the agent's own two sentences. So this keeps
+/// `Text` messages only, and within them plain-text sections only. Code,
+/// tables, images and diagrams are left out too, so a reader that does not
+/// strip Markdown still does not recite a code block.
+pub(crate) fn spoken_text(messages: &[AIAgentOutputMessage]) -> String {
+    let mut parts = Vec::new();
+    for message in messages {
+        let AIAgentOutputMessageType::Text(text) = &message.message else {
+            continue;
+        };
+        for section in &text.sections {
+            if let AIAgentTextSection::PlainText { text } = section {
+                parts.push(text.text().to_string());
+            }
+        }
+    }
+    parts.join("\n")
 }
 
 /// `exchanges` is `(has_user_query, output)` in conversation order.
