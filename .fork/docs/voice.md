@@ -126,17 +126,29 @@ and hands text to the command the user names. The trigger (keybinding,
 
 | | |
 |---|---|
-| engine | speech-kit's `native/src/adapters/pocket_tts.rs`, ~300 lines, **MIT**; `ort` + `sentencepiece-rs` over `tokenizer.model`, 24 kHz output |
+| engine | speech-kit's `native/src/adapters/pocket_tts.rs`, **840 lines** including tests, **MIT**; `ort` + `sentencepiece-rs` over `tokenizer.model`, 24 kHz output. ~~This row said ~300 lines on 2026-09-13, copied from the position paper; `wc -l` on the file the same day says 840.~~ |
 | models | `KevinAHM/pocket-tts-onnx` `english_2026-04` int8 (text conditioner, flow LM main and flow, Mimi decoder), ~125 MB; **CC-BY-4.0** |
 | voice | `alba.safetensors` from `kyutai/pocket-tts-without-voice-cloning`; **CC-BY-4.0**. No encoder in this bundle, so no cloning |
 | pins | speech-kit's `native/catalog.json` pins each file to a commit and a sha256; reuse them |
 
 Both model licences require attribution in the CLI.
 
-**The tokenizer risk the position paper ranks highest mostly does not apply to
-this path.** That risk is re-implementing SentencePiece over sherpa's
-`vocab.json`. This port loads the real `tokenizer.model` through a library, so
-it inherits a tokenizer already in use. Not verified by running.
+~~**The tokenizer risk the position paper ranks highest mostly does not apply to
+this path.** This port loads the real `tokenizer.model` through a library, so
+it inherits a tokenizer already in use.~~ Wrong the same day it was written.
+`sentencepiece-rs` 0.2.2 (Apache-2.0, no dependencies, one author) describes
+itself as *"a Rust runtime reimplementation"* that follows the C++ behaviour
+*"but is not a line-by-line rewrite"*, and its tests build nine-piece models by
+hand; none compares its output with Google's on a real model. So the risk moved
+into that crate rather than going away. The paper's first step stands: **diff
+its tokenisation against Google's SentencePiece over a few thousand sentences
+before anything downstream.** The only evidence it works on this model is
+speech-kit's CI, which gates on a Whisper round-trip word error rate.
+
+**Build-time download.** `ort` rc.12's `download-binaries` fetches ONNX Runtime
+1.24.2 from `cdn.pyke.io` and checks it against a sha256 pinned in
+`ort-sys/build/download/dist.txt`. That is pinned but third-party-hosted; a
+Microsoft release pointed at by `ORT_LIB_LOCATION` is the alternative.
 
 **Order:** build the CLI on Windows, text on stdin, voice alba, to a WAV or the
 speaker; measure it against the *Eleven Utterances* set, trailing runts
@@ -258,9 +270,18 @@ there** (2026-09-13, by ear, not measured). Its adapter stops on an EOS logit
 above `-4.0` and then generates a tail: **5 more frames when the text has 4
 words or fewer, 3 otherwise**, capped by a frame budget of `tokens / 3 + 2`
 seconds (`pocket_tts.rs:223`, `:283`, `:321`). The Android build goes through
-sherpa-onnx's own stopping rule. The longer tail on short text is a plausible
-cause of the difference and is **read, not measured**; the CLI's first test set
-is where to measure it.
+sherpa-onnx's own stopping rule. ~~The longer tail on short text is a plausible
+cause of the difference.~~ Superseded the same day by a larger difference
+upstream of the engine: **speech-kit generates one sentence at a time.**
+`segmentSpeakableText` flushes a chunk once it reaches `minimumCharacters`,
+which defaults to 1, and `extractAndSegmentMarkdown` passes only a locale, so
+every sentence is its own generation. A trailing "Two." is generated alone,
+with the 5-frame tail and the leading-space padding the bundle asks for short
+inputs, which sherpa strips. The Android app chunks to ~200 characters and
+measured the per-sentence approach as costing *"a full voice conditioning pass
+per word"* (`TextChunker.kt`). Both are **read, not measured**. For the CLI
+this is a choice between latency and the cutoff, and the *Eleven Utterances*
+set is where to make it.
 
 ## Three findings worth keeping for their shape
 
