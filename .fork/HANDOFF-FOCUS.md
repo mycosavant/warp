@@ -67,9 +67,12 @@ cp target/release/warp-oss /tmp/warp-oss-prefix-7d8e21b76
 > bridge. Read, not run: the same panic looks reachable in the app under
 > `WARP_FORK_POLICY=0`, which skips `FORCE_ENABLED` and so never registers the
 > bridge, while the call's comment calls it "a no-op under upstream
-> behaviour". A one-line `has_singleton_model` guard is proposed there, not
-> applied. Three more of the 23 are the intended inversions already in T03 and
-> T04. Task 4 done: the count
+> behaviour". ~~A one-line `has_singleton_model` guard is proposed there, not
+> applied.~~ Applied the same evening, on the maintainer's go-ahead, to all
+> four entry points in `remote_control.rs` (the footer tick reaches
+> `state_of` the same way); the 17 pass alone and a no-bridge test covers
+> each entry point. Three more of the 23 are the intended inversions already
+> in T03 and T04. Task 4 done: the count
 > (`bb0af075d`) and the GHTESTS audit (`41e77d9ef`). Windows checkout synced
 > to `bb0af075d` and both Windows binaries rebuilt; pre-fix copies kept in
 > `C:\dev\prefix-debug-7d8e21b76` and `C:\dev\prefix-release-76d8b07e6`.

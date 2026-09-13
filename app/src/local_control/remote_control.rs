@@ -21,9 +21,26 @@ use ::local_control::protocol::PairingResult;
 use warpui::{AppContext, SingletonEntity};
 
 use crate::local_control::LocalControlBridge;
+use crate::local_control::bridge::PairingContext;
 use crate::local_control::handlers::pairing::mint;
 pub(crate) use crate::local_control::pairing::ControlState;
 use crate::local_control::pairing::Scope;
+
+/// The pairing state, when this process has any.
+///
+/// `None` when the wide listener is off, and also when no bridge was ever
+/// registered: under `WARP_FORK_POLICY=0`, which skips `FORCE_ENABLED` and so
+/// `WarpControlCli`, and in every upstream test fixture. No bridge means no
+/// listener was started, so there is no pairing to find and `None` is the exact
+/// answer. Every function below goes through here, because
+/// `LocalControlBridge::as_ref` panics when the singleton is absent, and until
+/// 2026-09-12 all four called it directly (`.fork/runs/lib-baseline-2026-09-12/`).
+fn pairing_context(app: &AppContext) -> Option<PairingContext> {
+    if !app.has_singleton_model::<LocalControlBridge>() {
+        return None;
+    }
+    LocalControlBridge::as_ref(app).pairing().cloned()
+}
 
 /// Hands a conversation to whatever scans the code this returns.
 ///
@@ -32,7 +49,7 @@ pub(crate) fn start(
     conversation_id: &str,
     app: &AppContext,
 ) -> Result<PairingResult, ControlError> {
-    let pairing = LocalControlBridge::as_ref(app).pairing().cloned();
+    let pairing = pairing_context(app);
     mint(
         pairing.as_ref(),
         Scope::Control {
@@ -45,7 +62,7 @@ pub(crate) fn start(
 /// code for it stop working. Returns how many devices were cut off, so the
 /// panel can say whether a phone was connected or only a code had been shown.
 pub(crate) fn stop(conversation_id: &str, app: &AppContext) -> usize {
-    let Some(pairing) = LocalControlBridge::as_ref(app).pairing().cloned() else {
+    let Some(pairing) = pairing_context(app) else {
         return 0;
     };
     // The credentials first, because they are what a request carries: a
@@ -63,7 +80,7 @@ pub(crate) fn stop(conversation_id: &str, app: &AppContext) -> usize {
 /// Where remote control of a conversation stands, for the block in the pane:
 /// waiting for a scan, paired since when, or nothing outstanding.
 pub(crate) fn state_of(conversation_id: &str, app: &AppContext) -> ControlState {
-    let Some(pairing) = LocalControlBridge::as_ref(app).pairing().cloned() else {
+    let Some(pairing) = pairing_context(app) else {
         return ControlState::Idle;
     };
     let Ok(pairings) = pairing.pairings.lock() else {
@@ -76,7 +93,7 @@ pub(crate) fn state_of(conversation_id: &str, app: &AppContext) -> ControlState 
 /// paired for it, or a code for it still waiting to be scanned. What the chip
 /// reads to decide between *start* and *stop*.
 pub(crate) fn is_active(conversation_id: &str, app: &AppContext) -> bool {
-    let Some(pairing) = LocalControlBridge::as_ref(app).pairing().cloned() else {
+    let Some(pairing) = pairing_context(app) else {
         return false;
     };
     let Ok(pairings) = pairing.pairings.lock() else {
@@ -84,3 +101,7 @@ pub(crate) fn is_active(conversation_id: &str, app: &AppContext) -> bool {
     };
     pairings.is_controlling(conversation_id, chrono::Utc::now())
 }
+
+#[cfg(test)]
+#[path = "remote_control_tests.rs"]
+mod tests;

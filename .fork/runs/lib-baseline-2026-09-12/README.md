@@ -1,5 +1,12 @@
 # `cargo test -p warp --lib`, whole, twice
 
+> **Superseded in one part, same evening.** The guard below marked "proposed,
+> not applied" was applied at the maintainer's request, and widened: `start`,
+> `state_of` and `is_active` made the same unguarded lookup, and the footer's
+> tick reaches `state_of` after the chip is clicked with fork policy off. All
+> four now go through `remote_control::pairing_context`. The 17 pass alone;
+> see the commit that follows this record. The body is left as written.
+
 2026-09-12 evening, `HANDOFF-FOCUS.md` Task 3. Tree at `4cd2bff33`; no app
 code changed since `aa406e7ca` except two test files. Linux, WSL, no Warp
 running, no concurrent build.

@@ -2432,8 +2432,11 @@ impl BlocklistAIHistoryModel {
         // `/remote-control` is taken back when it goes away, because a control
         // pairing has no clock and this is one of the three things that end
         // it. Both `remove_conversation` and `delete_conversation` come
-        // through here. A no-op under upstream behaviour and with no wide
-        // listener; the phone would have been refused anyway, since every
+        // through here. A no-op with no wide listener, and under upstream
+        // behaviour -- which until 2026-09-12 this comment claimed while
+        // `stop` panicked there instead, because `WARP_FORK_POLICY=0` never
+        // registers the bridge (`.fork/runs/lib-baseline-2026-09-12/`).
+        // The phone would have been refused anyway, since every
         // handler it reaches looks the conversation up, but the pairing and
         // its credentials should not outlive the thing they were minted for.
         let cut_off = crate::local_control::remote_control::stop(&conversation_id.to_string(), ctx);
