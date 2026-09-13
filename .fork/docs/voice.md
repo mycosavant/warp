@@ -198,8 +198,11 @@ ended on the EOS head or the frame budget.
 So **the early-EOS failure is the model's**, not sherpa-onnx's: it appears on
 direct ONNX Runtime too, and the trailing-short-sentence join still earns its
 place. `packed` is the default because it costs nothing measurable against
-`sentence` on real replies. **Not established:** how it sounds against the
-Android build or speech-kit, which needs ears; other languages; aarch64.
+`sentence` on real replies. ~~**Not established:** how it sounds against the
+Android build or speech-kit, which needs ears~~ **Heard by the maintainer,
+2026-09-13, on the Windows smoke tests:** *"sounds at least as good as the
+speech-kit impl (as good or better than the android impl). all runts
+articulated perfectly."* Still not established: other languages; aarch64.
 
 **Warp's share** is two palette entries, "Read last agent reply aloud" and
 "Stop reading aloud" (no default keys), gated on `fork::read_aloud_enabled`.
@@ -208,6 +211,30 @@ query to the end, the same span the AI block's "Copy output" takes, and it is
 written as Markdown to the stdin of `agents.voice.read_aloud.command` with
 `agents.voice.read_aloud.args`. Starting a reading stops the one in progress;
 stopping kills the process. Warp holds no engine and no voice.
+
+**Run end to end on Windows, 2026-09-13** (debug build of `68cc117c2`,
+`WARP_DATA_PROFILE=readaloud`, `claude-agent-acp` 0.73.0 started Windows-side
+because the scratch pane was PowerShell, `pocket-speak --stats` as the reader).
+The palette entry dispatched; Warp logged each of pocket-speak's stats lines
+through the stderr reader, four chunks, all ending on the EOS head, the last
+the agent's own *"…Patching, Testing, Done."* with the tail join applied.
+
+**And it read Warp's notes aloud first.** The reply text came from
+`format_output_for_copy`, which writes `WarpNote` and `ToolRow` messages into
+the text: the ACP mode disclosure took three of the four chunks, about forty
+seconds, before the agent's two sentences. Fixed in `ac5f6b25f`: only `Text`
+messages, and within them only plain-text sections, are spoken.
+`warp_notes_are_not_read_aloud` was calibrated by letting `WarpNote` through
+(fails) and restoring (8/8). Speed in that run was 0.94-2.14x real time against
+3.6-3.9x standalone, with the emulator and a debug Warp on the same machine;
+contention is the likely cause and was not isolated.
+
+**Heard fixed on the rebuilt binary** (`v0.fork.ac5f6b25f`, same profile and
+agent, emulator off). The stored reply was 657 characters and still began with
+the mode notice, so the test had something to leave out; pocket-speak was
+handed one 41-character chunk, *"The fix is in the build. One, Two, Three."*,
+ended on the EOS head, first audio 258 ms, 4.15x real time. The 4.15x against
+the earlier run's ~1x is consistent with the contention explanation above.
 
 ```toml
 [agents.voice.read_aloud]
@@ -281,8 +308,20 @@ phone-local Termux shell rather than the mosh pane: ssh to the desk, take the
 trace, broadcast locally. In `speak-last.sh`'s own structure that is a second
 **source** for the text, not a second script.
 
-**Unbuilt on this side. Do not build it before #7 and #8 are confirmed on a
-device**: they are green in CI and have never touched a phone, and wiring a new
+**Built 2026-09-13, as a source in `speak-last.sh`, not in Warp** (pocket-tts
+PR #13): `CLAUDE_TTS_REMOTE=<ssh host>` copies the newest transcript under the
+desk's `~/.claude/projects` over the phone's existing ssh access, and
+`CLAUDE_TTS_TRANSCRIPT=<file>` names one outright. It reads the agent's own
+session file rather than `warpctrl agent trace`, because `agent list` and
+`agent read` carry no timestamps to pick "the latest" by, and the session file
+needs no running Warp either. **Measured on the `warp_phone` emulator**
+(x86_64, Termux 0.118.3 and Termux:API 0.53.0, both sha256-checked): `engine`
+mode spoke a staged reply through Google's TTS, the only engine installed,
+bound and dispatched twice (heading, then paragraph), 6 s, exit 0, which is the
+agnostic path: whatever engine the device has. **Not measured:** the ssh hop
+from a real phone, and the Pocket TTS app on the emulator, whose APK is
+arm64/armv7 only. ~~**Unbuilt on this side. Do not build it before #7 and #8
+are confirmed on a device**~~ (both were, on build 52): they are green in CI and have never touched a phone, and wiring a new
 text source into two unverified layers means debugging all three at once.
 
 ## Four constraints any phone bridge inherits
