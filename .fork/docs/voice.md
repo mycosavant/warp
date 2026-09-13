@@ -145,6 +145,23 @@ its tokenisation against Google's SentencePiece over a few thousand sentences
 before anything downstream.** The only evidence it works on this model is
 speech-kit's CI, which gates on a Whisper round-trip word error rate.
 
+**Measured 2026-09-13: identical to Google's.** `sentencepiece-rs` 0.2.2
+`encode_to_ids` against Google's `sentencepiece` 0.2.2 `encode` (the call
+`conditioners/text.py` makes: `encode(text, out_type=int)`, no BOS), on the
+pinned `english_2026-04` `tokenizer.model`:
+
+| corpus | rows | mismatches |
+|---|---|---|
+| sentences from `.fork/docs`, `.fork/runs`, `.fork/tickets` and pocket-tts's docs (258 files), plus 22 hand-written edge cases: URLs, Windows paths, hashes, code signatures, emoji, fullwidth, zero-width and non-breaking spaces | 13,529 raw + 1,283 as the adapter's `prepare_text` form | **0** |
+| random strings, 1–80 characters, from eleven pools: Latin, digits, whitespace, punctuation, accented, Greek, Cyrillic, CJK, emoji with modifiers and ZWJ, fullwidth and ligatures, combining marks | 5,000 (seed 20260913) | **0** |
+
+The bundle's `tokenizer.model` is **byte-identical** to the one the reference
+implementation loads (`kyutai/pocket-tts-without-voice-cloning@d4fdd22`, both
+sha256 `d461765a…`), so this is the tokenizer the model was conditioned on.
+**Not established:** decoding (the CLI never decodes), sampling or
+`nbest` modes, other languages' tokenizers, and texts longer than 400
+characters. The harness was session scratch; it becomes the CLI's first test.
+
 **Build-time download.** `ort` rc.12's `download-binaries` fetches ONNX Runtime
 1.24.2 from `cdn.pyke.io` and checks it against a sha256 pinned in
 `ort-sys/build/download/dist.txt`. That is pinned but third-party-hosted; a
@@ -276,8 +293,11 @@ upstream of the engine: **speech-kit generates one sentence at a time.**
 `segmentSpeakableText` flushes a chunk once it reaches `minimumCharacters`,
 which defaults to 1, and `extractAndSegmentMarkdown` passes only a locale, so
 every sentence is its own generation. A trailing "Two." is generated alone,
-with the 5-frame tail and the leading-space padding the bundle asks for short
-inputs, which sherpa strips. The Android app chunks to ~200 characters and
+with the 5-frame tail. ~~…and the leading-space padding the bundle asks for
+short inputs, which sherpa strips.~~ `english_2026-04`'s `bundle.json` sets
+`pad_with_spaces_for_short_inputs: false` (and `remove_semicolons: false`,
+`model_recommended_frames_after_eos: null`), so no padding happens for this
+model; read off the pinned file the same day. The Android app chunks to ~200 characters and
 measured the per-sentence approach as costing *"a full voice conditioning pass
 per word"* (`TextChunker.kt`). Both are **read, not measured**. For the CLI
 this is a choice between latency and the cutoff, and the *Eleven Utterances*
