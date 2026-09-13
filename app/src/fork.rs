@@ -238,6 +238,19 @@ pub fn local_voice_transcription_enabled() -> bool {
     is_active()
 }
 
+/// Whether the palette offers to read the last agent reply aloud.
+///
+/// Upstream has no speech output at all, so this adds a surface rather than
+/// replacing one, and it speaks through a command the user names in
+/// `agents.voice.read_aloud.command` -- Warp holds no voice and no engine. The
+/// engine the fork was built against is `pocket-speak` from
+/// `mycosavant/pocket-tts`, which reads text on stdin; any command that does
+/// works. Gated on fork policy only so `WARP_FORK_POLICY=0` shows stock
+/// upstream, which has no such entry. `.fork/docs/voice.md`.
+pub fn read_aloud_enabled() -> bool {
+    is_active()
+}
+
 /// Whether the four small AI features call a model the user controls.
 ///
 /// "Next Command", "Prompt Suggestions", "Shared Block Title Generation" and

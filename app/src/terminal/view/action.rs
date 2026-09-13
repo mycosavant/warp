@@ -328,6 +328,11 @@ pub enum TerminalAction {
     /// distribution is what `warpctrl remote wsl connect --distro` is for,
     /// until there is a picker.
     ConnectWslRemoteServer,
+    /// Reads the last reply in this pane's agent conversation aloud, through
+    /// `agents.voice.read_aloud.command` (`voice::read_aloud`).
+    ReadLastAgentReplyAloud,
+    /// Stops a reading started by [`TerminalAction::ReadLastAgentReplyAloud`].
+    StopReadingAloud,
     /// Sets the input mode to Agent Mode
     SetInputModeAgent,
     /// Sets the input mode to Terminal Mode
@@ -666,6 +671,8 @@ impl fmt::Debug for TerminalAction {
             SelectAIAttachedBlock(_) => write!(f, "SelectAIAttachedBlock"),
             DragAndDropFiles(_) => write!(f, "DragAndDropFiles"),
             ConnectWslRemoteServer => write!(f, "ConnectWslRemoteServer"),
+            ReadLastAgentReplyAloud => write!(f, "ReadLastAgentReplyAloud"),
+            StopReadingAloud => write!(f, "StopReadingAloud"),
             SetInputModeAgent => write!(f, "SetInputModeAgent"),
             SetInputModeTerminal => write!(f, "SetInputModeTerminal"),
             #[cfg(feature = "voice_input")]

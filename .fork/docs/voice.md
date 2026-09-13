@@ -1,6 +1,6 @@
 # Voice, both directions
 
-*As of 2026-09-13.* Speech **in** and speech **out** are two halves of one
+*As of 2026-09-13, evening.* Speech **in** and speech **out** are two halves of one
 surface, and only one of them has ever been on this fork's board. This page is
 the fork's account of both: what exists, where it lives, what the fork would
 have to build, and the engineering findings worth keeping whichever way it goes.
@@ -13,7 +13,7 @@ detail. Nothing here restates their documentation.
 |---|---|---|
 | speech **in**, at the desk | OpenWhispr, installed on Windows | **in daily use**; its paste reaches Warp's composer (maintainer, 2026-09-13) |
 | speech **in**, inside Warp | `.fork/tickets/T02`, `LocalTranscriber` | built, egress measured; spoken words through the mic never measured |
-| speech **out**, at the desk | a pocket-tts CLI in `mycosavant/pocket-tts` | **decided 2026-09-13, unbuilt** |
+| speech **out**, at the desk | `pocket-speak`, branch `desk-cli` of `mycosavant/pocket-tts`; palette entry in Warp | **built and measured 2026-09-13** on WSL and Windows; ~~decided, unbuilt~~ (morning) |
 | speech **out**, on the phone | `mycosavant/pocket-tts` Android app | built, on a device, tested end to end |
 
 ~~This table had two rows until 2026-09-13, and the speech-in row read *"T2.1/T2.2
@@ -41,8 +41,9 @@ Taken by the maintainer after the facts below were measured.
   than Warp pushing voice to a device. A leaning, not a decision.
 
 **What was not established:** that OpenWhispr's paste works in every Warp input
-(only the agent composer was tried), and anything about the CLI beyond reading
-the code it will be ported from.
+(only the agent composer was tried). ~~…and anything about the CLI beyond
+reading the code it will be ported from.~~ The CLI was built and measured the
+same evening; see *As built* below.
 
 ## Speech in
 
@@ -117,10 +118,13 @@ not a crate in this fork:
 - **A separate binary serves Termux, a Claude Code `/speak` command and Warp
   alike**, and Warp's builds never wait on it.
 
-**Warp's share** is a speaker seam shaped like `LocalTranscriber`: Warp decides
+~~**Warp's share** is a speaker seam shaped like `LocalTranscriber`: Warp decides
 *what* is spoken (the last agent reply, with code blocks and tables stripped)
 and hands text to the command the user names. The trigger (keybinding,
-`warpctrl` action, panel button) is undecided.
+`warpctrl` action, panel button) is undecided.~~ As built, Warp hands over the
+reply as Markdown and the command strips it, because what should be said
+depends on the voice saying it; the trigger is two palette entries with no
+default keys. See *As built* below.
 
 **What it is ported from**, read 2026-09-13, not run:
 
@@ -167,9 +171,49 @@ characters. The harness was session scratch; it becomes the CLI's first test.
 `ort-sys/build/download/dist.txt`. That is pinned but third-party-hosted; a
 Microsoft release pointed at by `ORT_LIB_LOCATION` is the alternative.
 
-**Order:** build the CLI on Windows, text on stdin, voice alba, to a WAV or the
-speaker; measure it against the *Eleven Utterances* set, trailing runts
-included, **before any Warp code**; then the Warp seam; then the phone.
+~~**Order:** build the CLI on Windows … before any Warp code; then the Warp
+seam; then the phone.~~ Followed, and done the same day except the phone.
+
+### As built, 2026-09-13
+
+**`pocket-speak`** (`rust/` on `desk-cli`, commits `005cce7`..): reads
+Markdown on stdin, strips what should not be spoken, chunks, and plays
+through the default output device or writes a WAV. `pocket-speak install`
+fetches the pinned bundle and voices and keeps a file only if its sha256
+matches. The engine is the speech-kit port with three changes: voice state
+loaded once, latents decoded in batches of twelve as they are generated (same
+boundaries, same samples, earlier audio), and each chunk reporting whether it
+ended on the EOS head or the frame budget.
+
+**Measured**, faster-whisper base.en as judge:
+
+| | result |
+|---|---|
+| cutoff cases, `sentence` and `packed`, seeds 1-3 | 54 of 54 kept the final word, none doubled it |
+| same cases, `packed-raw` (tail join off), seeds 1-5 | 44 of 45; the loss dropped a whole countdown after one prose sentence |
+| speed, 2 threads | 3.2-4.2x real time on WSL, 3.6-3.9x on Windows; first audio 280-450 ms |
+| 168-word agent reply, `sentence` vs `packed` | 340 vs 344 ms first audio, 3.46x vs 3.49x |
+| Windows | 30 s MSVC build; 22 MB exe runs relocated alone, plays through WASAPI, WAV transcribed word for word |
+
+So **the early-EOS failure is the model's**, not sherpa-onnx's: it appears on
+direct ONNX Runtime too, and the trailing-short-sentence join still earns its
+place. `packed` is the default because it costs nothing measurable against
+`sentence` on real replies. **Not established:** how it sounds against the
+Android build or speech-kit, which needs ears; other languages; aarch64.
+
+**Warp's share** is two palette entries, "Read last agent reply aloud" and
+"Stop reading aloud" (no default keys), gated on `fork::read_aloud_enabled`.
+The reply is every non-empty output from the most recent exchange with a user
+query to the end, the same span the AI block's "Copy output" takes, and it is
+written as Markdown to the stdin of `agents.voice.read_aloud.command` with
+`agents.voice.read_aloud.args`. Starting a reading stops the one in progress;
+stopping kills the process. Warp holds no engine and no voice.
+
+```toml
+[agents.voice.read_aloud]
+command = 'C:\path\to\pocket-speak.exe'
+args = "--voice alba"
+```
 
 ### Why not speech-kit's own sidecar
 

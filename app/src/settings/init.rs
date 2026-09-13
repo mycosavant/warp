@@ -111,6 +111,7 @@ pub fn register_all_settings(ctx: &mut AppContext) {
     LocalAiSettings::register(ctx);
     LocalDriveSyncSettings::register(ctx);
     LocalVoiceSettings::register(ctx);
+    crate::settings::ReadAloudSettings::register(ctx);
 
     #[cfg(any(target_os = "linux", target_os = "freebsd"))]
     super::LinuxAppConfiguration::register(ctx);

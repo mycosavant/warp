@@ -27048,6 +27048,8 @@ impl TypedActionView for TerminalView {
             | BlockSnackbarHover { .. }
             | BlockNearSnackbarHover { .. }
             | ConnectWslRemoteServer
+            | ReadLastAgentReplyAloud
+            | StopReadingAloud
             | MaybeLinkHover { .. } => Empty,
             BlockTextSelect(_) => {
                 let semantic_selection = SemanticSelection::as_ref(ctx);
@@ -27832,6 +27834,33 @@ impl TypedActionView for TerminalView {
                         log::info!("ConnectWslRemoteServer: this pane is not running a WSL shell");
                     }
                 }
+            }
+            ReadLastAgentReplyAloud => {
+                let history = BlocklistAIHistoryModel::as_ref(ctx);
+                // The agent view's conversation when one is open, else the one
+                // this pane most recently streamed, so the entry works from the
+                // terminal after the panel has closed.
+                let conversation = self
+                    .active_conversation_id(ctx)
+                    .and_then(|id| history.conversation(&id))
+                    .or_else(|| history.active_conversation(self.view_id));
+                let Some(conversation) = conversation else {
+                    log::info!("ReadLastAgentReplyAloud: no agent conversation in this pane");
+                    return;
+                };
+                let Some(text) = crate::voice::read_aloud::last_reply_text(conversation) else {
+                    log::info!("ReadLastAgentReplyAloud: the last reply has no text yet");
+                    return;
+                };
+                let settings = crate::settings::ReadAloudSettings::as_ref(ctx);
+                if let Err(error) =
+                    crate::voice::read_aloud::speak(settings.command(), settings.args(), &text)
+                {
+                    log::warn!("ReadLastAgentReplyAloud: {error:#}");
+                }
+            }
+            StopReadingAloud => {
+                crate::voice::read_aloud::stop();
             }
             SetInputModeAgent => {
                 // Guard: when a CLI agent session is active, block mode

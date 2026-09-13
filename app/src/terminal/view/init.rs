@@ -1216,6 +1216,23 @@ fn register_input_mode_bindings(app: &mut AppContext) {
             TerminalAction::ConnectWslRemoteServer,
         )
         .with_group(bindings::BindingGroup::Terminal.as_str()),
+        // No default keystrokes, for the same reason as the entry above: the
+        // palette is the surface, and a user who wants a key binds one. The
+        // command that does the speaking is `agents.voice.read_aloud.command`.
+        EditableBinding::new(
+            "terminal:read_last_agent_reply_aloud",
+            "Read last agent reply aloud",
+            TerminalAction::ReadLastAgentReplyAloud,
+        )
+        .with_group(bindings::BindingGroup::WarpAi.as_str())
+        .with_enabled(crate::fork::read_aloud_enabled),
+        EditableBinding::new(
+            "terminal:stop_reading_aloud",
+            "Stop reading aloud",
+            TerminalAction::StopReadingAloud,
+        )
+        .with_group(bindings::BindingGroup::WarpAi.as_str())
+        .with_enabled(crate::fork::read_aloud_enabled),
         EditableBinding::new(
             SET_INPUT_MODE_TERMINAL_ACTION_NAME,
             "Set Input Mode to Terminal Mode",

@@ -94,6 +94,7 @@ pub fn initialize_settings_for_tests_with_mode(
     }
     LocalAiSettings::register(app);
     LocalVoiceSettings::register(app);
+    crate::settings::ReadAloudSettings::register(app);
 
     #[cfg(any(target_os = "linux", target_os = "freebsd"))]
     {
