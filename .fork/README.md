@@ -79,7 +79,8 @@ backlog mostly closed and the upstream drift check reporting a false zero:
 `HANDOFF-HYGIENE.md` (archive the finished handoffs and correct the boards;
 runs beside the merge), `HANDOFF-CORRECTNESS.md` (four defects with a wrong
 answer on screen) and `HANDOFF-BUILDS.md` (the endpoint watcher, a graph run
-keeping the machine awake, the TUI's test pass). A fifth, `HANDOFF-SECRETS.md`
+keeping the machine awake, the TUI's test pass, and a disclosure that the
+agent contacts its vendor during a local-model turn). A fifth, `HANDOFF-SECRETS.md`
 (a measured secrets inventory, the Linux key fallback that only looked
 encrypted, and the console authority constrained), was added the same evening
 when the maintainer took its recommendations. The last three start after the

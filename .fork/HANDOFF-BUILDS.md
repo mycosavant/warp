@@ -99,3 +99,46 @@ and a recommendation the maintainer decides on.
 
 Record in `.fork/runs/tui-firstclass-<date>/`. Close with a short list: what
 would have to change before first-class status, ranked.
+
+## Task 4: a local-model turn discloses the agent's own connection
+
+Decision: `2026-09-13-a-local-model-turn-discloses-the-agents-own-connection.md`,
+added the same evening. It reverses the disclosure half of the 09-11 ruling in
+`docs/agent-transports.md`.
+
+**What to show.** A note in the panel, the same kind as the mode disclosure
+(`WarpNote`, which read-aloud already skips), with **Got it** and an option to
+make that acknowledgement the last one. Say only what was measured, in plain
+words: this agent contacted its vendor's servers during a turn answered by a
+local model, the flags meant to stop that did not, and Warp neither causes nor
+blocks it. Link the run record or the doc section. **Do not say what is sent**,
+because nobody has measured the content.
+
+**When to show it. Decide from what Warp already knows, in this order:**
+
+1. **"Local"**: the panel already knows a local model is answering. T21.4
+   gave local models a specs row, and the model chip and the `session_model`
+   event log line carry the model. `ANTHROPIC_BASE_URL` pointing at a
+   loopback or private host inside `WARP_FORK_ACP_COMMAND` is a second signal.
+   Pick what is reliable on both the Windows and WSL agent commands, and test
+   both.
+2. **"This agent"**: key on the agent's `initialize` reply (`agentInfo.name`
+   and `version`). Show it for agents **measured** to do this, which today is
+   `claude-agent-acp` alone. For an agent never measured, say nothing rather
+   than guess, and file its measurement.
+3. **Dismissal**: store "don't show again" keyed by agent name, **not** by
+   version, unless you can argue otherwise. A new version is a new binary but
+   the same vendor relationship, and re-showing on every `npx` bump teaches
+   people to click through. Say which you chose and why in the commit.
+
+**Then the docs.** In `docs/agent-transports.md` and the manual's local-model
+recipe, recommend a harness for people who care. **Measure it first.** Run the
+same socket census as the 09-09 panel run (whose positive control fired) with
+`opencode acp` and `codex-acp` each pointed at the local `llama-server`. Only
+an agent that reaches loopback and nothing else gets recommended. The 09-11
+codex run reached only OpenRouter, but that was a remote model, so it does
+not answer this question.
+
+Verify the note live on Windows in a scratch profile. It appears on a local
+turn, not on a remote-model turn, and never again after "don't show again"
+across a relaunch. Photograph it.
