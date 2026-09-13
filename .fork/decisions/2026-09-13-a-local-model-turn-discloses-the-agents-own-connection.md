@@ -2,13 +2,14 @@
 
 - **When the panel answers from a local model through an agent measured to
   contact its vendor anyway, Warp tells the user, and what it says comes from a
-  measurement of what is sent.** The maintainer, 2026-09-13, verbatim: *"we
-  want to be HONEST and ON-THESIS. i feel that at minimum it should be
-  disclosed when running a local model. with something like "got it" and an
-  option for that one acceptance to be the final notice. maybe in the docs i
-  will recommend local models use a different harness if thats a concern."*
-  And, on the approach: *"should we do an instumented run and measure, see what
-  exactly is sent and when? ... i don't want to be sleazy."*
+  measurement of what is sent.** Decided by the maintainer, 2026-09-13:
+  honesty and the fork's thesis require, at minimum, a disclosure when the
+  panel runs a local model. The shape they asked for is a notice with a "got
+  it" acknowledgement and an option to make that one acknowledgement the last
+  notice. They asked for an instrumented run first, to measure exactly what is
+  sent and when, so the notice says no more and no less than that. Whether the
+  docs should recommend a different harness for local models, for users who
+  care, is the maintainer's leaning, not a choice.
 
   **What is measured** (RAN, `.fork/runs/localmodel-panel-2026-09-09/`): during
   a turn answered entirely by `llama-server`, `claude-agent-acp@0.73.0` opened

@@ -8,16 +8,13 @@ the fable-advisor's, adopted by the maintainer as the record's posture.
 **Start after `HANDOFF-MERGE.md` lands.** Tasks are ranked by likelihood times
 impact for a stranger on default settings; take them in order.
 
-The maintainer, 2026-09-13, verbatim:
-
-> let the record reflect the posture that Fable has taken here, and i
-> personally advise that we step our game up on security, safety and privacy
-> when/where reasonably possible. with harneses like claude code and codex
-> using 3rs party models, there's only so much we can do and i understadn that
-> fully, but we should go further than we are.
-
-> Eventually there will be users other than me, so we def need more robust
-> security practices and hygeine.
+Decided by the maintainer, 2026-09-13
+(`decisions/2026-09-13-security-safety-and-privacy-go-further.md`): the
+fable-advisor's assessment is the record's posture, and the fork goes further
+on security, safety and privacy wherever that is reasonably possible, because
+it will have users other than the maintainer. They accept that a third-party
+harness such as Claude Code or Codex, talking to its vendor's models, limits
+what the fork can control.
 
 Claims are tagged RAN, READ, TOLD or ASSUMED. "READ" below was read by the
 advisor and the cited lines re-read by the session that wrote this file.
@@ -139,10 +136,10 @@ path at install time can substitute their own.
 6. **Migration**: remove the old authority from the phone, delete the old key,
    install the new one.
 
-The maintainer on why this points at the native app (TOLD, verbatim): *"this is
-all really enforcing the need for an APK. i've really found the mosh+tmux
-experience to be better anyways, but this risk has been part of the reason
-i've pushed for that."*
+The maintainer, 2026-09-13 (TOLD): this risk is part of why they have moved to
+mosh and tmux for remote work, which they also prefer, and it strengthens the
+case for the native app
+(`decisions/2026-09-13-a-native-android-app-is-a-destination.md`).
 
 ## Task 6: the clients the egress backstop never sees
 

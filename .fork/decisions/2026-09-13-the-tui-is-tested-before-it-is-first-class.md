@@ -1,8 +1,8 @@
 > A decision on record, 2026-09-13. Binding until a later decision names it.
 
 - **The TUI (`crates/warp_tui`) is wanted as a first-class surface, and it gets
-  a test pass before that status.** The maintainer, 2026-09-13: *"TUI needs
-  testing before 1st classing, but i would love that to be real."* What is
+  a test pass before that status.** Decided by the maintainer, 2026-09-13.
+  What is
   already measured: `warpctrl` inside the TUI process (`f2e1558c6`) and
   park-and-approve end to end from another shell (`9b58f8eda`,
   `.fork/runs/tui-approve-2026-09-12/`). What must be measured before any

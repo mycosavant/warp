@@ -4,10 +4,10 @@
 
 - **A phone paired to control a conversation holds a token that expires after
   twelve hours, like a watch pairing, in addition to ending on Stop sharing,
-  on the conversation being deleted, or on Warp closing.** The maintainer,
-  verbatim: *"when we wrote the code at first, the token was a 1-time pairing,
-  it couldnt be used twice. i think 12hrs is fair, but as i said earlier, this
-  is all really enforcing the need for an APK."*
+  on the conversation being deleted, or on Warp closing.** Decided by the
+  maintainer, 2026-09-13. They added that this risk is one more reason for the native app
+  (`2026-09-13-a-native-android-app-is-a-destination.md`), and they recalled
+  the original design as a token that could not be used twice.
 
   Today a control token has no clock (READ, `app/src/local_control/pairing.rs:436-439`).
   That was deliberate: commit `ae694127a` (2026-09-06, T19) implemented the

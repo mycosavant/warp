@@ -2,8 +2,8 @@
 
 - **Before the first turn of an agent session in which Warp will not be asked
   for permission, the panel asks for a one-time acknowledgement, and the turn
-  waits for it.** The maintainer chose option (b), verbatim: *"on default agent
-  perm: (b)"*, of three offered the same evening: (a) disclose more loudly,
+  waits for it.** Decided by the maintainer, 2026-09-13: option (b) of three
+  offered the same evening for an agent's default permission mode: (a) disclose more loudly,
   (b) require a one-time acknowledgement before the first turn runs without
   Warp in the loop, (c) refuse to start a known agent until a mode is named.
   Warp still never picks a mode for the user (`fork::acp_mode()` has no default,

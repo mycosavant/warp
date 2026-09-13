@@ -1,19 +1,22 @@
 > A decision on record, 2026-09-13. Binding until a later decision names it.
 
 - **A native Android app is a destination for the phone surface. Nothing is
-  scoped.** The maintainer, verbatim: *"APK is also a destination and T3-code
-  has a good example of how i think this might work on-thesis and minimally for
-  a first effort. it's well designed, but is basically just a remote-control
-  GUI that pairs with the desk instance. not sure of the architecture, but i
-  think it's react native. I'd like to do a native android, rust-core app,
-  which may/may not require composer, maybe Kotlin MP if the rust-core is
-  compatible. just thoughts for now."* Later the same evening: *"Honestly, the
-  CA cert is probably the biggest single motivator to move toward a native
-  APK. i have mostly switched to mosh+tmux for now since under my current
-  browser configs, it still says unsecure despite having installed the CA."*
-  And: *"this is all really enforcing the need for an APK. i've really found
-  the mosh+tmux experience to be better anyways, but this risk has been part of
-  the reason i've pushed for that."*
+  scoped.** Decided by the maintainer, 2026-09-13: an Android app (APK) is a
+  destination. Everything past that is the maintainer's leaning, not a choice:
+
+  - T3 Code's mobile app is their model for a minimal, on-thesis first effort:
+    a remote-control GUI that pairs with the desk instance. They believe it is
+    React Native and have not confirmed its architecture (TOLD).
+  - They would rather build a native Android app around a Rust core, possibly
+    with Jetpack Compose for the UI (ASSUMED: their wording named a composer,
+    read here as Compose, not the fork's panel composer), or Kotlin
+    Multiplatform if the Rust core can be bound to it.
+  - The console's certificate authority is their largest single reason to
+    want the app: with the authority installed, their browsers still mark the
+    console as not secure (TOLD, 2026-09-13), so they have mostly moved to
+    mosh and tmux, which they also prefer to use. The unexpiring control token
+    (`2026-09-13-a-control-pairing-expires-after-twelve-hours.md`) is a
+    further reason.
 
   T3 Code's app has not been read here. What the app would talk to already
   exists: `/remote-control`'s pairing and scoped actions

@@ -2,14 +2,12 @@
 
 Written 2026-09-13. Decision:
 `decisions/2026-09-13-acp-agents-are-not-launched-through-a-package-manager.md`.
-The maintainer, verbatim:
-
-> i don't like npx at all, and really don't even like package managers in the
-> first place. i do strongly feel that we should not npx acp agents. Can we
-> vendor them? or have forks that we pin and audit before bumping? i don't mind
-> the workload there at all. NPM is pretty much notorious for vulns now, and
-> it's only going to get worse as threat actors w/ ai-models get increasingly
-> more sophisticated.
+Decided by the maintainer, 2026-09-13: the fork does not launch ACP agents
+through `npx`, and they distrust package managers in general. They asked for
+agents to be vendored, or forked, pinned and audited before each bump, and
+accept the maintenance that costs. Their reason is that the npm registry has a
+record of compromised packages and that attackers using AI models will make
+that worse.
 
 Can start any time; it touches docs, launch scripts and one panel path.
 Claims tagged RAN, READ, TOLD or ASSUMED.
