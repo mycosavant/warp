@@ -66,5 +66,21 @@ where only the fast one gets run.
 happily: every one of these three lives in test or TUI code the `warp-oss`
 target never compiles.
 
+- [x] **T10.3** Merge `upstream/master` through 2026-09-14 (`e3464f102`), as
+  `2d7ffdc07`. Record: `.fork/runs/merge-2026-09-14/`.
+
+### T10.3 — as built
+
+72 commits, 47 overlapping files, **zero conflicts, and two compile breaks
+anyway** (`0e6d4323c`): a new exhaustive match missing the fork's
+`ConversationSettledChanged`, and a `TeamScope` argument added to a function
+the fork's `agent.spawn` calls. Same shape as T10.1's dangerous half, so the
+gate above held. A third failure was not code: ignored build output kept a
+crate directory upstream deleted, and the `crates/*` glob refused the
+workspace. Before merging, the drift check learned to say when its count was
+unconfirmed (`1409ce080`), and two pins went in so the next merge stops at the
+settings-file loopback door or at a new unchecked `reqwest` client
+(`9750c9bd0`).
+
 ---
 
