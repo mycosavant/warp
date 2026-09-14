@@ -4791,6 +4791,12 @@ impl PaneGroup {
             return None;
         }
 
+        // Captured at spawn, as upstream's own error-child path does: the child
+        // inherits the parent's settings from the team this window had when
+        // `agent.spawn` arrived, not whichever team it has by the time the
+        // settings are copied.
+        let settings_inheritance_scope =
+            UserWorkspaces::as_ref(ctx).team_context_for_operation(ctx);
         let child = child_agent::create_hidden_child_agent_conversation(
             self,
             child_agent::HiddenChildAgentConversationRequest {
@@ -4805,6 +4811,7 @@ impl PaneGroup {
                 task_context: None,
                 is_shared_session_creator: IsSharedSessionCreator::No,
             },
+            &settings_inheritance_scope,
             ctx,
         )?;
 
