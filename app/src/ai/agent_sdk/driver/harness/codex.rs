@@ -29,7 +29,7 @@ use super::json_utils::read_json_file_or_default;
 use super::{
     HarnessRunner, JSONMCPServer, ResumePayload, SavePoint, ThirdPartyHarness, write_temp_file,
 };
-use crate::ai::agent::conversation::AIConversationId;
+use crate::ai::agent::api::ServerConversationToken;
 use crate::ai::agent_sdk::setup_observability::{
     OzRunTimelineEvent, SetupClientEventReporter, SetupStep,
 };
@@ -102,7 +102,7 @@ impl ThirdPartyHarness for CodexHarness {
     /// [`ResumePayload::Codex`].
     async fn fetch_resume_payload(
         &self,
-        conversation_id: &AIConversationId,
+        conversation_id: &ServerConversationToken,
         harness_support_client: Arc<dyn HarnessSupportClient>,
     ) -> Result<Option<ResumePayload>, AgentDriverError> {
         let envelope: CodexTranscriptEnvelope =
@@ -110,7 +110,7 @@ impl ThirdPartyHarness for CodexHarness {
                 .await?;
         let session_id = envelope.session_id;
         Ok(Some(ResumePayload::Codex(CodexResumeInfo {
-            conversation_id: *conversation_id,
+            conversation_id: conversation_id.clone(),
             session_id,
             envelope,
         })))
@@ -206,7 +206,7 @@ fn codex_command(cli_name: &str, session_id: Option<&Uuid>, prompt_path: &str) -
 enum CodexRunnerState {
     Preexec,
     Running {
-        conversation_id: AIConversationId,
+        conversation_id: ServerConversationToken,
         block_id: BlockId,
     },
 }
@@ -227,7 +227,7 @@ struct CodexHarnessRunner {
     /// directory walk and read the JSONL file directly.
     transcript_path: OnceLock<PathBuf>,
     /// Optionally supply an existing conversation ID.
-    preexisting_conversation_id: Option<AIConversationId>,
+    preexisting_conversation_id: Option<ServerConversationToken>,
 }
 
 impl CodexHarnessRunner {
@@ -317,10 +317,10 @@ impl HarnessRunner for CodexHarnessRunner {
         setup_events: &SetupClientEventReporter,
     ) -> Result<CommandHandle, AgentDriverError> {
         // Resume runs reuse the prior server conversation id; fresh runs mint a new one.
-        let conversation_id = match self.preexisting_conversation_id {
+        let conversation_id = match &self.preexisting_conversation_id {
             Some(id) => {
                 log::info!("Resuming external conversation {id}");
-                id
+                id.clone()
             }
             None => {
                 let id = setup_events
@@ -443,7 +443,7 @@ impl HarnessRunner for CodexHarnessRunner {
             CodexRunnerState::Running {
                 conversation_id,
                 block_id,
-            } => (*conversation_id, block_id.clone()),
+            } => (conversation_id.clone(), block_id.clone()),
         };
 
         let session_id = self.session_id.get().copied();
@@ -456,10 +456,10 @@ impl HarnessRunner for CodexHarnessRunner {
                 foreground,
                 &self.terminal_driver,
                 client,
-                conversation_id,
+                &conversation_id,
                 block_id,
             ),
-            upload_transcript(client, conversation_id, session_id, rollout_path, is_final),
+            upload_transcript(client, &conversation_id, session_id, rollout_path, is_final),
         )?;
         Ok(())
     }
@@ -469,7 +469,7 @@ impl HarnessRunner for CodexHarnessRunner {
 /// been captured yet or no rollout file is on disk yet.
 async fn upload_transcript(
     client: &dyn HarnessSupportClient,
-    conversation_id: AIConversationId,
+    conversation_id: &ServerConversationToken,
     session_id: Option<Uuid>,
     transcript_path: Option<PathBuf>,
     is_final: bool,
@@ -506,7 +506,7 @@ async fn upload_transcript(
     .context("read_envelope task panicked")??;
 
     let target = client
-        .get_transcript_upload_target(&conversation_id)
+        .get_transcript_upload_target(conversation_id)
         .await
         .with_context(|| format!("Failed to get transcript upload target for {conversation_id}"))?;
     upload_to_target(client.http_client(), &target, body).await?;
@@ -569,13 +569,13 @@ fn prepare_codex_environment_config(
         third_party_harness_model_config,
         openai_base_url.as_deref(),
     )?;
-    publish_warp_skill_dirs_for_codex(workspace_root, harness_working_dir);
+    publish_skills_for_codex(workspace_root, harness_working_dir);
     Ok(())
 }
 
-/// Publish the skills listed in `WARP_SKILL_DIRS`, under their own names, as
-/// symlinks under `<harness_working_dir>/.agents/skills`, so an agent running on
-/// Codex sees the same skills the Oz harness loads from `WARP_SKILL_DIRS`.
+/// Publish configured and eligible bundled skills under
+/// `<harness_working_dir>/.agents/skills`, so Codex sees the same skills
+/// available to the Warp driver.
 ///
 /// Relative source directories are resolved from the workspace root, matching
 /// Oz. The links are published into the harness working directory because
@@ -586,17 +586,15 @@ fn prepare_codex_environment_config(
 /// existing entry with the same name (see
 /// `skill_dirs_publish::publish_skill`), with the conflict-resolution behavior
 /// depending on whether this run is sandboxed (see
-/// `warp_isolation_platform::detect`). A no-op when `WARP_SKILL_DIRS` is not
-/// configured for this run.
-fn publish_warp_skill_dirs_for_codex(workspace_root: &Path, harness_working_dir: &Path) {
-    let source_dirs = super::skill_dirs_publish::warp_skill_source_dirs(workspace_root);
-    if source_dirs.is_empty() {
-        return;
-    }
+/// `warp_isolation_platform::detect`).
+fn publish_skills_for_codex(workspace_root: &Path, harness_working_dir: &Path) {
     let skill_root = harness_working_dir.join(".agents").join("skills");
     let is_sandbox = warp_isolation_platform::detect().is_some();
-    let published =
-        super::skill_dirs_publish::publish_skill_dirs(&skill_root, &source_dirs, is_sandbox);
+    let published = super::skill_dirs_publish::publish_skills_for_harness(
+        &skill_root,
+        workspace_root,
+        is_sandbox,
+    );
     super::skill_dirs_publish::exclude_published_skill_paths_from_git(
         harness_working_dir,
         &published,
@@ -604,9 +602,9 @@ fn publish_warp_skill_dirs_for_codex(workspace_root: &Path, harness_working_dir:
     if !published.is_empty() {
         let published = published.len();
         safe_info!(
-            safe: ("Published {published} WARP_SKILL_DIRS skill(s) to the Codex skill root"),
+            safe: ("Published {published} skill(s) to the Codex skill root"),
             full: (
-                "Published {published} WARP_SKILL_DIRS skill(s) to Codex skill root {}",
+                "Published {published} skill(s) to Codex skill root {}",
                 skill_root.display()
             )
         );

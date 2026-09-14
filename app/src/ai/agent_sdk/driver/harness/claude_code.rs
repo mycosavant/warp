@@ -27,7 +27,7 @@ use super::{
     HarnessCleanupDisposition, HarnessRunner, JSONMCPServer, ResumePayload, SavePoint,
     ThirdPartyHarness, cli_agent_session_status, write_temp_file,
 };
-use crate::ai::agent::conversation::AIConversationId;
+use crate::ai::agent::api::ServerConversationToken;
 use crate::ai::agent_sdk::setup_observability::{
     OzRunTimelineEvent, SetupClientEventReporter, SetupStep,
 };
@@ -114,7 +114,7 @@ impl ThirdPartyHarness for ClaudeHarness {
     /// so the user sees a resume-specific error rather than a generic load failure.
     async fn fetch_resume_payload(
         &self,
-        conversation_id: &AIConversationId,
+        conversation_id: &ServerConversationToken,
         harness_support_client: Arc<dyn HarnessSupportClient>,
     ) -> Result<Option<ResumePayload>, AgentDriverError> {
         let envelope: ClaudeTranscriptEnvelope =
@@ -122,7 +122,7 @@ impl ThirdPartyHarness for ClaudeHarness {
                 .await?;
         let session_id = envelope.uuid;
         Ok(Some(ResumePayload::Claude(ClaudeResumeInfo {
-            conversation_id: *conversation_id,
+            conversation_id: conversation_id.clone(),
             session_id,
             envelope,
         })))
@@ -225,7 +225,7 @@ enum ClaudeRunnerState {
     Preexec,
     /// The harness command is running (or has finished).
     Running {
-        conversation_id: AIConversationId,
+        conversation_id: ServerConversationToken,
         block_id: BlockId,
     },
 }
@@ -252,7 +252,7 @@ struct ClaudeHarnessRunner {
     /// When resuming an existing conversation, we pin the runner's server conversation id
     /// up front instead of calling `create_external_conversation` in [`HarnessRunner::start`].
     /// Subsequent saves overwrite the same GCS objects keyed by this id.
-    preexisting_conversation_id: Option<AIConversationId>,
+    preexisting_conversation_id: Option<ServerConversationToken>,
 }
 
 impl ClaudeHarnessRunner {
@@ -450,10 +450,10 @@ impl HarnessRunner for ClaudeHarnessRunner {
         // Otherwise create a fresh external conversation record for this run.
         // TODO(REMOTE-1149): `create_external_conversation` currently won't work for local CLI
         // runs. We should either support it or have a fallback.
-        let conversation_id = match self.preexisting_conversation_id {
+        let conversation_id = match &self.preexisting_conversation_id {
             Some(id) => {
                 log::info!("Resuming external conversation {id}");
-                id
+                id.clone()
             }
             None => {
                 let id = setup_events
@@ -572,7 +572,7 @@ impl HarnessRunner for ClaudeHarnessRunner {
             ClaudeRunnerState::Running {
                 conversation_id,
                 block_id,
-            } => (*conversation_id, block_id.clone()),
+            } => (conversation_id.clone(), block_id.clone()),
         };
 
         let claude_version = self.resolve_claude_version(foreground).await;
@@ -587,12 +587,12 @@ impl HarnessRunner for ClaudeHarnessRunner {
                 foreground,
                 &self.terminal_driver,
                 client,
-                conversation_id,
+                &conversation_id,
                 block_id,
             ),
             upload_transcript(
                 client,
-                conversation_id,
+                &conversation_id,
                 session_id,
                 harness_working_dir,
                 claude_version,
@@ -618,7 +618,7 @@ impl HarnessRunner for ClaudeHarnessRunner {
 /// Upload the Claude Code session transcript to the server.
 async fn upload_transcript(
     client: &dyn HarnessSupportClient,
-    conversation_id: AIConversationId,
+    conversation_id: &ServerConversationToken,
     session_id: Uuid,
     harness_working_dir: &Path,
     claude_version: Option<String>,
@@ -642,7 +642,7 @@ async fn upload_transcript(
     .await
     .context("read_envelope task panicked")??;
     let target = client
-        .get_transcript_upload_target(&conversation_id)
+        .get_transcript_upload_target(conversation_id)
         .await
         .with_context(|| format!("Failed to get transcript upload target for {conversation_id}"))?;
     upload_to_target(client.http_client(), &target, body).await
@@ -662,14 +662,12 @@ pub(crate) fn prepare_claude_environment_config(
         api_key_suffix.as_deref(),
     )?;
     prepare_claude_settings(&claude_settings_path)?;
-    publish_warp_skill_dirs_for_claude(workspace_root, harness_working_dir);
+    publish_skills_for_claude(workspace_root, harness_working_dir);
     Ok(())
 }
 
-/// Publish the skills listed in `WARP_SKILL_DIRS`, under their own names, as
-/// symlinks under `<harness_working_dir>/.claude/skills`, so an agent running on
-/// Claude Code sees the same skills the Oz harness loads from
-/// `WARP_SKILL_DIRS`.
+/// Publish `WARP_SKILL_DIRS` and eligible bundled skills under
+/// `<harness_working_dir>/.claude/skills`.
 ///
 /// Relative source directories are resolved from the workspace root, matching
 /// Oz. The links are published into the harness working directory because
@@ -680,17 +678,15 @@ pub(crate) fn prepare_claude_environment_config(
 /// existing entry with the same name (see
 /// `skill_dirs_publish::publish_skill`), with the conflict-resolution behavior
 /// depending on whether this run is sandboxed (see
-/// `warp_isolation_platform::detect`). A no-op when `WARP_SKILL_DIRS` is not
-/// configured for this run.
-fn publish_warp_skill_dirs_for_claude(workspace_root: &Path, harness_working_dir: &Path) {
-    let source_dirs = super::skill_dirs_publish::warp_skill_source_dirs(workspace_root);
-    if source_dirs.is_empty() {
-        return;
-    }
+/// `warp_isolation_platform::detect`).
+fn publish_skills_for_claude(workspace_root: &Path, harness_working_dir: &Path) {
     let skill_root = harness_working_dir.join(".claude").join("skills");
     let is_sandbox = warp_isolation_platform::detect().is_some();
-    let published =
-        super::skill_dirs_publish::publish_skill_dirs(&skill_root, &source_dirs, is_sandbox);
+    let published = super::skill_dirs_publish::publish_skills_for_harness(
+        &skill_root,
+        workspace_root,
+        is_sandbox,
+    );
     super::skill_dirs_publish::exclude_published_skill_paths_from_git(
         harness_working_dir,
         &published,
@@ -698,9 +694,9 @@ fn publish_warp_skill_dirs_for_claude(workspace_root: &Path, harness_working_dir
     if !published.is_empty() {
         let published = published.len();
         safe_info!(
-            safe: ("Published {published} WARP_SKILL_DIRS skill(s) to the Claude Code skill root"),
+            safe: ("Published {published} skill(s) to the Claude Code skill root"),
             full: (
-                "Published {published} WARP_SKILL_DIRS skill(s) to Claude Code skill root {}",
+                "Published {published} skill(s) to Claude Code skill root {}",
                 skill_root.display()
             )
         );
