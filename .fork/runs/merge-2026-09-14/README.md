@@ -103,6 +103,49 @@ diffed against the files. The 09-12 record is left as written.
 
 ## Not done here
 
-Linux and Windows release rebuilds, the WSL remote-server daemon refresh, the
+~~Linux and Windows release rebuilds, the WSL remote-server daemon refresh, the
 live smoke (an ACP panel turn, read-aloud, `warpctrl instance list`, and a
-`warpctrl agent spawn` for fix 2), and the push.
+`warpctrl agent spawn` for fix 2), and the push.~~ This list stood until the
+addendum below, the same evening. What is still not done: the Windows
+rebuild and the sync of `/mnt/c/dev/warp` (the maintainer's side), the
+read-aloud palette check, and loading an existing `settings.toml` across the
+`background_blur_texture` rename.
+
+## Addendum, same evening: push, Factory MCP, rebuild, smoke
+
+- Pushed `dev` through `27b09440c` at the maintainer's call, with the budget
+  gate failing as above (TOLD, 2026-09-14).
+- `fbf9df938`: `FactoryMcp` in `FORCE_DISABLED`, decided by the maintainer the
+  same day (TOLD). Calibrated pin, affected upstream tests green; see its body.
+  Pushed.
+- Linux release rebuilt with `.fork/tools/build.sh`: `v0.fork.fbf9df938`,
+  `warpctrl: present` (RAN). The WSL daemon needs no separate refresh: it is
+  the symlink `~/.warp-dev/remote-server/warp-oss -> target/release/warp-oss`,
+  intact (RAN), and no old daemon process was running (RAN).
+
+### Smoke, `v0.fork.fbf9df938`, scratch profile
+
+Launched on WSLg from a scratch working directory with scratch
+`XDG_CONFIG_HOME`/`XDG_STATE_HOME`, `WARP_FORK_ACP_COMMAND` set to the locked
+`claude-agent-acp` 0.73.0 launcher, and `WARP_FORK_ACP_MODE=default`. No other
+instance was registered before launch (RAN).
+
+| step | result (RAN) |
+|---|---|
+| `instance list` | one instance, up within 2 s |
+| `input submit 'cd …'` | `executed: true` |
+| `agent prompt` | `success` in ~3 s. The session opened in `auto`, the requested `default` was accepted, and the panel said so in the agent's words. Reply `parent-ok` |
+| `agent spawn --allow-tools read-only` | `ok`, `depth: 1`, parented to the prompt's conversation, read-only tool list. Child `is_hidden: true`, `success` in ~6 s under `default`, reply `child-ok`. **Fix 2 run live** |
+| `window close` | process exited within 2 s; `instance list` empty afterwards |
+
+Four `[ERROR]` lines in the scratch log. Three are the scratch setup: no AI
+endpoint configured (two lines), and no Secret Service on WSLg. The fourth is
+`Failed to bind local HTTP server on 127.0.0.1:9282: Address already in use`.
+Nothing in the WSL namespace listened on 9282 (RAN, `ss`). On Windows,
+`Get-NetTCPConnection` reports the listener owned by pid 38188, which neither
+`tasklist` nor `Get-Process` can find, and no process has it as a parent (RAN).
+`.fork/docs/warpctrl.md:80-90` documents this shape: `wsl.exe` children of an
+exited Windows Warp keep upstream's inheritable `9282` socket (READ). The
+holder was not identified here. It predates this launch and has nothing to do
+with the merge; the fork's own control plane registered and answered every
+call.
