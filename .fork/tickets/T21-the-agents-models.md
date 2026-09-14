@@ -322,4 +322,7 @@ holds the survey and the numbers; what belongs here is what it changed.
   fork's config is not installed, so on the recommended configuration this
   one feature is dead and the log says *"No AI endpoint is configured"*.
   Unrouted, it works. Fix: the daemon returns the diff, the GUI generates; a
-  protocol addition. Filed on `next.html`.
+  protocol addition. Filed on `next.html`. **Closed 2026-09-12** (noted
+  2026-09-14): one request field, not a protocol addition (`036bcccac`,
+  measured in `848427cfc`); the two PR-content paths had the same defect and
+  were fixed and driven live the same day (`35a29d6d6`, `a5e50790a`).

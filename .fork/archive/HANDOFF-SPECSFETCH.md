@@ -20,7 +20,7 @@
 > own choice.
 
 **Written 2026-09-09, after `.fork/runs/localmodel-panel-2026-09-09/`. Paste-target:
-start a new session and say *"read `.fork/HANDOFF-SPECSFETCH.md` and run it to
+start a new session and say *"read `.fork/archive/HANDOFF-SPECSFETCH.md` and run it to
 completion"*.**
 
 Read `CLAUDE.md` first, as always. This file is the run, not the method.

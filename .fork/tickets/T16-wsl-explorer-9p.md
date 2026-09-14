@@ -97,8 +97,13 @@ own clothes. **(1) is genuinely still open**: the file says in as many words
 that "the seam still has no automated test", so it is left unticked rather
 than swept along with the two beside it.
 
-- [ ] **(1) `#[cfg(windows)]` unit test** on `matches_gitignores` — minutes,
-      isolates the bug, fails today.
+- [x] **(1) `#[cfg(windows)]` unit test** on `matches_gitignores` — minutes,
+      isolates the bug, fails today. **Ticked 2026-09-14**: it had existed since
+      `2d4dcf69b` (2026-09-01), eight days before the sweep above called it open.
+      `a_gitignore_cannot_match_a_child_spelled_with_a_different_unc_prefix` in
+      `crates/repo_metadata/src/entry_tests.rs`, run on Windows. It passes rather
+      than fails, because it pins the prefix inequality and (2) fixed the bug one
+      level up.
 - [x] **(2) Skip `canonicalize` for non-symlink children** at `entry.rs:371-373`.
       `read_dir` already returns the on-disk name joined to the parent's
       spelling, so this deletes the 13 ms op **and** makes child spelling equal
@@ -126,7 +131,11 @@ The path-seam fix touches none of these.
 **Unverified ordering hazard**: today connect landed *after* the `cd`
 (`23:32:51Z` index start, `23:33:36Z` connected). Whether `SessionConnected`
 re-derives display roots and drops a running local index was not traced. The fix
-needs a connect-after-cd test.
+needs a connect-after-cd test. **The hazard was real and is fixed, noted
+2026-09-14:** a pane that `cd`-ed first kept its Windows-side tree for good, and
+`SessionConnected` now re-runs repo detection (`4c4c21798`). No connect-after-cd
+test was found (`run_repo_detection` appears in no test file under `app/src`),
+so that half is still open.
 
 ### The sidestep that needs no code
 

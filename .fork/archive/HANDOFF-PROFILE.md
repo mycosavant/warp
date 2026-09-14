@@ -16,7 +16,7 @@
 > kept rather than deleted.
 
 **Written 2026-09-09, after `.fork/runs/pricefetch-2026-09-09/`. Paste-target:
-start a new session and say *"read `.fork/HANDOFF-PROFILE.md` and run it to
+start a new session and say *"read `.fork/archive/HANDOFF-PROFILE.md` and run it to
 completion"*.**
 
 Read `CLAUDE.md` first, as always. This file is the run, not the method.

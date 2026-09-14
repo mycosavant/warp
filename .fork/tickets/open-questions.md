@@ -5,8 +5,10 @@
 - [x] ~~Log spam on window move (`workspace:save_app` per window event).~~
       **Measured, and the premise was wrong. Nothing to silence.** See "The
       log-spam question, answered by counting" below.
-- [ ] Windows Developer Mode so `.claude/skills` resolves as a symlink on the
-      Windows checkout.
+- [x] ~~Windows Developer Mode so `.claude/skills` resolves as a symlink on the
+      Windows checkout.~~ **Done 2026-09-12, `aeebfd4fa`** (ticked 2026-09-14).
+      Developer Mode was half of it: `core.symlinks=false` is written into the
+      clone's config at clone time and stays.
 - [x] ~~Proxy-based verification that nothing escapes under real activity — only
       idle runs observed so far.~~ **Done, two ways, with a control for each.**
       See "Nothing escapes: measured, not argued" below.

@@ -1,6 +1,11 @@
 > Ticket T13, split out of `.fork/TASKS.md` on 2026-09-05. History; read the section you came for.
 
-## T13 — The run gate (ratified Tier 1, items 4 and 5)  ← ACTIVE
+## T13 — The run gate (ratified Tier 1, items 4 and 5)  ← ~~ACTIVE~~ done
+
+> **Labelled ACTIVE until 2026-09-14 with all three boxes ticked.** Checked that
+> day against `crates/warp_cli/src/local_control/graph.rs`, which has `review`,
+> `rejected` verdicts and `--resume`. The kode-engine extraction §12 names as a
+> dependency is carried in `T15-loose-ends.md`, not here.
 
 > `.fork/archive/CONSOLIDATION.md` §4.1 orders these fourth and fifth, and they are the other
 > half of the maintainer's sentence: T12 delivers *"check in on"*, T13 delivers

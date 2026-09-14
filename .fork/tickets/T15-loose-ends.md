@@ -116,7 +116,10 @@ browsers. What remains is *installation on the phone that will actually be
 used* — **Firefox on Android**, with DuckDuckGo as the Chromium fallback. The
 install rows in `README.md` were originally written around iOS Safari and Android
 *Chrome*, neither of which is this maintainer's phone; they are corrected there
-and the Firefox row is the one still open.
+and the Firefox row is the one still open. **Closed 2026-09-07, noted
+2026-09-14**: the maintainer ran the checklist on their Android phone in
+Firefox, and a notification reached the lock screen with the console
+backgrounded (`docs/remote-control.md`, *Unverified*).
 
 ### T13.3 — as built
 
@@ -900,6 +903,8 @@ Three properties were driven rather than asserted:
 **Not done here, and deliberately:** world 1 (`BlocklistAIHistoryEvent`, Warp's
 own agent) is not yet projected into the log. The mapping exists as a reference
 in `crates/warp_tui/src/cli_agent_osc_event_publisher.rs`; wiring it is T11.1b.
+**Done 2026-08-25 as T11.1b, `210b029a1`** — the as-built directly below
+(noted 2026-09-14).
 Also still open from the gate check: **no per-call id**, so a `tool_complete`
 cannot be tied to the `permission_request` before it (`TR-EVENTS-B`). That one
 needs a protocol version bump, because the id has to come from the plugin.

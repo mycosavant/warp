@@ -2420,7 +2420,7 @@ drag event, was the next suspect and does not need to be.
 
 ## A phone that is not a phone — the Android emulator
 
-Set up 2026-09-06, so the checklist in `.fork/HANDOFF-MOBILE.md` could be
+Set up 2026-09-06, so the checklist in `.fork/archive/HANDOFF-MOBILE.md` could be
 run without waiting for a person with a phone. `.fork/tools/phone.sh` wraps
 it: `start [cold]`, `wait`, `stop`, `shot <file>`, `open <url>`, `tap`,
 `type`, `key`, `tapon <label>`, `find <label>`, `ui`, `adb …`.

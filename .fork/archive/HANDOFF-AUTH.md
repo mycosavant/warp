@@ -10,7 +10,7 @@
 > at.
 
 **Written 2026-09-10, after `.fork/runs/profile-2026-09-09/`. Paste-target:
-start a new session and say *"read `.fork/HANDOFF-AUTH.md` and run it to
+start a new session and say *"read `.fork/archive/HANDOFF-AUTH.md` and run it to
 completion"*.**
 
 Read `CLAUDE.md` first, as always. This file is the run, not the method.

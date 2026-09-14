@@ -5,6 +5,16 @@ beside `HANDOFF-MERGE.md`**: Part A touches only `.fork/`. Part B touches code,
 so start it only after the merge lands. Retire this file to `archive/` when
 both parts are done.
 
+> **Part A done 2026-09-14.** Nine handoffs archived with `git mv`, the boards
+> and ticket boxes corrected in place, and each strike carries the sha or run
+> that falsified it. Two findings beyond the lists below: `reach.html`'s Private
+> DNS line already said it was fixed, and `next.html`'s "done when" is **not**
+> met, because the specs clause fails on the settings page, which is Part B's
+> T21.2. So `next.html` stays live. Links left pointing at the old paths, on
+> purpose: run records under `.fork/runs/` (never rewritten),
+> `.fork/tools/phone.sh:3` (a script) and `app/src/code_review/git_actions_tests.rs:212`
+> (code). **Part B has not started.**
+
 ## Why this is worth a session
 
 The ranking pass that produced these handoffs read every board, handoff and

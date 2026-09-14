@@ -1,7 +1,7 @@
 # Handoff: a decide run — seven open questions, at the desk, in one sitting
 
 **Written 2026-09-11. Paste-target: start a new session and say *"read
-`.fork/HANDOFF-DECIDE.md` and run it with me"*.**
+`.fork/archive/HANDOFF-DECIDE.md` and run it with me"*.**
 
 Read `CLAUDE.md` first, as always.
 

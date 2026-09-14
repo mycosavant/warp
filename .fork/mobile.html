@@ -92,7 +92,7 @@
       <span>decided 2026-09-06</span>
     </div>
     <h1>A Conversation in Your Pocket</h1>
-    <p class="lede">What the fork's <code>/remote-control</code> is today, what Claude Code's does that ours does not, and the smallest set of changes that closes the gaps worth closing. Four decisions were the maintainer's; each was answered with its recommendation on 2026-09-06 (<code>.fork/decisions/2026-09-06-the-phone-surface-four-decisions.md</code>), and one of them gates two of the others. The work is handed off in <code>.fork/HANDOFF-MOBILE.md</code>.</p>
+    <p class="lede">What the fork's <code>/remote-control</code> is today, what Claude Code's does that ours does not, and the smallest set of changes that closes the gaps worth closing. Four decisions were the maintainer's; each was answered with its recommendation on 2026-09-06 (<code>.fork/decisions/2026-09-06-the-phone-surface-four-decisions.md</code>), and one of them gates two of the others. The work was handed off in <code>.fork/archive/HANDOFF-MOBILE.md</code>, archived 2026-09-14 with steps 1-6 built; its device rows live on in <code>.fork/docs/remote-control.md</code>.</p>
   </header>
 
   <section class="callout">
@@ -111,7 +111,7 @@
     <tr><td>send the next prompt</td><td class="yes">yes</td><td>yes</td></tr>
     <tr><td>answer a permission request</td><td class="yes">yes, two taps in four seconds</td><td>not documented</td></tr>
     <tr><td>stop a turn</td><td class="yes">yes</td><td>yes</td></tr>
-    <tr><td>be told when the agent needs you</td><td class="part">foreground only, built 2026-09-06: a notification and a buzz on a permission request or a turn ending while the page is open in the background; the <em>notify me</em> button is drawn in a secure context (photographed in Brave); a notification arriving is a phone measurement, not yet made. Push is not built</td><td>yes, push notifications</td></tr>
+    <tr><td>be told when the agent needs you</td><td class="part">foreground only, built 2026-09-06: a notification and a buzz on a permission request or a turn ending while the page is open in the background; the <em>notify me</em> button is drawn in a secure context (photographed in Brave); <del>a notification arriving is a phone measurement, not yet made.</del> <em>Measured: on the emulator 2026-09-06, 6-9 s with the tab hidden; on a real Android phone in Firefox 2026-09-07, reaching the lock screen with the console backgrounded.</em> Push is not built</td><td>yes, push notifications</td></tr>
     <tr><td>see the mode and model in force</td><td class="yes">in the header since 2026-09-06, read off the record (photographed)</td><td>model and effort shown</td></tr>
     <tr><td>see the working directory</td><td class="yes">in the header since 2026-09-06 (photographed)</td><td>not documented</td></tr>
     <tr><td>switch conversations</td><td class="no">one per code; a second scan replaces</td><td>no, <code>/resume</code> is local only</td></tr>
@@ -119,7 +119,7 @@
     <tr><td>end it from the desk</td><td class="yes">Stop sharing; closing Warp</td><td><code>/remote-control</code> again; closing the terminal</td></tr>
     <tr><td>end it from the phone</td><td class="part">forgets its token locally; the server does not know</td><td>not documented</td></tr>
     <tr><td>the desk sees the phone act</td><td class="yes">the block says waiting, paired at HH:MM, or expired (measured 2026-09-06); the event log and the trace mark the phone's prompts and answers; the conversation shows them as yours</td><td>connection status, tool activity, <code>/rc active</code></td></tr>
-    <tr><td>transport</td><td class="part">HTTPS on the LAN with an authority Warp mints and the phone installs once, built 2026-09-06 (<code>tls.rs</code>); the same port hands the authority out in the clear and nothing else. A phone with it installed has not been measured yet</td><td>HTTPS to Anthropic; transcript stored there</td></tr>
+    <tr><td>transport</td><td class="part">HTTPS on the LAN with an authority Warp mints and the phone installs once, built 2026-09-06 (<code>tls.rs</code>); the same port hands the authority out in the clear and nothing else. <del>A phone with it installed has not been measured yet</del> <em>Installed and measured on the emulator 2026-09-06, and on Android over the tailnet and on iOS (full trust required) 2026-09-08, <code>.fork/runs/reach-2026-09-08/</code></em></td><td>HTTPS to Anthropic; transcript stored there</td></tr>
     <tr><td>where the words go</td><td class="yes">nowhere; the phone talks to the machine</td><td>Anthropic's servers</td></tr>
     <tr><td>lifetimes</td><td>code 2 min; a control pairing has no clock and ends on Stop sharing, the conversation going away, or Warp closing (2026-09-06); a watch pairing 12 h; credential 5 min</td><td>session outlives the server by about 4 h</td></tr>
     <tr><td>how many</td><td>8 devices per instance, any conversations</td><td>one remote session per interactive process</td></tr>
@@ -134,8 +134,9 @@
     <div class="body">
       <h3>A real phone, once</h3>
       <div class="meta"><span>measure</span><span>no code</span><span>remote-control.md, "Unverified"</span></div>
-      <p>Every measurement so far had Brave on the Windows side standing in for the phone. Scan the block with a phone, install the page from the browser's menu (the manifest already says <code>standalone</code>), lock the phone mid-turn, unlock it, answer a request. The reconnect path and the 5-minute credential turnover have only been exercised by a browser that never sleeps.</p>
-      <div class="rec"><span class="k">expect</span><p>the QR block's text column clipped on a narrow pane (seen), and Chrome offering "add to home screen" as a shortcut rather than an install, because over plain HTTP the page does not meet its install criteria. iOS adds it either way, and gives it nothing a shortcut lacks.</p></div>
+      <p><em>Corrected 2026-09-14: the checklist ran on an Android emulator on 2026-09-06 (<code>62ad2f2c6</code>), on the maintainer&rsquo;s own Android phone in Firefox on 2026-09-07, and on an Android phone on cellular and an iPhone on 2026-09-08 (<code>313280f3d</code>). What no phone has done yet is under &ldquo;Unverified&rdquo; in <code>docs/remote-control.md</code>.</em></p>
+      <p><del>Every measurement so far had Brave on the Windows side standing in for the phone.</del> Scan the block with a phone, install the page from the browser's menu (the manifest already says <code>standalone</code>), lock the phone mid-turn, unlock it, answer a request. The reconnect path and the 5-minute credential turnover have only been exercised by a browser that never sleeps.</p>
+      <div class="rec"><span class="k">expect</span><p><del>the QR block's text column clipped on a narrow pane (seen)</del> <em>fixed 2026-09-06 in <code>5a954bf7e</code>: the text wraps, and the block stacks under the QR below <code>STACK_BELOW_WIDTH</code> (480 points), measured on the Windows build the same day</em>, and Chrome offering "add to home screen" as a shortcut rather than an install, because over plain HTTP the page does not meet its install criteria. iOS adds it either way, and gives it nothing a shortcut lacks.</p></div>
     </div>
   </article>
   <article class="gap">

@@ -5,7 +5,7 @@ two PR-content paths. **Those are done and in `git log`** (`036bcccac`,
 `848427cfc`, `35a29d6d6`); this file is only what they left open. Retire it
 when its list is empty.
 
-`.fork/HANDOFF-NEXT.md` is still the standing board and is **not** superseded —
+`.fork/archive/HANDOFF-NEXT.md` is still the standing board and is **not** superseded —
 its items 1, 3, 5 and 6 were not touched. This file adds to it.
 
 > **Audited 2026-09-12 evening, after `HANDOFF-FOCUS.md`; the body is left as
@@ -364,7 +364,7 @@ non-obvious parts it already handles:
   section.
 - **The Windows release build is stale**, see the state table.
 
-## Still open from `.fork/HANDOFF-NEXT.md`, with the maintainer's 2026-09-12 steer
+## Still open from `.fork/archive/HANDOFF-NEXT.md`, with the maintainer's 2026-09-12 steer
 
 - **`authenticate` half 2** — **Gemini CLI and gemini-acp are parked**, the
   maintainer's call: Gemini models are reachable through opencode or codex on

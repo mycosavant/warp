@@ -63,12 +63,14 @@ Three of the four blockers hit on the way were the operator's, not the product's
 
 ### Still open
 
-- [ ] **`did_change_watched_files` is advertised and never sent** (T17 above).
+- [x] **`did_change_watched_files` is advertised and never sent** (T17 above).
       Editor correctness, unrelated to agents. Two candidate fixes, both the
-      maintainer's call.
-- [ ] **`warpctrl acp probe --cwd` validates the path locally**, so it cannot
+      maintainer's call. **Done 2026-09-11, `2a18a2dc8`** (ticked 2026-09-14):
+      the maintainer picked "send them"; `LSPAsATool` is in `FORCE_ENABLED`.
+- [x] **`warpctrl acp probe --cwd` validates the path locally**, so it cannot
       probe a Unix cwd from the Windows binary. Small, and it made the probe
-      useless for exactly the case being investigated.
+      useless for exactly the case being investigated. **Done 2026-09-03 as
+      T20.5, `7c2433a5c`** (ticked 2026-09-14).
 
 ---
 

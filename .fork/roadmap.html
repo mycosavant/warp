@@ -74,7 +74,8 @@
 
 <header>
   <div class="eyebrow"><span>roadmap</span><span>2026-09-12</span><span>ranked by priority &amp; effort</span></div>
-  <h1>What's actually left</h1>
+  <h1><del>What's actually left</del></h1>
+  <p class="lede"><strong>Superseded 2026-09-14.</strong> Every ranked item below is done or parked. What is open now is carried by the handoffs written 2026-09-13: <code>HANDOFF-MERGE.md</code>, <code>HANDOFF-HYGIENE.md</code>, <code>HANDOFF-CORRECTNESS.md</code> and <code>HANDOFF-BUILDS.md</code>, then <code>HANDOFF-SECURITY.md</code>, <code>HANDOFF-VENDORCALLS.md</code> and <code>HANDOFF-SUPPLYCHAIN.md</code>. The page is kept as the 2026-09-12 record, including the framing struck here.</p>
   <p class="lede">The tracked backlog is almost entirely closed. <code>GOAL.md</code>'s
   board is done, seven of <code>next.html</code>'s eight items are done, and the two
   2026-09-12 handoffs closed most of what they opened same-day. What remains is a
@@ -252,7 +253,7 @@
     Read-aloud at the desk, now the primary target, is decided as a pocket-tts
     CLI in <code>mycosavant/pocket-tts</code> that Warp names as a command.
     Scoping correction
-    written into <code>.fork/HANDOFF-GHTESTS.md</code> and
+    written into <code>.fork/archive/HANDOFF-GHTESTS.md</code> and
     <code>.fork/docs/voice.md</code> in the maintainer's own words: "do not
     touch" was about pocket-tts's own codebase at one PR-review moment, not
     a ban on this fork's dictation work.</p>
@@ -350,13 +351,13 @@
   <ul>
     <li><b>Gemini <code>authenticate</code> half 2</b><span>Decided 2026-09-11: Gemini models are reachable through opencode or codex on OpenRouter, so opening the credential door isn't worth it. Closed, not merely deferred.</span></li>
     <li><b>CLAUDE.md reduction pass</b><span>Explicitly: don't start a fresh pass &mdash; you consider it largely done. The only standing task is discipline: pay for any addition with a removal.</span></li>
-    <li><b>Voice: read-aloud / TTS / mobile entry point</b><span><del>Your own current work; asked to be left alone on it. Not agent work.</del> Corrected 2026-09-13: "do not touch" was scoped to one pocket-tts PR review (2026-09-12). Now open: desk read-aloud via a pocket-tts CLI in <code>mycosavant/pocket-tts</code>, then a Warp speaker seam. See <code>.fork/docs/voice.md</code>.</span></li>
+    <li><b><del>Voice: read-aloud / TTS / mobile entry point</del></b><span><del>Your own current work; asked to be left alone on it. Not agent work.</del> Corrected 2026-09-13: "do not touch" was scoped to one pocket-tts PR review (2026-09-12). <del>Now open: desk read-aloud via a pocket-tts CLI in <code>mycosavant/pocket-tts</code>, then a Warp speaker seam.</del> <strong>Built 2026-09-13</strong> (<code>68cc117c2</code>, <code>ac5f6b25f</code>, <code>9d878a1ec</code>), so it no longer belongs under this heading; struck 2026-09-14. See <code>.fork/docs/voice.md</code>.</span></li>
   </ul>
 </div>
 
 <footer>
   <p>Built from <code>.fork/GOAL.md</code>, <code>.fork/next.html</code>,
-  <code>.fork/HANDOFF-NEXT.md</code>, <code>.fork/HANDOFF-GHTESTS.md</code> and
+  <code>.fork/archive/HANDOFF-NEXT.md</code>, <code>.fork/archive/HANDOFF-GHTESTS.md</code> and
   <code>.fork/tickets/</code>, read directly on 2026-09-12. Priority and effort
   are judgment calls made against those sources, not a formula &mdash; re-read the
   source doc before acting on an item here, the way this project always asks.</p>

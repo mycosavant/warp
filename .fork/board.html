@@ -94,7 +94,7 @@
   <header>
     <div class="eyebrow">
       <span>warp fork &middot; dev</span>
-      <span>set 2026-09-04 &middot; updated 2026-09-05</span>
+      <span>set 2026-09-04 &middot; updated 2026-09-05 &middot; chips corrected 2026-09-14</span>
       <span>carry until complete</span>
     </div>
     <h1>Five to Ship</h1>
@@ -124,7 +124,7 @@
     <div class="body">
       <div class="head">
         <h2>Merge upstream</h2>
-        <button class="status" type="button" aria-label="cycle status">open</button>
+        <button class="status" type="button" aria-label="cycle status">done</button>
       </div>
       <div class="meta"><span>T10</span><span>owner: Opus 5</span><span>last merge 2026-08-24</span></div>
       <p>The only item that gets more expensive every day it waits, and it is already eleven days late. The overlap has grown from 39 files to 64 and is concentrated in <code>app/src/ai/blocklist/</code>, exactly where this week's composer work landed. Sixteen of the incoming subjects are crash or panic fixes: the wide-char cell crash, the em_width glyph panic, the empty streamed agent document update, the winit X11 panic pin. Those are daily-driver stability for free.</p>
@@ -150,7 +150,7 @@
           <li>Build at <code>CARGO_BUILD_JOBS=8</code>, and not on both sides of the VM at once.</li>
         </ul>
       </div>
-      <p><strong>Landed 2026-09-04 as <code>b175101a2</code></strong>, by Opus 5. Six conflicts, both binaries built serially at <code>-j 8</code>, both green with only the four pre-existing warnings, both trees on the same commit. The sixteen crash fixes are merged and <em>unexercised</em>: neither binary has been run as a GUI yet. The drift check exists at <code>.fork/tools/drift-check.sh</code>; its cron line is written up in <code>.fork/docs/manual.md</code> (this said &ldquo;the README&rdquo; until 2026-09-09, where only the script&rsquo;s name appears) and, as far as any file here can say, not yet installed.</p>
+      <p><strong>Landed 2026-09-04 as <code>b175101a2</code></strong>, by Opus 5. Six conflicts, both binaries built serially at <code>-j 8</code>, both green with only the four pre-existing warnings, both trees on the same commit. The sixteen crash fixes are merged and <em>unexercised</em>: neither binary has been run as a GUI yet. The drift check exists at <code>.fork/tools/drift-check.sh</code>; its cron line is written up in <code>.fork/docs/manual.md</code> (this said &ldquo;the README&rdquo; until 2026-09-09, where only the script&rsquo;s name appears) <del>and, as far as any file here can say, not yet installed.</del> <em>Installed: the maintainer&rsquo;s <code>crontab -l</code> showed the line on 2026-09-10, and the recipe needed a <code>mkdir -p</code> before it could have worked (<code>7a5a3028e</code>).</em></p>
       <p>The drift check reports and never merges. <code>git merge-tree --write-tree</code> against a fresh fetch gives the conflict count without touching the tree; the overlap count is two lines of <code>comm</code>. A merge needs judgment every time it has been done, so the automation stops at the report.</p>
     </div>
   </article>
@@ -160,7 +160,7 @@
     <div class="body">
       <div class="head">
         <h2>Make the Windows launcher the product, not the rig</h2>
-        <button class="status" type="button" aria-label="cycle status">open</button>
+        <button class="status" type="button" aria-label="cycle status">done</button>
       </div>
       <div class="meta"><span>.fork/tools/warpdev.ps1</span><span>no app surface</span></div>
       <p>The machine you work on launches through <code>warpdev.ps1</code>, and that script still sets <code>WARP_FORK_ACP_MODE=default</code>, both instruments on, and points at <code>target\debug\warp-oss.exe</code>. It is the measurement rig. The Linux launcher made the opposite choice the same day. Flip the defaults and the build you use stops being the build you measure.</p>
@@ -190,7 +190,7 @@
     <div class="body">
       <div class="head">
         <h2>Measure the thesis where you use it</h2>
-        <button class="status" type="button" aria-label="cycle status">open</button>
+        <button class="status" type="button" aria-label="cycle status">done</button>
       </div>
       <div class="meta"><span>Open questions &middot; "Platform: Linux only"</span><span>about half a day</span></div>
       <p>Done 2026-09-05, against the merged release binary <code>v0.fork.f6f59cfe8</code>. Two socket pollers (<code>Get-NetTCPConnection</code> on Windows, <code>ss</code> inside WSL) and a decrypting proxy, 685 seconds, 1716 samples. Every <code>warp-oss.exe</code> socket was loopback or a bound listener, zero remote; a <code>curl.exe</code> control proved the poller catches a real outbound connection, and the panel agent's <code>api.anthropic.com</code> traffic is the WSL child on the user's own key. Full account in <code>.fork/runs/egress-windows-2026-09-05/</code>.</p>
@@ -211,7 +211,7 @@
     <div class="body">
       <div class="head">
         <h2>Composer: the cancel path, not the polish</h2>
-        <button class="status" type="button" aria-label="cycle status">open</button>
+        <button class="status" type="button" aria-label="cycle status">done</button>
       </div>
       <div class="meta"><span>.fork/docs/composer.md, "Item 7, measured and built"</span><span>measured, then built 2026-09-05, <code>2ff77def8</code></span></div>
       <p>Steps 2 through 4c shipped this week and were the most visible product progress on the board. What remained split cleanly into defects and polish, and only the defects were ranked. Cancel is a daily gesture. Measured before designing, with a streaming turn in the panel and a <code>sleep 300</code> typed into the pane behind it; the four defects came out three real and one not, and the real ones were not the size the board said.</p>
@@ -238,12 +238,12 @@
     </div>
   </article>
 
-  <article class="item" data-id="chips">
+  <article class="item" data-id="chips" data-default="done">
     <div class="rank">5</div>
     <div class="body">
       <div class="head">
         <h2>Hide the two dead cloud chips</h2>
-        <button class="status" type="button" aria-label="cycle status">open</button>
+        <button class="status" type="button" aria-label="cycle status">done</button>
       </div>
       <div class="meta"><span>T19</span><span>agent_input_footer/mod.rs</span><span><code>/remote-control</code> repointed 2026-09-05, <code>.fork/docs/remote-control.md</code></span><span>"Hand off to cloud" off 2026-09-06, <code>HandoffLocalCloud</code> in <code>FORCE_DISABLED</code></span></div>
       <p>The agent footer shows <code>/remote-control</code> and "Hand off to cloud", one tooltipped "Log in". T19 established that the first is a relay over a closed protocol that needs a real account, and the second has nothing local to point at. A no-account product with two login buttons in its footer contradicts itself on screen. Half answered 2026-09-05 the other way round: <code>/remote-control</code> is not hidden but repointed, at the maintainer's ask, to the fork's own pairing. It hands the pane's conversation to a phone, which may watch it, answer it, stop it and prompt it, that conversation and no other; the confinement is on the grant. "Hand off to cloud" has nothing local to point at and is hidden the fork's usual way, one flag in <code>FORCE_DISABLED</code>: <code>HandoffLocalCloud</code> gates the chip, the <code>&amp;</code> prefix, <code>/move-to-cloud</code>, the toolbar migration that re-adds the chip, and auto-handoff on sleep, so all of them go together and no upstream file changes. Done 2026-09-06.</p>
@@ -255,7 +255,7 @@
     <div class="body">
       <div class="head">
         <h2>The viewer: one trace from the record the agent already keeps</h2>
-        <button class="status" type="button" aria-label="cycle status">open</button>
+        <button class="status" type="button" aria-label="cycle status">done</button>
       </div>
       <div class="meta"><span>.fork/docs/observability.md</span><span>specified 2026-09-04</span><span>phase 0 done 2026-09-05, <code>7bb323cbc</code></span><span>phases 1 and 2 done 2026-09-05</span><span>phase 3, the live view on a phone, done 2026-09-05</span></div>
       <p>The observability target, reframed. The harness's own session file is the record: for run 2 it held the full input for all 59 calls where Warp's log truncated 14, and the two joined on the tool-call id Warp already writes. Warp adds only what no harness file has: what it decided, which surface answered, why a request was refused, and live state. The viewer merges the two on that id, orders by time, labels every line by author, and never writes. Compaction is a boundary row, so a session can always be viewed without being compacted, which was I21's whole ask.</p>
@@ -280,12 +280,12 @@
     </div>
   </article>
 
-  <article class="item" data-id="wsl" data-default="active">
+  <article class="item" data-id="wsl" data-default="done">
     <div class="rank">7</div>
     <div class="body">
       <div class="head">
         <h2>WSL parity: the pane is a remote session, and now it connects itself</h2>
-        <button class="status" type="button" aria-label="cycle status">open</button>
+        <button class="status" type="button" aria-label="cycle status">done</button>
       </div>
       <div class="meta"><span>.fork/docs/wsl.md</span><span>friction #1, 2026-09-05</span><span>all three steps built 2026-09-05</span></div>
       <p>The first product-profile session hit it within minutes: the diff panel in a WSL pane on this repo says <em>Diffs don't currently work in WSL</em>. The text is a fallback that fires when no repository has been detected yet, and in a pane nobody has connected to the server, detection walks the repo from Windows over 9p. Measured later the same day, that walk takes 27 s on this repo and the panel works; what the first screenshot was showing is not established. The remote diff stack was built for SSH and, opened on a WSL host the same day, worked unchanged. Language servers were the last gap, and they closed the same night without touching the protocol: the distribution's own <code>rust-analyzer</code>, spawned through <code>wsl.exe</code>, serves the routed buffer, with paths spelled at one seam in <code>crates/lsp</code>. Measured end to end: footer, hover card, go-to-definition into another crate as a second routed tab.</p>
@@ -325,7 +325,7 @@
     <ul>
       <li><b>I18 persistent grant</b><span>Run 2's own log says 30 of 44 asks were the agent driving the Windows host from WSL, which the agent's config already handles. 7 of 44 were the case the grant addresses.</span></li>
       <li><b>CLASSIFIER.md</b><span>An input to a posture decision, and posture is set aside.</span></li>
-      <li><b>T14.14 model picker</b><span>Under ACP the agent owns model choice. A second picker in Warp duplicates it.</span></li>
+      <li><b>T14.14 model picker</b><span><del>Under ACP the agent owns model choice. A second picker in Warp duplicates it.</del> <em>Built 2026-09-07 (<code>952d80a08</code>), and not as a second picker: upstream&rsquo;s own chip lists the agent&rsquo;s <code>configOptions</code> models and sends the pick as <code>session/set_config_option</code>, after a real phone found the chip drawing an empty menu.</em></span></li>
       <li><b>I22 OpenRouter provider</b><span>Same reason. The provider lives in the agent now.</span></li>
       <li><b>I1 inbox and settled</b><span>No friction log has asked for it.</span></li>
       <li><b>T7 plan runner</b><span>Built. Waits for a plan you actually want run.</span></li>
@@ -344,6 +344,7 @@
 
   <footer>
     <p>Status chips cycle open &rarr; active &rarr; done and are remembered in this browser only.</p>
+    <p><strong>Corrected 2026-09-14.</strong> Every chip&rsquo;s static text read <em>open</em>, and items 5 and 7 defaulted to open and active, while all seven were done: merge <code>b175101a2</code>, launcher <code>7ab130c2d</code>, egress <code>.fork/runs/egress-windows-2026-09-05/</code>, cancel <code>2ff77def8</code>, the cloud chip <code>.fork/runs/handoff-chip-2026-09-06/</code>, viewer <code>7bb323cbc</code>/<code>9ed773dc3</code>, WSL <code>ea61116e1</code>/<code>099b26ea5</code>/<code>6d07c1e1a</code>. A browser that already cycled a chip keeps its own stored value. Item 7&rsquo;s clipboard question is still the maintainer&rsquo;s.</p>
     <p>Item 7 added 2026-09-05 from the first friction-log line; its first step landed the same day. Figures in item 1 measured 2026-09-04 against <code>upstream/master</code> at 5a6ded1e8 and <code>dev</code> at 07b56708a. Re-run before trusting them a week from now.</p>
   </footer>
 </div>

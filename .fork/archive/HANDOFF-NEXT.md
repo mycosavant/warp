@@ -17,7 +17,7 @@ the same way when its own list is empty.
    2026-09-12, `ls .fork/GOAL.md`; first noted in `HANDOFF-FOCUS.md`). Per
    `CLAUDE.md`, absent means no standing horizon and `.fork/tickets/` is the plan.
 3. **`.fork/next.html`** — the board, with status chips. Open it in a browser.
-5. **`.fork/HANDOFF-GHTESTS.md`** — added 2026-09-12. The open work left by the
+5. **`.fork/archive/HANDOFF-GHTESTS.md`** — added 2026-09-12. The open work left by the
    routed commit-message and PR-content fixes: five tests that never run their
    fake `gh`, the live PR drive that was not run, and the loose ends. It adds
    to this file rather than replacing it.

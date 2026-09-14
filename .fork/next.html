@@ -103,17 +103,18 @@
     <span class="k">What this is and is not</span>
     <p><strong>A second horizon beside <code>GOAL.md</code>, not a replacement.</strong> <em>Live in it</em> stands until seven working days are logged; its rule that a friction which stops a turn is fixed the same day outranks every row below. This page is what the agent does on the days nothing stopped. It is a run with a definition of done, so it can be met or abandoned and then deleted.</p>
     <p><strong>Done when:</strong> a turn in the panel is answered by a model running on this machine, with the event log naming it and zero sockets off loopback during the turn <em>(met 2026-09-09, except that the last clause was true of Warp and false of the agent &mdash; see item 3)</em>; the picker has been measured against a list that is not Anthropic's; every agent in the survey table is filled from the wire or blocked on a credential the maintainer has declined; and the specs card says something true about every row on offer, including <code>?</code>.</p>
+    <p><strong>Checked 2026-09-14: not met, so this page stays live.</strong> The first three clauses hold: item 3; item 1; Codex filled from the wire (<code>.fork/runs/codex-wire-2026-09-11/</code>) and Gemini blocked on a credential door the maintainer declined on 2026-09-11. The fourth does not: the <em>settings page</em> draws an unknown spec as an empty bar rather than <code>?</code>, which <code>app/src/ai/acp_agent/specs.rs</code>&rsquo;s own module doc says. <code>HANDOFF-HYGIENE.md</code> Part B carries that fix; retire this page when it lands.</p>
   </section>
 
   <section class="seq">
     <h2>Sequence</h2>
     <ol>
       <li><small>done</small>The picker against opencode's OpenRouter list. <em>365 rows, a pick sent and honoured, the same night.</em></li>
-      <li><small>gate</small>A model runtime inside the distribution. <em>Needs a say-so: it is an install.</em></li>
+      <li><small><del>gate</del> done 2026-09-07</small>A model runtime <del>inside the distribution</del>. <em>llama-server on the Windows side, item 2.</em></li>
       <li><small>done</small>A local model answers the panel. <em>It does; Warp held loopback only, and the agent's own process did not.</em></li>
       <li><small>done</small>The specs card for a list the table cannot hand-cover: the fetch, opt-in, off. <em>430 rows, and it agrees with the four hand-written ones exactly.</em></li>
       <li><small>half done</small><code>authenticate</code> for Codex and Gemini: the refusal is disclosed, in the agent's words and on the agent's own error code. <em>For Codex the send turns out to be unnecessary &mdash; a provider key in config means <code>session/new</code> is never refused. Gemini untested.</em></li>
-      <li><small>between builds</small>Housekeeping that recurs: the record that outlives the process, the websocket check, the cron line, the stale boxes.</li>
+      <li><small><del>between builds</del> done</small>Housekeeping that recurs: the record that outlives the process, the websocket check, the cron line, the stale boxes. <em>All closed by 2026-09-12; item 6 strikes each with its date.</em></li>
       <li><small>a quiet hour</small>The clean-build test of <code>-j 8</code>. <em>Only when no Windows build runs.</em></li>
     </ol>
   </section>
@@ -144,7 +145,7 @@
         <li>The 22 GB Qwen3.6-35B-A3B for the panel, to <code>X:\models</code>, which has 2.1 TB free. An earlier version of this line said disk was the reason to wait; that was a false reading of where the WSL image lives, corrected in <code>.fork/runs/wsl-move-2026-09-07/</code>.</li>
       </ul></div>
       <div class="gates"><span class="k">Open from the run</span><ul>
-        <li><b>Built 2026-09-12.</b> The commit message in a <em>routed</em> WSL pane: the daemon inside the distribution generated it with its own client, where the fork's config is not installed, so on the recommended configuration this one feature was dead. The daemon now returns the diff and the GUI generates &mdash; <code>return_diff_only</code> on <code>GitGenerateCommitMessageRequest</code>. The protocol addition this line called for turned out to be <b>one request field</b>, because the proto is in-tree and the daemon already computes the diff. <b>Measured end to end the same day</b> (<code>.fork/runs/routedcommit-2026-09-12/</code>): the dialog fills in on a routed pane, one model request at the moment it opens, and the message names a function added minutes before the run &mdash; so the diff provably travelled rather than reading plausibly. The unrouted case was re-run as a control, because the fix refactored a function the local path shares. <b>The two PR-content paths were the same defect and were fixed the same day</b> &mdash; they hid five days longer only because <code>create_pr</code> falls back to <code>gh pr create --fill</code>, so the broken generator kept shipping real PRs titled by git. <b>A fallback is not a fix; it is a defect that stopped reporting itself.</b> Not driven live: that would mean opening a real pull request. The same defect is still live in the two PR-content call sites, where it falls back to <code>gh pr create --fill</code> instead of going blank.</li>
+        <li><b>Built 2026-09-12.</b> The commit message in a <em>routed</em> WSL pane: the daemon inside the distribution generated it with its own client, where the fork's config is not installed, so on the recommended configuration this one feature was dead. The daemon now returns the diff and the GUI generates &mdash; <code>return_diff_only</code> on <code>GitGenerateCommitMessageRequest</code>. The protocol addition this line called for turned out to be <b>one request field</b>, because the proto is in-tree and the daemon already computes the diff. <b>Measured end to end the same day</b> (<code>.fork/runs/routedcommit-2026-09-12/</code>): the dialog fills in on a routed pane, one model request at the moment it opens, and the message names a function added minutes before the run &mdash; so the diff provably travelled rather than reading plausibly. The unrouted case was re-run as a control, because the fix refactored a function the local path shares. <b>The two PR-content paths were the same defect and were fixed the same day</b> &mdash; they hid five days longer only because <code>create_pr</code> falls back to <code>gh pr create --fill</code>, so the broken generator kept shipping real PRs titled by git. <b>A fallback is not a fix; it is a defect that stopped reporting itself.</b> Not driven live: that would mean opening a real pull request. <del>The same defect is still live in the two PR-content call sites, where it falls back to <code>gh pr create --fill</code> instead of going blank.</del> <em>Struck 2026-09-14: fixed 2026-09-12 in <code>35a29d6d6</code> and driven live against a dead-end <code>gh</code> the same day (<code>a5e50790a</code>), as this bullet already says above; the edit that said so left this sentence behind.</em></li>
       </ul></div>
     </div>
   </article>
@@ -190,10 +191,10 @@
     </div>
   </article>
 
-  <article class="item" data-id="housekeeping">
+  <article class="item done" data-id="housekeeping">
     <div class="rank">6</div>
     <div class="body">
-      <div class="head"><h2>Housekeeping that has recurred</h2><span class="status">between builds</span></div>
+      <div class="head"><h2>Housekeeping that has recurred</h2><span class="status">done 2026-09-12</span></div>
       <div class="meta"><span>from the inventory of 2026-09-07</span></div>
       <p>Each of these is an evening and none needs the desk. Ranked by how often the files themselves mention it.</p>
       <div class="facts"><table>
@@ -251,7 +252,7 @@
   <article class="item" data-id="voice-out">
     <div class="rank">new</div>
     <div class="body">
-      <div class="head"><h2>Read-aloud: the app exists, the bridge does not</h2><span class="status">unranked &middot; filed 2026-09-12</span></div>
+      <div class="head"><h2>Read-aloud: the app exists, the bridge does not</h2><span class="status"><del>unranked &middot; filed 2026-09-12</del> built 2026-09-13</span></div>
       <div class="meta"><span><code>mycosavant/pocket-tts</code></span><span>artifact: Read Aloud Wiring, 2026-09-11</span><span>friction #2</span></div>
 
       <p><b>This was filed hours ago as an unexplored requirement. That was wrong and is corrected here.</b> The maintainer has built it: an Android app, <code>org.pockettts.android</code>, pocket-tts voices with sherpa-onnx and custom Kotlin, registered as a <em>system</em> TTS engine so any app can read aloud in a natural voice &mdash; <q>apps are oblivious to my apk even being installed; it just works</q> &mdash; plus an in-app read path with real transport controls (skip back, pause, skip forward, stop) and a scratchpad.</p>
@@ -264,7 +265,7 @@
 
       <p><b>The phone half is not a plan, it is tested.</b> <em>Eleven Utterances</em>, 2026-09-11/12, SM-S938U1 on Android 16, app build 46: transcript &rarr; script &rarr; broadcast &rarr; <code>Reader</code> &rarr; <code>PlaybackService</code> &rarr; audio, with lock-screen controls and the screen off. Tests 1&ndash;5 pass. Every first-contact failure was in the shell script or proot, none in the app. <b>Two PRs are open</b> &mdash; <code>#7</code> the script fixes, <code>#8</code> the app fixes, 236 tests green in CI and never run on a phone.</p>
 
-      <p><b>The primitive for the bridge already exists and nothing needs building in Warp to try it.</b> <code>warpctrl agent trace</code> joins the agent's session file with Warp's event log and <em>needs no running Warp</em> &mdash; the same property that made mosh+tmux worth having, since the instance is usually what is being rebuilt. So the candidate is one line from a <b>phone-local</b> Termux shell rather than the mosh pane: ssh to the desk, take the trace, broadcast locally. In <code>speak-last.sh</code>'s own terms that is a second <em>source</em> for the text, not a second script. <b>Unbuilt on this side</b>; the app side is done.</p>
+      <p><b>The primitive for the bridge already exists and nothing needs building in Warp to try it.</b> <code>warpctrl agent trace</code> joins the agent's session file with Warp's event log and <em>needs no running Warp</em> &mdash; the same property that made mosh+tmux worth having, since the instance is usually what is being rebuilt. So the candidate is one line from a <b>phone-local</b> Termux shell rather than the mosh pane: ssh to the desk, take the trace, broadcast locally. In <code>speak-last.sh</code>'s own terms that is a second <em>source</em> for the text, not a second script. <del><b>Unbuilt on this side</b>; the app side is done.</del> <em>Corrected 2026-09-14. The phone bridge was built 2026-09-13 on the pocket-tts side, as a transcript source in <code>speak-last.sh</code> (pocket-tts PR #13), not in Warp. The desk read-aloud the maintainer made primary that day is built in Warp: a palette entry that runs a command you name (<code>68cc117c2</code>, <code>ac5f6b25f</code>, <code>9d878a1ec</code>). #7 and #8 have since been confirmed on a device (build 52). <code>.fork/docs/voice.md</code> is current.</em></p>
 
       <p><b>Four constraints any fork-side bridge inherits, measured on the device and not negotiable from here.</b> <code>am</code> <em>cannot confirm delivery</em> &mdash; it exits 0 both for a receiver that does not exist and for a package that is not installed, so the app's own <code>utterances read</code> is the only proof a read happened. proot breaks <b>process substitution</b>, and when it did the script <b>reported success while sending nothing</b>, which is this repo's favourite defect wearing someone else's clothes. <code>tail</code> from a pipe hangs under proot, unconditionally. And <code>am broadcast</code> needs an explicit <code>--user 0</code> on Android 16, where <code>--user current</code> fails the same way.</p>
 

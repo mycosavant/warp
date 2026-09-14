@@ -1,7 +1,7 @@
 # Handoff: a local model answers the panel
 
 **Written 2026-09-09 for a phone-driven session. Paste-target: start a new
-session and say *"read `.fork/HANDOFF-LOCALMODEL.md` and run it to
+session and say *"read `.fork/archive/HANDOFF-LOCALMODEL.md` and run it to
 completion"*.**
 
 Read `CLAUDE.md` first, as always. This file is the run, not the method.
@@ -15,7 +15,7 @@ Read `CLAUDE.md` first, as always. This file is the run, not the method.
 > here is the recipe — the agent line, the aliases, the census tools. What is
 > stale is the context figure implied by `serve.ps1`'s default: this repository
 > needs **`-Ctx 98304`**, not 12288, or the local model cannot answer at all.
-> The live handoff is `.fork/HANDOFF-SPECSFETCH.md`.
+> The live handoff is `.fork/archive/HANDOFF-SPECSFETCH.md`.
 
 ---
 

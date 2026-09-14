@@ -443,10 +443,14 @@ headscale steps are `.fork/reach.html`.
 
 ## Unverified, as of writing
 
-- **The phone off the LAN, end to end.** The mesh path is measured (above);
+- ~~**The phone off the LAN, end to end.** The mesh path is measured (above);
   a pairing scanned at the desk and driven from cellular is the run this
   page owes next, and it waits on a release build the Windows checkout lost
-  on 2026-09-07 when its `target` was deleted for disk.
+  on 2026-09-07 when its `target` was deleted for disk.~~ **No longer owed,
+  struck 2026-09-14.** The release build was rebuilt and the run made on
+  2026-09-08; the maintainer confirmed the Android phone was on cellular with
+  Wi-Fi off when it scanned and paired (`313280f3d`,
+  `.fork/runs/reach-2026-09-08/`).
 
 - **A phone, still, and one phone has now walked it.** The emulator above
   is a Windows process with Android in it, and it settled everything a

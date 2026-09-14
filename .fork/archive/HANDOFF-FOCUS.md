@@ -22,7 +22,7 @@ absent means there is no standing horizon and `.fork/tickets/` is the plan.
 3. **`.fork/runs/pockettts-pr-2026-09-12/README.md`**, **the header only**. The
    body is a wrong diagnosis kept per the never-rewrite rule. Read the
    superseding block at the top and do not act on the body.
-4. **`.fork/HANDOFF-GHTESTS.md`** — its Task 4 list, now partly struck.
+4. **`.fork/archive/HANDOFF-GHTESTS.md`** — its Task 4 list, now partly struck.
 
 ## State of the machine
 
