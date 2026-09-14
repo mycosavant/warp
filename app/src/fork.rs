@@ -108,6 +108,19 @@ pub fn is_active() -> bool {
 /// (T19, board item 5). The narrower of the two flags is the one listed:
 /// `OzHandoff` has twenty-odd call sites and gates cloud-pane behaviour this
 /// entry has no opinion on.
+///
+/// `FactoryMcp` is the fifth: **a Warp-hosted server attached to agents,
+/// behind an HTTP client the egress checks never see.** The flag attaches the
+/// Factory MCP server (`{server_root}/api/v1/mcp/factory`) to interactive
+/// sessions and, since the 2026-09-14 merge (`a48ff8014`, `e3464f102`), to
+/// Claude Code and Codex runs launched through `AgentDriver`, and it gates the
+/// bundled `factory-mcp` skill that documents the server. Both attach paths
+/// also want a login or a bearer token, which this fork never has, so it was
+/// unreachable in practice. That is upstream's gate, and MCP's HTTP transport
+/// builds its own `reqwest` client (`crates/mcp/src/runtime.rs`, listed in
+/// `http_client`'s unchecked-client pin), so the deny-lists would not stop it
+/// the day a token turned up. The cargo feature is in `default`, so this entry
+/// is the removal, as it is for the embedding index.
 const FORCE_DISABLED: &[FeatureFlag] = &[
     FeatureFlag::Autoupdate,
     FeatureFlag::HandoffLocalCloud,
@@ -122,6 +135,7 @@ const FORCE_DISABLED: &[FeatureFlag] = &[
     FeatureFlag::GlobalAIAnalyticsBanner,
     FeatureFlag::SendTelemetryToFile,
     FeatureFlag::AgentModeAnalytics,
+    FeatureFlag::FactoryMcp,
 ];
 
 /// Flags forced on so local, account-free agent operation is reachable.

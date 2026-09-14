@@ -1231,6 +1231,29 @@ fn the_surfaces_routing_costs_are_switched_on_in_this_build() {
     }
 }
 
+/// The Warp-hosted MCP server is forced off, not left to its login gate.
+///
+/// `factory_mcp` is in `app/Cargo.toml`'s `default` list, so the flag is on in
+/// every build made here and the `FORCE_DISABLED` entry is the only fork-side
+/// removal. What it stops is `sync_builtin_servers` and the `AgentDriver`
+/// per-run attach dialling `{server_root}/api/v1/mcp/factory` through MCP's own
+/// `reqwest` client, which the egress checks do not see. Both paths also need a
+/// login or bearer token; that gate is upstream's, and this test is here so the
+/// entry is not deleted on the strength of it.
+#[test]
+fn the_warp_hosted_mcp_server_is_forced_off_not_merely_login_gated() {
+    assert!(
+        cfg!(feature = "factory_mcp"),
+        "if this goes false the FORCE_DISABLED entry becomes belt-and-braces \
+         rather than the removal"
+    );
+    assert!(
+        FORCE_DISABLED.contains(&FeatureFlag::FactoryMcp),
+        "the cargo feature is on, so only a login stands between an agent run \
+         and a Warp-hosted MCP server"
+    );
+}
+
 /// The index that uploads source is forced off, and the entry that does it
 /// looks redundant to anyone who checks the cargo features.
 ///
