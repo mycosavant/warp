@@ -1,5 +1,15 @@
 # A local model answers the panel, 2026-09-09
 
+> **Superseded in part 2026-09-13 by `.fork/runs/vendorcalls-2026-09-13/`.**
+> *"The documented remedy does not work"* is wrong. This run's pane cwd,
+> `/home/effatha/git/warp`, had a gitignored `.claude/settings.local.json`
+> that set `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` to `""` until the
+> maintainer removed the line on 2026-09-13 (READ that day; mtime then
+> 2026-09-03, so most likely present on 09-09), and a settings
+> `env` entry overrides the variable in the launch command. With nothing
+> overriding it, the flag removes every startup request. What the connections
+> carried is now measured there. The body below is unchanged.
+
 `.fork/next.html` item 3, run from a phone-driven session against
 `.fork/HANDOFF-LOCALMODEL.md`. **No fork code was written or changed.** The
 Windows checkout was three commits behind and all three are docs, so the binary

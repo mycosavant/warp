@@ -150,3 +150,17 @@ they outlive the Warp that spawned them.
 - **`9282` may already be held.** Upstream's HTTP server fails to bind if
   another `warp-oss` on the machine holds it, so the listener count can be one,
   not two. Not an egress finding; note it and move on.
+- **A name pattern misses what you did not predict** (2026-09-13). Node 24
+  shows in `ss` as `MainThread`, and `opencode` and `codex-acp` matched nothing,
+  so the WSL poller silently dropped all three. Run it with
+  `EGRESS_POLL_PATTERN=.` and attribute by the process tree, as
+  `.fork/runs/vendorcalls-2026-09-13/instruments/` does.
+- **mitmproxy connects upstream before an addon can refuse a request.** To
+  block a host rather than only record it, also set
+  `connection_strategy=lazy` and `upstream_cert=false`.
+- **The session cwd's Claude Code settings outrank the launch command.** An
+  `env` entry in `.claude/settings.local.json` overrides a variable set on the
+  agent's command line. This checkout's own blanked
+  `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` from 2026-09-03 at the latest until 2026-09-13,
+  unnoticed through two egress runs. Measure an agent from a directory whose
+  settings you have read.

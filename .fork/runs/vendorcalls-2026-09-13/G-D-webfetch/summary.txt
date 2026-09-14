@@ -1,0 +1,13 @@
+timeline:
+  CENSUS_START 2026-09-14T00:42:03.085Z 
+  CONTROL_1A 2026-09-14T00:42:05.133Z 
+  DRIVER_START 2026-09-14T00:42:05.158Z 
+  DRIVER_END 2026-09-14T00:42:08.932Z exit=0
+  CONTROL_2 2026-09-14T00:42:16.922Z 
+  CENSUS_STOP 2026-09-14T00:42:19.385Z 
+windows sockets, non-listen, distinct per (pid,name,remote):
+  2026-09-14T00:42:04.466Z pid=36508 curl.exe       SynSent     127.0.0.1:56644 -> 127.0.0.1:9 loopback
+  2026-09-14T00:42:06.526Z pid=33064 claude.exe     Established 127.0.0.1:56645 -> 127.0.0.1:8080 loopback
+  2026-09-14T00:42:12.239Z pid=43812 curl.exe       SynSent     10.2.0.2:56653 -> 172.66.147.243:443 NON-LOOPBACK
+requests seen by proxy:
+first chunk: 2026-09-14T00:42:08.365Z answer: I was unable to fetch the page because the domain example.com was blocked by security policies.

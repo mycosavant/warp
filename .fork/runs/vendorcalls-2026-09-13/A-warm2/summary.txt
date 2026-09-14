@@ -1,0 +1,29 @@
+process tree (agent side):
+  2026-09-14T00:21:34.683Z pid=480954 warp-oss  /home/effatha/git/warp/target/release/warp-oss --warpctrl acp probe --command /home/effatha/.nvm/versions/node
+  2026-09-14T00:21:34.683Z pid=480957 MainThread  /home/effatha/.nvm/versions/node/v24.5.0/bin/node /home/effatha/.npm/_npx/6130df88bef2cca3/node_modules/@agent
+  2026-09-14T00:21:35.088Z pid=480989 claude  /home/effatha/.npm/_npx/6130df88bef2cca3/node_modules/@anthropic-ai/claude-agent-sdk-linux-x64/claude --output
+  2026-09-14T00:21:35.290Z pid=481061 powershell.exe  /init /mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe powershell.exe -NoProfile -NonInteractive 
+  2026-09-14T00:21:39.333Z pid=481287 MainThread  /home/effatha/.nvm/versions/node/v24.5.0/bin/node -e require("https").get("https://example.com",r=>{r.resume()
+distinct remotes per tree pid (first seen):
+  2026-09-14T00:21:35.408Z pid=480989 claude     ESTAB     127.0.0.1:48054 -> 127.0.0.1:8081 loopback
+  2026-09-14T00:21:35.624Z pid=480989 claude     ESTAB     127.0.0.1:47754 -> 127.0.0.1:8080 loopback
+  2026-09-14T00:21:39.412Z pid=481287 MainThread ESTAB     10.2.0.2:46620 -> 104.20.23.154:443 NON-LOOPBACK
+control 2 (node, no proxy) pids: [481287] fired: True
+requests seen by proxy:
+  2026-09-14T00:21:34Z connect example.com:443
+  2026-09-14T00:21:34.589Z GET example.com/ q=[] -> 200 req=0B resp=559B ua=curl creds={} canaries=[]
+  2026-09-14T00:21:35Z connect api.anthropic.com:443
+  2026-09-14T00:21:35Z connect api.anthropic.com:443
+  2026-09-14T00:21:35Z connect api.anthropic.com:443
+  2026-09-14T00:21:35Z connect api.anthropic.com:443
+  2026-09-14T00:21:35.396Z GET api.anthropic.com/api/claude_code_penguin_mode q=[] -> 200 req=0B resp=39B ua=axios creds={'authorization': [('Bearer', 'SAME-AS-accessToken', 108)]} canaries=[]
+  2026-09-14T00:21:35.416Z POST api.anthropic.com/api/eval/sdk-zAZezfDKGoZuXXKe q=[] -> 200 req=482B resp=101419B ua=Bun creds={'x-api-key': [(None, 'other', 5)]} canaries=[]
+  2026-09-14T00:21:35.448Z GET api.anthropic.com/mcp-registry/v0/servers q=['limit', 'version', 'visibility'] -> 200 req=0B resp=232170B ua=claude-cli creds={} canaries=[]
+  2026-09-14T00:21:35.443Z GET api.anthropic.com/api/claude_cli/bootstrap q=['entrypoint', 'model'] -> 200 req=0B resp=762B ua=claude-code creds={'authorization': [('Bearer', 'SAME-AS-accessToken', 108)]} canaries=[]
+  2026-09-14T00:21:35Z connect api.anthropic.com:443
+  2026-09-14T00:21:35.782Z GET api.anthropic.com/mcp-registry/v0/servers q=['cursor', 'limit', 'version', 'visibility'] -> 200 req=0B resp=211417B ua=claude-cli creds={} canaries=[]
+  2026-09-14T00:21:35Z connect api.anthropic.com:443
+  2026-09-14T00:21:36.087Z GET api.anthropic.com/mcp-registry/v0/servers q=['cursor', 'limit', 'version', 'visibility'] -> None req=0B resp=NoneB ua=claude-cli creds={} canaries=[]
+first agent_message_chunk: 2026-09-14T00:21:35.923Z (+1.25s)
+answer: 2 + 2 is 4.
+driver: 2026-09-14T00:21:34.671Z -> 2026-09-14T00:21:36.186Z

@@ -106,16 +106,43 @@ Decision: `2026-09-13-a-local-model-turn-discloses-the-agents-own-connection.md`
 It reverses the disclosure half of the 2026-09-11 ruling (commit `a7b6803c8`),
 which had refused a panel notice; "accepted" still stands.
 
-**Held until `HANDOFF-VENDORCALLS.md` has run.** Its result decides the
-wording, whether a stop exists, and whether a notice is the right answer at
-all (if the canary appears in a request body, it is not).
+~~**Held until `HANDOFF-VENDORCALLS.md` has run.**~~ **Released 2026-09-13**:
+the run is `.fork/runs/vendorcalls-2026-09-13/`. No canary appeared in any
+request body, so a notice remains the answer the decision allows.
+
+**What the run gives the note to say**, each fact RAN on `claude-agent-acp`
+0.73.0 with Claude Code 2.1.257:
+
+| | measured |
+|---|---|
+| hosts | `api.anthropic.com` at agent start. WebFetch adds `/api/web/domain_info` per domain. Once, with the flag not in force, a marketplace fetch to `downloads.claude.ai` and plugin clones from `github.com`, 8 s into a long turn |
+| as the user's account | yes when signed in: two of the calls carry the subscription OAuth token. They are made without an account too |
+| prompt or file content in a body | no, in 105 requests across 38 runs |
+| the stop | `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` removes every startup call; `skipWebFetchPreflight: true` removes the WebFetch one |
+| what undoes the stop | an `env` entry in a project `.claude/settings.local.json` (measured; other settings files presumed the same). This checkout's own set it to `""` until the maintainer removed the line on 2026-09-13 |
+
+A starting text, to be cut to fit: *"`claude-agent-acp` 0.73.0 contacts
+api.anthropic.com when it starts, even with a local model: feature flags, an
+account check that sends your Claude sign-in, and the MCP registry. Measured
+2026-09-13, no prompt or file content was sent. Setting
+`CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` stops it unless a settings file
+sets it back."*
+
+**The launch command does not hide the note** (maintainer, 2026-09-13, TOLD).
+*"Hidden when the launch command already carries that stop"* would hide it in
+exactly the case the 2026-09-09 run was in: the variable in the launch command
+and a `settings.local.json` in the cwd undoing it. So the note shows on every
+qualifying turn until dismissed, and when the launch command carries the flag
+its text says the flag is set and that a settings file can still turn the
+calls back on. Warp does not read the agent's settings files to decide.
 
 **What to show.** A note in the panel, the same kind as the mode disclosure
 (`WarpNote`, which read-aloud already skips), with **Got it** and an option to
 make that acknowledgement the last one. It names the agent and the version
 measured, whether the requests are made as the user's account, whether any
-body carried prompt or file content, and the stop the run found, if any. It is
-hidden when the launch command already carries that stop. It does not say
+body carried prompt or file content, and the stop the run found, if any.
+~~It is hidden when the launch command already carries that stop.~~ *Not
+hidden by the launch command; see the rule above (2026-09-13).* It does not say
 "during this turn": Warp does not see the connection per turn, and the note
 describes a measured property of a version.
 
@@ -130,7 +157,12 @@ describes a measured property of a version.
 2. **"This agent"**: key on the agent's `initialize` reply (`agentInfo.name`
    and `version`). Show it for agents **measured** to do this, which today is
    `claude-agent-acp` alone. For an agent never measured, say nothing rather
-   than guess, and file its measurement.
+   than guess, and file its measurement. *Added 2026-09-13:* `opencode` 1.18.25
+   was measured and fetches a 4.6 MB model catalogue from `models.opencode.ai`
+   on a cold cache, with no credential and no content; `codex-acp` was measured
+   and reaches loopback only. The catalogue download is documented, not
+   noted in the panel (maintainer, 2026-09-13, TOLD): `docs/manual.md`'s
+   `WARP_FORK_ACP_COMMAND` section names it and its switch.
 3. **Dismissal**: store "don't show again" keyed by agent name, **not** by
    version, unless you can argue otherwise. A new version is a new binary but
    the same vendor relationship, and re-showing on every `npx` bump teaches
@@ -142,7 +174,11 @@ same socket census as the 09-09 panel run (whose positive control fired) with
 `opencode acp` and `codex-acp` each pointed at the local `llama-server`. Only
 an agent that reaches loopback and nothing else gets recommended. The 09-11
 codex run reached only OpenRouter, but that was a remote model, so it does
-not answer this question.
+not answer this question. **Measured 2026-09-13** (`.fork/runs/vendorcalls-2026-09-13/`):
+`codex-acp` from `~/git/codex-acp` at `296069e`, `CODEX_HOME` config in that
+run's `instruments/codex-config.toml`, reached loopback only; `opencode acp`
+reached loopback only with `OPENCODE_DISABLE_MODELS_FETCH=1`, and
+`models.opencode.ai` without it. Both answered through `llama-server`.
 
 Verify the note live on Windows in a scratch profile. It appears on a local
 turn, not on a remote-model turn, and never again after "don't show again"

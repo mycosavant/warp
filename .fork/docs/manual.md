@@ -1700,6 +1700,28 @@ transport closed* at `initialize` and nothing about why (measured 2026-09-07,
 `wsl.exe -d Ubuntu --shell-type login -- /home/<you>/.nvm/versions/node/<v>/bin/opencode acp`.
 `warpdev.ps1 -Agent '<cmd>'` runs one launch with a different agent.
 
+**`opencode` downloads its model catalogue from `models.opencode.ai` when its
+cache is cold, even when every model is local.** Measured 2026-09-13 with
+`opencode` 1.18.25 answering from `llama-server`: one `GET
+https://models.opencode.ai/api.json`, 4.6 MB down, no credential, no prompt or
+file content, at session start. With a warm cache it made no request.
+`OPENCODE_DISABLE_MODELS_FETCH=1` in the agent's environment removes it, and
+the turn still answered, so for a local model name the agent as
+
+```
+WARP_FORK_ACP_COMMAND="OPENCODE_DISABLE_MODELS_FETCH=1 opencode acp"
+```
+
+A leading `NAME=value` is applied to the agent's environment by the command
+parser, so this form also works where there is no `env` binary (READ). The
+run set the variable through `warpctrl acp probe`'s environment; the panel
+path with this exact line was not rerun.
+
+What opencode loses without a fresh catalogue (model metadata for hosted
+providers) was not measured. `.fork/runs/vendorcalls-2026-09-13/` has the
+census, including `claude-agent-acp`'s own startup calls and `codex-acp`
+reaching loopback only.
+
 **Not yet:** `/compact` and Warp's own tools.
 
 ### Talking to an agent that is not Warp's: `warpctrl acp probe`

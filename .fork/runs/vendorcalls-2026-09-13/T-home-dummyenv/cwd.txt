@@ -1,0 +1,3 @@
+session cwd: ~/.cache/vc-ws-2026-09-13-dummyenv
+settings in the cwd: .claude/settings.local.json {"env":{"X_VC_DUMMY":"x"}}
+source: the driver command in the session that ran this, not captured by the rig at run time (added 2026-09-13 after review)

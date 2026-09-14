@@ -266,8 +266,9 @@ has evidence already gathered.
 
 Measured twice. `claude-agent-acp` opens a TLS connection to
 `api.anthropic.com` **before** it opens the one to `llama-server`, during a turn
-answered entirely on this machine. `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1`
-does not stop it. Anthropic's docs name exactly two exemptions;
+answered entirely on this machine. ~~`CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1`
+does not stop it.~~ *It does. The measuring cwd's `.claude/settings.local.json`
+set it back to `""`; corrected 2026-09-13, `.fork/runs/vendorcalls-2026-09-13/`.* Anthropic's docs name exactly two exemptions;
 `CLAUDE_CODE_DISABLE_OFFICIAL_MARKETPLACE_AUTOINSTALL=1` was **tested and
 excluded**, and the WebFetch preflight (`skipWebFetchPreflight`) is **untested**
 because it fires only when WebFetch is used and its switch lives in the

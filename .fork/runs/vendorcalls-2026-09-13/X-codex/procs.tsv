@@ -1,0 +1,50 @@
+first_seen	pid	ppid	comm	cmdline
+2026-09-14T00:36:36.415Z	506633	505472	bash	bash /tmp/claude-1000/-home-effatha-git-warp/c5e29190-ea8b-4e54-b962-05dd165cb7cc/scratchpad/vc/run.sh X-codex probe ANTHROPIC_BASE_URL=UNSET ANTHROPIC_API_KEY=
+2026-09-14T00:36:36.415Z	506642	506633	mitmdump	/usr/bin/python3 /usr/bin/mitmdump --listen-host 127.0.0.1 --listen-port 8081 --set confdir=/tmp/claude-1000/-home-effatha-git-warp/c5e29190-ea8b-4e54-b962-05dd
+2026-09-14T00:36:36.415Z	506652	506633	bash	bash /home/effatha/git/warp/.fork/tools/egress-poll-wsl.sh /tmp/claude-1000/-home-effatha-git-warp/c5e29190-ea8b-4e54-b962-05dd165cb7cc/scratchpad/vc/runs/X-cod
+2026-09-14T00:36:36.415Z	506731	506652	sleep	sleep 0.2 
+2026-09-14T00:36:36.415Z	506734	506633	warp-oss	/home/effatha/git/warp/target/release/warp-oss --warpctrl acp probe --command /home/effatha/git/codex-acp/target/release/codex-acp --prompt CANARY-PROMPT-5d19b2
+2026-09-14T00:36:36.415Z	506735	506633	python3	python3 -u /tmp/claude-1000/-home-effatha-git-warp/c5e29190-ea8b-4e54-b962-05dd165cb7cc/scratchpad/vc/ts.py 
+2026-09-14T00:36:36.415Z	506736	506633	python3	python3 /tmp/claude-1000/-home-effatha-git-warp/c5e29190-ea8b-4e54-b962-05dd165cb7cc/scratchpad/vc/proctree.py 506633 /tmp/claude-1000/-home-effatha-git-warp/c5
+2026-09-14T00:36:36.415Z	506737	506734	codex-acp	/home/effatha/git/codex-acp/target/release/codex-acp 
+2026-09-14T00:36:36.617Z	506842	506652	sleep	sleep 0.2 
+2026-09-14T00:36:36.821Z	506851	506652	sleep	sleep 0.2 
+2026-09-14T00:36:37.023Z	506860	506652	sleep	sleep 0.2 
+2026-09-14T00:36:37.225Z	506869	506652	sleep	sleep 0.2 
+2026-09-14T00:36:37.427Z	506871	506633	sleep	sleep 3 
+2026-09-14T00:36:37.427Z	506880	506652	sleep	sleep 0.2 
+2026-09-14T00:36:37.629Z	506882	506652	bash	bash /home/effatha/git/warp/.fork/tools/egress-poll-wsl.sh /tmp/claude-1000/-home-effatha-git-warp/c5e29190-ea8b-4e54-b962-05dd165cb7cc/scratchpad/vc/runs/X-cod
+2026-09-14T00:36:37.629Z	506883	506652	grep	grep -E . 
+2026-09-14T00:36:37.629Z	506885	506652	awk	awk -v ts=2026-09-14T00:36:37.607Z -v n=12 -v OFS=\t {print ts,$0,n} 
+2026-09-14T00:36:37.629Z	506887	506882	ss	ss -Hunp 
+2026-09-14T00:36:37.629Z	506888	506882	awk	awk -v OFS=\t {print "udp",$0} 
+2026-09-14T00:36:37.831Z	506889	506652	sleep	
+2026-09-14T00:36:38.032Z	506899	506652	sleep	sleep 0.2 
+2026-09-14T00:36:38.234Z	506908	506652	sleep	sleep 0.2 
+2026-09-14T00:36:38.436Z	506917	506652	sleep	sleep 0.2 
+2026-09-14T00:36:38.638Z	506926	506652	sleep	sleep 0.2 
+2026-09-14T00:36:38.839Z	506935	506652	sleep	sleep 0.2 
+2026-09-14T00:36:39.041Z	506944	506652	sleep	sleep 0.2 
+2026-09-14T00:36:39.243Z	506953	506652	sleep	sleep 0.2 
+2026-09-14T00:36:39.445Z	506962	506652	sleep	sleep 0.2 
+2026-09-14T00:36:39.647Z	506971	506652	sleep	sleep 0.2 
+2026-09-14T00:36:40.252Z	506989	506652	sleep	sleep 0.2 
+2026-09-14T00:36:40.454Z	506998	506633	MainThread	/home/effatha/.nvm/versions/node/v24.5.0/bin/node -e require("https").get("https://example.com",r=>{r.resume();r.on("end",()=>setTimeout(()=>process.exit(0),800
+2026-09-14T00:36:40.454Z	507004	506652	sleep	sleep 0.2 
+2026-09-14T00:36:40.656Z	507018	506652	sleep	sleep 0.2 
+2026-09-14T00:36:40.857Z	507027	506652	sleep	sleep 0.2 
+2026-09-14T00:36:41.059Z	507036	506652	sleep	sleep 0.2 
+2026-09-14T00:36:41.261Z	507064	506652	sleep	sleep 0.2 
+2026-09-14T00:36:41.463Z	507073	506652	sleep	sleep 0.2 
+2026-09-14T00:36:41.463Z	507075	506633	sleep	sleep 1.5 
+2026-09-14T00:36:41.665Z	507084	506652	sleep	sleep 0.2 
+2026-09-14T00:36:41.866Z	507093	506652	sleep	sleep 0.2 
+2026-09-14T00:36:42.068Z	507102	506652	sleep	sleep 0.2 
+2026-09-14T00:36:42.270Z	507104	506652	bash	bash /home/effatha/git/warp/.fork/tools/egress-poll-wsl.sh /tmp/claude-1000/-home-effatha-git-warp/c5e29190-ea8b-4e54-b962-05dd165cb7cc/scratchpad/vc/runs/X-cod
+2026-09-14T00:36:42.270Z	507105	506652	grep	grep -E . 
+2026-09-14T00:36:42.270Z	507106	507104	ss	ss -Htnp state all 
+2026-09-14T00:36:42.270Z	507107	506652	awk	awk -v ts=2026-09-14T00:36:42.264Z -v n=33 -v OFS=\t {print ts,$0,n} 
+2026-09-14T00:36:42.270Z	507108	507104	awk	awk -v OFS=\t {print "tcp",$0} 
+2026-09-14T00:36:42.472Z	507111	506652	sleep	sleep 0.2 
+2026-09-14T00:36:42.673Z	507120	506652	sleep	sleep 0.2 
+2026-09-14T00:36:42.876Z	507129	506652	sleep	sleep 0.2 

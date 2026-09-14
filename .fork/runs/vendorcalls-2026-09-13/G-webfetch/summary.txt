@@ -1,0 +1,15 @@
+timeline:
+  CENSUS_START 2026-09-14T00:39:30.290Z 
+  CONTROL_1A 2026-09-14T00:39:30.699Z 
+  DRIVER_START 2026-09-14T00:39:30.723Z 
+  DRIVER_END 2026-09-14T00:39:35.914Z exit=0
+  CONTROL_2 2026-09-14T00:39:39.195Z 
+  CENSUS_STOP 2026-09-14T00:39:41.448Z 
+windows sockets, non-listen, distinct per (pid,name,remote):
+  2026-09-14T00:39:32.419Z pid=14572 claude.exe     Established 127.0.0.1:56607 -> 127.0.0.1:8080 loopback
+  2026-09-14T00:39:34.065Z pid=14572 claude.exe     Established 127.0.0.1:56608 -> 127.0.0.1:8081 loopback
+requests seen by proxy:
+  2026-09-14T00:39:30.726Z GET example.com/ q=[] -> 200 ua=curl creds={} canaries=[]
+  2026-09-14T00:39:33.875Z GET api.anthropic.com/api/web/domain_info q=['domain'] -> 200 ua=axios creds={} canaries=[]
+  2026-09-14T00:39:34.152Z GET example.com/ q=[] -> 200 ua=Claude-User (claude-code creds={} canaries=[]
+first chunk: 2026-09-14T00:39:35.546Z answer: The page title is "Example Domain".

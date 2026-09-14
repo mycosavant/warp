@@ -1,0 +1,9 @@
+﻿# started 2026-09-14T00:40:43.813Z interval 200ms names warp-oss.exe,node.exe,claude.exe,curl.exe
+# ts	pid	name	proto	local	remote	state	sample
+2026-09-14T00:40:46.967Z	48448	curl.exe	tcp	0.0.0.0:56626	0.0.0.0:0	Bound	6
+2026-09-14T00:40:46.977Z	48448	curl.exe	tcp	127.0.0.1:56626	127.0.0.1:8081	Established	6
+2026-09-14T00:40:48.517Z	34296	claude.exe	tcp	0.0.0.0:56627	0.0.0.0:0	Bound	9
+2026-09-14T00:40:48.527Z	34296	claude.exe	tcp	127.0.0.1:56627	127.0.0.1:8080	Established	9
+2026-09-14T00:40:54.149Z	6932	curl.exe	tcp	0.0.0.0:56630	0.0.0.0:0	Bound	21
+2026-09-14T00:40:54.157Z	6932	curl.exe	tcp	10.2.0.2:56630	172.66.147.243:443	Established	21
+# stopped 2026-09-14T00:41:00.132Z samples 33 elapsed_s 16 distinct_tuples 6

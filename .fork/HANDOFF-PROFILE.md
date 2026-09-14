@@ -232,7 +232,9 @@ hypothetical and they are ordered by how much time each cost.
 
 **The agent's process opens a TLS connection to `api.anthropic.com` during a
 turn answered entirely by a local model**, before it opens the one to the model.
-`CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` does not stop it. Anthropic's docs
+~~`CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` does not stop it.~~ *It does. The
+measuring cwd's `.claude/settings.local.json` set it back to `""`; corrected
+2026-09-13, `.fork/runs/vendorcalls-2026-09-13/`.* Anthropic's docs
 name exactly two things exempt from that variable, and
 `CLAUDE_CODE_DISABLE_OFFICIAL_MARKETPLACE_AUTOINSTALL=1` was **tested and
 excluded** on 2026-09-09. The other, the WebFetch domain safety check

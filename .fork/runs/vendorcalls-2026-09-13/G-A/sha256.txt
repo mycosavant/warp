@@ -1,0 +1,4 @@
+e921fe5307e29bf6fd00000dd594356affd3a7b044e52720c7f10decbdc305b9  C:\Program Files\nodejs\node.exe
+9d73d1f0f121fb96cc8badb28c22d5bff02d8582eb2e40360a81c189e1b9422a  C:\Users\onemind\AppData\Local\npm-cache\_npx\6130df88bef2cca3\node_modules\@agentclientprotocol\claude-agent-acp\dist\index.js
+190a5fe1a2a0c76176cd4e387a2c3555220ca7acadda295d2d45cdbc562bd400  C:\Users\onemind\AppData\Local\npm-cache\_npx\6130df88bef2cca3\node_modules\@anthropic-ai\claude-agent-sdk-win32-x64\claude.exe
+9c2740d36ca4a70d0aa6bac5b336a6c011ca05abe57e962fd94c27506af4eb56  C:\dev\warp\target\release\warp-oss.exe

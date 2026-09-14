@@ -1,0 +1,3 @@
+session cwd: /home/effatha/git/warp
+settings in the cwd: the checkout: .claude/settings.json {} and the gitignored .claude/settings.local.json
+source: the driver command in the session that ran this, not captured by the rig at run time (added 2026-09-13 after review)

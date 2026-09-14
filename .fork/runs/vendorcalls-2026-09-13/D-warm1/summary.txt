@@ -1,0 +1,19 @@
+process tree (agent side):
+  2026-09-14T00:21:18.496Z pid=480216 warp-oss  /home/effatha/git/warp/target/release/warp-oss --warpctrl acp probe --command /home/effatha/.nvm/versions/node
+  2026-09-14T00:21:18.496Z pid=480219 MainThread  /home/effatha/.nvm/versions/node/v24.5.0/bin/node /home/effatha/.npm/_npx/6130df88bef2cca3/node_modules/@agent
+  2026-09-14T00:21:18.902Z pid=480250 claude  /home/effatha/.npm/_npx/6130df88bef2cca3/node_modules/@anthropic-ai/claude-agent-sdk-linux-x64/claude --output
+  2026-09-14T00:21:18.902Z pid=480260 git  
+  2026-09-14T00:21:19.104Z pid=480314 powershell.exe  /init /mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe powershell.exe -NoProfile -NonInteractive 
+  2026-09-14T00:21:26.910Z pid=480567 sh  /bin/sh -c workmux set-window-status done 
+  2026-09-14T00:21:29.942Z pid=480728 MainThread  /home/effatha/.nvm/versions/node/v24.5.0/bin/node -e require("https").get("https://example.com",r=>{r.resume()
+distinct remotes per tree pid (first seen):
+  2026-09-14T00:21:19.174Z pid=480250 claude     SYN-SENT  127.0.0.1:47346 -> 127.0.0.1:9 loopback
+  2026-09-14T00:21:26.425Z pid=480250 claude     ESTAB     127.0.0.1:44908 -> 127.0.0.1:8080 loopback
+  2026-09-14T00:21:30.217Z pid=480728 MainThread ESTAB     10.2.0.2:44704 -> 172.66.147.243:443 NON-LOOPBACK
+control 2 (node, no proxy) pids: [480728] fired: True
+requests seen by proxy:
+  2026-09-14T00:21:18Z connect example.com:443
+  2026-09-14T00:21:18.354Z GET example.com/ q=[] -> 200 req=0B resp=559B ua=curl creds={} canaries=[]
+first agent_message_chunk: 2026-09-14T00:21:26.670Z (+8.19s)
+answer: 2+2 is 4.
+driver: 2026-09-14T00:21:18.484Z -> 2026-09-14T00:21:26.933Z

@@ -1,0 +1,21 @@
+process tree (agent side):
+  2026-09-14T00:36:26.643Z pid=506241 warp-oss  /home/effatha/git/warp/target/release/warp-oss --warpctrl acp probe --command /home/effatha/.npm/_npx/addef32b
+  2026-09-14T00:36:26.643Z pid=506244 opencode  /home/effatha/.npm/_npx/addef32b45109aa1/node_modules/opencode-linux-x64/bin/opencode acp 
+  2026-09-14T00:36:31.894Z pid=506507 MainThread  /home/effatha/.nvm/versions/node/v24.5.0/bin/node -e require("https").get("https://example.com",r=>{r.resume()
+distinct remotes per tree pid (first seen):
+  2026-09-14T00:36:27.621Z pid=506244 opencode   ESTAB     127.0.0.1:4096 -> 127.0.0.1:47460 loopback
+  2026-09-14T00:36:27.621Z pid=506244 opencode   ESTAB     127.0.0.1:4096 -> 127.0.0.1:47464 loopback
+  2026-09-14T00:36:27.621Z pid=506244 opencode   ESTAB     127.0.0.1:47460 -> 127.0.0.1:4096 loopback
+  2026-09-14T00:36:27.621Z pid=506244 opencode   ESTAB     127.0.0.1:4096 -> 127.0.0.1:47502 loopback
+  2026-09-14T00:36:27.621Z pid=506244 opencode   ESTAB     127.0.0.1:4096 -> 127.0.0.1:47468 loopback
+  2026-09-14T00:36:27.621Z pid=506244 opencode   ESTAB     127.0.0.1:4096 -> 127.0.0.1:47480 loopback
+  2026-09-14T00:36:27.621Z pid=506244 opencode   ESTAB     127.0.0.1:4096 -> 127.0.0.1:47494 loopback
+  2026-09-14T00:36:28.071Z pid=506244 opencode   ESTAB     127.0.0.1:47080 -> 127.0.0.1:8080 loopback
+  2026-09-14T00:36:31.849Z pid=506507 MainThread SYN-SENT  10.2.0.2:46660 -> 104.20.23.154:443 NON-LOOPBACK
+control 2 (node, no proxy) pids: [506507] fired: True
+requests seen by proxy:
+  2026-09-14T00:36:26Z connect example.com:443
+  2026-09-14T00:36:26.403Z GET example.com/ q=[] -> 200 req=0B resp=559B ua=curl creds={} canaries=[]
+first agent_message_chunk: 2026-09-14T00:36:28.737Z (+2.10s)
+answer: 4
+driver: 2026-09-14T00:36:26.632Z -> 2026-09-14T00:36:28.770Z

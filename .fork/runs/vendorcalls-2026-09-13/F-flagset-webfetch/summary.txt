@@ -1,0 +1,23 @@
+process tree (agent side):
+  2026-09-14T00:30:16.920Z pid=498678 warp-oss  /home/effatha/git/warp/target/release/warp-oss --warpctrl acp probe --command /home/effatha/.nvm/versions/node
+  2026-09-14T00:30:16.920Z pid=498681 MainThread  /home/effatha/.nvm/versions/node/v24.5.0/bin/node /home/effatha/.npm/_npx/6130df88bef2cca3/node_modules/@agent
+  2026-09-14T00:30:17.324Z pid=498714 claude  /home/effatha/.npm/_npx/6130df88bef2cca3/node_modules/@anthropic-ai/claude-agent-sdk-linux-x64/claude --output
+  2026-09-14T00:30:17.324Z pid=498732 git  
+  2026-09-14T00:30:17.527Z pid=498751 powershell.exe  /init /mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe powershell.exe -NoProfile -NonInteractive 
+  2026-09-14T00:30:17.527Z pid=498773 sh  /bin/sh -c workmux set-window-status working 
+  2026-09-14T00:30:48.868Z pid=500091 MainThread  /home/effatha/.nvm/versions/node/v24.5.0/bin/node -e require("https").get("https://example.com",r=>{r.resume()
+distinct remotes per tree pid (first seen):
+  2026-09-14T00:30:17.650Z pid=498714 claude     ESTAB     127.0.0.1:47940 -> 127.0.0.1:8080 loopback
+  2026-09-14T00:30:43.888Z pid=498714 claude     ESTAB     127.0.0.1:48454 -> 127.0.0.1:8081 loopback
+  2026-09-14T00:30:49.002Z pid=500091 MainThread ESTAB     10.2.0.2:47734 -> 104.20.23.154:443 NON-LOOPBACK
+control 2 (node, no proxy) pids: [500091] fired: True
+requests seen by proxy:
+  2026-09-14T00:30:16Z connect example.com:443
+  2026-09-14T00:30:16.830Z GET example.com/ q=[] -> 200 req=0B resp=559B ua=curl creds={} canaries=[]
+  2026-09-14T00:30:43Z connect api.anthropic.com:443
+  2026-09-14T00:30:43.840Z GET api.anthropic.com/api/web/domain_info q=['domain'] -> 200 req=0B resp=41B ua=axios creds={} canaries=[]
+  2026-09-14T00:30:43Z connect example.com:443
+  2026-09-14T00:30:44.148Z GET example.com/ q=[] -> 200 req=0B resp=559B ua=Claude-User (claude-code creds={} canaries=[]
+first agent_message_chunk: 2026-09-14T00:30:45.580Z (+28.67s)
+answer: The page title is "Example Domain".
+driver: 2026-09-14T00:30:16.909Z -> 2026-09-14T00:30:45.787Z

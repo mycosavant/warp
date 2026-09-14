@@ -1,0 +1,14 @@
+timeline:
+  CENSUS_START 2026-09-14T00:40:46.629Z 
+  CONTROL_1A 2026-09-14T00:40:46.993Z 
+  DRIVER_START 2026-09-14T00:40:47.017Z 
+  DRIVER_END 2026-09-14T00:40:49.763Z exit=0
+  CONTROL_2 2026-09-14T00:40:57.758Z 
+  CENSUS_STOP 2026-09-14T00:41:00.160Z 
+windows sockets, non-listen, distinct per (pid,name,remote):
+  2026-09-14T00:40:46.977Z pid=48448 curl.exe       Established 127.0.0.1:56626 -> 127.0.0.1:8081 loopback
+  2026-09-14T00:40:48.527Z pid=34296 claude.exe     Established 127.0.0.1:56627 -> 127.0.0.1:8080 loopback
+  2026-09-14T00:40:54.157Z pid=6932 curl.exe       Established 10.2.0.2:56630 -> 172.66.147.243:443 NON-LOOPBACK
+requests seen by proxy:
+  2026-09-14T00:40:46.467Z GET example.com/ q=[] -> 200 ua=curl creds={} canaries=[]
+first chunk: None answer: 

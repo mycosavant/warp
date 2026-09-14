@@ -1,0 +1,12 @@
+timeline:
+  CENSUS_START 2026-09-14T00:41:04.627Z 
+  CONTROL_1A 2026-09-14T00:41:06.693Z 
+  DRIVER_START 2026-09-14T00:41:06.718Z 
+  DRIVER_END 2026-09-14T00:41:08.373Z exit=0
+  CONTROL_2 2026-09-14T00:41:16.354Z 
+  CENSUS_STOP 2026-09-14T00:41:18.469Z 
+windows sockets, non-listen, distinct per (pid,name,remote):
+  2026-09-14T00:41:06.274Z pid=28764 curl.exe       SynSent     127.0.0.1:56633 -> 127.0.0.1:9 loopback
+  2026-09-14T00:41:12.890Z pid=5452 curl.exe       Established 10.2.0.2:56638 -> 172.66.147.243:443 NON-LOOPBACK
+requests seen by proxy:
+first chunk: None answer: 

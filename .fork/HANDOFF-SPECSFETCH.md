@@ -5,6 +5,10 @@
 > All three decisions were answered by the maintainer before any code. Item 4
 > is built and item 7 was run.
 >
+> **A third, found 2026-09-13:** the flag does remove the connections. The
+> measuring cwd's `.claude/settings.local.json` set it back to `""`, so both
+> probes below ran without it (`.fork/runs/vendorcalls-2026-09-13/`).
+>
 > **Two things in this file are wrong and the run README says why.** Decision
 > 1's *"`CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` does not remove them"* is
 > true but its implied conclusion is not: two things are documented as exempt

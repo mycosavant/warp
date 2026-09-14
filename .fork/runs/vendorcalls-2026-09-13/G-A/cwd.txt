@@ -1,0 +1,3 @@
+session cwd: C:\Users\onemind
+settings in the cwd: none in the cwd; Windows ~/.claude/settings.json sets the flag to "1"
+source: the driver command in the session that ran this, not captured by the rig at run time (added 2026-09-13 after review)

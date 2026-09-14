@@ -1,5 +1,11 @@
 # Handoff: what the agent sends to its vendor during a local-model turn
 
+> **Run to completion 2026-09-13. Do not run it again** except on an agent
+> bump, with `instruments/` from `.fork/runs/vendorcalls-2026-09-13/`, which is
+> the account. Two premises below were wrong: the flag does remove the calls
+> (the earlier runs' cwd set it back to `""` in `.claude/settings.local.json`),
+> and account scoping is measured, not ASSUMED. Configuration H was not run.
+
 Written 2026-09-13 from the fable-advisor's design of the same evening, which
 the maintainer adopted. **This run comes before `HANDOFF-BUILDS.md` task 4**
 (the panel disclosure), because two likely outcomes would each rewrite what
@@ -12,8 +18,9 @@ Claims below are tagged RAN, READ, TOLD or ASSUMED, per `CLAUDE.md`.
 During a panel turn answered entirely by a local `llama-server`,
 `claude-agent-acp@0.73.0` opened TLS connections to `api.anthropic.com`
 (RAN, `.fork/runs/localmodel-panel-2026-09-09/`), and
-`CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` did not remove them (RAN,
-`.fork/runs/pricefetch-2026-09-09/`). Nobody has seen what is in those
+~~`CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` did not remove them (RAN,
+`.fork/runs/pricefetch-2026-09-09/`)~~ *it removes them; both runs' cwd
+overrode it (RAN 2026-09-13)*. Nobody has seen what is in those
 requests, whether they are made as the maintainer's account, when in a session
 they happen, or whether anything stops them.
 

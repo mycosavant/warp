@@ -1,0 +1,221 @@
+first_seen	pid	ppid	comm	cmdline
+2026-09-14T00:18:02.367Z	472989	472372	bash	bash /tmp/claude-1000/-home-effatha-git-warp/c5e29190-ea8b-4e54-b962-05dd165cb7cc/scratchpad/vc/run.sh B-empty probe CLAUDE_CONFIG_DIR=/tmp/claude-1000/-home-ef
+2026-09-14T00:18:02.367Z	472998	472989	mitmdump	/usr/bin/python3 /usr/bin/mitmdump --listen-host 127.0.0.1 --listen-port 8081 --set confdir=/tmp/claude-1000/-home-effatha-git-warp/c5e29190-ea8b-4e54-b962-05dd
+2026-09-14T00:18:02.367Z	473008	472989	bash	bash /home/effatha/git/warp/.fork/tools/egress-poll-wsl.sh /tmp/claude-1000/-home-effatha-git-warp/c5e29190-ea8b-4e54-b962-05dd165cb7cc/scratchpad/vc/runs/B-emp
+2026-09-14T00:18:02.367Z	473067	473008	sleep	sleep 0.2 
+2026-09-14T00:18:02.367Z	473070	472989	warp-oss	/home/effatha/git/warp/target/release/warp-oss --warpctrl acp probe --command /home/effatha/.nvm/versions/node/v24.5.0/bin/node /home/effatha/.npm/_npx/6130df88
+2026-09-14T00:18:02.367Z	473071	472989	python3	python3 -u /tmp/claude-1000/-home-effatha-git-warp/c5e29190-ea8b-4e54-b962-05dd165cb7cc/scratchpad/vc/ts.py 
+2026-09-14T00:18:02.367Z	473072	472989	python3	python3 /tmp/claude-1000/-home-effatha-git-warp/c5e29190-ea8b-4e54-b962-05dd165cb7cc/scratchpad/vc/proctree.py 472989 /tmp/claude-1000/-home-effatha-git-warp/c5
+2026-09-14T00:18:02.367Z	473073	473070	MainThread	/home/effatha/.nvm/versions/node/v24.5.0/bin/node /home/effatha/.npm/_npx/6130df88bef2cca3/node_modules/@agentclientprotocol/claude-agent-acp/dist/index.js 
+2026-09-14T00:18:02.569Z	473090	473008	sleep	sleep 0.2 
+2026-09-14T00:18:02.569Z	473092	473073	reg.exe	/init /mnt/c/Windows/System32/reg.exe /mnt/c/Windows/System32/reg.exe query HKCU\SOFTWARE\Policies\ClaudeCode /v Settings 
+2026-09-14T00:18:02.771Z	473102	473073	claude	/home/effatha/.npm/_npx/6130df88bef2cca3/node_modules/@anthropic-ai/claude-agent-sdk-linux-x64/claude --output-format stream-json --verbose --input-format strea
+2026-09-14T00:18:02.771Z	473120	473008	sleep	sleep 0.2 
+2026-09-14T00:18:02.975Z	473153	473008	sleep	sleep 0.2 
+2026-09-14T00:18:03.177Z	473160	473102	claude	
+2026-09-14T00:18:03.177Z	473175	473102	claude	
+2026-09-14T00:18:03.177Z	473176	473102	claude	
+2026-09-14T00:18:03.177Z	473179	473008	sleep	sleep 0.2 
+2026-09-14T00:18:03.177Z	473180	473102	powershell.exe	/init /mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe powershell.exe -NoProfile -NonInteractive -Command $env:USERPROFILE 
+2026-09-14T00:18:03.379Z	473192	473008	bash	bash /home/effatha/git/warp/.fork/tools/egress-poll-wsl.sh /tmp/claude-1000/-home-effatha-git-warp/c5e29190-ea8b-4e54-b962-05dd165cb7cc/scratchpad/vc/runs/B-emp
+2026-09-14T00:18:03.379Z	473193	473008	grep	grep -E warp-oss|remote-server|terminal-server|claude|node|MainThread|npx|rust-analyzer 
+2026-09-14T00:18:03.379Z	473195	473008	awk	awk -v ts=2026-09-14T00:18:03.357Z -v n=11 -v OFS=\t {print ts,$0,n} 
+2026-09-14T00:18:03.379Z	473197	473192	ss	ss -Hunp 
+2026-09-14T00:18:03.379Z	473198	473192	awk	awk -v OFS=\t {print "udp",$0} 
+2026-09-14T00:18:03.582Z	473199	473008	sleep	sleep 0.2 
+2026-09-14T00:18:03.784Z	473208	473008	sleep	sleep 0.2 
+2026-09-14T00:18:03.986Z	473217	473008	sleep	sleep 0.2 
+2026-09-14T00:18:04.188Z	473244	473008	sleep	sleep 0.2 
+2026-09-14T00:18:04.391Z	473253	473008	sleep	sleep 0.2 
+2026-09-14T00:18:04.593Z	473262	473008	sleep	sleep 0.2 
+2026-09-14T00:18:04.795Z	473271	473008	sleep	sleep 0.2 
+2026-09-14T00:18:04.997Z	473280	473008	sleep	sleep 0.2 
+2026-09-14T00:18:05.199Z	473289	473008	sleep	sleep 0.2 
+2026-09-14T00:18:05.402Z	473298	473008	sleep	sleep 0.2 
+2026-09-14T00:18:05.604Z	473319	473008	bash	bash /home/effatha/git/warp/.fork/tools/egress-poll-wsl.sh /tmp/claude-1000/-home-effatha-git-warp/c5e29190-ea8b-4e54-b962-05dd165cb7cc/scratchpad/vc/runs/B-emp
+2026-09-14T00:18:05.604Z	473320	473008	grep	grep -E warp-oss|remote-server|terminal-server|claude|node|MainThread|npx|rust-analyzer 
+2026-09-14T00:18:05.604Z	473321	473319	ss	ss -Htnp state all 
+2026-09-14T00:18:05.604Z	473322	473319	awk	awk -v OFS=\t {print "tcp",$0} 
+2026-09-14T00:18:05.604Z	473323	473008	awk	awk -v ts=2026-09-14T00:18:05.594Z -v n=21 -v OFS=\t {print ts,$0,n} 
+2026-09-14T00:18:05.806Z	473326	473008	sleep	sleep 0.2 
+2026-09-14T00:18:06.008Z	473335	473008	sleep	sleep 0.2 
+2026-09-14T00:18:06.210Z	473344	473008	sleep	sleep 0.2 
+2026-09-14T00:18:06.412Z	473353	473008	sleep	sleep 0.2 
+2026-09-14T00:18:06.614Z	473362	473008	sleep	sleep 0.2 
+2026-09-14T00:18:06.817Z	473371	473008	sleep	sleep 0.2 
+2026-09-14T00:18:07.019Z	473380	473008	sleep	sleep 0.2 
+2026-09-14T00:18:07.221Z	473389	473008	sleep	sleep 0.2 
+2026-09-14T00:18:07.423Z	473398	473008	sleep	sleep 0.2 
+2026-09-14T00:18:07.828Z	473409	473008	bash	bash /home/effatha/git/warp/.fork/tools/egress-poll-wsl.sh /tmp/claude-1000/-home-effatha-git-warp/c5e29190-ea8b-4e54-b962-05dd165cb7cc/scratchpad/vc/runs/B-emp
+2026-09-14T00:18:07.828Z	473410	473008	grep	grep -E warp-oss|remote-server|terminal-server|claude|node|MainThread|npx|rust-analyzer 
+2026-09-14T00:18:07.828Z	473411	473409	ss	ss -Htnp state all 
+2026-09-14T00:18:07.828Z	473412	473008	awk	awk -v ts=2026-09-14T00:18:07.826Z -v n=31 -v OFS=\t {print ts,$0,n} 
+2026-09-14T00:18:07.828Z	473413	473409	awk	awk -v OFS=\t {print "tcp",$0} 
+2026-09-14T00:18:08.030Z	473416	473008	sleep	sleep 0.2 
+2026-09-14T00:18:08.234Z	473425	473008	sleep	sleep 0.2 
+2026-09-14T00:18:08.436Z	473435	473008	sleep	sleep 0.2 
+2026-09-14T00:18:08.638Z	473444	473008	sleep	sleep 0.2 
+2026-09-14T00:18:08.840Z	473453	473008	sleep	sleep 0.2 
+2026-09-14T00:18:09.042Z	473462	473008	sleep	sleep 0.2 
+2026-09-14T00:18:09.245Z	473471	473008	sleep	sleep 0.2 
+2026-09-14T00:18:09.447Z	473480	473008	sleep	sleep 0.2 
+2026-09-14T00:18:09.650Z	473489	473008	sleep	sleep 0.2 
+2026-09-14T00:18:09.852Z	473498	473008	sleep	sleep 0.2 
+2026-09-14T00:18:10.054Z	473500	473008	bash	bash /home/effatha/git/warp/.fork/tools/egress-poll-wsl.sh /tmp/claude-1000/-home-effatha-git-warp/c5e29190-ea8b-4e54-b962-05dd165cb7cc/scratchpad/vc/runs/B-emp
+2026-09-14T00:18:10.054Z	473501	473008	grep	grep -E warp-oss|remote-server|terminal-server|claude|node|MainThread|npx|rust-analyzer 
+2026-09-14T00:18:10.054Z	473502	473500	ss	ss -Htnp state all 
+2026-09-14T00:18:10.054Z	473503	473008	awk	awk -v ts=2026-09-14T00:18:10.046Z -v n=41 -v OFS=\t {print ts,$0,n} 
+2026-09-14T00:18:10.054Z	473504	473500	awk	awk -v OFS=\t {print "tcp",$0} 
+2026-09-14T00:18:10.257Z	473507	473008	sleep	sleep 0.2 
+2026-09-14T00:18:10.459Z	473516	473008	sleep	sleep 0.2 
+2026-09-14T00:18:10.661Z	473525	473008	sleep	sleep 0.2 
+2026-09-14T00:18:10.863Z	473534	473008	sleep	sleep 0.2 
+2026-09-14T00:18:11.066Z	473543	473008	sleep	sleep 0.2 
+2026-09-14T00:18:11.267Z	473552	473008	sleep	sleep 0.2 
+2026-09-14T00:18:11.470Z	473561	473008	sleep	sleep 0.2 
+2026-09-14T00:18:11.672Z	473570	473008	sleep	sleep 0.2 
+2026-09-14T00:18:11.875Z	473579	473008	sleep	sleep 0.2 
+2026-09-14T00:18:12.076Z	473588	473008	sleep	sleep 0.2 
+2026-09-14T00:18:12.278Z	473590	473008	bash	bash /home/effatha/git/warp/.fork/tools/egress-poll-wsl.sh /tmp/claude-1000/-home-effatha-git-warp/c5e29190-ea8b-4e54-b962-05dd165cb7cc/scratchpad/vc/runs/B-emp
+2026-09-14T00:18:12.278Z	473591	473008	grep	grep -E warp-oss|remote-server|terminal-server|claude|node|MainThread|npx|rust-analyzer 
+2026-09-14T00:18:12.278Z	473592	473590	ss	ss -Htnp state all 
+2026-09-14T00:18:12.278Z	473593	473008	awk	awk -v ts=2026-09-14T00:18:12.273Z -v n=51 -v OFS=\t {print ts,$0,n} 
+2026-09-14T00:18:12.278Z	473594	473590	awk	awk -v OFS=\t {print "tcp",$0} 
+2026-09-14T00:18:12.480Z	473597	473008	sleep	sleep 0.2 
+2026-09-14T00:18:12.682Z	473606	473008	sleep	sleep 0.2 
+2026-09-14T00:18:12.884Z	473615	473008	sleep	sleep 0.2 
+2026-09-14T00:18:13.086Z	473624	473008	sleep	sleep 0.2 
+2026-09-14T00:18:13.288Z	473633	473008	sleep	sleep 0.2 
+2026-09-14T00:18:13.491Z	473642	473008	sleep	sleep 0.2 
+2026-09-14T00:18:13.693Z	473651	473008	sleep	sleep 0.2 
+2026-09-14T00:18:13.895Z	473660	473008	sleep	sleep 0.2 
+2026-09-14T00:18:14.097Z	473669	473008	sleep	sleep 0.2 
+2026-09-14T00:18:14.299Z	473678	473008	sleep	sleep 0.2 
+2026-09-14T00:18:14.501Z	473680	473008	bash	bash /home/effatha/git/warp/.fork/tools/egress-poll-wsl.sh /tmp/claude-1000/-home-effatha-git-warp/c5e29190-ea8b-4e54-b962-05dd165cb7cc/scratchpad/vc/runs/B-emp
+2026-09-14T00:18:14.501Z	473681	473008	grep	grep -E warp-oss|remote-server|terminal-server|claude|node|MainThread|npx|rust-analyzer 
+2026-09-14T00:18:14.501Z	473682	473680	ss	ss -Htnp state all 
+2026-09-14T00:18:14.501Z	473683	473008	awk	awk -v ts=2026-09-14T00:18:14.498Z -v n=61 -v OFS=\t {print ts,$0,n} 
+2026-09-14T00:18:14.501Z	473684	473680	awk	awk -v OFS=\t {print "tcp",$0} 
+2026-09-14T00:18:14.703Z	473687	473008	sleep	sleep 0.2 
+2026-09-14T00:18:14.905Z	473696	473008	sleep	sleep 0.2 
+2026-09-14T00:18:15.107Z	473705	473008	sleep	sleep 0.2 
+2026-09-14T00:18:15.309Z	473714	473008	sleep	sleep 0.2 
+2026-09-14T00:18:15.511Z	473723	473008	sleep	sleep 0.2 
+2026-09-14T00:18:15.713Z	473751	473008	sleep	sleep 0.2 
+2026-09-14T00:18:15.915Z	473760	473008	sleep	sleep 0.2 
+2026-09-14T00:18:16.117Z	473769	473008	sleep	sleep 0.2 
+2026-09-14T00:18:16.319Z	473778	473008	sleep	sleep 0.2 
+2026-09-14T00:18:16.521Z	473787	473008	sleep	sleep 0.2 
+2026-09-14T00:18:16.723Z	473789	473008	bash	bash /home/effatha/git/warp/.fork/tools/egress-poll-wsl.sh /tmp/claude-1000/-home-effatha-git-warp/c5e29190-ea8b-4e54-b962-05dd165cb7cc/scratchpad/vc/runs/B-emp
+2026-09-14T00:18:16.723Z	473790	473008	grep	grep -E warp-oss|remote-server|terminal-server|claude|node|MainThread|npx|rust-analyzer 
+2026-09-14T00:18:16.723Z	473791	473789	ss	ss -Htnp state all 
+2026-09-14T00:18:16.723Z	473792	473008	awk	awk -v ts=2026-09-14T00:18:16.713Z -v n=71 -v OFS=\t {print ts,$0,n} 
+2026-09-14T00:18:16.723Z	473793	473789	awk	awk -v OFS=\t {print "tcp",$0} 
+2026-09-14T00:18:16.925Z	473796	473008	sleep	sleep 0.2 
+2026-09-14T00:18:17.127Z	473805	473008	sleep	sleep 0.2 
+2026-09-14T00:18:17.329Z	473814	473008	sleep	sleep 0.2 
+2026-09-14T00:18:17.531Z	473823	473008	sleep	sleep 0.2 
+2026-09-14T00:18:17.734Z	473832	473008	sleep	sleep 0.2 
+2026-09-14T00:18:17.936Z	473841	473008	sleep	sleep 0.2 
+2026-09-14T00:18:18.138Z	473850	473008	sleep	sleep 0.2 
+2026-09-14T00:18:18.340Z	473859	473008	sleep	sleep 0.2 
+2026-09-14T00:18:18.542Z	473868	473008	sleep	sleep 0.2 
+2026-09-14T00:18:18.745Z	473877	473008	sleep	sleep 0.2 
+2026-09-14T00:18:18.947Z	473879	473008	bash	bash /home/effatha/git/warp/.fork/tools/egress-poll-wsl.sh /tmp/claude-1000/-home-effatha-git-warp/c5e29190-ea8b-4e54-b962-05dd165cb7cc/scratchpad/vc/runs/B-emp
+2026-09-14T00:18:18.947Z	473880	473008	grep	grep -E warp-oss|remote-server|terminal-server|claude|node|MainThread|npx|rust-analyzer 
+2026-09-14T00:18:18.947Z	473881	473008	awk	awk -v ts=2026-09-14T00:18:18.939Z -v n=81 -v OFS=\t {print ts,$0,n} 
+2026-09-14T00:18:18.947Z	473882	473879	ss	ss -Htnp state all 
+2026-09-14T00:18:18.947Z	473883	473879	awk	awk -v OFS=\t {print "tcp",$0} 
+2026-09-14T00:18:19.149Z	473886	473008	sleep	sleep 0.2 
+2026-09-14T00:18:19.351Z	473895	473008	sleep	sleep 0.2 
+2026-09-14T00:18:19.554Z	473904	473008	sleep	sleep 0.2 
+2026-09-14T00:18:19.756Z	473913	473008	sleep	sleep 0.2 
+2026-09-14T00:18:19.958Z	473922	473008	sleep	sleep 0.2 
+2026-09-14T00:18:20.160Z	473931	473008	sleep	sleep 0.2 
+2026-09-14T00:18:20.363Z	473940	473008	sleep	sleep 0.2 
+2026-09-14T00:18:20.564Z	473949	473008	sleep	sleep 0.2 
+2026-09-14T00:18:20.767Z	473958	473008	sleep	sleep 0.2 
+2026-09-14T00:18:20.969Z	473967	473008	sleep	sleep 0.2 
+2026-09-14T00:18:21.171Z	473969	473008	bash	bash /home/effatha/git/warp/.fork/tools/egress-poll-wsl.sh /tmp/claude-1000/-home-effatha-git-warp/c5e29190-ea8b-4e54-b962-05dd165cb7cc/scratchpad/vc/runs/B-emp
+2026-09-14T00:18:21.171Z	473970	473008	grep	grep -E warp-oss|remote-server|terminal-server|claude|node|MainThread|npx|rust-analyzer 
+2026-09-14T00:18:21.171Z	473972	473008	awk	awk -v ts=2026-09-14T00:18:21.166Z -v n=91 -v OFS=\t {print ts,$0,n} 
+2026-09-14T00:18:21.374Z	473976	473008	sleep	sleep 0.2 
+2026-09-14T00:18:21.576Z	473985	473008	sleep	sleep 0.2 
+2026-09-14T00:18:21.778Z	473994	473008	sleep	sleep 0.2 
+2026-09-14T00:18:21.981Z	474003	473008	sleep	sleep 0.2 
+2026-09-14T00:18:22.183Z	474012	473008	sleep	sleep 0.2 
+2026-09-14T00:18:22.385Z	474021	473008	sleep	sleep 0.2 
+2026-09-14T00:18:22.587Z	474030	473008	sleep	sleep 0.2 
+2026-09-14T00:18:22.789Z	474039	473008	sleep	sleep 0.2 
+2026-09-14T00:18:22.992Z	474048	473008	sleep	sleep 0.2 
+2026-09-14T00:18:23.194Z	474057	473008	sleep	sleep 0.2 
+2026-09-14T00:18:23.396Z	474077	473008	bash	bash /home/effatha/git/warp/.fork/tools/egress-poll-wsl.sh /tmp/claude-1000/-home-effatha-git-warp/c5e29190-ea8b-4e54-b962-05dd165cb7cc/scratchpad/vc/runs/B-emp
+2026-09-14T00:18:23.396Z	474078	473008	grep	grep -E warp-oss|remote-server|terminal-server|claude|node|MainThread|npx|rust-analyzer 
+2026-09-14T00:18:23.396Z	474079	474077	ss	ss -Htnp state all 
+2026-09-14T00:18:23.396Z	474080	473008	awk	awk -v ts=2026-09-14T00:18:23.383Z -v n=101 -v OFS=\t {print ts,$0,n} 
+2026-09-14T00:18:23.396Z	474081	474077	awk	awk -v OFS=\t {print "tcp",$0} 
+2026-09-14T00:18:23.598Z	474084	473008	sleep	sleep 0.2 
+2026-09-14T00:18:23.800Z	474093	473008	sleep	sleep 0.2 
+2026-09-14T00:18:24.002Z	474102	473008	sleep	sleep 0.2 
+2026-09-14T00:18:24.204Z	474111	473008	sleep	sleep 0.2 
+2026-09-14T00:18:24.406Z	474120	473008	sleep	sleep 0.2 
+2026-09-14T00:18:24.608Z	474129	473008	sleep	sleep 0.2 
+2026-09-14T00:18:24.810Z	474138	473008	sleep	sleep 0.2 
+2026-09-14T00:18:25.012Z	474147	473008	sleep	sleep 0.2 
+2026-09-14T00:18:25.214Z	474156	473008	sleep	sleep 0.2 
+2026-09-14T00:18:25.416Z	474165	473008	sleep	sleep 0.2 
+2026-09-14T00:18:25.618Z	474186	473008	bash	bash /home/effatha/git/warp/.fork/tools/egress-poll-wsl.sh /tmp/claude-1000/-home-effatha-git-warp/c5e29190-ea8b-4e54-b962-05dd165cb7cc/scratchpad/vc/runs/B-emp
+2026-09-14T00:18:25.618Z	474187	473008	grep	grep -E warp-oss|remote-server|terminal-server|claude|node|MainThread|npx|rust-analyzer 
+2026-09-14T00:18:25.618Z	474188	474186	ss	ss -Htnp state all 
+2026-09-14T00:18:25.618Z	474189	473008	awk	awk -v ts=2026-09-14T00:18:25.609Z -v n=111 -v OFS=\t {print ts,$0,n} 
+2026-09-14T00:18:25.618Z	474190	474186	awk	awk -v OFS=\t {print "tcp",$0} 
+2026-09-14T00:18:25.821Z	474193	473008	sleep	sleep 0.2 
+2026-09-14T00:18:26.023Z	474202	473008	sleep	sleep 0.2 
+2026-09-14T00:18:26.225Z	474211	473008	sleep	sleep 0.2 
+2026-09-14T00:18:26.428Z	474220	473008	sleep	sleep 0.2 
+2026-09-14T00:18:28.948Z	474229	473008	sleep	sleep 0.2 
+2026-09-14T00:18:29.151Z	474238	473008	sleep	sleep 0.2 
+2026-09-14T00:18:29.353Z	474247	473008	sleep	sleep 0.2 
+2026-09-14T00:18:29.555Z	474250	472989	sleep	sleep 3 
+2026-09-14T00:18:29.555Z	474259	473008	sleep	sleep 0.2 
+2026-09-14T00:18:29.758Z	474268	473008	sleep	sleep 0.2 
+2026-09-14T00:18:29.960Z	474270	473008	bash	bash /home/effatha/git/warp/.fork/tools/egress-poll-wsl.sh /tmp/claude-1000/-home-effatha-git-warp/c5e29190-ea8b-4e54-b962-05dd165cb7cc/scratchpad/vc/runs/B-emp
+2026-09-14T00:18:29.960Z	474271	473008	grep	grep -E warp-oss|remote-server|terminal-server|claude|node|MainThread|npx|rust-analyzer 
+2026-09-14T00:18:29.960Z	474273	473008	awk	awk -v ts=2026-09-14T00:18:29.939Z -v n=120 -v OFS=\t {print ts,$0,n} 
+2026-09-14T00:18:29.960Z	474275	474270	ss	ss -Hunp 
+2026-09-14T00:18:29.960Z	474276	474270	awk	awk -v OFS=\t {print "udp",$0} 
+2026-09-14T00:18:30.162Z	474277	473008	sleep	sleep 0.2 
+2026-09-14T00:18:30.364Z	474286	473008	sleep	sleep 0.2 
+2026-09-14T00:18:30.566Z	474295	473008	sleep	sleep 0.2 
+2026-09-14T00:18:30.768Z	474305	473008	sleep	sleep 0.2 
+2026-09-14T00:18:30.969Z	474314	473008	sleep	sleep 0.2 
+2026-09-14T00:18:31.172Z	474323	473008	sleep	sleep 0.2 
+2026-09-14T00:18:31.374Z	474332	473008	sleep	sleep 0.2 
+2026-09-14T00:18:31.576Z	474341	473008	sleep	sleep 0.2 
+2026-09-14T00:18:31.778Z	474350	473008	sleep	sleep 0.2 
+2026-09-14T00:18:31.980Z	474359	473008	sleep	sleep 0.2 
+2026-09-14T00:18:32.181Z	474368	473008	sleep	sleep 0.2 
+2026-09-14T00:18:32.383Z	474370	473008	bash	bash /home/effatha/git/warp/.fork/tools/egress-poll-wsl.sh /tmp/claude-1000/-home-effatha-git-warp/c5e29190-ea8b-4e54-b962-05dd165cb7cc/scratchpad/vc/runs/B-emp
+2026-09-14T00:18:32.383Z	474371	473008	grep	grep -E warp-oss|remote-server|terminal-server|claude|node|MainThread|npx|rust-analyzer 
+2026-09-14T00:18:32.383Z	474372	474370	ss	ss -Htnp state all 
+2026-09-14T00:18:32.383Z	474373	473008	awk	awk -v ts=2026-09-14T00:18:32.376Z -v n=131 -v OFS=\t {print ts,$0,n} 
+2026-09-14T00:18:32.383Z	474374	474370	awk	awk -v OFS=\t {print "tcp",$0} 
+2026-09-14T00:18:32.585Z	474377	473008	sleep	sleep 0.2 
+2026-09-14T00:18:32.585Z	474378	472989	MainThread	/home/effatha/.nvm/versions/node/v24.5.0/bin/node -e require("https").get("https://example.com",r=>{r.resume();r.on("end",()=>setTimeout(()=>process.exit(0),800
+2026-09-14T00:18:32.787Z	474397	473008	sleep	sleep 0.2 
+2026-09-14T00:18:32.989Z	474406	473008	sleep	sleep 0.2 
+2026-09-14T00:18:33.191Z	474415	473008	sleep	sleep 0.2 
+2026-09-14T00:18:33.393Z	474424	473008	sleep	sleep 0.2 
+2026-09-14T00:18:33.595Z	474433	473008	sleep	sleep 0.2 
+2026-09-14T00:18:33.595Z	474435	472989	sleep	sleep 1.5 
+2026-09-14T00:18:33.797Z	474444	473008	sleep	sleep 0.2 
+2026-09-14T00:18:33.999Z	474453	473008	sleep	sleep 0.2 
+2026-09-14T00:18:34.200Z	474462	473008	sleep	sleep 0.2 
+2026-09-14T00:18:34.402Z	474471	473008	sleep	sleep 0.2 
+2026-09-14T00:18:34.604Z	474473	473008	bash	bash /home/effatha/git/warp/.fork/tools/egress-poll-wsl.sh /tmp/claude-1000/-home-effatha-git-warp/c5e29190-ea8b-4e54-b962-05dd165cb7cc/scratchpad/vc/runs/B-emp
+2026-09-14T00:18:34.604Z	474474	473008	grep	grep -E warp-oss|remote-server|terminal-server|claude|node|MainThread|npx|rust-analyzer 
+2026-09-14T00:18:34.604Z	474475	474473	ss	ss -Htnp state all 
+2026-09-14T00:18:34.604Z	474476	473008	awk	awk -v ts=2026-09-14T00:18:34.601Z -v n=141 -v OFS=\t {print ts,$0,n} 
+2026-09-14T00:18:34.604Z	474477	474473	awk	awk -v OFS=\t {print "tcp",$0} 
+2026-09-14T00:18:34.806Z	474480	473008	sleep	sleep 0.2 
+2026-09-14T00:18:35.008Z	474489	473008	sleep	sleep 0.2 

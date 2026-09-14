@@ -1,0 +1,3 @@
+session cwd: ~/.cache/vc-ws-2026-09-13-hooks
+settings in the cwd: the checkout's .claude/settings.local.json cut to its hooks key
+source: the driver command in the session that ran this, not captured by the rig at run time (added 2026-09-13 after review)

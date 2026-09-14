@@ -1,0 +1,18 @@
+# Scratch CODEX_HOME for the 2026-09-13 vendor-calls census. The maintainer's
+# ~/.codex is untouched. Same posture as .fork/runs/codex-wire-2026-09-11's
+# watched config, with the provider pointed at llama-server.
+model = "gemma-4-12b"
+model_provider = "llama"
+
+[model_providers.llama]
+name = "llama-server"
+base_url = "http://127.0.0.1:8080/v1"
+wire_api = "responses"
+
+[analytics]
+enabled = false
+
+[otel]
+exporter = "none"
+trace_exporter = "none"
+metrics_exporter = "none"

@@ -1,0 +1,3 @@
+session cwd: /tmp/.../scratchpad/vc/ws-git (git init copy)
+settings in the cwd: none
+source: the driver command in the session that ran this, not captured by the rig at run time (added 2026-09-13 after review)

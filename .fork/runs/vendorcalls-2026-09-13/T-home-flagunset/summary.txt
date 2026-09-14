@@ -1,0 +1,16 @@
+process tree (agent side):
+  2026-09-14T00:26:49.841Z pid=490732 warp-oss  /home/effatha/git/warp/target/release/warp-oss --warpctrl acp probe --command /home/effatha/.nvm/versions/node
+  2026-09-14T00:26:50.044Z pid=490735 MainThread  /home/effatha/.nvm/versions/node/v24.5.0/bin/node /home/effatha/.npm/_npx/6130df88bef2cca3/node_modules/@agent
+  2026-09-14T00:26:50.246Z pid=490768 claude  /home/effatha/.npm/_npx/6130df88bef2cca3/node_modules/@anthropic-ai/claude-agent-sdk-linux-x64/claude --output
+  2026-09-14T00:26:50.448Z pid=490812 powershell.exe  /init /mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe powershell.exe -NoProfile -NonInteractive 
+  2026-09-14T00:27:04.808Z pid=491560 MainThread  /home/effatha/.nvm/versions/node/v24.5.0/bin/node -e require("https").get("https://example.com",r=>{r.resume()
+distinct remotes per tree pid (first seen):
+  2026-09-14T00:26:50.608Z pid=490768 claude     ESTAB     127.0.0.1:45766 -> 127.0.0.1:8080 loopback
+  2026-09-14T00:27:04.876Z pid=491560 MainThread SYN-SENT  10.2.0.2:47620 -> 172.66.147.243:443 NON-LOOPBACK
+control 2 (node, no proxy) pids: [491560] fired: True
+requests seen by proxy:
+  2026-09-14T00:26:49Z connect example.com:443
+  2026-09-14T00:26:49.743Z GET example.com/ q=[] -> 200 req=0B resp=559B ua=curl creds={} canaries=[]
+first agent_message_chunk: 2026-09-14T00:27:01.575Z (+11.74s)
+answer: 2+2 is 4.
+driver: 2026-09-14T00:26:49.830Z -> 2026-09-14T00:27:01.767Z

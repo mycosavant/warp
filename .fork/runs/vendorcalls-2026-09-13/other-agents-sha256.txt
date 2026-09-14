@@ -1,0 +1,2 @@
+24f163045a1589f9b16fa202fc088fa95155bcd898f4a17eaded3e6bfee92b33  /home/effatha/git/codex-acp/target/release/codex-acp
+d91e0d33676d0839f7cde87924cd4127ea88c9d6784eea9f009a7d08bdc60eeb  /home/effatha/.npm/_npx/addef32b45109aa1/node_modules/opencode-linux-x64/bin/opencode

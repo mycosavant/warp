@@ -298,18 +298,51 @@ refused, and the split is the argument rather than a convenience:
   `egress.rs` is **Warp's** HTTP client, not the agent's — so the agent's own
   API channel is an exfil path the deny-list does not cover.
 
-  **And the agent dials that channel even when the model is local, which was
-  measured twice and cannot be configured away by the obvious means.** During a
-  turn answered entirely by a `llama-server` on this machine,
+  **And the agent dials that channel even when the model is local~~, which was
+  measured twice and cannot be configured away by the obvious means~~.** During
+  a turn answered entirely by a `llama-server` on this machine,
   `claude-agent-acp` opens a TLS connection to `api.anthropic.com` *before* it
   opens the one to the model (2026-09-09, `.fork/runs/localmodel-panel-2026-09-09/`).
-  `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` does not remove it. Anthropic's
-  docs name exactly two things that variable does not cover — the WebFetch
-  domain safety check (`skipWebFetchPreflight`) and official marketplace
-  auto-install (`CLAUDE_CODE_DISABLE_OFFICIAL_MARKETPLACE_AUTOINSTALL`) — and
-  **the marketplace one was tested and is not it**
-  (`.fork/runs/pricefetch-2026-09-09/`). The WebFetch check is untested because
-  it fires only when WebFetch is used.
+  ~~`CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` does not remove it.~~
+
+  **It does, and this page said otherwise from 2026-09-09 until 2026-09-13.**
+  Both earlier runs used `/home/effatha/git/warp` as the session cwd, and that
+  checkout's gitignored `.claude/settings.local.json` set the variable to
+  `""`, left over from a remote-control test (TOLD; the maintainer removed the
+  line on 2026-09-13). A settings `env` entry beats the launch command's environment, so the
+  flag was never in force. Falsified by a bisect: that one `env` key copied
+  into a scratch directory under `$HOME` brings every call back, and with nothing overriding
+  the flag the agent made zero requests off the machine, on WSL and on Windows
+  (RAN, `.fork/runs/vendorcalls-2026-09-13/`). The marketplace exemption was
+  tested and excluded (`.fork/runs/pricefetch-2026-09-09/`), and that still
+  stands. ~~The WebFetch check is untested because it fires only when WebFetch
+  is used.~~ The WebFetch check survives the flag, sends the fetched domain to
+  `/api/web/domain_info` with no credential, and `skipWebFetchPreflight: true`
+  removes it (RAN, same run).
+
+  **What is sent, measured 2026-09-13** with a redacting decrypting proxy and
+  three canaries (prompt, `CLAUDE.md`, an unread file): a feature-flag
+  evaluation carrying the `ANTHROPIC_API_KEY` value as `x-api-key`, a
+  bootstrap call and a `penguin_mode` call each carrying the subscription OAuth
+  token (the bootstrap response holds the account's email and organisation),
+  and four pages of the public MCP registry. All at startup; none in turns 2
+  and 3 of one session. **No canary in any of 105 requests.** The calls do not
+  need the account: with no credentials they go out anyway and the two
+  account calls get 401.
+
+  **A stop that survives a repository needs enforcement.** The flag, and
+  separately a closed proxy port (`HTTPS_PROXY=http://127.0.0.1:9` with
+  `NO_PROXY` covering loopback), each reached zero while the turn answered; D
+  costs 4.5-7 s per turn. A project `.claude/settings.local.json` that blanks
+  the flag and `HTTPS_PROXY` defeated both, and the agent opened a direct
+  socket to `api.anthropic.com`. So anything placed in the launch command is
+  advice a checkout can overrule.
+
+  **For a local model, `opencode` and `codex-acp` measured loopback only**
+  (same run): opencode with `OPENCODE_DISABLE_MODELS_FETCH=1`, since without it
+  a cold cache downloads a 4.6 MB catalogue from `models.opencode.ai`; codex-acp
+  from the maintainer's source build, with `[analytics]` and `[otel]` off, which
+  is the only posture measured.
 
   Two things worth carrying from that. **It reproduces with no Warp process at
   all** — `warpctrl acp probe` inside the distribution shows the same
@@ -320,8 +353,12 @@ refused, and the split is the argument rather than a convenience:
 
   **Decided 2026-09-11: accepted and documented. Stop re-measuring it.** The
   maintainer runs Claude Code with the non-essential-traffic flags already set
-  and the connection is opened anyway, which is one more control ruled out
-  without a further run. Containment stays available as an ops choice — a
+  and the connection is opened anyway~~, which is one more control ruled out
+  without a further run~~. *Probably the same override, not a control (ASSUMED):
+  on 2026-09-13 `~/.claude/settings.json` set the flag to `"1"` and this
+  checkout's `settings.local.json` set it back to `""` (READ), but which cwd
+  that observation came from, and what either file held on 2026-09-11, is not
+  recorded.* Containment stays available as an ops choice — a
   firewall rule or a namespace — and is theirs to make outside this repo.
 
   **The panel discloses it, from a measurement of what is sent** (maintainer,
@@ -330,8 +367,8 @@ refused, and the split is the argument rather than a convenience:
   cannot stop (`a7b6803c8`, a paraphrase with no quote of the maintainer).
   Someone who points the panel at a local model reasonably expects the turn to
   stay local, and the requests may be made as their own Claude account: the
-  subscription token is on disk even with a dummy key. Whether any of these
-  calls is account-scoped is unmeasured.
+  subscription token is on disk even with a dummy key. ~~Whether any of these
+  calls is account-scoped is unmeasured.~~ Two are, measured 2026-09-13 (above).
   `HANDOFF-VENDORCALLS.md` measures content, account and any stop first;
   `HANDOFF-BUILDS.md` task 4 then builds the note from it. Decision:
   `.fork/decisions/2026-09-13-a-local-model-turn-discloses-the-agents-own-connection.md`.

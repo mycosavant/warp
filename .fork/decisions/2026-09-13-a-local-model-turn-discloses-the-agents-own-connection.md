@@ -11,20 +11,26 @@
   docs should recommend a different harness for local models, for users who
   care, is the maintainer's leaning, not a choice.
 
-  **What is measured** (RAN, `.fork/runs/localmodel-panel-2026-09-09/`): during
-  a turn answered entirely by `llama-server`, `claude-agent-acp@0.73.0` opened
-  TLS connections to `api.anthropic.com`, and
-  `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` did not remove them. Warp itself
-  made no non-loopback connection. Warp does not block the agent's connection.
+  **What is measured** (RAN, `.fork/runs/localmodel-panel-2026-09-09/` and
+  `.fork/runs/vendorcalls-2026-09-13/`): during a turn answered entirely by
+  `llama-server`, `claude-agent-acp@0.73.0` calls `api.anthropic.com` at
+  startup: a feature-flag evaluation, an account bootstrap, a `penguin_mode`
+  check and the public MCP registry. No prompt, `CLAUDE.md` or file content was
+  in any request. `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` removes all of
+  them unless a settings file's `env` sets it back, which the 2026-09-09 run's
+  cwd did; WebFetch still sends each domain to `api.anthropic.com` unless
+  `skipWebFetchPreflight` is set. Warp itself made no non-loopback connection.
+  Warp does not block the agent's connection. *Corrected 2026-09-13: this
+  paragraph said the variable did not remove the connections.*
 
   **Why disclose.** The fork does not promise that nothing leaves the machine
   (`.fork/docs/manual.md:56`: the claim is "no telemetry"). But someone who
   points the panel at a local model reasonably expects the turn to stay local,
-  and the requests may be made as their own Claude account: the subscription
-  token is on disk even when a dummy key is set (RAN, `stat`). Whether any call
-  is account-scoped is ASSUMED until measured; the one call decrypted before
-  (`.fork/tickets/open-questions.md`, *Method 2*) was an ordinary subscription
-  turn. This reverses the disclosure half of the 2026-09-11 ruling (commit
+  and the requests are made as their own Claude account when one is signed in:
+  the bootstrap and `penguin_mode` calls carry the subscription OAuth token,
+  and the bootstrap response holds the account's email and organisation (RAN,
+  2026-09-13). *Corrected the same day: this said account scoping was
+  ASSUMED.* This reverses the disclosure half of the 2026-09-11 ruling (commit
   `a7b6803c8`), which had refused a panel notice; "accepted" still stands.
 
   **The order.** `HANDOFF-VENDORCALLS.md` runs first and decides the content;

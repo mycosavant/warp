@@ -1,5 +1,15 @@
 # The specs card's fetch, 2026-09-09
 
+> **Superseded in part 2026-09-13 by `.fork/runs/vendorcalls-2026-09-13/`.**
+> Section 2's baseline and opt-out probes both passed
+> `--cwd /home/effatha/git/warp`, whose gitignored
+> `.claude/settings.local.json` set `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`
+> to `""` until the maintainer removed the line on 2026-09-13 (READ that day;
+> the file's mtime was then 2026-09-03, so it most likely
+> held that key on 09-09). The flag was never in force, so the marketplace
+> opt-out was tested on top of an already-overridden flag. With nothing
+> overriding it, the flag removes the connection. The body below is unchanged.
+
 `.fork/next.html` item 4, run from `.fork/HANDOFF-SPECSFETCH.md`. The handoff
 also carried three decisions for the maintainer; all three were answered before
 any code, and **the first one produced a measurement that killed the

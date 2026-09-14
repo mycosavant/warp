@@ -1,0 +1,3 @@
+session cwd: /home/effatha/git/warp/target/vc-ws
+settings in the cwd: a .claude/settings.json {"skipWebFetchPreflight": true}, plus the checkout file above it
+source: the driver command in the session that ran this, not captured by the rig at run time (added 2026-09-13 after review)

@@ -1,0 +1,24 @@
+process tree (agent side):
+  2026-09-14T00:37:15.038Z pid=507596 warp-oss  /home/effatha/git/warp/target/release/warp-oss --warpctrl acp probe --command /home/effatha/.npm/_npx/addef32b
+  2026-09-14T00:37:15.038Z pid=507599 opencode  /home/effatha/.npm/_npx/addef32b45109aa1/node_modules/opencode-linux-x64/bin/opencode acp 
+  2026-09-14T00:37:20.488Z pid=507939 MainThread  /home/effatha/.nvm/versions/node/v24.5.0/bin/node -e require("https").get("https://example.com",r=>{r.resume()
+distinct remotes per tree pid (first seen):
+  2026-09-14T00:37:15.755Z pid=507599 opencode   ESTAB     127.0.0.1:46862 -> 127.0.0.1:8081 loopback
+  2026-09-14T00:37:15.980Z pid=507599 opencode   ESTAB     127.0.0.1:4096 -> 127.0.0.1:45988 loopback
+  2026-09-14T00:37:15.980Z pid=507599 opencode   ESTAB     127.0.0.1:4096 -> 127.0.0.1:46022 loopback
+  2026-09-14T00:37:15.980Z pid=507599 opencode   ESTAB     127.0.0.1:4096 -> 127.0.0.1:46008 loopback
+  2026-09-14T00:37:15.980Z pid=507599 opencode   ESTAB     127.0.0.1:45988 -> 127.0.0.1:4096 loopback
+  2026-09-14T00:37:15.980Z pid=507599 opencode   ESTAB     127.0.0.1:4096 -> 127.0.0.1:46026 loopback
+  2026-09-14T00:37:15.980Z pid=507599 opencode   ESTAB     127.0.0.1:4096 -> 127.0.0.1:46004 loopback
+  2026-09-14T00:37:15.980Z pid=507599 opencode   ESTAB     127.0.0.1:4096 -> 127.0.0.1:46000 loopback
+  2026-09-14T00:37:16.423Z pid=507599 opencode   ESTAB     127.0.0.1:47096 -> 127.0.0.1:8080 loopback
+  2026-09-14T00:37:20.425Z pid=507939 MainThread SYN-SENT  10.2.0.2:45368 -> 104.20.23.154:443 NON-LOOPBACK
+control 2 (node, no proxy) pids: [507939] fired: True
+requests seen by proxy:
+  2026-09-14T00:37:14Z connect example.com:443
+  2026-09-14T00:37:14.753Z GET example.com/ q=[] -> 200 req=0B resp=559B ua=curl creds={} canaries=[]
+  2026-09-14T00:37:15Z connect models.opencode.ai:443
+  2026-09-14T00:37:15.608Z GET models.opencode.ai/api.json q=[] -> 200 req=0B resp=4640971B ua=opencode creds={} canaries=[]
+first agent_message_chunk: 2026-09-14T00:37:17.153Z (+2.13s)
+answer: 2+2 is 4.
+driver: 2026-09-14T00:37:15.027Z -> 2026-09-14T00:37:17.326Z

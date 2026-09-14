@@ -244,7 +244,9 @@ toolchain? Unmeasured.
 
 Measured twice: `claude-agent-acp` opens a TLS connection to `api.anthropic.com`
 **before** it opens the one to `llama-server`, during a turn answered entirely
-by a local model. `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` does not stop it.
+by a local model. ~~`CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` does not stop it.~~
+*It does. The measuring cwd's `.claude/settings.local.json` set it back to
+`""`; corrected 2026-09-13, `.fork/runs/vendorcalls-2026-09-13/`.*
 Of Anthropic's two named exemptions, the marketplace one was **tested and
 excluded**; the WebFetch preflight (`skipWebFetchPreflight`) is **untested**
 because it fires only when WebFetch is used, and its switch lives in the

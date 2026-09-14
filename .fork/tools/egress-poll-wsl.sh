@@ -10,8 +10,16 @@
 #
 # The agent's own API traffic is expected here and is the control: a poller
 # that never shows `api.anthropic.com` during a turn was not looking.
+#
+# `MainThread` is Node 24's process name as `ss` prints it; `node` matched
+# nothing from the nvm v24.5.0 install, so until 2026-09-13 this poller never saw
+# the `claude-agent-acp` process or a `node` control (measured,
+# `.fork/runs/vendorcalls-2026-09-13/`). The same run found `opencode` and
+# `codex-acp` invisible for the same reason. `EGRESS_POLL_PATTERN=.` keeps every
+# socket, for attributing by pid afterwards, which is the only form that cannot
+# miss an agent whose process name nobody predicted.
 out=$1; stop=$2; interval=${3:-0.2}
-pattern='warp-oss|remote-server|terminal-server|claude|node|npx|rust-analyzer'
+pattern=${EGRESS_POLL_PATTERN:-'warp-oss|remote-server|terminal-server|claude|node|MainThread|npx|rust-analyzer'}
 samples=0
 : > "$out.raw"
 echo "# started $(date -u +%Y-%m-%dT%H:%M:%S.%3NZ) interval ${interval}s pattern $pattern" > "$out"
