@@ -4672,11 +4672,26 @@ in no conflict at all.
 .fork/tools/drift-check.sh --no-fetch   # report against the refs already on disk
 ```
 
-Weekly, from your own crontab (`crontab -e`) — 9am Mondays:
+Twice a week, from your own crontab (`crontab -e`) — 9am Mondays and
+Thursdays. This said weekly until 2026-09-14, when the maintainer moved it to
+twice a week so a merge is proposed while the overlap is still small:
 
 ```cron
-0 9 * * 1 mkdir -p $HOME/.local/state/warp-fork && /home/effatha/git/warp/.fork/tools/drift-check.sh >> $HOME/.local/state/warp-fork/drift.log 2>&1
+0 9 * * 1,4 mkdir -p $HOME/.local/state/warp-fork && /home/effatha/git/warp/.fork/tools/drift-check.sh >> $HOME/.local/state/warp-fork/drift.log 2>&1
 ```
+
+**A count is only as current as the local upstream ref, and since 2026-09-14
+the report says whether that was confirmed.** The 2026-09-10 run printed `0
+upstream commits` with 38 waiting, because its fetch left the ref six days old;
+why was never established. The script now asks `git ls-remote` after fetching,
+and when the local ref does not match it leads with `COUNTS ARE STALE` or
+`COUNTS ARE UNCONFIRMED`, quotes the fetch's own error, and marks each count.
+The status is the last column of `drift.tsv`. Calibrated both ways the same
+day, in scratch clones: a fetch that exits without moving the ref reads
+`STALE`, and an unreachable remote reads `UNCONFIRMED`. That second case took
+3m24s, because curl spent 141 s failing to connect before the fetch gave up on
+its own and `ls-remote` would have spent as long again; the script now caps
+the fetch at 180 s and `ls-remote` at 60 s.
 
 **The `mkdir` is not belt-and-braces, and this recipe carried the version
 without it until 2026-09-10.** The script creates that directory itself
