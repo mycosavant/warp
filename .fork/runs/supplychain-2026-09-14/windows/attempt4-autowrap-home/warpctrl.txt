@@ -1,0 +1,71 @@
+--- warpctrl input submit cd /tmp/sc-run/ws (exit 0) 2026-09-14T09:58:15.810Z
+{
+  "action": "input.submit",
+  "ok": true,
+  "instance_id": "inst_c6c2c5ef13ec43188b5a44a067c03675",
+  "executed": true,
+  "queued": false
+}
+
+--- warpctrl agent prompt In one sentence, what is 2+2? Do not use any tools. (exit 0) 2026-09-14T09:58:20.097Z
+{
+  "action": "agent.prompt",
+  "ok": true,
+  "instance_id": "inst_c6c2c5ef13ec43188b5a44a067c03675",
+  "conversation_id": "e35b9089-716d-44da-8b48-4b7394e72bbe",
+  "created": true
+}
+
+--- warpctrl agent list (exit 0) 2026-09-14T09:58:22.404Z
+{
+  "action": "agent.list",
+  "ok": true,
+  "instance_id": "inst_c6c2c5ef13ec43188b5a44a067c03675",
+  "conversations": [
+    {
+      "conversation_id": "679c7df8-d880-4311-bb4a-2447e4b58fe7",
+      "title": "In one sentence, what is 2+2? Do not use any tools.",
+      "status": "success",
+      "is_busy": false,
+      "pane_id": "Pane Pane Terminal (2174)",
+      "tab_id": "1776"
+    },
+    {
+      "conversation_id": "e35b9089-716d-44da-8b48-4b7394e72bbe",
+      "title": "In one sentence, what is 2+2? Do not use any tools.",
+      "status": "in_progress",
+      "is_busy": true,
+      "pane_id": "Pane Pane Terminal (2174)",
+      "tab_id": "1776",
+      "quiet_for_seconds": 0,
+      "session_mode": "auto"
+    }
+  ]
+}
+
+--- warpctrl agent list (exit 0) 2026-09-14T09:58:22.704Z
+{
+  "action": "agent.list",
+  "ok": true,
+  "instance_id": "inst_c6c2c5ef13ec43188b5a44a067c03675",
+  "conversations": [
+    {
+      "conversation_id": "679c7df8-d880-4311-bb4a-2447e4b58fe7",
+      "title": "In one sentence, what is 2+2? Do not use any tools.",
+      "status": "success",
+      "is_busy": false,
+      "pane_id": "Pane Pane Terminal (2174)",
+      "tab_id": "1776"
+    },
+    {
+      "conversation_id": "e35b9089-716d-44da-8b48-4b7394e72bbe",
+      "title": "In one sentence, what is 2+2? Do not use any tools.",
+      "status": "success",
+      "is_busy": false,
+      "pane_id": "Pane Pane Terminal (2174)",
+      "tab_id": "1776",
+      "session_mode": "auto"
+    }
+  ]
+}
+

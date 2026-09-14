@@ -37,10 +37,11 @@ second. When you add a variable, say which one you chose and why.
 Names an agent and it answers the agent panel; naming the command *is* the
 switch, there is no second flag, and it outranks `WARP_FORK_LOCAL_AGENT`.
 
-Which agent to name, the Windows-plus-WSL cwd failure, pinning the `npx`
-version, and what the recommended pairing gets you are all still in `CLAUDE.md`
-— they are operating rules a session needs before it touches this path, not
-accounts of one.
+Which agent to name, the Windows-plus-WSL cwd failure, and what the recommended
+pairing gets you are all still in `CLAUDE.md` — they are operating rules a
+session needs before it touches this path, not accounts of one. This paragraph
+also listed "pinning the `npx` version" until 2026-09-14; agents are installed
+from a lock and named by absolute path now, `docs/agents-supply-chain.md`.
 
 ## `WARP_FORK_LOCAL_AGENT`
 

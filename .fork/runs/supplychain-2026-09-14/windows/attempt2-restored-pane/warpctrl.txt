@@ -1,0 +1,86 @@
+--- warpctrl input submit cd /tmp/sc-run/ws (exit 0) 2026-09-14T09:46:17.831Z
+{
+  "action": "input.submit",
+  "ok": true,
+  "instance_id": "inst_1188bf22c1b9432ea4961bcad59c6b6d",
+  "executed": true,
+  "queued": false
+}
+
+--- warpctrl agent prompt In one sentence, what is 2+2? Do not use any tools. (exit 0) 2026-09-14T09:46:22.128Z
+{
+  "action": "agent.prompt",
+  "ok": true,
+  "instance_id": "inst_1188bf22c1b9432ea4961bcad59c6b6d",
+  "conversation_id": "8fd2c731-e74f-4fb1-95b4-b181c09f4b8d",
+  "created": true
+}
+
+--- warpctrl agent list (exit 0) 2026-09-14T09:46:24.449Z
+{
+  "action": "agent.list",
+  "ok": true,
+  "instance_id": "inst_1188bf22c1b9432ea4961bcad59c6b6d",
+  "conversations": [
+    {
+      "conversation_id": "8fd2c731-e74f-4fb1-95b4-b181c09f4b8d",
+      "title": "In one sentence, what is 2+2? Do not use any tools.",
+      "status": "in_progress",
+      "is_busy": true,
+      "pane_id": "Pane Pane Terminal (2160)",
+      "tab_id": "1770"
+    }
+  ]
+}
+
+--- warpctrl agent list (exit 0) 2026-09-14T09:46:26.731Z
+{
+  "action": "agent.list",
+  "ok": true,
+  "instance_id": "inst_1188bf22c1b9432ea4961bcad59c6b6d",
+  "conversations": [
+    {
+      "conversation_id": "8fd2c731-e74f-4fb1-95b4-b181c09f4b8d",
+      "title": "In one sentence, what is 2+2? Do not use any tools.",
+      "status": "in_progress",
+      "is_busy": true,
+      "pane_id": "Pane Pane Terminal (2160)",
+      "tab_id": "1770"
+    }
+  ]
+}
+
+--- warpctrl agent list (exit 0) 2026-09-14T09:46:28.974Z
+{
+  "action": "agent.list",
+  "ok": true,
+  "instance_id": "inst_1188bf22c1b9432ea4961bcad59c6b6d",
+  "conversations": [
+    {
+      "conversation_id": "8fd2c731-e74f-4fb1-95b4-b181c09f4b8d",
+      "title": "In one sentence, what is 2+2? Do not use any tools.",
+      "status": "error",
+      "is_busy": false,
+      "pane_id": "Pane Pane Terminal (2160)",
+      "tab_id": "1770"
+    }
+  ]
+}
+
+--- warpctrl agent list (exit 0) 2026-09-14T09:46:29.275Z
+{
+  "action": "agent.list",
+  "ok": true,
+  "instance_id": "inst_1188bf22c1b9432ea4961bcad59c6b6d",
+  "conversations": [
+    {
+      "conversation_id": "8fd2c731-e74f-4fb1-95b4-b181c09f4b8d",
+      "title": "In one sentence, what is 2+2? Do not use any tools.",
+      "status": "error",
+      "is_busy": false,
+      "pane_id": "Pane Pane Terminal (2160)",
+      "tab_id": "1770"
+    }
+  ]
+}
+

@@ -65,6 +65,9 @@ turn, measured before any disclosure is built) and `HANDOFF-SUPPLYCHAIN.md`
 (agents from pinned, audited artifacts instead of `npx`). CORRECTNESS, BUILDS
 and SECURITY start after the merge lands; VENDORCALLS and SUPPLYCHAIN can start
 any time. The handoffs before these are archived (the paragraph above).
+SUPPLYCHAIN steps 1 and 2 were done 2026-09-14, along with the docs and
+launcher half of step 3. The panel note waits for the merge, because it is
+code in `acp_agent`.
 
 ## docs/ — one page per surface, current truth
 
@@ -84,6 +87,7 @@ changes the answer; the story of the finding stays in the ticket it cites.
 | `docs/build.md` | **build verification, test flakiness, and the multi-day memory-cap saga**: the crash that justified `CARGO_BUILD_JOBS=8`, the two wrong extrapolations from it, and the clean uncapped run that retired it |
 | `docs/warpctrl.md` | **instances, discovery, and stopping one**: every wrong version of "why won't it close," the two discovery registries, and what `window close`'s `ok: true` actually promises |
 | `docs/agent-transports.md` | **the agent you named, not the fork**: refusal and denial behaviour, the Claude Code plugin's TR-EVENTS-B measurement, `opencode.json`'s bash-map footguns, why tool calls are never re-emitted as `Action` messages, and the second binary (`crates/warp_tui`) |
+| `docs/agents-supply-chain.md` | **where an ACP agent's code comes from**: the three agents surveyed (licences, dependency trees, install scripts, what they fetch at install and at run time), `claude-agent-acp` installed from `agents/` with no package manager, a bump's steps, and the closed binary a lock cannot audit |
 | `docs/model-economy.md` | which model and how much effort for each kind of work here, what the `CLAUDE.md` prefix costs, the 150k-character warning it crossed on 2026-09-10, and the caching habits that follow |
 | `docs/away-from-desk.md` | **the command reference for driving this machine from a phone**: which of the three shells a command runs in, restarting Warp remotely, what still works with the desk locked, symptom-to-command troubleshooting |
 | `docs/manual.md` | the operating manual, whole: building and launching on each platform, `warpctrl`, Warp Drive, remote access, the gotchas. Large; navigate by heading. To be cut into surface pages one at a time as each is next touched |
@@ -162,6 +166,7 @@ as a destination, and acknowledging a session Warp is not asked in.
 | `runs/pricefetch-2026-09-09/` | **the Model Specs card's prices off a public catalogue**, opt-in and off by default; the fetch agreeing with four hand-written rows exactly; a header disclosure found in `http_client` that no diff would have shown; the phone-home hypothesis from the night before tested and killed; the clean-build test of `-j 8` |
 | `runs/remote-launch-2026-09-09/` | **Warp relaunched from an SSH session, with the desk locked**: 3 s to a discovery record, the listener rebound, TLS answering, zero render failures. Plus what still works while locked -- `warpctrl` reads and writes, and a `PrintWindow` screenshot of real content |
 | `runs/wsl-move-2026-09-07/` | the WSL image was already on X: behind Store-relocation junctions and this session said it was on C:; the `wsl --manage --move` it suggested lifted the vhdx out of app-container EFS and WSL could not attach it. Written by the session that repaired it; `re-read.md` beside it checks two of its claims against the machine |
+| `runs/supplychain-2026-09-14/` | `claude-agent-acp` from a lock: installed with the network cut, a tampered blob refused, the tree byte-identical to the census tree, one panel turn on Linux and four attempts on the Windows build (two lost to a scratch profile's PowerShell pane) |
 | `runs/phone-2026-09-06/` | the phone checklist on an Android emulator: the authority installed through Settings, the page paired over TLS, a notification through a worker, Yes and a prompt from the phone, the home-screen install; four defects found and fixed, and Android not running a backgrounded Chrome recorded as the push case |
 
 ## viewer/ — fixtures the trace is pinned against
@@ -178,7 +183,9 @@ goes here and the failing test is the calibration.
 event log since 2026-09-05; `-Instrumented` for the rig, `-Console` for the
 wide listener so a phone can pair), `phone.sh` (the Android emulator on the
 Windows side, driven from WSL; `manual.md`, "A phone that is not a phone"),
-`drift-check.sh`, `memsample.sh`, three
+`agents.py` (installs an ACP agent from its lock in `.fork/agents/`, with no
+package manager; `docs/agents-supply-chain.md`), `drift-check.sh`,
+`memsample.sh`, three
 measurement scripts, and `reorg-2026-09-05.py`, which produced this layout and
 is kept as its record. `launch.sh` beside this file is the Linux daily driver.
 

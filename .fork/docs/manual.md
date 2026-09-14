@@ -384,9 +384,15 @@ explorer all work in this fork and none of them did upstream; see below.
 starts inside the distribution:
 
 ```powershell
-$env:WARP_FORK_ACP_COMMAND = 'npx -y @agentclientprotocol/claude-agent-acp@0.73.0'
+$env:WARP_FORK_ACP_COMMAND = '$HOME/.local/share/warp-fork/agents/claude-agent-acp/0.73.0/bin/claude-agent-acp'
 $env:WARP_FORK_ACP_MODE    = 'default'
 ```
+
+The single quotes are deliberate: `$HOME` reaches the distribution unexpanded
+and the `sh -lc` described below expands it there. Measured 2026-09-14 on the
+debug build in a WSL pane (`runs/supplychain-2026-09-14/`, attempt 4). The
+agent is installed by `.fork/tools/agents.py` inside the distribution; this
+line was an `npx` launch until that day (`docs/agents-supply-chain.md`).
 
 **Before that fix every turn in every WSL pane died**, and the message named
 neither the cause nor the remedy:
@@ -1733,7 +1739,7 @@ built in:
 
 ```
 warpctrl acp probe --command "gemini --acp" --prompt "what is in this directory?"
-warpctrl acp probe --command "npx -y @agentclientprotocol/claude-agent-acp@0.73.0" --prompt "hello"
+warpctrl acp probe --command "$(python3 .fork/tools/agents.py path claude-agent-acp)" --prompt "hello"
 warpctrl acp probe --command "opencode acp" --prompt "hello"
 ```
 
@@ -1928,8 +1934,10 @@ capabilities, so an agent cannot ask it to read a file, write one, or run a
 command. That is now a **decision rather than a gap** (T14's (B)): those methods
 exist for clients with unsaved editor buffers, which a terminal does not have, so
 serving them would mean handing back the same bytes off the same disk. And
-**this is not the Claude path**: reaching Claude over ACP needs an `npx`-launched
-proprietary shim in front of the CLI the fork already drives directly, so
+**this is not the Claude path**: reaching Claude over ACP needs an adapter over
+Anthropic's proprietary agent SDK in front of the CLI the fork already drives
+directly (this said *"an `npx`-launched proprietary shim"* until 2026-09-14; it
+is installed from a lock now, `docs/agents-supply-chain.md`), so
 `app/src/ai/local_agent/` stays where Claude lives. The probe talks to it anyway,
 because it is the best available evidence that the ecosystem claim is real.
 

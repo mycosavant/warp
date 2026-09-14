@@ -1,0 +1,624 @@
+--- warpctrl --instance inst_203281030b36444a9a5df3675a2fa12c input submit cd /tmp/sc-run/ws (exit 2) 2026-09-14T09:43:49.967Z
+warp-oss.exe : error: unexpected argument '--instance' found
+At \\wsl.localhost\Ubuntu\tmp\sc-run\win-panel.ps1:10 char:44
++ ... $argv) $o = & $Exe --warpctrl @argv --output-format json 2>&1 | Out-S ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (error: unexpect...instance' found:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+Usage: warpctrl [OPTIONS] <COMMAND>
+
+For more information, try '--help'.
+
+--- warpctrl --instance inst_203281030b36444a9a5df3675a2fa12c agent prompt In one sentence, what is 2+2? Do not use any tools. (exit 2) 2026-09-14T09:43:54.089Z
+warp-oss.exe : error: unexpected argument '--instance' found
+At \\wsl.localhost\Ubuntu\tmp\sc-run\win-panel.ps1:10 char:44
++ ... $argv) $o = & $Exe --warpctrl @argv --output-format json 2>&1 | Out-S ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (error: unexpect...instance' found:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+Usage: warpctrl [OPTIONS] <COMMAND>
+
+For more information, try '--help'.
+
+--- warpctrl --instance inst_203281030b36444a9a5df3675a2fa12c agent list (exit 2) 2026-09-14T09:43:56.203Z
+warp-oss.exe : error: unexpected argument '--instance' found
+At \\wsl.localhost\Ubuntu\tmp\sc-run\win-panel.ps1:10 char:44
++ ... $argv) $o = & $Exe --warpctrl @argv --output-format json 2>&1 | Out-S ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (error: unexpect...instance' found:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+Usage: warpctrl [OPTIONS] <COMMAND>
+
+For more information, try '--help'.
+
+--- warpctrl --instance inst_203281030b36444a9a5df3675a2fa12c agent list (exit 2) 2026-09-14T09:43:58.333Z
+warp-oss.exe : error: unexpected argument '--instance' found
+At \\wsl.localhost\Ubuntu\tmp\sc-run\win-panel.ps1:10 char:44
++ ... $argv) $o = & $Exe --warpctrl @argv --output-format json 2>&1 | Out-S ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (error: unexpect...instance' found:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+Usage: warpctrl [OPTIONS] <COMMAND>
+
+For more information, try '--help'.
+
+--- warpctrl --instance inst_203281030b36444a9a5df3675a2fa12c agent list (exit 2) 2026-09-14T09:44:00.450Z
+warp-oss.exe : error: unexpected argument '--instance' found
+At \\wsl.localhost\Ubuntu\tmp\sc-run\win-panel.ps1:10 char:44
++ ... $argv) $o = & $Exe --warpctrl @argv --output-format json 2>&1 | Out-S ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (error: unexpect...instance' found:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+Usage: warpctrl [OPTIONS] <COMMAND>
+
+For more information, try '--help'.
+
+--- warpctrl --instance inst_203281030b36444a9a5df3675a2fa12c agent list (exit 2) 2026-09-14T09:44:02.587Z
+warp-oss.exe : error: unexpected argument '--instance' found
+At \\wsl.localhost\Ubuntu\tmp\sc-run\win-panel.ps1:10 char:44
++ ... $argv) $o = & $Exe --warpctrl @argv --output-format json 2>&1 | Out-S ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (error: unexpect...instance' found:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+Usage: warpctrl [OPTIONS] <COMMAND>
+
+For more information, try '--help'.
+
+--- warpctrl --instance inst_203281030b36444a9a5df3675a2fa12c agent list (exit 2) 2026-09-14T09:44:04.691Z
+warp-oss.exe : error: unexpected argument '--instance' found
+At \\wsl.localhost\Ubuntu\tmp\sc-run\win-panel.ps1:10 char:44
++ ... $argv) $o = & $Exe --warpctrl @argv --output-format json 2>&1 | Out-S ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (error: unexpect...instance' found:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+Usage: warpctrl [OPTIONS] <COMMAND>
+
+For more information, try '--help'.
+
+--- warpctrl --instance inst_203281030b36444a9a5df3675a2fa12c agent list (exit 2) 2026-09-14T09:44:06.838Z
+warp-oss.exe : error: unexpected argument '--instance' found
+At \\wsl.localhost\Ubuntu\tmp\sc-run\win-panel.ps1:10 char:44
++ ... $argv) $o = & $Exe --warpctrl @argv --output-format json 2>&1 | Out-S ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (error: unexpect...instance' found:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+Usage: warpctrl [OPTIONS] <COMMAND>
+
+For more information, try '--help'.
+
+--- warpctrl --instance inst_203281030b36444a9a5df3675a2fa12c agent list (exit 2) 2026-09-14T09:44:08.975Z
+warp-oss.exe : error: unexpected argument '--instance' found
+At \\wsl.localhost\Ubuntu\tmp\sc-run\win-panel.ps1:10 char:44
++ ... $argv) $o = & $Exe --warpctrl @argv --output-format json 2>&1 | Out-S ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (error: unexpect...instance' found:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+Usage: warpctrl [OPTIONS] <COMMAND>
+
+For more information, try '--help'.
+
+--- warpctrl --instance inst_203281030b36444a9a5df3675a2fa12c agent list (exit 2) 2026-09-14T09:44:11.109Z
+warp-oss.exe : error: unexpected argument '--instance' found
+At \\wsl.localhost\Ubuntu\tmp\sc-run\win-panel.ps1:10 char:44
++ ... $argv) $o = & $Exe --warpctrl @argv --output-format json 2>&1 | Out-S ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (error: unexpect...instance' found:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+Usage: warpctrl [OPTIONS] <COMMAND>
+
+For more information, try '--help'.
+
+--- warpctrl --instance inst_203281030b36444a9a5df3675a2fa12c agent list (exit 2) 2026-09-14T09:44:13.230Z
+warp-oss.exe : error: unexpected argument '--instance' found
+At \\wsl.localhost\Ubuntu\tmp\sc-run\win-panel.ps1:10 char:44
++ ... $argv) $o = & $Exe --warpctrl @argv --output-format json 2>&1 | Out-S ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (error: unexpect...instance' found:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+Usage: warpctrl [OPTIONS] <COMMAND>
+
+For more information, try '--help'.
+
+--- warpctrl --instance inst_203281030b36444a9a5df3675a2fa12c agent list (exit 2) 2026-09-14T09:44:15.382Z
+warp-oss.exe : error: unexpected argument '--instance' found
+At \\wsl.localhost\Ubuntu\tmp\sc-run\win-panel.ps1:10 char:44
++ ... $argv) $o = & $Exe --warpctrl @argv --output-format json 2>&1 | Out-S ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (error: unexpect...instance' found:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+Usage: warpctrl [OPTIONS] <COMMAND>
+
+For more information, try '--help'.
+
+--- warpctrl --instance inst_203281030b36444a9a5df3675a2fa12c agent list (exit 2) 2026-09-14T09:44:17.514Z
+warp-oss.exe : error: unexpected argument '--instance' found
+At \\wsl.localhost\Ubuntu\tmp\sc-run\win-panel.ps1:10 char:44
++ ... $argv) $o = & $Exe --warpctrl @argv --output-format json 2>&1 | Out-S ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (error: unexpect...instance' found:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+Usage: warpctrl [OPTIONS] <COMMAND>
+
+For more information, try '--help'.
+
+--- warpctrl --instance inst_203281030b36444a9a5df3675a2fa12c agent list (exit 2) 2026-09-14T09:44:19.648Z
+warp-oss.exe : error: unexpected argument '--instance' found
+At \\wsl.localhost\Ubuntu\tmp\sc-run\win-panel.ps1:10 char:44
++ ... $argv) $o = & $Exe --warpctrl @argv --output-format json 2>&1 | Out-S ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (error: unexpect...instance' found:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+Usage: warpctrl [OPTIONS] <COMMAND>
+
+For more information, try '--help'.
+
+--- warpctrl --instance inst_203281030b36444a9a5df3675a2fa12c agent list (exit 2) 2026-09-14T09:44:21.835Z
+warp-oss.exe : error: unexpected argument '--instance' found
+At \\wsl.localhost\Ubuntu\tmp\sc-run\win-panel.ps1:10 char:44
++ ... $argv) $o = & $Exe --warpctrl @argv --output-format json 2>&1 | Out-S ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (error: unexpect...instance' found:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+Usage: warpctrl [OPTIONS] <COMMAND>
+
+For more information, try '--help'.
+
+--- warpctrl --instance inst_203281030b36444a9a5df3675a2fa12c agent list (exit 2) 2026-09-14T09:44:23.996Z
+warp-oss.exe : error: unexpected argument '--instance' found
+At \\wsl.localhost\Ubuntu\tmp\sc-run\win-panel.ps1:10 char:44
++ ... $argv) $o = & $Exe --warpctrl @argv --output-format json 2>&1 | Out-S ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (error: unexpect...instance' found:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+Usage: warpctrl [OPTIONS] <COMMAND>
+
+For more information, try '--help'.
+
+--- warpctrl --instance inst_203281030b36444a9a5df3675a2fa12c agent list (exit 2) 2026-09-14T09:44:26.125Z
+warp-oss.exe : error: unexpected argument '--instance' found
+At \\wsl.localhost\Ubuntu\tmp\sc-run\win-panel.ps1:10 char:44
++ ... $argv) $o = & $Exe --warpctrl @argv --output-format json 2>&1 | Out-S ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (error: unexpect...instance' found:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+Usage: warpctrl [OPTIONS] <COMMAND>
+
+For more information, try '--help'.
+
+--- warpctrl --instance inst_203281030b36444a9a5df3675a2fa12c agent list (exit 2) 2026-09-14T09:44:28.250Z
+warp-oss.exe : error: unexpected argument '--instance' found
+At \\wsl.localhost\Ubuntu\tmp\sc-run\win-panel.ps1:10 char:44
++ ... $argv) $o = & $Exe --warpctrl @argv --output-format json 2>&1 | Out-S ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (error: unexpect...instance' found:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+Usage: warpctrl [OPTIONS] <COMMAND>
+
+For more information, try '--help'.
+
+--- warpctrl --instance inst_203281030b36444a9a5df3675a2fa12c agent list (exit 2) 2026-09-14T09:44:30.385Z
+warp-oss.exe : error: unexpected argument '--instance' found
+At \\wsl.localhost\Ubuntu\tmp\sc-run\win-panel.ps1:10 char:44
++ ... $argv) $o = & $Exe --warpctrl @argv --output-format json 2>&1 | Out-S ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (error: unexpect...instance' found:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+Usage: warpctrl [OPTIONS] <COMMAND>
+
+For more information, try '--help'.
+
+--- warpctrl --instance inst_203281030b36444a9a5df3675a2fa12c agent list (exit 2) 2026-09-14T09:44:32.526Z
+warp-oss.exe : error: unexpected argument '--instance' found
+At \\wsl.localhost\Ubuntu\tmp\sc-run\win-panel.ps1:10 char:44
++ ... $argv) $o = & $Exe --warpctrl @argv --output-format json 2>&1 | Out-S ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (error: unexpect...instance' found:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+Usage: warpctrl [OPTIONS] <COMMAND>
+
+For more information, try '--help'.
+
+--- warpctrl --instance inst_203281030b36444a9a5df3675a2fa12c agent list (exit 2) 2026-09-14T09:44:34.673Z
+warp-oss.exe : error: unexpected argument '--instance' found
+At \\wsl.localhost\Ubuntu\tmp\sc-run\win-panel.ps1:10 char:44
++ ... $argv) $o = & $Exe --warpctrl @argv --output-format json 2>&1 | Out-S ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (error: unexpect...instance' found:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+Usage: warpctrl [OPTIONS] <COMMAND>
+
+For more information, try '--help'.
+
+--- warpctrl --instance inst_203281030b36444a9a5df3675a2fa12c agent list (exit 2) 2026-09-14T09:44:36.853Z
+warp-oss.exe : error: unexpected argument '--instance' found
+At \\wsl.localhost\Ubuntu\tmp\sc-run\win-panel.ps1:10 char:44
++ ... $argv) $o = & $Exe --warpctrl @argv --output-format json 2>&1 | Out-S ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (error: unexpect...instance' found:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+Usage: warpctrl [OPTIONS] <COMMAND>
+
+For more information, try '--help'.
+
+--- warpctrl --instance inst_203281030b36444a9a5df3675a2fa12c agent list (exit 2) 2026-09-14T09:44:38.989Z
+warp-oss.exe : error: unexpected argument '--instance' found
+At \\wsl.localhost\Ubuntu\tmp\sc-run\win-panel.ps1:10 char:44
++ ... $argv) $o = & $Exe --warpctrl @argv --output-format json 2>&1 | Out-S ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (error: unexpect...instance' found:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+Usage: warpctrl [OPTIONS] <COMMAND>
+
+For more information, try '--help'.
+
+--- warpctrl --instance inst_203281030b36444a9a5df3675a2fa12c agent list (exit 2) 2026-09-14T09:44:41.157Z
+warp-oss.exe : error: unexpected argument '--instance' found
+At \\wsl.localhost\Ubuntu\tmp\sc-run\win-panel.ps1:10 char:44
++ ... $argv) $o = & $Exe --warpctrl @argv --output-format json 2>&1 | Out-S ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (error: unexpect...instance' found:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+Usage: warpctrl [OPTIONS] <COMMAND>
+
+For more information, try '--help'.
+
+--- warpctrl --instance inst_203281030b36444a9a5df3675a2fa12c agent list (exit 2) 2026-09-14T09:44:43.307Z
+warp-oss.exe : error: unexpected argument '--instance' found
+At \\wsl.localhost\Ubuntu\tmp\sc-run\win-panel.ps1:10 char:44
++ ... $argv) $o = & $Exe --warpctrl @argv --output-format json 2>&1 | Out-S ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (error: unexpect...instance' found:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+Usage: warpctrl [OPTIONS] <COMMAND>
+
+For more information, try '--help'.
+
+--- warpctrl --instance inst_203281030b36444a9a5df3675a2fa12c agent list (exit 2) 2026-09-14T09:44:45.458Z
+warp-oss.exe : error: unexpected argument '--instance' found
+At \\wsl.localhost\Ubuntu\tmp\sc-run\win-panel.ps1:10 char:44
++ ... $argv) $o = & $Exe --warpctrl @argv --output-format json 2>&1 | Out-S ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (error: unexpect...instance' found:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+Usage: warpctrl [OPTIONS] <COMMAND>
+
+For more information, try '--help'.
+
+--- warpctrl --instance inst_203281030b36444a9a5df3675a2fa12c agent list (exit 2) 2026-09-14T09:44:47.611Z
+warp-oss.exe : error: unexpected argument '--instance' found
+At \\wsl.localhost\Ubuntu\tmp\sc-run\win-panel.ps1:10 char:44
++ ... $argv) $o = & $Exe --warpctrl @argv --output-format json 2>&1 | Out-S ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (error: unexpect...instance' found:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+Usage: warpctrl [OPTIONS] <COMMAND>
+
+For more information, try '--help'.
+
+--- warpctrl --instance inst_203281030b36444a9a5df3675a2fa12c agent list (exit 2) 2026-09-14T09:44:49.797Z
+warp-oss.exe : error: unexpected argument '--instance' found
+At \\wsl.localhost\Ubuntu\tmp\sc-run\win-panel.ps1:10 char:44
++ ... $argv) $o = & $Exe --warpctrl @argv --output-format json 2>&1 | Out-S ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (error: unexpect...instance' found:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+Usage: warpctrl [OPTIONS] <COMMAND>
+
+For more information, try '--help'.
+
+--- warpctrl --instance inst_203281030b36444a9a5df3675a2fa12c agent list (exit 2) 2026-09-14T09:44:51.953Z
+warp-oss.exe : error: unexpected argument '--instance' found
+At \\wsl.localhost\Ubuntu\tmp\sc-run\win-panel.ps1:10 char:44
++ ... $argv) $o = & $Exe --warpctrl @argv --output-format json 2>&1 | Out-S ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (error: unexpect...instance' found:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+Usage: warpctrl [OPTIONS] <COMMAND>
+
+For more information, try '--help'.
+
+--- warpctrl --instance inst_203281030b36444a9a5df3675a2fa12c agent list (exit 2) 2026-09-14T09:44:54.195Z
+warp-oss.exe : error: unexpected argument '--instance' found
+At \\wsl.localhost\Ubuntu\tmp\sc-run\win-panel.ps1:10 char:44
++ ... $argv) $o = & $Exe --warpctrl @argv --output-format json 2>&1 | Out-S ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (error: unexpect...instance' found:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+Usage: warpctrl [OPTIONS] <COMMAND>
+
+For more information, try '--help'.
+
+--- warpctrl --instance inst_203281030b36444a9a5df3675a2fa12c agent list (exit 2) 2026-09-14T09:44:56.353Z
+warp-oss.exe : error: unexpected argument '--instance' found
+At \\wsl.localhost\Ubuntu\tmp\sc-run\win-panel.ps1:10 char:44
++ ... $argv) $o = & $Exe --warpctrl @argv --output-format json 2>&1 | Out-S ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (error: unexpect...instance' found:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+Usage: warpctrl [OPTIONS] <COMMAND>
+
+For more information, try '--help'.
+
+--- warpctrl --instance inst_203281030b36444a9a5df3675a2fa12c agent list (exit 2) 2026-09-14T09:44:58.528Z
+warp-oss.exe : error: unexpected argument '--instance' found
+At \\wsl.localhost\Ubuntu\tmp\sc-run\win-panel.ps1:10 char:44
++ ... $argv) $o = & $Exe --warpctrl @argv --output-format json 2>&1 | Out-S ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (error: unexpect...instance' found:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+Usage: warpctrl [OPTIONS] <COMMAND>
+
+For more information, try '--help'.
+
+--- warpctrl --instance inst_203281030b36444a9a5df3675a2fa12c agent list (exit 2) 2026-09-14T09:45:00.703Z
+warp-oss.exe : error: unexpected argument '--instance' found
+At \\wsl.localhost\Ubuntu\tmp\sc-run\win-panel.ps1:10 char:44
++ ... $argv) $o = & $Exe --warpctrl @argv --output-format json 2>&1 | Out-S ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (error: unexpect...instance' found:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+Usage: warpctrl [OPTIONS] <COMMAND>
+
+For more information, try '--help'.
+
+--- warpctrl --instance inst_203281030b36444a9a5df3675a2fa12c agent list (exit 2) 2026-09-14T09:45:02.874Z
+warp-oss.exe : error: unexpected argument '--instance' found
+At \\wsl.localhost\Ubuntu\tmp\sc-run\win-panel.ps1:10 char:44
++ ... $argv) $o = & $Exe --warpctrl @argv --output-format json 2>&1 | Out-S ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (error: unexpect...instance' found:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+Usage: warpctrl [OPTIONS] <COMMAND>
+
+For more information, try '--help'.
+
+--- warpctrl --instance inst_203281030b36444a9a5df3675a2fa12c agent list (exit 2) 2026-09-14T09:45:05.036Z
+warp-oss.exe : error: unexpected argument '--instance' found
+At \\wsl.localhost\Ubuntu\tmp\sc-run\win-panel.ps1:10 char:44
++ ... $argv) $o = & $Exe --warpctrl @argv --output-format json 2>&1 | Out-S ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (error: unexpect...instance' found:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+Usage: warpctrl [OPTIONS] <COMMAND>
+
+For more information, try '--help'.
+
+--- warpctrl --instance inst_203281030b36444a9a5df3675a2fa12c agent list (exit 2) 2026-09-14T09:45:07.193Z
+warp-oss.exe : error: unexpected argument '--instance' found
+At \\wsl.localhost\Ubuntu\tmp\sc-run\win-panel.ps1:10 char:44
++ ... $argv) $o = & $Exe --warpctrl @argv --output-format json 2>&1 | Out-S ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (error: unexpect...instance' found:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+Usage: warpctrl [OPTIONS] <COMMAND>
+
+For more information, try '--help'.
+
+--- warpctrl --instance inst_203281030b36444a9a5df3675a2fa12c agent list (exit 2) 2026-09-14T09:45:09.384Z
+warp-oss.exe : error: unexpected argument '--instance' found
+At \\wsl.localhost\Ubuntu\tmp\sc-run\win-panel.ps1:10 char:44
++ ... $argv) $o = & $Exe --warpctrl @argv --output-format json 2>&1 | Out-S ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (error: unexpect...instance' found:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+Usage: warpctrl [OPTIONS] <COMMAND>
+
+For more information, try '--help'.
+
+--- warpctrl --instance inst_203281030b36444a9a5df3675a2fa12c agent list (exit 2) 2026-09-14T09:45:11.525Z
+warp-oss.exe : error: unexpected argument '--instance' found
+At \\wsl.localhost\Ubuntu\tmp\sc-run\win-panel.ps1:10 char:44
++ ... $argv) $o = & $Exe --warpctrl @argv --output-format json 2>&1 | Out-S ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (error: unexpect...instance' found:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+Usage: warpctrl [OPTIONS] <COMMAND>
+
+For more information, try '--help'.
+
+--- warpctrl --instance inst_203281030b36444a9a5df3675a2fa12c agent list (exit 2) 2026-09-14T09:45:13.682Z
+warp-oss.exe : error: unexpected argument '--instance' found
+At \\wsl.localhost\Ubuntu\tmp\sc-run\win-panel.ps1:10 char:44
++ ... $argv) $o = & $Exe --warpctrl @argv --output-format json 2>&1 | Out-S ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (error: unexpect...instance' found:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+Usage: warpctrl [OPTIONS] <COMMAND>
+
+For more information, try '--help'.
+
+--- warpctrl --instance inst_203281030b36444a9a5df3675a2fa12c agent list (exit 2) 2026-09-14T09:45:15.860Z
+warp-oss.exe : error: unexpected argument '--instance' found
+At \\wsl.localhost\Ubuntu\tmp\sc-run\win-panel.ps1:10 char:44
++ ... $argv) $o = & $Exe --warpctrl @argv --output-format json 2>&1 | Out-S ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (error: unexpect...instance' found:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+Usage: warpctrl [OPTIONS] <COMMAND>
+
+For more information, try '--help'.
+
+--- warpctrl --instance inst_203281030b36444a9a5df3675a2fa12c agent list (exit 2) 2026-09-14T09:45:18.008Z
+warp-oss.exe : error: unexpected argument '--instance' found
+At \\wsl.localhost\Ubuntu\tmp\sc-run\win-panel.ps1:10 char:44
++ ... $argv) $o = & $Exe --warpctrl @argv --output-format json 2>&1 | Out-S ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (error: unexpect...instance' found:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+Usage: warpctrl [OPTIONS] <COMMAND>
+
+For more information, try '--help'.
+
+--- warpctrl --instance inst_203281030b36444a9a5df3675a2fa12c agent list (exit 2) 2026-09-14T09:45:20.194Z
+warp-oss.exe : error: unexpected argument '--instance' found
+At \\wsl.localhost\Ubuntu\tmp\sc-run\win-panel.ps1:10 char:44
++ ... $argv) $o = & $Exe --warpctrl @argv --output-format json 2>&1 | Out-S ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (error: unexpect...instance' found:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+Usage: warpctrl [OPTIONS] <COMMAND>
+
+For more information, try '--help'.
+
+--- warpctrl --instance inst_203281030b36444a9a5df3675a2fa12c agent list (exit 2) 2026-09-14T09:45:22.375Z
+warp-oss.exe : error: unexpected argument '--instance' found
+At \\wsl.localhost\Ubuntu\tmp\sc-run\win-panel.ps1:10 char:44
++ ... $argv) $o = & $Exe --warpctrl @argv --output-format json 2>&1 | Out-S ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (error: unexpect...instance' found:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+Usage: warpctrl [OPTIONS] <COMMAND>
+
+For more information, try '--help'.
+
+--- warpctrl --instance inst_203281030b36444a9a5df3675a2fa12c agent list (exit 2) 2026-09-14T09:45:24.532Z
+warp-oss.exe : error: unexpected argument '--instance' found
+At \\wsl.localhost\Ubuntu\tmp\sc-run\win-panel.ps1:10 char:44
++ ... $argv) $o = & $Exe --warpctrl @argv --output-format json 2>&1 | Out-S ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (error: unexpect...instance' found:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+Usage: warpctrl [OPTIONS] <COMMAND>
+
+For more information, try '--help'.
+
+--- warpctrl --instance inst_203281030b36444a9a5df3675a2fa12c agent list (exit 2) 2026-09-14T09:45:26.697Z
+warp-oss.exe : error: unexpected argument '--instance' found
+At \\wsl.localhost\Ubuntu\tmp\sc-run\win-panel.ps1:10 char:44
++ ... $argv) $o = & $Exe --warpctrl @argv --output-format json 2>&1 | Out-S ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (error: unexpect...instance' found:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+Usage: warpctrl [OPTIONS] <COMMAND>
+
+For more information, try '--help'.
+
+--- warpctrl --instance inst_203281030b36444a9a5df3675a2fa12c agent list (exit 2) 2026-09-14T09:45:28.859Z
+warp-oss.exe : error: unexpected argument '--instance' found
+At \\wsl.localhost\Ubuntu\tmp\sc-run\win-panel.ps1:10 char:44
++ ... $argv) $o = & $Exe --warpctrl @argv --output-format json 2>&1 | Out-S ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (error: unexpect...instance' found:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+Usage: warpctrl [OPTIONS] <COMMAND>
+
+For more information, try '--help'.
+
+--- warpctrl --instance inst_203281030b36444a9a5df3675a2fa12c agent list (exit 2) 2026-09-14T09:45:31.025Z
+warp-oss.exe : error: unexpected argument '--instance' found
+At \\wsl.localhost\Ubuntu\tmp\sc-run\win-panel.ps1:10 char:44
++ ... $argv) $o = & $Exe --warpctrl @argv --output-format json 2>&1 | Out-S ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (error: unexpect...instance' found:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+Usage: warpctrl [OPTIONS] <COMMAND>
+
+For more information, try '--help'.
+
+--- warpctrl --instance inst_203281030b36444a9a5df3675a2fa12c agent list (exit 2) 2026-09-14T09:45:31.199Z
+warp-oss.exe : error: unexpected argument '--instance' found
+At \\wsl.localhost\Ubuntu\tmp\sc-run\win-panel.ps1:10 char:44
++ ... $argv) $o = & $Exe --warpctrl @argv --output-format json 2>&1 | Out-S ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (error: unexpect...instance' found:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+Usage: warpctrl [OPTIONS] <COMMAND>
+
+For more information, try '--help'.
+

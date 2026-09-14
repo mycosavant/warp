@@ -29,10 +29,19 @@
 set -u
 cd "$(cd "$(dirname "$0")/.." && pwd)"
 
-# Pinned, because `npx -y` with no version resolves to whatever is newest, and
-# the path form is an npx *cache key* that says nothing about what it holds --
-# two installs sat side by side for a week giving opposite answers to I18.
-export WARP_FORK_ACP_COMMAND="npx -y @agentclientprotocol/claude-agent-acp@0.73.0"
+# Installed from `.fork/agents/claude-agent-acp.toml` and started by absolute
+# path, never fetched through npx at launch
+# (`.fork/decisions/2026-09-13-acp-agents-are-not-launched-through-a-package-manager.md`).
+# This was `npx -y @agentclientprotocol/claude-agent-acp@0.73.0` until
+# 2026-09-14; that pinned the adapter and left its dependency ranges free.
+AGENT=$(python3 .fork/tools/agents.py path claude-agent-acp) || exit 1
+if [ ! -x "$AGENT" ]; then
+  echo "launch.sh: the agent is not installed at $AGENT. Install it with:" >&2
+  echo "  python3 .fork/tools/agents.py fetch claude-agent-acp" >&2
+  echo "  python3 .fork/tools/agents.py install claude-agent-acp" >&2
+  exit 1
+fi
+export WARP_FORK_ACP_COMMAND="$AGENT"
 
 # Instruments, off. Turn one on for the session where you need it:
 #   WARP_FORK_EVENT_LOG=on     -- one JSONL per conversation

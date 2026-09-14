@@ -1,0 +1,8 @@
+## tamper control, rerun after the staging fix (2026-09-14T09:40:31Z)
+agents: /tmp/tmp.1f7UYgctoX/cache/warp-fork/agents/blobs/51f51d886af1428713bf52b4e795afa43e2b43956b8483c9a92590f4c5a7b296: locked sha256 51f51d886af1428713bf52b4e795afa43e2b43956b8483c9a92590f4c5a7b296, cached file has 07cf957c2eb41d1cdf30412fdc2ee101cf02717d9dacf8a17624ac1fbc8dc3e9. Refusing.
+exit 1
+left behind under the agent dir: 0 entries
+## control on the control: restore the byte, install
+/tmp/tmp.1f7UYgctoX/data/warp-fork/agents/claude-agent-acp/0.73.0/bin/claude-agent-acp
+exit 0
+0.73.0

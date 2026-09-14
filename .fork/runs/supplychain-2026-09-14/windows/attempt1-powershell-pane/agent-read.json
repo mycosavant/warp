@@ -1,0 +1,23 @@
+{
+  "action": "agent.read",
+  "ok": true,
+  "instance_id": "inst_203281030b36444a9a5df3675a2fa12c",
+  "conversation": {
+    "conversation_id": "867722f9-971a-40a5-8757-8cab7029199e",
+    "title": "In one sentence, what is 2+2? Do not use any tools.",
+    "status": "error",
+    "is_busy": false,
+    "pane_id": "Pane Pane Terminal (2160)",
+    "tab_id": "1770"
+  },
+  "exchanges": [
+    {
+      "index": 0,
+      "input": "In one sentence, what is 2+2? Do not use any tools.",
+      "is_complete": true,
+      "error": "Request failed with error: Other(The agent exchange failed: Invalid params: `cwd` must be an absolute path, but received: C:\\Users\\onemind: {\n  \"cwd\": \"C:\\\\Users\\\\onemind\"\n})"
+    }
+  ],
+  "exchange_count": 1,
+  "included_tool_results": false
+}

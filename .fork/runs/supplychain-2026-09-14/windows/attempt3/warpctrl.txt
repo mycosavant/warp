@@ -1,0 +1,73 @@
+--- warpctrl input submit cd /tmp/sc-run/ws (exit 0) 2026-09-14T09:52:40.398Z
+{
+  "action": "input.submit",
+  "ok": true,
+  "instance_id": "inst_a9f45cea4ace4c038047baf668e592d2",
+  "executed": true,
+  "queued": false
+}
+
+--- warpctrl agent prompt In one sentence, what is 2+2? Do not use any tools. (exit 0) 2026-09-14T09:52:44.707Z
+{
+  "action": "agent.prompt",
+  "ok": true,
+  "instance_id": "inst_a9f45cea4ace4c038047baf668e592d2",
+  "conversation_id": "679c7df8-d880-4311-bb4a-2447e4b58fe7",
+  "created": true
+}
+
+--- warpctrl agent list (exit 0) 2026-09-14T09:52:47.050Z
+{
+  "action": "agent.list",
+  "ok": true,
+  "instance_id": "inst_a9f45cea4ace4c038047baf668e592d2",
+  "conversations": [
+    {
+      "conversation_id": "679c7df8-d880-4311-bb4a-2447e4b58fe7",
+      "title": "In one sentence, what is 2+2? Do not use any tools.",
+      "status": "in_progress",
+      "is_busy": true,
+      "pane_id": "Pane Pane Terminal (2160)",
+      "tab_id": "1770",
+      "quiet_for_seconds": 1,
+      "session_mode": "auto"
+    }
+  ]
+}
+
+--- warpctrl agent list (exit 0) 2026-09-14T09:52:49.375Z
+{
+  "action": "agent.list",
+  "ok": true,
+  "instance_id": "inst_a9f45cea4ace4c038047baf668e592d2",
+  "conversations": [
+    {
+      "conversation_id": "679c7df8-d880-4311-bb4a-2447e4b58fe7",
+      "title": "In one sentence, what is 2+2? Do not use any tools.",
+      "status": "success",
+      "is_busy": false,
+      "pane_id": "Pane Pane Terminal (2160)",
+      "tab_id": "1770",
+      "session_mode": "auto"
+    }
+  ]
+}
+
+--- warpctrl agent list (exit 0) 2026-09-14T09:52:49.686Z
+{
+  "action": "agent.list",
+  "ok": true,
+  "instance_id": "inst_a9f45cea4ace4c038047baf668e592d2",
+  "conversations": [
+    {
+      "conversation_id": "679c7df8-d880-4311-bb4a-2447e4b58fe7",
+      "title": "In one sentence, what is 2+2? Do not use any tools.",
+      "status": "success",
+      "is_busy": false,
+      "pane_id": "Pane Pane Terminal (2160)",
+      "tab_id": "1770",
+      "session_mode": "auto"
+    }
+  ]
+}
+

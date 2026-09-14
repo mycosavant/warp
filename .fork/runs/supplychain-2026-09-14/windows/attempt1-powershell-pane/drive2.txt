@@ -1,0 +1,16 @@
+--- input submit 2026-09-14T09:44:54Z
+{
+  "action": "input.submit",
+  "ok": true,
+  "instance_id": "inst_203281030b36444a9a5df3675a2fa12c",
+  "executed": true,
+  "queued": false
+}
+--- agent prompt 2026-09-14T09:44:58Z
+{
+  "action": "agent.prompt",
+  "ok": true,
+  "instance_id": "inst_203281030b36444a9a5df3675a2fa12c",
+  "conversation_id": "867722f9-971a-40a5-8757-8cab7029199e",
+  "created": true
+}

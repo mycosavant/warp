@@ -1,0 +1,40 @@
+## control: is the network cut inside unshare -rn?
+curl: (6) Could not resolve host: registry.npmjs.org
+curl exit 6
+lo               DOWN           00:00:00:00:00:00 <LOOPBACK> 
+## install with the network cut (2026-09-14T09:38:48Z)
+/home/effatha/.local/share/warp-fork/agents/claude-agent-acp/0.73.0/bin/claude-agent-acp
+8.45 s wall
+## what was installed
+#!/bin/sh
+# Written by .fork/tools/agents.py install from .fork/agents/claude-agent-acp.toml.
+exec "/home/effatha/.local/share/warp-fork/agents/claude-agent-acp/0.73.0/runtime/bin/node" "/home/effatha/.local/share/warp-fork/agents/claude-agent-acp/0.73.0/node_modules/@agentclientprotocol/claude-agent-acp/dist/index.js" "$@"
+382M	/home/effatha/.local/share/warp-fork/agents/claude-agent-acp/0.73.0
+/home/effatha/.local/share/warp-fork/agents/claude-agent-acp/0.73.0/runtime:
+LICENSE
+bin
+
+/home/effatha/.local/share/warp-fork/agents/claude-agent-acp/0.73.0/runtime/bin:
+node
+0
+v24.21.0
+total 20
+dr-xr-xr-x   5 effatha effatha 4096 Sep 14 05:38 .
+dr-xr-xr-x 101 effatha effatha 4096 Sep 14 05:38 ..
+dr-xr-xr-x   2 effatha effatha 4096 Sep 14 05:38 claude-agent-sdk
+dr-xr-xr-x   2 effatha effatha 4096 Sep 14 05:38 claude-agent-sdk-linux-x64
+dr-xr-xr-x  12 effatha effatha 4096 Sep 14 05:38 sdk
+-r-xr-xr-x 1 effatha effatha 215469464 Oct 26  1985 /home/effatha/.local/share/warp-fork/agents/claude-agent-acp/0.73.0/node_modules/@anthropic-ai/claude-agent-sdk-linux-x64/claude
+9a64bda9d8722a1fa05bef9a5961d07e0331b99597eda9e2f6a732f3a0ff7f05  /home/effatha/.local/share/warp-fork/agents/claude-agent-acp/0.73.0/node_modules/@anthropic-ai/claude-agent-sdk-linux-x64/claude
+9a64bda9d8722a1fa05bef9a5961d07e0331b99597eda9e2f6a732f3a0ff7f05  /home/effatha/.npm/_npx/6130df88bef2cca3/node_modules/@anthropic-ai/claude-agent-sdk-linux-x64/claude
+2
+## tamper control: one flipped byte in a cached blob
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+FileNotFoundError: [Errno 2] No such file or directory: '/tmp/tmp.37SDBqs4Bt/cache/warp-fork/agents/blobs/51f51d886af1428713bf52b4e795afa43e2b43956b8483c9a92590f4c5a7b296'
+agents: https://nodejs.org/dist/v24.21.0/node-v24.21.0-linux-x64.tar.xz is not fetched; run `agents.py fetch claude-agent-acp` first
+exit 1
+0.73.0.partial
+## second install refuses without --force
+agents: /home/effatha/.local/share/warp-fork/agents/claude-agent-acp/0.73.0 exists; pass --force to replace it
+exit 1

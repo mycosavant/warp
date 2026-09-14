@@ -1,0 +1,14 @@
+## --force against a corrupt cache keeps the working install (2026-09-14T10:12:23Z)
+/tmp/tmp.Nx19DD5YBu/data/warp-fork/agents/claude-agent-acp/0.73.0/bin/claude-agent-acp
+good install exit 0
+agents: /tmp/tmp.Nx19DD5YBu/cache/warp-fork/agents/blobs/51f51d886af1428713bf52b4e795afa43e2b43956b8483c9a92590f4c5a7b296: locked sha256 51f51d886af1428713bf52b4e795afa43e2b43956b8483c9a92590f4c5a7b296, cached file has 07cf957c2eb41d1cdf30412fdc2ee101cf02717d9dacf8a17624ac1fbc8dc3e9. Refusing.
+force on bad cache exit 1
+entries: 0.73.0 
+{"jsonrpc":"2.0","id":0,"result":{"protocolVersion":1,"agentCapabilities":{"_meta":{"claudeCode":{"promptQueueing":true}},"promptCapabilities":{"image":true,"em
+## reinstall the real install with the committed tool (2026-09-14T10:12:33Z)
+/home/effatha/.local/share/warp-fork/agents/claude-agent-acp/0.73.0/bin/claude-agent-acp
+exit 0
+diff -rq against the census tree:
+Only in /home/effatha/.npm/_npx/6130df88bef2cca3/node_modules: .bin
+Only in /home/effatha/.npm/_npx/6130df88bef2cca3/node_modules: .package-lock.json
+writable files: 0

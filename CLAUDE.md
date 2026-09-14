@@ -581,8 +581,11 @@ this file's other ACP measurements was taken.
 The remedy is one variable and no code:
 
 ```
-WARP_FORK_ACP_COMMAND='wsl.exe -d Ubuntu -- npx -y @agentclientprotocol/claude-agent-acp@0.73.0'
+WARP_FORK_ACP_COMMAND='wsl.exe -d Ubuntu -- /home/<you>/.local/share/warp-fork/agents/claude-agent-acp/0.73.0/bin/claude-agent-acp'
 ```
+
+**That line launched through `npx` until 2026-09-14**; agents install from a
+lock now, `.fork/docs/agents-supply-chain.md`.
 
 **Pin the version, and this file did not until 2026-09-03.** Unpinned, `npx -y`
 resolves to whatever is newest, and two installs sat in `~/.npm/_npx/` for a

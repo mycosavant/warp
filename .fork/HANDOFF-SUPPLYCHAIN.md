@@ -1,5 +1,15 @@
 # Handoff: ACP agents installed from pinned, audited sources, never through npx
 
+> **Progress 2026-09-14.** Steps 1 and 2 are done. The survey is
+> `docs/agents-supply-chain.md`; the lock is `agents/claude-agent-acp.toml`,
+> the installer `tools/agents.py`, the run `runs/supplychain-2026-09-14/`.
+> From step 3, the docs and launchers (`CLAUDE.md`, `manual.md`,
+> `environment.md`, `launch.sh`, `warpdev.ps1`) name the installed path.
+> **Still open:** step 3's panel note, held until the merge lands because it
+> is code in `acp_agent`; step 4; the `mycosavant/claude-agent-acp` fork (a
+> GitHub action for the maintainer); and a native Windows install, which the
+> WSL install made unnecessary for the launch lines.
+
 Written 2026-09-13. Decision:
 `decisions/2026-09-13-acp-agents-are-not-launched-through-a-package-manager.md`.
 Decided by the maintainer, 2026-09-13: the fork does not launch ACP agents
@@ -16,7 +26,8 @@ Claims tagged RAN, READ, TOLD or ASSUMED.
 
 - **Every recommended launch line uses it**:
   `npx -y @agentclientprotocol/claude-agent-acp@0.73.0`, in `CLAUDE.md`,
-  `.fork/docs/manual.md`, `.fork/docs/composer.md` and
+  `.fork/docs/manual.md`, ~~`.fork/docs/composer.md`~~ (it never had one; line
+  1050 mentions `npx` installs as history, found 2026-09-14 by review) and
   `.fork/tools/warpdev.ps1` (READ, grep 2026-09-13; `environment.md` mentions
   pinning but has no launch line). The version is pinned; its
   dependencies are not: `claude-agent-acp` 0.73.0 declares `zod: ^4.0.0`, a

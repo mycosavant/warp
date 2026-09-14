@@ -145,6 +145,13 @@ if (Test-Path $OldStateFile) {
     Write-Host "warpdev: ~/.warpdev is no longer read (profiles are per launch); delete it when convenient." -ForegroundColor DarkGray
 }
 
+# The agent is installed inside the distribution from
+# `.fork/agents/claude-agent-acp.toml` by `.fork/tools/agents.py` and started
+# by absolute path, never fetched through npx at launch (decision 2026-09-13).
+# The path is asked of the lock, so a bump edits one file and not this one.
+$WslRepoPosix = '/' + (($WslRepo -replace '^\\\\wsl(\.localhost|\$)\\[^\\]+\\', '') -replace '\\', '/')
+$AgentPath = (& wsl.exe -d Ubuntu -- python3 "$WslRepoPosix/.fork/tools/agents.py" path claude-agent-acp 2>$null | Select-Object -First 1)
+
 # What each profile sets. Kept as data so `-Status` prints exactly what a launch
 # would do: the variable, the value, and the reason.
 $Product = @(
@@ -154,10 +161,9 @@ $Product = @(
        # is a Unix path, Warp passes it verbatim in `session/new`, and the agent
        # is spawned by the *Windows* Warp, so the unwrapped `npx` form refuses
        # the session outright with "`cwd` does not exist on the machine running
-       # the agent". Pinned, because `npx -y` with no version resolves to
-       # whatever is newest and two installs once sat side by side for a week
-       # giving opposite answers to the same question.
-       Value = 'wsl.exe -d Ubuntu -- npx -y @agentclientprotocol/claude-agent-acp@0.73.0'
+       # the agent". This was `wsl.exe -d Ubuntu -- npx -y
+       # @agentclientprotocol/claude-agent-acp@0.73.0` until 2026-09-14.
+       Value = "wsl.exe -d Ubuntu -- $AgentPath"
        Why = 'the agent panel answers from this agent, started inside WSL so a pane cwd resolves' }
     # Product since 2026-09-05, not an instrument: the console's conversation
     # view (`agent.trace`) reads this log for the join to the agent's own
@@ -382,6 +388,14 @@ if ($Agent) {
     }
     Set-Item -Path 'env:WARP_FORK_ACP_COMMAND' -Value $Agent
     $ProfileName = "$ProfileName, agent: $Agent"
+} elseif (-not $Stock) {
+    & wsl.exe -d Ubuntu -- test -x "$AgentPath" 2>$null
+    if (-not $AgentPath -or $LASTEXITCODE -ne 0) {
+        Write-Host "warpdev: the agent is not installed inside Ubuntu ($AgentPath). Install it there with:" -ForegroundColor Red
+        Write-Host "  python3 $WslRepoPosix/.fork/tools/agents.py fetch claude-agent-acp" -ForegroundColor DarkGray
+        Write-Host "  python3 $WslRepoPosix/.fork/tools/agents.py install claude-agent-acp" -ForegroundColor DarkGray
+        exit 2
+    }
 }
 Write-Host "warpdev: launching $ProfileName" -ForegroundColor Green
 
