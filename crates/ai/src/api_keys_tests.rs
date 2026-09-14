@@ -305,6 +305,42 @@ fn a_host_on_this_machine_or_its_network_may_be_plain_http() {
     assert!(!is_local_endpoint_url("not a url"));
 }
 
+/// fork: the settings-file door. `from_file_value` drops the whole set of
+/// endpoints when one fails the validator, so a local endpoint declared in
+/// `settings.toml` is only usable if it survives this. The test above only
+/// reaches the function; the 2026-09-07 break was a merge that routed the
+/// file through it, and no test loaded a file.
+#[test]
+fn a_local_endpoint_in_the_settings_file_survives_load() {
+    let load = |base_url: &str| {
+        let value = serde_json::json!({
+            "local-model": {
+                "name": "Local",
+                "base_url": base_url,
+                "models": [{ "name": "qwen", "config_key": "local-qwen" }],
+            }
+        });
+        <CustomEndpointDefinitions as settings_value::SettingsValue>::from_file_value(&value)
+    };
+
+    for local in [
+        "http://127.0.0.1:8080/v1",
+        "http://localhost:11434/v1",
+        "http://[::1]:8080/v1",
+        "http://192.168.1.20:8080/v1",
+    ] {
+        let definitions = load(local).unwrap_or_else(|| panic!("{local} was dropped on load"));
+        let (_, definition) = definitions.definitions().next().unwrap();
+        assert_eq!(definition.base_url, local);
+    }
+
+    // The control, so this cannot pass by accepting everything.
+    assert!(
+        load("http://api.example.com/v1").is_none(),
+        "plain http to a public host must still be dropped"
+    );
+}
+
 #[test]
 fn legacy_endpoint_ids_are_deterministic_and_preserve_config_keys() {
     let legacy = vec![endpoint_with_keys(
